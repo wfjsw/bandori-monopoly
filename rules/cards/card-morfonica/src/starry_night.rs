@@ -60,8 +60,9 @@ fn starry_night(player_id: i32) -> card_sdk::Asked {
         &Msg::new(key!("starry_night_reason")).i("n", x as i64),
     )?;
     if paid < 1000 * x {
-        // TODO(规则书)[judgement]: 「视为此卡未生效」 -- the clause names a state without saying
-        // what observes it. And what counts a use that this would suppress?
+        // 规则书: 「视为此卡未生效」 -- a shortfall on the X*1000. Card spent
+        // anyway (C-Q5(a)); the waste bit carries it (CH-07).
+        bandori_std::zones::set_ineffective();
         return Ok(());
     }
     // 规则书（1）: 「将此卡放置在场地中央并在此卡上放置X个[奇迹水晶]」

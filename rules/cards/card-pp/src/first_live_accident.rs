@@ -45,9 +45,8 @@ fn first_live_accident(player_id: i32) -> card_sdk::Asked {
     // token is what the P✽P skills' press gates read. One concept, one name:
     // the band's real spelling (`skill_blocked` builds `skillBlock:<band>`).
     // Bound to the placed instance so it dies with the card.
-    // TODO(规则书)（[拥有者]不可使用任何Pastel✽Palettes角色的（2）技能。）: a guest
-    //   write does not reach the host routine that raises this body's own draw
-    //   hook (BACKLOG HOST-02), so a (2) window on that very draw still opens.
+    // The body's own writes cross onto live before the draw routine runs, so
+    // the hook the very next `ctx::draw` raises already sees the seal (HOST-02).
     ctx::set_held(player_id, "skillBlock:Pastel✽Palettes", 1, 0, uid);
     // 规则书[手]: 「并将1张“重叠的声音”加入抽卡区并洗切」
     ctx::add_to_dest(

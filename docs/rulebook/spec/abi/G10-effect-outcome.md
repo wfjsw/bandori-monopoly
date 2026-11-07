@@ -63,7 +63,7 @@ this one. What the draft got wrong:
 | R25 | `turn.placed_during_play` was not carried, so a placing play that paused before completing looked unplaced and was copied (`a_placing_play_is_not_copied`). | `adopt_turn_policy` carries it with the other staged turn fields (§6). |
 | R26 | `turn.play_doubled` was not carried, so the start square's doubling of a third party's played number was lost at the commit (both circle-staff tests). | `commit_after` carries it with `cancelled_designations` (§6). |
 | R27 | `commit_after` drained `mark_log` off the completing copy only; live kept a duplicate of the same row, the next pass inherited it, and `markChanged` re-entered the card every pass (`black_suits`'s `resync` re-placed its circle without bound — stack overflow). | `commit_after` clears live's `mark_log` with the drain; the copy's rows are the only copy raised (§6). |
-| R28 | Cards that mark "already done this drive" in ordinary player state lose it at the pass-top rewind, so the re-run repeats the step (tsugu's teleport re-fired, its post-move buy prompt never settled; 立希's 100-reroll guard reset every pass and the loop never ended). | Such a marker is a `latch:` slot, excluded from the rewind capture and crossing only at the commit (§6.3.1, `tsugu_ycm`, `taki_even_if` — whose guard is keyed to the roll transaction so the next activation starts over — and `tsukushi_garden`). |
+| R28 | Cards that mark "already done this drive" in ordinary player state lose it at the pass-top rewind, so the re-run repeats the step (tsugu's teleport re-fired, its post-move buy prompt never settled; 立希's 100-reroll guard reset every pass and the loop never ended). | Such a marker is a `latch:` slot, excluded from the rewind capture and crossing only at the commit (§6.3.1, `taki_even_if` — whose guard is keyed to the roll transaction so the next activation starts over — and `tsukushi_garden`). Where the flip is a request **kind** the answered request itself carries it, and tsugu's latch is retired by the identity drift of §6.3.2 step 2 (LOY-TSUGU-01). |
 | R29 | A body that lands the mover **after** restoring money has its landing effect swallowed by the restore (CiRCLE's pass reward: 12000 instead of 10000), and the money reload then dragged the newer figure back. | Order the body teleport-first, restore-second (`ran_as_usual`), and re-impose the recorded post-request money only where the row's own `condition` still holds (§6.3.1). |
 | R30 | Mark-driven cards that clean up "while any mark remains" left their siblings placed when their own drive paused at the ask and another copy finished first (`hagumi`'s two stand-ins). | The body drops same-card siblings once no mark of its own is left (`hagumi_marks`). |
 | R31 | `black_suits` re-derived its borrowed `tile:circle` from the world alone. The placement is a guest write, so a nested `resync` ran before it crossed and attached another copy; and the `MarkChanged` entries also ran under the body's own `cardFired` raise. | The attached uid is a `latch:` slot (adopt-from-board on re-entry, drop by latch or by board scan), and the condition spells `kind == "markChanged"` (`black_suits`). |
@@ -88,6 +88,8 @@ this one. What the draft got wrong:
 | R51 | `black_suits`' crystal latch returned on the bare uid without checking the borrowed instance still stood, so a destroyed CiRCLE instance left the borrow dead. | The latch only short-circuits while its instance is on the tile. |
 | R52 | `no_breakup`'s terminals derived the checkpoint as `BASE + 1` with nothing asserting it. | The body asserts the adjacency (`debug_assert`); the terminals keep the derivation because a latch written after the checkpoint is not inside it (§10.1 row 4). |
 | R35 | Every restore of the pass world (`Run::restore_from_world`, `restore_condition`, `restore_run_point`) dropped the body's `latch:` rows with it, so a cross-pass guard (`taki`'s reroll cap, stored under `latch:` keys as §6.5.1 requires) read `0` after each pause and the constant-die loop never reached it. | A restore is an undo of what the body derived; the latches are its frozen decisions, so each of the three paths re-lays the live `latch:` rows over the restored world (`World::latches` / `put_latches`, §6.5). |
+
+| R53 | The reload's money re-base took the row's recorded post-request figure even for a seat a nested request had already moved past it (the settle's build pay behind the buy's `bought` hook), so the crossing recorded the pay as a guest write and the next pass top reverted it: the `lose` line stayed, the balance did not (`band_free_house_then_paid_second_build`). | The diff base is the money the copy carries after the re-impose pass (the recorded figure for a seat at the pre-value, the newer figure for a seat past it), so the request's own debit is invisible to the crossing. |
 
 ## 1. Items
 
@@ -224,23 +226,19 @@ Book (`RAS:EXIST`):
 
 > 若在此期间此卡没有造成影响，抽1张卡
 
-Current (`rules/cards/card-ras/src/exist.rs:65-72`): the latch is
-`On::Action(Action::Effect("target == owner && actor != owner", …))`. But
-`effect` is raised for **every** money movement too (`play.rs:4160`) and
-for any direct targeting, so:
+Current (`rules/cards/card-ras/src/exist.rs`): the latch is
+`On::Action(Action::Target("target == owner && actor != owner", …))`. An
+`effect` entry once stood here, but `effect` is raised for **every** money
+movement too (`play.rs:4160`) and for any direct targeting, so a plain rent,
+a bank print, or a direct effect that names the owner all marked the card.
 
-* a plain rent payment to the owner — `target == owner`, `actor != owner` —
-  marks the card as having had an influence;
-* a bank print to the owner — same;
-* an opponent's effect that directly names the owner, never redirected — same.
-
-Only a redirect that **landed** is an influence. `redirect` is a Filter on the
-declaration path (`wasm_rules.rs:6825-6920`, the fold at `:6855-6878`); a
-Filter body may not write an instance prop (`refuse_if_filter`), and the
-effect payload has no "redirected" flag, so the `effect` hook cannot tell
-whether the rename happened. The provisional `state::add` inside the Filter
-now also over-counts, because a probe pass and a counter can run the fold
-several times (`exist.rs:68`).
+Only a redirect that **landed** is an influence. `target` (kind 15) is the
+settlement fact -- `target_window` raises it only after the `effect` chain came
+back not-cancelled -- and `landed_redirect` additionally requires the
+designation to have survived (`!ctx::designation_cancelled(target)`): 网络链接
+异常 clause 1 cancels the pair without cancelling the link, so the link check
+alone would still latch. A probe pass no longer writes anything (the latch moved
+out of the Filter fold into `mark_used`).
 
 ### 1.5 `world-snapshot` (rows 782, 1077)
 
@@ -832,13 +830,26 @@ st = c.st_mut(); at = st.next_answer;
 2. if st.answers.get(at) is Some(x):
        // The request completed (a torn one was taken by step 1). Its effect is
        // already on live, so the answer is reused -- even when the body
-       // recomputed the arguments, with one exception, the Move drift below.
-       if the row is a Move, the body recomputed it, and this slot is not in
-          st.reapplied:                                 // once per slot per drive
-           re-apply it under the new plan: Replace(at); the position is the
-           effect and the plan states it absolutely, so it is not rewound --
-           `plan.settles = false` (the old landing already settled) and the
-           deeper answers / entries are truncated; st.reapplied += at
+       // recomputed the arguments, with two exceptions, the identity drift and
+       // the Move drift below.
+       drifted = this slot is not in st.reapplied AND (
+           the row's request **variant** (discriminant) differs from `req`
+           OR the row is a Move the body recomputed)
+       if drifted:
+           re-apply under the new request: Replace(at); the deeper answers /
+           entries are truncated and st.reapplied += at
+           // The answer means what its request asked. A body whose gate read
+           // flipped and now makes a different **kind** of call must not eat
+           // the old answer (LOY-TSUGU-01: tsugu's post-move buy was answered
+           // by the consumed Move). Only the discriminant is compared: a
+           // same-kind value may oscillate between the restored pre-state and
+           // the settled one without changing what the answer means.
+           //
+           // Neither drift rewinds to the entry's `condition`: the swallowed
+           // answer's work already landed (an accepted buy offer ran the buy
+           // body; a move landed), so the new request applies on top. For a
+           // Move the plan states the position absolutely, so `plan.settles =
+           // false` (the old landing already settled) and the landing stays.
        else
            st.w().after_host(at, row.condition, row.after_money, row.after_pos)
            advance; return Ok(x)
@@ -939,15 +950,25 @@ The journal holds **only in-flight entries**: a completed request pops its
 entry, so outside a torn stack it is empty, and §6.3.2 step 2 consumes a
 completed answer, so a body cannot loop on a request.
 
-The one re-application is the **Move drift** (§6.3.2 step 2): a move whose
-destination the body recomputed from the world its own landing changed. It is
-bounded by `reapplied`, a per-slot set cleared at the drive's end, so a slot is
-re-applied at most once per drive even when the recomputation keeps differing;
-every later reach consumes. The other kinds never re-apply — an application
-they already crossed onto live is the correct one, and re-running it from the
-restored `condition` drops effects nested requests landed meanwhile (the
-Afterglow free-house build in the buy pipeline). `JournalStart::Replace` is
-the drift's plumbing; it is emitted only there.
+The re-applications are step 2's two **drifts**: the identity drift (the body
+now makes a different request kind) and the **Move drift** (a move whose
+destination the body recomputed from the world its own landing changed). Both
+are bounded by `reapplied`, a per-slot set cleared at the drive's end, so a
+slot is re-applied at most once per drive even when the recomputation keeps
+differing; every later reach consumes. The identity drift is what a body needs
+when a re-run gate flips (tsugu: the post-move buy was previously answered by
+the consumed Move, and the `latch:tsugu_ycm_moved` slot was its manual
+workaround). Neither drift restores the entry's `condition`: the swallowed
+answer's effect already landed (the accepted buy offer ran the buy body), and
+the new request applies on top of it — an identity drift on a buy offer
+therefore sees the now-owned tile rather than re-offering the buy
+(`rokka_first_deed_contract`). Same-kind requests otherwise never re-apply —
+an application they already crossed onto live is the correct one, and re-running
+it from the restored `condition` drops effects nested requests landed meanwhile
+(the Afterglow free-house build in the buy pipeline). Kind identity cannot
+oscillate (a body that flip-flops its kind at one slot is re-applied once and
+then consumes), so this terminates; `JournalStart::Replace` is the drifts'
+plumbing and is emitted only there.
 
 `last` survives only the drive's passes and is cleared when the drive
 returns.
@@ -1211,18 +1232,23 @@ Before: `Action::Effect("target == owner && actor != owner", …)` with the
 After:
 
 ```rust
-On::Action(Action::Effect(
+On::Action(Action::Target(
     "target == owner && actor != owner", Some(landed_redirect), mark_used))
 ```
 
 ```rust
-fn landed_redirect(_: i32) -> bool { ctx::trigger::redirected() }
+fn landed_redirect(_: i32) -> bool {
+    ctx::trigger::redirected() && !ctx::designation_cancelled(ctx::trigger::target())
+}
 ```
 
 The latch write moves out of `redirect` into `mark_used` (`state::add` on the
 same per-instance key, unchanged), so it runs once per settled declaration and
 no longer on probe passes. A rent or a direct effect to the owner has no
-`redirected_from` and no longer latches.
+`redirected_from` and no `target` raise at all for EXIST (its condition needs a
+player target equal to the owner and a foreign actor). A negated link never
+reaches `target`; a cancelled designation is excluded by the second conjunct.
+C-Q8 resolved to settlement (option (b)).
 
 ### 7.6 `no_breakup`
 
@@ -1736,7 +1762,7 @@ the fix is now in the body.
 | # | clause | design element | test | verdict |
 |---|---|---|---|---|
 | 1 | 「场上及打出的所有对单一玩家生效的手卡…的目标将改为你」 | the existing `Redirect` Filter, unchanged | existing `exist_*` | matched |
-| 2 | 「若在此期间此卡没有造成影响」 | the `Effect` entry's `redirected()` guard (§6.4, §7.5) | `g10_exist_latch_needs_a_landed_redirect`, `g10_exist_latch_ignores_a_plain_rent_payment` | matched, assumption (Q3) |
+| 2 | 「若在此期间此卡没有造成影响」 | the `Target` (settlement) entry's guard: `redirected()` and `!designation_cancelled(target)` (§7.5) | `g10_exist_latch_needs_a_landed_redirect`, `g10_exist_latch_ignores_a_plain_rent_payment`, `g10_exist_latch_ignores_a_direct_target`, `g07_exist_redirect_then_negated_designation` | matched (C-Q8: settlement) |
 | 3 | 「你的下回合开始时将其翻入弃牌堆」 | the existing `TurnStart` body, unchanged | existing | matched |
 
 ### 14.6 `Sumimi:Sumimi不会解散哦`
@@ -1854,15 +1880,22 @@ Two shapes differ from the text above and are the ones the code uses:
     * **money** is an absolute total and the request's own effect is already
       on `live`; measured against the pass base the effect reads as a guest
       write and is crossed back (a `pay`'s debit undone by its own replay).
-      The reload therefore writes the recorded post-request figure over
-      **both** `live` and the copy instead of relying on a three-way guard:
-      the copy's own figure differs from `live` whenever the body wrote it in
-      an earlier pass, and a stale copy crossed back would undo the request
-      (a `world_restore` putting an old balance back, then the reload
-      re-imposing the pre-restore total). `Run::pass_base.money` keeps the
-      pass-start figure: the commit's row is the whole pass delta, or a write
-      made before the last request would be reverted by the pass top and
-      never re-applied.
+      The reload therefore writes the recorded post-request figure over a
+      seat still standing at the request's pre-value on **both** `live` and
+      the copy -- the copy's own figure differs from `live` whenever the body
+      wrote it in an earlier pass, and a stale copy crossed back would undo
+      the request (a `world_restore` putting an old balance back, then the
+      reload re-imposing the pre-restore total). A seat something has already
+      moved *past* the recorded figure keeps that newer one (a nested pay
+      behind the request, e.g. the settle's build inside the buy's hook), so
+      the diff base is the money the copy carries **after** that pass rather
+      than the row's figure: basing on the figure (higher than the nested pay
+      left the seat) recorded that pay as a guest write and the next pass top
+      reverted it, leaving the `lose` line with no balance move
+      (`band_free_house_then_paid_second_build`).
+      `Run::pass_base.money` keeps the pass-start figure: the commit's row is
+      the whole pass delta, or a write made before the last request would be
+      reverted by the pass top and never re-applied.
     * **position** has the same shape for a `Move`: the landing is the
       request's effect and the reload writes the recorded `after_pos` over
       both sides, while `after_host`'s copy refresh lays it down for the

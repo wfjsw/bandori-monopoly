@@ -136,12 +136,17 @@ fn counteract(player_id: i32) -> card_sdk::Asked {
         &free,
     )?;
     ctx::teleport_to(player_id, to);
-    // The settle still opens its own optional buy like any other landing; 「必须购买」
-    // below is the binding one and runs after it.
+    // 规则书[手]: 「且必须购买」 -- the settle's own optional buy offer would
+    // duplicate the forced one below (LOY-MUSTBUY-02), so it is suppressed for
+    // this settle; the forced buy after it is the binding one. The flag
+    // carries onto the settle's own frame, so clearing it right after the
+    // queue does not re-open the offer (a plain landing later still gets the
+    // ordinary optional one).
+    ctx::plan::set_no_buy(true);
     ctx::settle_tile_at(player_id, to, true);
-    // Accepting the settle's own optional offer already bought the deed --
-    // `card_buy` would answer "already owned" false, so the owner check keeps that
-    // from logging 买不下.
+    ctx::plan::set_no_buy(false);
+    // `card_buy` would answer "already owned" false only if the offer bought
+    // it, which it no longer does; the owner check stays harmless.
     if ctx::tile_owner(to) != player_id
         && (ctx::money_of(player_id) < ctx::buy_price(to) || !ctx::card_buy(player_id, to))
     {

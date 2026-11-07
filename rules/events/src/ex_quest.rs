@@ -3,6 +3,8 @@
 //! 事件文本（`CardMeta` beside the rule body, id `EX任务挑战`）:
 //! > 抽出此卡的玩家投掷1d4并记录结果和26相加为X，然后所有玩家各自投掷3d20，结果至少为X的玩家可选择更换角色皮肤（技能相同）
 
+use alloc::vec::Vec;
+
 use bandori_std::ctx;
 use card_sdk::CardText;
 use card_sdk::{CardDef, Msg, On};
@@ -40,15 +42,35 @@ fn play(player_id: i32) -> card_sdk::Asked {
         if face < x {
             continue;
         }
-        // 「可选择更换角色皮肤（技能相同）」 -- a cosmetic swap only.
-        // TODO(规则书)/TODO(engine): 「更换角色皮肤」 has no mechanical effect
-        // (「技能相同」) and no ctx surface (no skin / cosmetic API), so the body
-        // only logs who became eligible. A skin-change ask is the missing surface.
+        // 「可选择更换角色皮肤（技能相同）」 -- a cosmetic swap only: the
+        // personas sharing `p`'s base character (`ctx::persona_skins`), with
+        // a 「不换」 first option. The swap writes the persona name and keeps
+        // the bound skills (「技能相同」).
+        let skins = ctx::persona_skins(p);
+        if skins.is_empty() {
+            continue;
+        }
+        let mut options: Vec<Msg> = Vec::with_capacity(skins.len() + 1);
+        options.push(Msg::new("ask.skip"));
+        for s in &skins {
+            options.push(Msg::new("ask.skinOption").chara("name", s));
+        }
+        let pick = ctx::ask_choice(
+            p,
+            &Msg::new("log.event.ex_quest_skin_title").player_id("who", p),
+            &Msg::new("log.event.ex_quest_skin_ask"),
+            &options,
+        )?;
+        if pick == 0 {
+            continue;
+        }
+        let skin = &skins[(pick - 1).min(skins.len() - 1)];
+        ctx::set_persona(p, skin);
         ctx::log(
             player_id,
             &Msg::new("log.event.ex_quest_skin")
                 .player_id("who", p)
-                .i("n", face as i64),
+                .chara("name", skin),
         );
     }
     Ok(())

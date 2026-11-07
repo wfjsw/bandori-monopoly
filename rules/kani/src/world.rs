@@ -1062,6 +1062,16 @@ pub struct World {
     pub trig_play_outcome: i32,
     /// `Trigger.out_cause` wire code, `-1` = none.
     pub trig_out_cause: i32,
+    /// The seat whose designation was cancelled (`-1` = none). One bit stands
+    /// for the per-pair list (`ctx::cancel_designation`, WINDOW-03).
+    pub designated_cancelled: i32,
+    /// `Turn.play_ineffective` -- the `-1` mark of a hand play (CH-07).
+    pub play_ineffective: bool,
+    /// The payer cannot cover the amount: `pay` / `pay_command` move what is
+    /// there and report the shortfall (CH-07 short-pay families).
+    pub pay_shortfall: bool,
+    /// `ctx::target` / `ask_player_target` designations are refused (`-1`).
+    pub target_refused: bool,
     /// The `effective` value the last Graveyard landing left on the row after
     /// the transition cleared it (`true` once a wasted entry lands). The row
     /// itself dies, so this is how the read-then-clear is observable.
@@ -1149,6 +1159,8 @@ pub struct World {
     pub trig_pay_is_fixed: bool,
     /// `TriggerPay.total_stage` (`pay_total_stage` pre); `true` is neutral.
     pub trig_pay_total_stage: bool,
+    /// `TriggerPay.split_total` (`pay_split_total` pre); `false` is neutral.
+    pub trig_pay_split_total: bool,
     /// `Trigger.charge_skill` (`charge_is_skill` pre).
     pub trig_charge_skill: bool,
     /// `Trigger.settle_tile` — the innermost open settle, `-1` = none.
@@ -1359,6 +1371,10 @@ impl World {
             trig_zone_counted: false,
             trig_play_outcome: -1,
             trig_out_cause: -1,
+            designated_cancelled: -1,
+            play_ineffective: false,
+            pay_shortfall: false,
+            target_refused: false,
             last_leave_effective_after: true,
             marks: [Mark::EMPTY; MAX_MARKS],
             marks_n: 0,
@@ -1402,6 +1418,7 @@ impl World {
             trig_pay_kind: -1,
             trig_pay_is_fixed: false,
             trig_pay_total_stage: true,
+            trig_pay_split_total: false,
             trig_charge_skill: false,
             trig_settle_tile: -1,
             trig_settle_outcome: -1,

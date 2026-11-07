@@ -51,6 +51,7 @@ const MISAKI: &str = "HHW:（美咲）";
 const NO_EXPECTATION: &str = "PP:不要背负期待";
 const LAYER_KEEP: &str = "RAS:（和奏瑞依）寄于指尖的执念";
 const PLEASE_CHOOSE: &str = "RAS:PLEASE CHOOSE";
+const NO_ROAD: &str = "MyGO:无路矢";
 const DOLL_GARDEN: &str = "Mujica:人偶的箱庭";
 const OWN_STAGE: &str = "R:选择自己的舞台";
 const RAIN: &str = "通用:雨啊，快点来吧";
@@ -463,6 +464,71 @@ fn g03_please_choose_opt1_offers_only_with_a_targeting_card() {
     assert!(
         t.on_field(0, "PP:[白鹭千圣]微笑的铁假面"),
         "the pick played it for the forced player"
+    );
+}
+
+// 规则书 (`please_choose` (1)): 「将你指定为目标（之一）」 -- the forced play of
+// a designating card makes this card's user the target, so the played card's
+// own target pick is not asked again (ABI-04). The `force` plan tag is cleared
+// after the play, so a later body does not inherit it.
+#[test]
+fn g03_please_choose_forced_play_designates_the_holder() {
+    let mut t = fresh(&["户山香澄", "lock"]);
+    t.give(1, &[PLEASE_CHOOSE]);
+    t.give(0, &[NO_ROAD]);
+    drain(&mut t);
+    t.set_pos(0, 0);
+    t.dice(&[8]); // onto RiNG 1, a livehouse
+    t.roll(0).unwrap();
+    t.counteract(1, PLEASE_CHOOSE).unwrap();
+    pick(&mut t, 0, "无路矢");
+    // The forced body runs straight through: no player-target prompt.
+    if let Some(p) = t.prompt() {
+        assert_ne!(
+            p.kind, "player",
+            "the forced target was asked again: {}",
+            t.dump_prompt()
+        );
+    }
+    drain(&mut t);
+    // The designation is the PLEASE CHOOSE holder (P1), not a picked seat.
+    assert_eq!(
+        t.state(0, "noRoad.who"),
+        1,
+        "no_road designated P1: {:?}",
+        t.recent_keys(24)
+    );
+    assert_eq!(t.state(0, "exile"), 2, "the exile cost was paid");
+    assert!(
+        t.on_field(0, NO_ROAD),
+        "the card was placed on the field: hand={:?} {:?}",
+        t.hand(0),
+        t.recent_keys(24)
+    );
+    assert!(
+        !t.m
+            .world()
+            .turn
+            .plan
+            .tags
+            .iter()
+            .any(|(k, v)| k == "force" && *v >= 0),
+        "the force tag is cleared after the play: {:?}",
+        t.m.world().turn.plan.tags
+    );
+
+    // With the only other player exiled, no_road has no target on board and its
+    // press gate refuses. An exiled holder cannot answer a hand counteraction
+    // (`OnBoard` gate), so pin the refusal directly rather than through
+    // please_choose.
+    let mut t = fresh(&["户山香澄", "lock"]);
+    t.give(0, &[NO_ROAD]);
+    t.set_state(1, "exile", 1);
+    drain(&mut t);
+    let err = t.play(0, NO_ROAD).unwrap_err();
+    assert!(
+        err.contains("no_road_blocked_none"),
+        "no on-board other player refuses the card: {err}"
     );
 }
 

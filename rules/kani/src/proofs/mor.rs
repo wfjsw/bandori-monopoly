@@ -1035,9 +1035,12 @@ crate::host_subset!(starry_play_dispatch {
     opt_int | opt_str | opt_tile => arm_opt,
     ask => arm_ask,
     pay => arm_pay,
+    pay_command => arm_pay_command,
     set_dest => arm_set_fate,
     place_card_at => arm_place_card_at,
     add_counter_self => arm_add_counter_self,
+    set_ineffective_at => arm_set_ineffective_at,
+    self_uid => arm_self_uid,
     log | effect => arm_log,
 });
 
@@ -1081,6 +1084,42 @@ fn starry_01_place_iff_at(user: i32) {
     );
     crate::kassert!(world::arr4_eq(post.pos, condition.pos), "frame: pos");
     crate::kassert!(world::arr4_eq(post.charge, condition.charge), "frame: fire");
+}
+
+/// A payer who cannot cover X*1000 arms 「视为此卡未生效」 (CH-07, C-Q5(a)):
+/// no place, no crystals, and the play's waste bit is set.
+#[kani::proof]
+#[kani::use_stub_set(crate::kani_stubs::LIB_COST_NOFMT)]
+#[kani::unwind(32)]
+pub fn starry_shortfall_wasted_iff() {
+    let user = 0i32;
+    starry_play_world(user);
+    world::with_world_mut(|w| {
+        // A hand play's `self_uid()` is `-1` (the waste bit rides the play).
+        w.bound_uid = -1;
+        w.money[user as usize] = 0;
+        w.pay_shortfall = true;
+    });
+    invoke::unwrap_done(card_morfonica::starry_night::starry_night_kani(user));
+    let mut ebuf = [Effect::SetPayAmount { to: 0 }; world::MAX_LOG];
+    let log_n = effects_of(&mut ebuf);
+    let effects = &ebuf[..log_n];
+    crate::kassert!(
+        !effects
+            .iter()
+            .any(|e| matches!(e, Effect::PlaceCard { .. })),
+        "C-MOR-starry: no placement on a shortfall"
+    );
+    crate::kassert!(
+        !effects
+            .iter()
+            .any(|e| matches!(e, Effect::AddCounter { .. })),
+        "C-MOR-starry: no crystals on a shortfall"
+    );
+    crate::kassert!(
+        world::with_world(|w| w.play_ineffective),
+        "C-MOR-starry: the waste bit is armed"
+    );
 }
 
 #[kani::proof]
@@ -1782,6 +1821,7 @@ crate::host_subset!(noble_dispatch {
     settle_tile_at => arm_protocol_stub,
     place_mark => arm_place_mark,
     self_uid => arm_self_uid,
+    set_ineffective_at => arm_set_ineffective_at,
 });
 
 /// `owned == true`: the tile under the user is theirs. Else it is the other seat's.
@@ -1841,6 +1881,8 @@ pub fn noble_02_mark_user1_iff() {
 /// NO-OP (not yours): no effects.
 fn noble_02_not_yours_noop_at(user: i32) {
     let _pos = noble_world(user, false);
+    // A hand play's `self_uid()` is `-1` (the waste bit rides the play).
+    world::with_world_mut(|w| w.bound_uid = -1);
     let condition = world::snapshot();
     invoke::unwrap_done(card_morfonica::noble_blue::noble_blue_kani(user));
     kani::cover!(true, "body returned");
@@ -1855,6 +1897,10 @@ fn noble_02_not_yours_noop_at(user: i32) {
     );
     crate::kassert!(world::arr4_eq(post.money, condition.money), "frame: money");
     crate::kassert!(world::arr4_eq(post.pos, condition.pos), "frame: pos");
+    crate::kassert!(
+        world::with_world(|w| w.play_ineffective),
+        "C-MOR-noble-02: the no-effect branch arms the waste bit (CH-07)"
+    );
 }
 
 #[kani::proof]

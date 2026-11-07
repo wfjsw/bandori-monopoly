@@ -924,6 +924,17 @@ impl Table {
         self.m.world().hidden[who].graveyard.clone()
     }
 
+    /// How many hand-card plays this turn has announced (the `twoCards`
+    /// counter) -- a refused activation must not move it.
+    pub fn cards_played(&self) -> usize {
+        self.m.world().turn.cards_played
+    }
+
+    /// The ids played from hand this turn -- a refused activation adds none.
+    pub fn turn_played(&self) -> &[String] {
+        &self.m.world().turn.played
+    }
+
     pub fn field(&self, who: usize) -> Vec<FieldCard> {
         self.m.world().st.players[who].field.clone()
     }

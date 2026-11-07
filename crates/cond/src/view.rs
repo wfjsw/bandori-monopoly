@@ -52,6 +52,9 @@ pub trait CondView {
     /// Is the pending payment a command total (`pay_total_stage`); neutral
     /// `true` without a payment.
     fn pay_total_stage(&self) -> bool;
+    /// Is this the one window of a 「[分摊]」 command total
+    /// (`pay_split_total`)?
+    fn pay_split_total(&self) -> bool;
     /// The `ChargePaying` window came from a skill cost (`charge_is_skill`).
     fn charge_is_skill(&self) -> bool;
     /// Does the answered subject card declare `RANGE_CARD`?

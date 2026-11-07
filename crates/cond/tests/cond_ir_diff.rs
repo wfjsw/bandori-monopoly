@@ -101,6 +101,7 @@ fn set_scalar(f: &mut Fixture, id: VarId, ty: VarType, v: FillVal) {
         VarId::PayKind => f.win.pay_kind = raw,
         VarId::PayIsFixed => f.win.pay_is_fixed = raw,
         VarId::PayTotalStage => f.win.pay_total_stage = raw != 0,
+        VarId::PaySplitTotal => f.win.pay_split_total = raw != 0,
         VarId::SubjectRangeCard => f.win.subject_range_card = raw != 0,
         VarId::ExtremeArmed => f.win.extreme_armed = raw != 0,
         VarId::PendingNegation => f.win.pending_negation = raw,

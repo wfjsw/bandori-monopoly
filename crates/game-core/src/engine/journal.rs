@@ -300,6 +300,9 @@ pub enum JournalRequest {
     WorldSnapshotDrop {
         key: i32,
     },
+    DiscardNextFx {
+        player_id: i32,
+    },
     PayRent {
         player_id: i32,
         tile: i32,
@@ -339,6 +342,10 @@ pub enum JournalRequest {
         source: i32,
     },
     RaiseBought {
+        player_id: i32,
+        tile: i32,
+    },
+    Auction {
         player_id: i32,
         tile: i32,
     },

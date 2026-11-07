@@ -92,11 +92,16 @@ fn counteract(player_id: i32) -> card_sdk::Asked {
     // 规则书[反击]（1）: 「立即打出一张可将你指定为目标的牌并将你指定为目标（之一）」
     if let Some(id) = cards.get(pick as usize) {
         let name = id.as_str();
-        // TODO(ABI-04)（将你指定为目标（之一））: the forced play runs the
-        //   card's own body, so its target declare still asks `other`; the
-        //   force-target play tag (`Tags["force"] = player_id`) is ABI-04's.
+        // 规则书[反击]（1）: 「将你指定为目标（之一）」 -- the forced body's own
+        // target pick must name this card's user (`player_id`) without asking
+        // again. The `"force"` plan tag is the designation; the plan crosses the
+        // play's pause, and the played card reads it through
+        // `ctx::ask_player_target` (ABI-04). Stored **plus one**: the tag's
+        // missing-name answer is 0 and seat 0 is a valid holder.
+        ctx::plan::set_tag("force", player_id + 1);
         let dest = ctx::play_card(name, other)?;
         apply_dest(other, name, dest);
+        ctx::plan::set_tag("force", 0);
         ctx::log(
             other,
             &Msg::new("log.play")

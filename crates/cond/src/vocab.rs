@@ -284,6 +284,18 @@ pub const VOCAB: &[Name] = &[
         doc: "1 = a command total, 0 = a split leg or an already staged command (neutral 1 without a payment)",
     },
     Name {
+        cel: "pay_split_total",
+        aliases: &[],
+        flat: "pay_split_total",
+        scope: Scope::Window,
+        ty: Type::Bool,
+        get: |v| v.pay_split_total() as i64,
+        get_str: NO_GET_STR,
+        func: NO_FUNC,
+        lower_as: crate::ext::LowerAs::Direct,
+        doc: "1 = the one window of a 「[分摊]」 command total (false on a whole payment and on every leg)",
+    },
+    Name {
         cel: "subject_range_card",
         aliases: &[],
         flat: "subject_range_card",

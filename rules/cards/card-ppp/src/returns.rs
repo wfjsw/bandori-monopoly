@@ -41,13 +41,12 @@ const PROP_FROM: &str = "returns.from";
 pub const RETURNS: CardDef = CardDef::new(
     "PPP:Returns",
     &[
-        // TODO(ABI)（[拥有者]的通用卡的[手]效果全部生效后获得1个星星贴纸）:
-        // `cardPlayed` carries no play-cancelled flag -- it is raised even when the
-        // play was counteracted, so a negated 通用 play still pays -- and a hand
-        // [反击] card is resolved in the counteraction tree and raises no
-        // `cardPlayed` at all, so a 通用 [反击] pays nothing.
-        // 规则书[持续]（4）: 「[拥有者]的通用卡的[手]效果全部生效后」 -- `condition::MINE`
-        // states the actor; the residual guard names the 通用 card. The body
+        // 规则书[持续]（4）: 「[拥有者]的通用卡的[手]效果全部生效后」 -- 「全部生效后」
+        // means a negated play pays nothing: `cardPlayed` carries `play_outcome`
+        // (G08 §2.4) and `on_played` returns early on `Cancelled`. A hand
+        // counter is announced `cardPlayed` too, so a 通用 [反击] pays.
+        // `condition::MINE` states the actor; the residual guard names the 通用
+        // card. The body
         // used to re-check the actor and the prefix and return early -- a flash
         // per non-通用 play by the owner.
         On::Action(Action::CardPlayed(card_sdk::condition::MINE, Some(on_played_is_general), on_played)),
@@ -247,6 +246,10 @@ fn on_played_is_general(_player_id: i32) -> bool {
 
 /// 规则书[持续]（4）: 「[拥有者]的通用卡的[手]效果全部生效后获得1个星星贴纸」.
 fn on_played(player_id: i32) -> card_sdk::Asked {
+    // 「全部生效后」: a counteracted play never took effect (G08 §2.4).
+    if ctx::trigger::play_outcome() == Some(card_sdk::abi::PlayOutcome::Cancelled) {
+        return Ok(());
+    }
     ctx::add_held_by_name(player_id, "星星贴纸", 1, i32::MAX)?;
     ctx::log(player_id, &Msg::new(key!("returns_sticker")));
     Ok(())

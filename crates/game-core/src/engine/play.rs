@@ -1658,10 +1658,21 @@ impl PlayCtx<'_> {
         // The named tile is an identity: the frame pins it and does not let a
         // swap re-resolve it. The position is only the slot it stands at.
         let at = self.w.position_of_tile(tile as i32).max(0) as usize;
-        // A nested settle's counter writes must not shape the outer move.
+        // A nested settle's counter writes must not shape the outer move. The
+        // caller's `no_buy` (a card-forced settle that must buy, LOY-MUSTBUY-02)
+        // carries into the settle's own frame: the seed's staging inherit is
+        // not reliable for a frame opened from inside a counter body. The turn
+        // latch is one-shot -- consumed here -- so the body's later
+        // `set_no_buy(false)` cannot clear the settle's copy.
+        let no_buy = self.w.plan().no_buy || self.w.turn.settle_no_buy;
+        self.w.turn.settle_no_buy = false;
         self.w.begin_plan(player_id, PlanKind::SideMove, m.clone());
+        if no_buy {
+            self.w.plan_mut().no_buy = true;
+        }
         let mut frame = crate::engine::work::SettleFrame::new(player_id, at, tile as i32, m);
         frame.scoped = true;
+        frame.no_buy = no_buy;
         // Always go through the pump: nested jobs suspend and resume on the
         // work stack (the pump catches `Halt::Suspended` and keeps going).
         // A call from inside an active pump must not reach here -- the drive's
@@ -2759,6 +2770,10 @@ impl PlayCtx<'_> {
     /// recursing. See `docs/ENGINE.md` "settle work stack".
     fn settle_at(&mut self, i: usize, at: usize, tile: i32, m: &Move) -> Flow<()> {
         let mut frame = crate::engine::work::SettleFrame::new(i, at, tile, m.clone());
+        // 「必须购买」 (LOY-MUSTBUY-02) is one-shot per settle; a walk landing
+        // settles here, so the latch is consumed onto the frame too.
+        frame.no_buy = self.w.plan().no_buy || self.w.turn.settle_no_buy;
+        self.w.turn.settle_no_buy = false;
         self.step_settle(&mut frame)
     }
 
@@ -2815,6 +2830,7 @@ impl PlayCtx<'_> {
                     .clone()
                     .expect("planted by `with_move`"),
                 is_main_move: frame.m.is_main_move,
+                no_buy: frame.no_buy,
             });
             frame.stack_idx = self.settle_stack.len() - 1;
             // The guest factor API reads the product and the innermost base
@@ -3585,8 +3601,11 @@ impl PlayCtx<'_> {
     /// [结算]是：可选择[消耗]…获得格子地契和拥有权」).
     fn offer_buy(&mut self, i: usize, t: usize) -> Flow<()> {
         // Never prompt for an offer `buy` would refuse: the plan bars a buy,
-        // or a `BuyGate` hook vetoes it.
-        if self.w.plan().no_buy {
+        // this settle is a forced one, or a `BuyGate` hook vetoes it.
+        if self.w.plan().no_buy
+            || self.settle_stack.last().is_some_and(|e| e.no_buy)
+            || self.w.turn.settle_no_buy
+        {
             return Ok(());
         }
         let quote = self.buy_quote_for(i, t, purchase::BuyKind::Land);
@@ -4448,6 +4467,37 @@ impl PlayCtx<'_> {
         // depth (the rulebook has no depth limit); the re-entrancy guard
         // (`PlayCtx::reentrant_hooks`) is the termination argument.
         if amount > 0 {
+            // 支付阶段 1 「支付计算前」: the declared figure, immediately
+            // before the `effect` window. Hook-only -- no cancel or retarget
+            // power; a `set_pay_amount` / `set_pay_target` folds into the
+            // declaration `effect` then sees (HOST-03, G02 §4.1).
+            let t = raise!(
+                self,
+                "payCalcBefore",
+                side,
+                player_id = payer,
+                target = to.map_or(-1, |t| t as i32),
+                value = amount,
+                by_card = p.by_card,
+                @p TriggerPay::new(p.kind, rent, total_stage, p.shape),
+                tile = p.tile.map_or(-1, |t| t as i32),
+                effects = vec![super::rules::Effect {
+                    kind: "pay".into(),
+                    target: to.map_or(-1, |t| t as i32),
+                    from: payer,
+                    tile: p.tile.map_or(-1, |t| t as i32),
+                    value: amount,
+                }],
+            )?;
+            if t.value != amount {
+                modified = true;
+            }
+            amount = t.value;
+            to = (t.target >= 0).then_some(t.target as usize);
+            Self::fold_pay_payload(&mut p, &t, &mut rent, &mut fixed);
+            if partner.is_none() && p.shape == PayShape::PayeeHalf {
+                partner = to;
+            }
             let t = raise!(
                 self,
                 "effect",
@@ -4557,6 +4607,7 @@ impl PlayCtx<'_> {
                             &mut p,
                             amount,
                             &["payCombinedAdd"],
+                            false,
                         )?
                         .unwrap_or(amount);
                     // The pre-split windows may have rewritten kind / rent / shape
@@ -4627,6 +4678,7 @@ impl PlayCtx<'_> {
                         &mut p,
                         amount,
                         &["payCombinedMul", "payCombinedCancel"],
+                        false,
                     )? {
                         // `payCombinedCancel` dropped the whole command.
                         None => {
@@ -4772,9 +4824,10 @@ impl PlayCtx<'_> {
                 }
             }
         }
-        // `pay` is a settlement hook now: what the payment actually was. It
-        // runs after the chain, so it can no longer be used to reconstruct
-        // 「被…效果影响」 -- that is `effect`'s job.
+        // `pay` is 支付阶段 5 「支付时」 -- the cancel / retarget window, after
+        // the whole count chain. It runs after the chain, so it can no longer
+        // be used to reconstruct 「被…效果影响」 -- that is `effect`'s job.
+        // (进行支付 / 分摊 shaping stays on `paySplitChoose` / `paySplitAt`.)
         //
         // V5 (`NEGATION-AUDIT`): the settlement window honours
         // `set_cancelled()` -- a counter body that cancels the `pay` link stops
@@ -5031,13 +5084,18 @@ impl PlayCtx<'_> {
             settle_tile = self.settle_tile(),
             tile = p.tile.map_or(-1, |t| t as i32)
         )?;
-        if let Some(f) = p.from.filter(|_| loss > 0) {
+        // 支付阶段 7 「资金变动」: the settled figure, on a loss **and** on a
+        // receipt. A print has no payer, so the seat is the payee and
+        // `player_id` stays -1 there (HOST-03).
+        if moved > 0 {
+            let seat = p.from.or(to).expect("a payment has a side");
             raise!(
                 self,
                 "paid",
-                f,
+                seat,
+                player_id = payer,
                 target = to.map_or(-1, |t| t as i32),
-                value = loss,
+                value = moved,
                 by_card = p.by_card,
                 @p TriggerPay::new(p.kind, rent, total_stage, p.shape),
                 settle_tile = self.settle_tile(),
@@ -5100,6 +5158,7 @@ impl PlayCtx<'_> {
         p: &mut Pay,
         total: i32,
         kinds: &[&str],
+        split_total: bool,
     ) -> Flow<Option<i32>> {
         let total_stage = p.runs_total_stage;
         let mut amount = total;
@@ -5116,7 +5175,7 @@ impl PlayCtx<'_> {
                     target = to.map_or(-1, |t| t as i32),
                     value = amount,
                     by_card = p.by_card,
-                    @p TriggerPay::new(p.kind, p.rent, total_stage, p.shape),
+                    @p TriggerPay::new(p.kind, p.rent, total_stage, p.shape).with_split_total(split_total),
                     settle_tile = self.settle_tile(),
                     tile = p.tile.map_or(-1, |t| t as i32)
                 )?;
@@ -5134,7 +5193,7 @@ impl PlayCtx<'_> {
                 target = to.map_or(-1, |t| t as i32),
                 value = amount,
                 by_card = p.by_card,
-                @p TriggerPay::new(p.kind, p.rent, total_stage, p.shape),
+                @p TriggerPay::new(p.kind, p.rent, total_stage, p.shape).with_split_total(split_total),
                 settle_tile = self.settle_tile(),
                 tile = p.tile.map_or(-1, |t| t as i32)
             )?;
@@ -5161,7 +5220,7 @@ impl PlayCtx<'_> {
         &mut self,
         from: Option<usize>,
         to: Option<usize>,
-        total: i32,
+        mut total: i32,
         by_card: Option<i32>,
     ) -> Flow<Option<i32>> {
         if total <= 0 {
@@ -5175,14 +5234,82 @@ impl PlayCtx<'_> {
         let payer = from.map_or(-1, |f| f as i32);
         let mut probe = Pay::new(total, PayKind::Card);
         probe.by_card = by_card;
-        let shaped = self.pay_total_stages(
+        // The command total raises the same `effect` counteraction window a
+        // whole payment does (G02 §2.20, I11): a 「一次性…支付至少5000」 counter
+        // reads the one figure, never a share. The probe is the command's own
+        // `Pay` (`runs_total_stage = true`), so `pay_total_stage` is 1 here and
+        // 0 on every leg. A cancel drops the whole command (`None`).
+        let mut rent = probe.rent;
+        let mut fixed = probe.shape == PayShape::Fixed;
+        // 支付阶段 1 「支付计算前」 on the command total, before its
+        // `effect` window (HOST-03). Hook-only; the writes fold into the
+        // declaration `effect` sees.
+        let t = raise!(
+            self,
+            "payCalcBefore",
             side,
-            payer,
-            &mut to,
-            &mut probe,
-            total,
-            &["payCombinedAdd", "payCombinedMul", "payCombinedCancel"],
+            player_id = payer,
+            target = to.map_or(-1, |t| t as i32),
+            value = total,
+            by_card = probe.by_card,
+            @p TriggerPay::new(probe.kind, rent, true, probe.shape).with_split_total(true),
+            tile = -1,
+            effects = vec![super::rules::Effect {
+                kind: "pay".into(),
+                target: to.map_or(-1, |t| t as i32),
+                from: payer,
+                tile: -1,
+                value: total,
+            }],
         )?;
+        total = t.value;
+        probe.amount = total;
+        if t.target >= 0 {
+            to = Some(t.target as usize);
+        }
+        Self::fold_pay_payload(&mut probe, &t, &mut rent, &mut fixed);
+        let t = raise!(
+            self,
+            "effect",
+            side,
+            player_id = payer,
+            target = to.map_or(-1, |t| t as i32),
+            value = total,
+            by_card = probe.by_card,
+            @p TriggerPay::new(probe.kind, rent, true, probe.shape).with_split_total(true),
+            tile = -1,
+            effects = vec![super::rules::Effect {
+                kind: "pay".into(),
+                target: to.map_or(-1, |t| t as i32),
+                from: payer,
+                tile: -1,
+                value: total,
+            }],
+        )?;
+        Self::fold_pay_payload(&mut probe, &t, &mut rent, &mut fixed);
+        if t.is_cancelled() || !t.settles_for(side as i32) {
+            return Ok(None);
+        }
+        total = t.value;
+        probe.amount = total;
+        if t.target >= 0 {
+            to = Some(t.target as usize);
+        }
+        // A `Fixed` write at the total is the card's own figure: the combined
+        // stages are skipped, exactly as a `Fixed` leg skips its chain.
+        let shaped = if fixed {
+            Some(total)
+        } else {
+            self.pay_total_stages(
+                side,
+                payer,
+                &mut to,
+                &mut probe,
+                total,
+                &["payCombinedAdd", "payCombinedMul", "payCombinedCancel"],
+                true,
+            )?
+        };
         // A cancelled command is `None`. A non-positive shaped total is nothing
         // to divide -- the per-leg `money()` calls (and their Q3 reversal) live
         // on the shares, not here.
@@ -5652,8 +5779,21 @@ impl PlayCtx<'_> {
         Ok(())
     }
 
-    /// Auction one deed among the players still in.
+    /// Auction one deed among the players still in (bankruptcy leftovers:
+    /// the dedicated auction timer, never a seat pool).
     fn auction_tile(&mut self, t: usize, from: usize) -> Flow<()> {
+        self.auction_deed(t, from, false, self.w.clock.bankrupt_auction_time)
+            .map(|_| ())
+    }
+
+    /// The ordinary auction on one tile, answerable from a card body
+    /// (`ctx::auction`, 弦卷集团地产开发's 「所有玩家进行竞价」): every present,
+    /// pay-gated seat from `from` may bid, the highest pays its bid and takes
+    /// the deed. Answers the winner seat (`-1` = nobody bid / the deal
+    /// voided). `use_pool` selects the per-seat time pool over
+    /// [`crate::clock::ClockSettings::bankrupt_auction_time`]; ordinary
+    /// auctions pass `true`.
+    pub fn auction_deed(&mut self, t: usize, from: usize, use_pool: bool, time: f32) -> Flow<i32> {
         // `BuyGate` filters bidders (`docs/PURCHASE.md` P4): a player the gate
         // refuses cannot bid.
         let mut players: Vec<usize> = Vec::new();
@@ -5675,7 +5815,7 @@ impl PlayCtx<'_> {
         if players.is_empty() {
             self.w
                 .log("text", -1, Msg::new("log.auction_nobody").tile("tile", t));
-            return Ok(());
+            return Ok(-1);
         }
         // The quote base sets AI worth (`docs/PURCHASE.md` P4).
         let base = purchase::quote_native(self.data, &self.w.st, t).max(0);
@@ -5698,18 +5838,14 @@ impl PlayCtx<'_> {
             Msg::new("ask.auction.title").tile("tile", t),
             text,
             worth,
-            // Bankruptcy leftover auction (`auction_leftovers`) is the only
-            // caller today and runs on its own dedicated timer -- never a
-            // seat pool. A future ordinary auction would pass `use_pool: true`
-            // and a pool-backed window instead.
-            self.w.clock.bankrupt_auction_time,
-            false,
+            time,
+            use_pool,
         );
         let r = self.ask(ask)?;
         if r.answered.bidder < 0 {
             self.w
                 .log("text", -1, Msg::new("log.auction_no_bid").tile("tile", t));
-            return Ok(());
+            return Ok(-1);
         }
         let (b, bid) = (r.answered.bidder as usize, r.answered.bid);
         if self.w.st.owners[t] >= 0 || !self.can_pay(b) {
@@ -5718,7 +5854,7 @@ impl PlayCtx<'_> {
                 b as i32,
                 Msg::new("log.auction_void").player_id("who", b),
             );
-            return Ok(());
+            return Ok(-1);
         }
         // `spendBefore` -- the raw-spend window runs before affordability, so a
         // reduction can prevent a shortfall. Only the affordability test and
@@ -5738,7 +5874,7 @@ impl PlayCtx<'_> {
                     b as i32,
                     Msg::new("log.auction_void").player_id("who", b),
                 );
-                return Ok(());
+                return Ok(-1);
             }
         }
         // Money remains direct until ruling 7 (TODO(规则书) ruling 7).
@@ -5801,7 +5937,7 @@ impl PlayCtx<'_> {
             @b TriggerBuy::new(purchase::BuyKind::Auction, -1, bid)
         )?;
         self.wait(1.0);
-        Ok(())
+        Ok(b as i32)
     }
 
     // =============================================================== cards
@@ -5946,8 +6082,18 @@ impl PlayCtx<'_> {
                     i,
                     card = Some(card.clone()),
                     value = 1,
-                    cards = vec![card]
+                    cards = vec![card.clone()]
                 )?;
+            }
+            // ABI-08 「若无手牌则弃掉下一张抽到的牌」: the armed one-shot eats
+            // this drawn card. Cleared on the draw either way -- it is a
+            // one-shot even if a `drawn`/`drew` hook already moved the card
+            // out of the hand.
+            if self.w.st.players[i].discard_next {
+                self.w.st.players[i].discard_next = false;
+                if self.w.hidden[i].hand.iter().any(|c| c == &card) {
+                    self.discard(i, &card)?;
+                }
             }
         }
         if hooks && got > 0 {
@@ -6253,27 +6399,28 @@ impl PlayCtx<'_> {
         let outcome = game_kinds::PlayOutcome::from_i32(cancelled as i32);
         match dest {
             Dest::Graveyard => {
-                if !self.out(i) {
-                    self.w.hidden[i].graveyard.push(id.to_string());
-                    // The played card's own filing is a pile write, not a draw:
-                    // an emptied deck stays empty while the play's look holds it
-                    // open (design G11 I2).
-                    if self.w.refill_after_pile_write(i) {
-                        raise!(self, "reshuffled", i)?;
-                    }
-                    // The look's hold ends with the play's own filing.
-                    if let Some(held) = self.w.look_hold.get_mut(i) {
-                        *held = false;
-                    }
-                    // `discarded` -- before the `cardPlayed` announcement.
-                    raise!(
-                        self,
-                        "discarded",
-                        i,
-                        card = Some(id.to_string()),
-                        zone = Some(arrival)
-                    )?;
+                // A play that bankrupted still files its card (C-Q5(a): the card
+                // is spent even when its effect did not take). The pile and its
+                // maintenance stay the ordinary ones.
+                self.w.hidden[i].graveyard.push(id.to_string());
+                // The played card's own filing is a pile write, not a draw:
+                // an emptied deck stays empty while the play's look holds it
+                // open (design G11 I2).
+                if self.w.refill_after_pile_write(i) {
+                    raise!(self, "reshuffled", i)?;
                 }
+                // The look's hold ends with the play's own filing.
+                if let Some(held) = self.w.look_hold.get_mut(i) {
+                    *held = false;
+                }
+                // `discarded` -- before the `cardPlayed` announcement.
+                raise!(
+                    self,
+                    "discarded",
+                    i,
+                    card = Some(id.to_string()),
+                    zone = Some(arrival)
+                )?;
             }
             Dest::Hand => {
                 if id.starts_with("tile:") {

@@ -204,7 +204,8 @@ const Prompt = memo(function Prompt({ sess, id, close }: { sess: GameSession; id
           {p.kind === "pick" && <PickOptions p={p} answer={answer} auto={auto} />}
           {p.kind === "multi" && <MultiOptions p={p} answer={answer} auto={auto} names={names} />}
           {p.kind === "auction" && <Auction p={p} playerId={view.playerId} bidderName={p.bidder >= 0 ? names.playerId(p.bidder) : ""} answer={answer} auto={auto} />}
-          {p.kind !== "tile" && p.kind !== "mortgage" && p.kind !== "pick" && p.kind !== "multi" && p.kind !== "auction" && !returnsGroup && (
+          {p.kind === "money" && <MoneyOptions p={p} answer={answer} auto={auto} />}
+          {p.kind !== "tile" && p.kind !== "mortgage" && p.kind !== "pick" && p.kind !== "multi" && p.kind !== "auction" && p.kind !== "money" && !returnsGroup && (
             <Options p={p} answer={answer} auto={auto} names={names} />
           )}
         </div>
@@ -627,6 +628,29 @@ const Auction = memo(function Auction({ p, playerId, bidderName, answer, auto }:
           <button type="button" className={s.opt} disabled={auto} onClick={() => void answer({ value: -1 })}>{tr("prompt.pass")}</button>
         </div>
       )}
+    </div>
+  );
+});
+
+/** A free money amount (`money`): the maximum rides `price`, the field starts
+ *  on the engine's fallback and is clamped to `0..max` before sending. */
+const MoneyOptions = memo(function MoneyOptions({ p, answer, auto }: { p: MatchPrompt; answer: Answer; auto: boolean }) {
+  const max = Math.max(0, p.price);
+  const [amount, setAmount] = useState(Math.min(Math.max(0, p.fallback), max));
+  const send = () => void answer({ value: Math.min(Math.max(0, Math.round(amount)), max) });
+  return (
+    <div className={s.bidRow}>
+      <TextInput
+        type="number"
+        min={0}
+        max={max}
+        step={100}
+        value={amount}
+        disabled={auto}
+        onChange={(e) => setAmount(Number(e.target.value))}
+        className={s.bidInput}
+      />
+      <button type="button" className={cx(s.opt, s.optMain)} disabled={auto} onClick={send}>{tr("common.confirm")}</button>
     </div>
   );
 });

@@ -313,6 +313,14 @@ pub struct TurnCtx {
     /// The activation body's command scope (see [`World::enter_plan_command`]).
     #[serde(default)]
     pub plan_scope: crate::engine::move_ctx::PlanScope,
+    /// 「必须购买」 latch (`ctx::plan::set_no_buy`): also bars the settle's
+    /// *optional* buy, which a frame write alone can miss because a card-forced
+    /// settle runs after the writing body's frame is gone (LOY-MUSTBUY-02).
+    /// One-shot: `settle_tile_at` / `settle_at` consume it onto the settle
+    /// frame (and cross it at a pause), so the caller's later `false` cannot
+    /// clear the settle's copy.
+    #[serde(default)]
+    pub settle_no_buy: bool,
     pub player_id: usize,
     pub extra: bool,
     pub main_moved: bool,
@@ -528,6 +536,7 @@ impl Default for TurnCtx {
             plan: Default::default(),
             plan_stack: Vec::new(),
             plan_scope: Default::default(),
+            settle_no_buy: false,
             player_id: 0,
             extra: false,
             main_moved: false,

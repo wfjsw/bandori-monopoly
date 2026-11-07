@@ -502,19 +502,14 @@ fn first_accident_blocks_pp_skill_2() {
         };
         t.give_play(0, "PP:初次演出事故")
             .map_err(|e| format!("play rejected: {e}"))?;
-        // The seal is written by this very body, and a guest write does not
-        // reach the host routine that raises the (1) draw's hook (BACKLOG
-        // HOST-02): 大和麻弥's window on the accident's own draw can still
-        // open. From the next drive on the committed seal must hold for all
-        // three.
+        // The seal is written by this very body; the hook the accident's own
+        // draw raises must see it, so no PP (2) window opens on it either.
         while t.prompt().is_some() {
             if let Some(k) = pp_skill_prompt(&t) {
-                if k != "maya" {
-                    return Err(format!(
-                        "C-PP-first-accident-02: PP (2) skill {k} offered under 初次演出事故: {}",
-                        t.dump_prompt()
-                    ));
-                }
+                return Err(format!(
+                    "C-PP-first-accident-02: PP (2) skill {k} offered under 初次演出事故: {}",
+                    t.dump_prompt()
+                ));
             }
             t.decline();
         }

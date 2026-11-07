@@ -347,17 +347,17 @@ byte-identical (checkpoints, sim counts — `cargo run -p game-core --release
   `rules/tests/tests/inline_provider.rs` pins "no body swallows a
   prompt".
 
-**The one known equivalence gap.** The learn pass's body runs against a copy
-of the live world taken *before* the `HostRequest`s it discovers, so a body
-that queries state a host routine changed (money after a `pay`, say) sees the
-pre-effect value and can ask different questions — and the overlay the engine
-routine runs against (and therefore e.g. `paid.moved()`) can differ — from the
-replay model's last pass (which runs on `live + host_effects`). The answer
-plumbing itself is exact: `stub_rules_inline_matches_halt_replay_exactly`
-pins identical checkpoints with no card effects at all. Closing the gap needs
-a rebase of the guest's writes onto the updated live world after each
-`HostRequest` (a write journal on `Run`), which is the next increment. The
-test reports the gap per seed rather than assert through it.
+**Equivalence after each `HostRequest`.** The guest's writes at a pause cross
+onto live (`PlayCtx::overlay_guest_state`) before the routine applies, the
+host effect lands on live, and the guest diff re-bases on the updated live
+world. Every later pass -- including the final commit pass, which is an
+ordinary loop iteration with the answers pre-filled -- therefore shares the
+same `live + host_effects` world the replay model's last pass runs on, a
+nested settle's writes included. The answer plumbing is exact with no card
+effects at all: `stub_rules_inline_matches_halt_replay_exactly` pins identical
+checkpoints. The real-rules test asserts the same questions and every world
+field; only the live event-tail length differs (the halt/replay model writes
+one line per pass), and `inline_provider` reports that offset per seed.
 
 **Not yet: the tree policy as a provider.** During tree descent the provider
 is off and a prompt the tree branches on surfaces as `Advance::Decision`

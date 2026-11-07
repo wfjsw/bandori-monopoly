@@ -10,6 +10,30 @@
 use crate::world::{Effect, Snapshot, MAX_PLAYERS};
 
 // ===========================================================================
+// C-MYGO-no_road-01
+// 「视为此卡未生效」 — the designation was refused (网络链接异常 clause 2).
+// Card: `MyGO:无路矢` On::Play, refused-target branch.
+// Trigger: the forced designation does not land (`ctx::target` → None).
+// Effect: none; the play's waste bit is armed (CH-07 / C-Q5(a): spent anyway).
+// Frame: position, last instance and exile count unchanged.
+// ===========================================================================
+
+pub fn no_road_refused_wasted_ok(
+    effects: &[Effect],
+    condition: &Snapshot,
+    post: &Snapshot,
+    player: i32,
+    ineffective: bool,
+) -> bool {
+    let p = player as usize;
+    effects.is_empty()
+        && ineffective
+        && post.pos[p] == condition.pos[p]
+        && crate::world::arr8b_eq(post.hand, condition.hand)
+        && post.exile[p] == condition.exile[p]
+}
+
+// ===========================================================================
 // C-MYGO-rinpuu-01
 // 「使自己获得一层[停留]」
 // Card: `MyGO:轮符雨` On::Play.

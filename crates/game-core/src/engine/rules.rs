@@ -131,6 +131,12 @@ pub struct TriggerPay {
     /// Is this payment a command **total**, as against a 「[分摊]」 leg? A
     /// command that has already staged is also `false` (a reverse child).
     pub total_stage: bool,
+    /// Is this the one window of a 「[分摊]」 command total (the raise
+    /// `pay_total` makes before it divides)? Unlike [`Self::total_stage`] it
+    /// is `false` on a whole (single-payer) payment: it tells a counter that a
+    /// loss will follow as legs, so a per-loss figure does not read the whole
+    /// command.
+    pub split_total: bool,
 }
 
 /// Where a purchase's money goes. Lives in `game-kinds` -- one definition
@@ -194,7 +200,14 @@ impl TriggerPay {
             shape,
             is_rent,
             total_stage,
+            split_total: false,
         }
+    }
+
+    /// Mark this payload as the one window of a 「[分摊]」 command total.
+    pub fn with_split_total(mut self, on: bool) -> Self {
+        self.split_total = on;
+        self
     }
 }
 

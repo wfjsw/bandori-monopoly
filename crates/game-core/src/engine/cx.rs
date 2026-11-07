@@ -150,6 +150,23 @@ impl Ask {
         a
     }
 
+    /// `Money`: name a free amount in `0..=max`. No option list; the bound is
+    /// carried on `view.price`, the answer is the raw amount. `ai` is the
+    /// seat's preferred amount (`-1` = let the host fill from `fallback`).
+    pub fn money(
+        player_id: usize,
+        max: i32,
+        title: Msg,
+        text: Msg,
+        fallback: i32,
+        time: f32,
+    ) -> Self {
+        let mut a = Self::new("money", vec![player_id], title, text, time);
+        a.view.price = max.max(0);
+        a.view.fallback = fallback.clamp(0, max.max(0));
+        a
+    }
+
     /// `TileAsk`: pick one of `tiles` (answer == len means "none"). Same AI
     /// fill as [`Self::choice`]; chaos never takes "none" while a tile exists.
     pub fn tile(
@@ -357,6 +374,22 @@ pub fn heuristic_answer_with(
     if ask.view.kind == "auction" {
         return heuristic_auction(ask, params);
     }
+    if ask.view.kind == "money" {
+        // The bound is `view.price`, not an option index.
+        let max = ask.view.price.max(0);
+        let answers = (0..n)
+            .map(|k| match ask.ai.get(k).copied().unwrap_or(AI_UNSET) {
+                AI_UNSET => ask.view.fallback,
+                v => v.clamp(0, max),
+            })
+            .collect();
+        return Answered {
+            answers,
+            picked: Vec::new(),
+            bid: 0,
+            bidder: -1,
+        };
+    }
     let picks = matches!(ask.view.kind.as_str(), "pick" | "mortgage");
     let multi = ask.view.kind == "multi";
     let max = if ask.view.kind == "tile" {
@@ -529,6 +562,11 @@ pub struct SettleEntry {
     pub mv: super::rules::TriggerMove,
     /// The settle's main-move flag, stamped on inheriting raises.
     pub is_main_move: bool,
+    /// 「必须购买」 for this settle only (LOY-MUSTBUY-02): the settle's own
+    /// optional buy offer is suppressed and the caller's forced buy is the
+    /// binding one. Seeded from the frame, so a later `set_no_buy(false)`
+    /// cannot clear it.
+    pub no_buy: bool,
 }
 
 /// Routine context: the world being mutated, read-only game data, card rules, and
@@ -1024,6 +1062,9 @@ impl BoardDelta {
     fn apply_scalar(rows: &[(usize, i32, i32)], live: &mut [i32]) {
         for (i, b, w) in rows {
             if let Some(v) = live.get_mut(*i) {
+                if std::env::var("DBG_H01").is_ok() && *i == 16 {
+                    eprintln!("H01 apply_scalar tile16 live={} base={b} wrote={w}", *v);
+                }
                 if *v == *b {
                     *v = *w;
                 } else if *v != *w {
@@ -1518,6 +1559,13 @@ impl PassBase {
                     None => l.push(v.clone()),
                 },
                 None => l.retain(|c| c.name != *name),
+            }
+        }
+        for (i, base_v, wrote_v) in &own.persona {
+            if let (Some(v), Some(b)) = (live.st.players.get(*i), self.persona.get_mut(*i)) {
+                if v.persona == *wrote_v {
+                    *b = base_v.clone();
+                }
             }
         }
         for (i, base_v, wrote_v) in &own.money {
@@ -2137,6 +2185,13 @@ impl GuestOverlay {
         if let Some(d) = &self.events {
             d.apply(w);
         }
+        for (i, base, wrote) in &self.persona {
+            if let Some(p) = w.st.players.get_mut(*i) {
+                if p.persona == *base {
+                    p.persona = wrote.clone();
+                }
+            }
+        }
         for (i, base, wrote) in &self.money {
             if let Some(p) = w.st.players.get_mut(*i) {
                 // A host move since the crossing is kept and the guest's own
@@ -2509,6 +2564,11 @@ impl<'a> PlayCtx<'a> {
         t.next_move_pay_factor = f.next_move_pay_factor;
         t.plan.can_build = f.plan.can_build;
         t.plan.no_buy = f.plan.no_buy;
+        // The 「必须购买」 one-shot latch (LOY-MUSTBUY-02) lives beside the
+        // plan: a card body's write is on its own copy's `turn`, and only the
+        // staging `plan` crosses above, so the latch has to cross here or a
+        // `settle_tile_at` on the far side of the pause loses it.
+        t.settle_no_buy = f.settle_no_buy;
         t.plan.tags = f.plan.tags.clone();
         // A card body may latch a decision across the pauses its host routines
         // cause -- e.g. 黑色生日 freezing 「每名你以外的资金不多于1000的玩家」 at

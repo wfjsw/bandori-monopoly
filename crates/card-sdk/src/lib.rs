@@ -1919,6 +1919,11 @@ mod tests {
             "paySplitMulBefore"
         );
         assert_eq!(TriggerKind::PaySplitMulBefore.id, 110);
+        assert_eq!(
+            TriggerKind::from_str("payCalcBefore").spelling(),
+            "payCalcBefore"
+        );
+        assert_eq!(TriggerKind::PayCalcBefore.id, 142);
         // v105 hook kinds (104 / 107 stay retired).
         assert_eq!(TriggerKind::from_str("cardFired").spelling(), "cardFired");
         assert_eq!(

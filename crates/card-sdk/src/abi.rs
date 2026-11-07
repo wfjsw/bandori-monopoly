@@ -872,7 +872,36 @@ use crate::intern::NameId;
 ///    tells the engine the def's name is a rule, not a card, so a card area
 ///    (hand / draw pile / discard) drops the name instead of filing it
 ///    (`CardRules::rule_ids`, `World::note_non_card`).
-pub const ABI_VERSION: i32 = 119;
+/// v120: **支付阶段 1 「支付计算前」**. New hook-only (no counteraction
+///    window) Action / Trigger kind `PayCalcBefore = engine(142)` (wire
+///    `payCalcBefore`), raised on the **declared** figure immediately before
+///    the `effect` window; the command total raises it too (`pay_total`),
+///    before its own `effect`. `set_pay_amount` / `set_pay_target` fold into
+///    the declaration the `effect` window then sees. Hook-only, so window 5
+///    stays `pay` and window 7 stays `paid` (which now raises on a receipt
+///    as well, `player_id` = -1). The trigger payload also carries
+///    `split_total`, exposed as the `pay_split_total` guard scalar: it marks
+///    the one command-total window of a 「[分摊]」 command so a responder can
+///    answer the share instead. `ManifestOn` unchanged (an engine id).
+///    SAVE_VERSION / RECORD_VERSION unchanged.
+/// v121: **one-shot `DiscardNextFx` (ABI-08)**. New host request / import
+///    `discard_next_fx = 495` (`ctx::discard_next_fx(player_id)`): 「若无手牌
+///    则弃掉下一张抽到的牌」. It arms a per-seat flag; the draw loop discards
+///    the next drawn card and clears it. No PromptKind change.
+///    SAVE_VERSION 21 -> 22 (the flag is world state); RECORD_VERSION
+///    unchanged (the request rides the host journal).
+/// v122: **auction, `ask_money`, cosmetic skins (ABI-09 / HOST-05)**.
+///    New host request / import `auction = 496` (`ctx::auction(player_id,
+///    tile)`): 「所有玩家进行竞价，出价最大的玩家支付选择数量的资金并获得该
+///    格子的地契」 -- the engine's ordinary auction, answered with the winner.
+///    New `PromptKind::Money = 8` (wire `"money"`) and `ask_money`: a free
+///    amount in `0..=max`, no option list, the bound on `view.price` -- a
+///    money range is far too wide for `ask_choice`'s one-option-per-integer.
+///    New import `persona_skins = 497` (`ctx::persona_skins(player_id)`): the
+///    roster personas sharing the player's base character (`variant_of`),
+///    for 「更换角色皮肤（技能相同）」. SAVE_VERSION / RECORD_VERSION
+///    unchanged (the auction request rides the host journal; skins are data).
+pub const ABI_VERSION: i32 = 122;
 /// v108: **stage folds and rent / settle stages (MONEY-01)**. The amount
 ///    stages no longer apply one responder after the other: every responder of
 ///    an add stage reads the **stage input** and its deltas are summed, every
@@ -2065,6 +2094,12 @@ pub enum PromptKind {
     /// answer log and `ruleset_ask` already speak. Distinctness is the mask's
     /// own shape -- the same bit cannot be set twice.
     ChoiceMulti = 7,
+    /// Name a free amount of money (`ask_money`). No option list: the upper
+    /// bound rides `opt_count` and reaches the view as `view.price`; the
+    /// answer is the raw amount (`0..=max`). 「竞价」's 「支付选择数量的
+    /// 资金」 is what this exists for -- an `ask_choice` over every integer
+    /// would carry thousands of options.
+    Money = 8,
 }
 
 impl PromptKind {
@@ -2078,6 +2113,7 @@ impl PromptKind {
             5 => Self::TileId,
             6 => Self::TileWalk,
             7 => Self::ChoiceMulti,
+            8 => Self::Money,
             _ => return None,
         })
     }
@@ -2094,6 +2130,7 @@ impl PromptKind {
             Self::TileId => "tile",
             Self::TileWalk => "tile",
             Self::ChoiceMulti => "multi",
+            Self::Money => "money",
         }
     }
 }
@@ -2825,6 +2862,13 @@ impl ActionKind {
     /// with `set_pay_amount`; a cancel does not zero it (I5).
     pub const SpendBefore: Self = Self(TriggerKind::SpendBefore);
 
+    /// Action hook (hook-only, no counteraction window). 支付阶段 1
+    /// 「支付计算前」: the declared figure, immediately before the `effect`
+    /// window. Payload: player_id = the payer, target = the payee, value =
+    /// the declared figure, the pay flag, tile, by_card. `set_pay_amount` /
+    /// `set_pay_target` fold into what the `effect` window sees.
+    pub const PayCalcBefore: Self = Self(TriggerKind::PayCalcBefore);
+
     /// Action. The move's plan pass (行动阶段 8, before the dice are rolled) --
     /// the **declaring** side of [`FilterKind::DiceRollPlan`], same engine id
     /// 67 (dual: see [`Self::is_dual_action_filter`]). The entry's `declare`
@@ -3537,6 +3581,13 @@ impl TriggerKind {
     /// cost, `trigger::set_pay_amount` reduces it, and a cancel leaves the
     /// cost unchanged.
     pub const SpendBefore: Self = Self::engine(122);
+
+    /// `payCalcBefore` -- 支付阶段 1 「支付计算前」: the **declared** payment
+    /// figure, immediately before the `effect` window (and on the command
+    /// total before its `effect`). Hook-only (no counteraction window, so no
+    /// `ChainKind` window). `set_pay_amount` / `set_pay_target` fold into the
+    /// declaration the `effect` window then sees.
+    pub const PayCalcBefore: Self = Self::engine(142);
 
     /// `onBoardGate`
     pub const OnBoardGate: Self = Self::engine(108);

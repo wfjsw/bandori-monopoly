@@ -50,6 +50,7 @@
   "saki_move_ordered": "{{who}} is ordered to move 3 tiles",
   "saki_move_title": "Saki, Move",
   "sakiko_cut_ask": "[Teleport] to which tile and settle? (unowned buyable tile or your own)",
+  "sakiko_cut_deck_ask": "Played from the draw pile: activate without discarding a hand card? (No = do not activate)",
   "sakiko_cut_discard": "Discard a hand card",
   "sakiko_cut_moved": "{{who}} teleported to {{tile}}",
   "sakiko_cut_no_hand": "Cut the Attachment's effect: {{who}} has no hand card: the next card drawn will be discarded (Forget Everything)",

@@ -23,7 +23,11 @@ pub const TRITONE: CardDef = CardDef::new(
         // raw loss.
         On::Counteract(
             &[ChainKind::Effect],
-            "actor == owner && effect.has(Pay) && value > 0",
+            // A 「[分摊]」 command total also raises `effect`, but 「此次失去的
+            // 资金金额」 is the share this player actually loses (G02 §2.21):
+            // exclude the command-window with `!pay_split_total`, so the answer
+            // lands on the leg.
+            "actor == owner && !pay_split_total && effect.has(Pay) && value > 0",
             None,
             counteract).counter_reason(key!("tritone_when")),
         On::Counteract(

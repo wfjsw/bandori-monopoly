@@ -734,8 +734,133 @@ fn g10_journal_three_deep() {
     );
 }
 
+/// LOY-TSUGU-01: a re-run that makes a different request **kind** at a slot
+/// must not consume the previous answer (`inline::same_request`). The body
+/// latches and draws on the first pass; the re-run reads the latch and gains.
+/// A positional answer alone would hand the `Draw`'s reply to the `Pay` and
+/// the gain would never land. The draw already landed, so it is kept (the
+/// identity drift does not rewind, only re-applies).
+#[test]
+fn g10_replay_reapplies_a_different_request_kind() {
+    let mut t = Table::vanilla(2);
+    t.set_draw(0, &[DOOR]);
+    t.set_money(0, 10_000);
+    t.give_play(0, "TEST:identitySwitch").unwrap();
+    drain(&mut t);
+    assert_eq!(
+        count_key(&t, "identity_switch_gain_done"),
+        1,
+        "the gain ran: {:?}",
+        t.recent_keys(30)
+    );
+    assert_eq!(
+        t.money(0),
+        10_700,
+        "the gain paid, not a reused draw answer"
+    );
+    // The pile half is rewound to the pass checkpoint and replayed by the
+    // body's own writes; the superseded draw is not applied twice.
+    assert!(
+        !t.hand(0).contains(&DOOR.to_string()) && t.draw_pile(0).contains(&DOOR.to_string()),
+        "the draw sits once, on the pile: hand={:?} pile={:?}",
+        t.hand(0),
+        t.draw_pile(0)
+    );
+}
+
 // =====================================================================
-// 4 -- exist latch (landed redirect)
+// 3b -- HOST-02: a body's board write is what the following routine sees
+// =====================================================================
+
+/// HOST-02: the `set_owner` writes `toko_swap` makes before `commit_redeem`
+/// cross onto live first, so the routine's owner guard settles the received
+/// deed instead of returning 0. The `redeemed` record and the `log.redeem`
+/// line then come from the engine (cost 0).
+///
+/// The crossing covers board rows only (owners / houses / mortgaged / tokens /
+/// money). A routine whose guard read a hand or pile write would still not see
+/// it -- no such routine exists today.
+#[test]
+fn g10_body_write_before_redeem_is_seen_by_the_owner_guard() {
+    let mut t = Table::new(&["桐谷透子", "户山香澄"]);
+    t.clean();
+    t.begin_turn(0);
+    let mine = tile("月之森女子学院");
+    let theirs = tile("羽丘女子学院");
+    t.own(0, &[mine]);
+    t.own(1, &[theirs]);
+    t.set_mortgaged(mine, true);
+    t.set_mortgaged(theirs, true);
+    t.set_money(0, 20_000);
+    t.set_money(1, 20_000);
+    let mark = t.mark();
+    t.give_play(0, "Mor:（toko）").unwrap();
+    // One candidate deed on each side.
+    t.answer_one(0).unwrap();
+    t.answer_one(0).unwrap();
+    drain(&mut t);
+
+    assert_eq!(t.owner(theirs), Some(0), "the swap landed");
+    assert_eq!(t.owner(mine), Some(1), "the swap landed");
+    assert!(
+        !t.mortgaged(theirs),
+        "the received deed was redeemed: {:?}",
+        t.keys_since(mark)
+    );
+    assert!(t.mortgaged(mine), "the given-away deed stays mortgaged");
+    let redeems: Vec<i32> = t
+        .events_since(mark)
+        .into_iter()
+        .filter(|e| e.r#type == "redeem")
+        .map(|e| e.value)
+        .collect();
+    assert_eq!(
+        redeems,
+        vec![0],
+        "one free redeem: {:?}",
+        t.keys_since(mark)
+    );
+}
+
+/// HOST-02: the `skillBlock:Pastel✽Palettes` held-token write is on live before
+/// the draw routine raises its hooks, so the accident's own draw offers no PP
+/// (2) skill prompt for 丸山彩 / 大和麻弥 / 冰川日菜.
+#[test]
+fn g10_seal_is_seen_by_the_body_own_draw_hook() {
+    let mut t = Table::vanilla(2);
+    t.set_character_raw(0, "丸山彩");
+    t.place_raw(0, "skill:丸山彩:With~");
+    t.place_raw(0, "skill:大和麻弥:朝阳照耀的片刻");
+    t.place_raw(0, "skill:冰川日菜:日菜抽中的大奖");
+    {
+        let p = &mut t.m.world_mut().st.players[0];
+        p.state_set("ppFansUp", 4);
+        p.state_set("ppFansDown", 0);
+    }
+    t.give_play(0, "PP:初次演出事故").unwrap();
+    for _ in 0..40 {
+        let Some(p) = t.prompt() else { break };
+        let hit = |k: &str| {
+            p.title.key().contains(k) || p.options.iter().any(|o| format!("{o:?}").contains(k))
+        };
+        // `maya` first: `maya_title` contains 「aya」 too.
+        if let Some(k) = ["maya", "hina", "aya"].into_iter().find(|&k| hit(k)) {
+            panic!(
+                "PP (2) skill {k} offered on the accident's own draw: {}",
+                t.dump_prompt()
+            );
+        }
+        t.decline();
+    }
+    assert_eq!(
+        t.token(0, "skillBlock:Pastel✽Palettes"),
+        1,
+        "the seal is on live"
+    );
+}
+
+// =====================================================================
+// 4 --exist latch (landed redirect)
 // =====================================================================
 
 /// Give P1 an EXIST on the field, ready.

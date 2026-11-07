@@ -182,23 +182,8 @@ fn toko_swap(player_id: i32) -> card_sdk::Asked {
     } else if num2 < num {
         ctx::transfer(other, player_id, num - num2, reason)?;
     }
-    // 规则书: 「互换后将你得到的地契免费赎回」 -- written raw rather than through
-    // `commit_redeem`: a host routine runs against a world that does not yet
-    // carry this body's `set_owner` writes (they are replayed after the
-    // pause), so `commit_redeem`'s owner guard still saw the previous owner and
-    // returned 0. The flag clear is replayed; copy the rest of what
-    // `commit_redeem` does -- the 「本回合进行过赎回操作」 record (turn-end) and
-    // the `log.redeem` line.
-    ctx::set_mortgaged(theirs, false);
-    ctx::state::set(player_id, "redeemed", 1);
-    ctx::state::set_expires(player_id, "redeemed", ctx::state::TURN_END);
-    ctx::log(
-        player_id,
-        &Msg::new("log.redeem")
-            .player_id("who", player_id)
-            .n("cost", 0)
-            .tile("tile", theirs),
-    );
+    // 规则书: 「互换后将你得到的地契免费赎回」
+    ctx::commit_redeem(player_id, theirs, 0)?;
     Ok(())
 }
 

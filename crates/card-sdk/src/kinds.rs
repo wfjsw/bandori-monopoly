@@ -734,6 +734,7 @@ action_kinds! {
     MarkerSpend;
     MarkerGain;
     PaySplitChooseBefore;
+    PayCalcBefore;
     PayCombinedAddBefore;
     PaySplitMulBefore;
     CardFired;
@@ -803,10 +804,10 @@ mod tests {
         // G01's `cardFired` / `markChanged` (ABI v105) = 76, plus G05's dual
         // `diceRollPlan` (ABI v111) = 77, plus G11's `inspected` / `drawAfter`
         // (ABI v114) = 79, plus G08's zone / attachment family (ABI v118)
-        // = 89, plus G10's `eventResolved` (ABI v119) = 90. The marker row
-        // `on Action;` is part of `KINDS`, so the pin sits one above the
-        // entry count.
-        assert_eq!(Action::KINDS.len(), 90);
+        // = 89, plus G10's `eventResolved` (ABI v119) = 90, plus HOST-03's
+        // `payCalcBefore` (ABI v120) = 91. The marker row `on Action;` is part
+        // of `KINDS`, so the pin sits one above the entry count.
+        assert_eq!(Action::KINDS.len(), 91);
         // A dual kind is filter-shaped but still an action entry.
         assert!(Action::KINDS
             .iter()

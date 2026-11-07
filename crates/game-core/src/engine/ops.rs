@@ -61,6 +61,10 @@ impl World {
     }
     /// The walk cannot buy where it lands.
     pub fn set_no_buy(&mut self, on: bool) {
+        // Also the one-shot latch the settle's optional offer reads: a
+        // card-forced settle runs after this body's frame is gone, and the
+        // settle consumes the latch onto its own frame (LOY-MUSTBUY-02).
+        self.turn.settle_no_buy = on;
         self.plan_mut().no_buy = on;
     }
     /// The walk cannot build where it lands.

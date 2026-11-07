@@ -139,6 +139,9 @@ impl<S: SnapSrc> CondView for SnapView<'_, S> {
     fn pay_total_stage(&self) -> bool {
         self.trigger.pay.map(|p| p.total_stage).unwrap_or(true)
     }
+    fn pay_split_total(&self) -> bool {
+        self.trigger.pay.map(|p| p.split_total).unwrap_or(false)
+    }
     fn charge_is_skill(&self) -> bool {
         self.trigger.charge_skill
     }
@@ -1522,6 +1525,7 @@ pub fn fill_window<S: SnapSrc>(world: &S) -> WindowCtx {
             .map(|p| (p.shape == game_core::engine::PayShape::Fixed) as i64)
             .unwrap_or(0),
         pay_total_stage: t.pay.map(|p| p.total_stage).unwrap_or(true),
+        pay_split_total: t.pay.map(|p| p.split_total).unwrap_or(false),
         charge_is_skill: t.charge_skill,
         subject_range_card: world.subject_range_card(),
         extreme_armed: world.extreme_armed(),
@@ -1635,6 +1639,7 @@ pub fn fill_window_ambient<S: SnapSrc>(world: &S, player_id: i32) -> WindowCtx {
         pay_kind: -1,
         pay_is_fixed: 0,
         pay_total_stage: true,
+        pay_split_total: false,
         charge_is_skill: false,
         subject_range_card: false,
         extreme_armed: false,

@@ -7,7 +7,7 @@
 
 use alloc::vec::Vec;
 
-use card_sdk::abi::{FilterKind, Payee, Seat};
+use card_sdk::abi::{prop, FilterKind, Payee, Seat};
 use card_sdk::CardText;
 use card_sdk::{ctx, key, Action, CardDef, Filter, Msg, On, PayAddValue};
 
@@ -30,7 +30,7 @@ pub const NO_ROAD: CardDef = CardDef::new(
         On::Action(Action::TurnStart("", Some(retire_guard), retire)),
     ],
 )
-.props(&[(card_sdk::abi::prop::SONG, 1)]).meta(&card_sdk::meta::CardMeta::new()
+.props(&[(prop::SONG, 1), (prop::DESIGNATES, 1)]).meta(&card_sdk::meta::CardMeta::new()
         .name(r#"无路矢"#)
         .raw_name(r#"无路矢"#)
         .tags(&[])
@@ -57,9 +57,13 @@ fn cant_play(player_id: i32) -> Option<Msg> {
 fn no_road(player_id: i32) -> card_sdk::Asked {
     let others = on_board_others(player_id);
     if others.is_empty() {
+        // 「视为此卡未生效」 -- nothing to designate (CH-07, C-Q5(a): spent anyway).
+        bandori_std::zones::set_ineffective();
         return Ok(());
     }
-    let picked = ctx::ask_player(
+    // 规则书: 「指定场上自己以外的一位玩家所在格子」 -- a forced play names
+    // the target (`ctx::ask_player_target`), so no prompt re-asks it (ABI-04).
+    let picked = ctx::ask_player_target(
         player_id,
         &Msg::new(key!("no_road_title")),
         &Msg::new(key!("no_road_ask")),
@@ -68,8 +72,9 @@ fn no_road(player_id: i32) -> card_sdk::Asked {
     let who = match ctx::target(picked) {
         Some(hit) => hit,
         None => {
-            // TODO(规则书)[judgement]: 「视为此卡未生效」 -- the clause names a state without saying
-            // what observes it. And what counts a use that this would suppress?
+            // 「视为此卡未生效」 -- the designation was refused (CH-07, C-Q5(a):
+            // the card is spent; the waste bit carries the clause to observers).
+            bandori_std::zones::set_ineffective();
             return Ok(());
         }
     };
@@ -83,6 +88,8 @@ fn no_road(player_id: i32) -> card_sdk::Asked {
     let before = ctx::state::get(player_id, bandori_std::state_key::EXILE);
     rules_status::exile::send(player_id, 2, tile);
     if ctx::state::get(player_id, bandori_std::state_key::EXILE) <= before {
+        // 「视为此卡未生效」 -- the exile refused the card (CH-07, C-Q5(a): spent).
+        bandori_std::zones::set_ineffective();
         ctx::log(
             player_id,
             &Msg::new(key!("no_road_refused")).card("card", "MyGO:无路矢"),

@@ -42,22 +42,39 @@ pub const RESONANCE: CardDef = CardDef::new("PP:[衍生]共鸣", &[]).meta(&card
 /// abstract point. On success the card is discarded and, for the owner's
 /// Pastel✽Palettes band card, 2 [奇迹水晶] are added (「添加2[奇迹水晶]」).
 pub fn try_resonance(player_id: i32) -> Result<bool, card_sdk::Prompt> {
-    // 规则书: 「拥有此卡的玩家的卡可发动[共鸣]时」
-    if ctx::hand_count(player_id, RESONANCE.id) <= 0 {
+    if !resonance_available(player_id) {
         return Ok(false);
     }
-    let yes = ctx::ask_yes(
+    if !ask_resonance(player_id)? {
+        return Ok(false);
+    }
+    Ok(pay_resonance(player_id))
+}
+
+/// Does the player hold the fuel at all? 规则书: 「拥有此卡的玩家的卡可发动
+/// [共鸣]时」.
+pub fn resonance_available(player_id: i32) -> bool {
+    ctx::hand_count(player_id, RESONANCE.id) > 0
+}
+
+/// Ask 「发动共鸣？」 only. Split from [`pay_resonance`] because an activation
+/// collector's writes are dropped (the collector runs on a throwaway world,
+/// `docs/ACTIVATION.md` §2), so the caller must pay in its body.
+pub fn ask_resonance(player_id: i32) -> Result<bool, card_sdk::Prompt> {
+    ctx::ask_yes(
         player_id,
         &Msg::new(key!("resonance_title")),
         &Msg::new(key!("resonance_text")).card("card", "PP:[衍生]共鸣"),
-    )?;
-    if !yes {
-        return Ok(false);
-    }
+    )
+}
+
+/// Pay a paid 共鸣: file the fuel and run its printed rider. `false` when the
+/// hand copy is gone.
+pub fn pay_resonance(player_id: i32) -> bool {
     // 规则书: 「拥有此卡的玩家的卡可发动[共鸣]时将此卡放入弃卡区」 -- one primitive:
     // `take_card` + `to_discard` would remove a second copy of the fuel.
     if !ctx::discard_from_hand(player_id, RESONANCE.id) {
-        return Ok(false);
+        return false;
     }
     // TODO(规则书)（发动那张卡的[共鸣]效果并为拥有此卡的玩家的Pastel✽Palettes乐队卡添加2[奇迹水晶]）:
     //   the book resolves the branch first and the 2 crystals after; we add them
@@ -70,6 +87,5 @@ pub fn try_resonance(player_id: i32) -> Result<bool, card_sdk::Prompt> {
             ctx::add_crystals_at(uid, 2, i32::MAX);
         }
     }
-    // 规则书: 「发动那张卡的[共鸣]效果」
-    Ok(true)
+    true
 }

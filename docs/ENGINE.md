@@ -751,11 +751,17 @@ carries the landing pass's wording (post-effect reads), not the discarded learn
 pass's. The activation header is posted once at the first body entry and
 consumes its replace-log slot on later passes.
 
-**Gap (HOST-01 remainder).** A write that happens *inside* a host routine's
-own nested settle (e.g. the agent-tile offer buying a deed during
-`HostRequest::Move`) may not be on live until that routine finishes prompting.
-A body whose next read is after that nested write can still see the pre-write
-value on the pass that lands. Closing that needs the write journal HOST-01
-names: commit nested settle writes to live before the next pass shares.
+**Nested-settle writes (HOST-01, closed).** A write that happens *inside* a
+host routine's own nested settle (e.g. the agent-tile offer buying a deed
+during `HostRequest::Move`) crosses onto live at the pause, exactly like the
+body's own writes: `DriveInline::apply` hands the write overlay to
+`apply_host_request` through `overlay_guest_state`, and the host effect and
+the overlay are on live before the routine returns. The guest diff then
+re-bases on the updated live world (`pass_base_for`), so the next pass's
+crossing does not reinstate the pre-effect row. The pass that lands is the
+**commit pass**: the `Done` arm loops once more with every answer pre-filled
+instead of a bespoke post-apply run, so the landing pass is a normal loop
+iteration (guest writes restored off live, live re-shared, `Run` rebuilt).
 Pinned for the top-level `pay` path by
-`effect_applied_log::reread_after_host_effect_sees_the_updated_value`.
+`effect_applied_log::reread_after_host_effect_sees_the_updated_value` and for
+the nested offer by `inline_provider::strongest_inline_matches_halt_replay`.

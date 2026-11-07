@@ -75,6 +75,7 @@ pub fn trigger_reason(t: &Trigger) -> Msg {
         | TriggerKind::PayCombinedAdd
         | TriggerKind::PayCombinedMul
         | TriggerKind::PayCombinedCancel
+        | TriggerKind::PayCalcBefore
         | TriggerKind::RentAdd
         | TriggerKind::RentMul
         | TriggerKind::SettleAdd

@@ -830,11 +830,14 @@ fn g09_path_is_every_step() {
     t.roll(0).unwrap();
     walk_to_rest(&mut t);
     let full = "cards:fixture-test-cards.path_seen";
+    // The settle's own payment is the last `Paid`; the pass reward before it
+    // is a receipt with no move path (HOST-03 raises `paid` on a receipt too).
     let n = t
         .st()
         .events
         .iter()
-        .find(|e| log_key(e) == full)
+        .filter(|e| log_key(e) == full)
+        .last()
         .and_then(|e| int_arg(&e.msg, "n"));
     assert_eq!(n, Some(3), "every step: {:?}", t.recent_keys(25));
 }
