@@ -824,7 +824,16 @@ impl Run {
                 base.next_steps = pre.next_steps;
             }
             if money_moved {
-                base.money = after_money.expect("money_moved").to_vec();
+                // Base on the money the copy **now** carries, not the row's
+                // recorded after-figure: the loop above has already re-imposed
+                // the request's own effect on a seat that still stood at the
+                // pre-value, while a seat something moved past keeps that newer
+                // figure (a nested pay behind this request). Either way the
+                // copy is the post-request world, so diffing against it makes
+                // the request's own debit invisible to the crossing -- an
+                // after-figure higher than a nested seat would otherwise be
+                // recorded as a guest write and reverted at the next pass top.
+                base.money = self.world.st.players.iter().map(|p| p.money).collect();
             }
             let crossed = live.overlay_guest_state(&base, &old, self.drive_id);
             // The staged move plan (`ctx::plan::set_*`) is a guest write too,
@@ -1445,7 +1454,10 @@ impl CardWorld for Run {
         // them (立希's rerun guard reset on every pass and never reached its
         // cap).
         let latched = self.world.latches();
-        let play_scope = (self.world.turn.play_from_hand, self.world.turn.placed_during_play);
+        let play_scope = (
+            self.world.turn.play_from_hand,
+            self.world.turn.placed_during_play,
+        );
         self.world = game_core::engine::SharedWorld::from(from.clone());
         self.world.put_latches(latched);
         // The condition was captured on live, which still names the outer
@@ -1738,6 +1750,11 @@ impl CardWorld for Run {
         after_pos: Option<(i32, i32)>,
     ) {
         self.after_host_inner(answer, condition, after_money, after_pos);
+    }
+    fn drop_pile_checkpoint(&mut self, answer: usize) {
+        if self.pile_checkpoints.contains_key(&answer) {
+            std::sync::Arc::make_mut(&mut self.pile_checkpoints).remove(&answer);
+        }
     }
     fn roll(&mut self, player_id: i32, count: i32, sides: i32) -> i32 {
         // Roll on the guest copy (its RNG), then post the `"dice"` event
@@ -4915,7 +4932,8 @@ impl<M: CardModules> RulesBridge<M> {
                             let seat = chain[node].seat;
                             let id = chain[node].id.clone();
                             let uid = chain[node].uid;
-                            bridge.settle_tail(cx, seat, &id, uid, dest)?;
+                            let negated = chain[node].link.is_cancelled();
+                            bridge.settle_tail(cx, seat, &id, uid, negated, dest)?;
                         }
                         cx.set_drive_dest(dest);
                         Ok(())
@@ -5591,6 +5609,25 @@ impl<M: CardModules> RulesBridge<M> {
                         journal_start,
                         Some(game_core::engine::JournalStart::Replace(_))
                     ) {
+                        // A kind drift supersedes the replaced request: its
+                        // effect is not replayed (the body now makes a
+                        // different call), so the recorded pile half must not
+                        // be laid back into the re-run (`Draw` superseded by
+                        // the gate's `Pay`). The pass top has already rewound
+                        // the piles to the drive start, which is the state the
+                        // re-run's own writes replay from.
+                        if let Some(game_core::engine::JournalStart::Replace(slot)) = journal_start
+                        {
+                            let superseded = log.last.get(&slot).is_some_and(|e| {
+                                std::mem::discriminant(&e.request)
+                                    != std::mem::discriminant(
+                                        &game_core::engine::JournalRequest::from(&req),
+                                    )
+                            });
+                            if superseded {
+                                pile_checkpoints.remove(&slot);
+                            }
+                        }
                         // The pass's earlier pauses crossed the body's writes
                         // onto live (the first application's included). The
                         // rewind supersedes them; see the inline arm.
@@ -5739,7 +5776,11 @@ impl<M: CardModules> RulesBridge<M> {
                                                 )?;
                                                 let seat = chain[node].seat;
                                                 let id = chain[node].id.clone();
-                                                bridge.settle_tail(cx, seat, &id, uid_own, dest)?;
+                                                let uid = chain[node].uid;
+                                                let negated = chain[node].link.is_cancelled();
+                                                bridge.settle_tail(
+                                                    cx, seat, &id, uid, negated, dest,
+                                                )?;
                                             }
                                             cx.set_drive_dest(dest);
                                             Ok(())
@@ -6115,7 +6156,25 @@ impl<M: CardModules> RulesBridge<M> {
         let seat = call.player_id();
         let request = game_core::engine::JournalRequest::from(&req);
         let is_move = matches!(request, game_core::engine::JournalRequest::Move { .. });
-        let condition = Box::new(cx.world_copy());
+        // A `Replace` that changed the request **kind** (LOY-TSUGU-01) inherits
+        // the replaced row's absolute record: its effect already landed, and
+        // the slot's pre-state / money result are what every later pass must
+        // re-impose. The new request is applied on top, so its own fresh
+        // pre-state would name a world the drift is already past.
+        let carried = match start {
+            game_core::engine::JournalStart::Replace(slot) => log
+                .last
+                .get(&slot)
+                .or_else(|| log.journal.iter().find(|e| e.slot == slot))
+                .filter(|e| std::mem::discriminant(&e.request) != std::mem::discriminant(&request))
+                .map(|e| e.clone()),
+            _ => None,
+        };
+        let condition = Box::new(
+            carried
+                .as_ref()
+                .map_or_else(|| cx.world_copy(), |e| (*e.condition).clone()),
+        );
         let index = match start {
             game_core::engine::JournalStart::Resume(index) => {
                 let e = &mut log.journal[index];
@@ -6182,8 +6241,10 @@ impl<M: CardModules> RulesBridge<M> {
                     strip(&mut log.journal[index].guest, &vanished);
                     strip(overlay, &vanished);
                 }
-                log.journal[index].after_money =
-                    Some(cx.world().st.players.iter().map(|p| p.money).collect());
+                log.journal[index].after_money = carried
+                    .as_ref()
+                    .and_then(|e| e.after_money.clone())
+                    .or_else(|| Some(cx.world().st.players.iter().map(|p| p.money).collect()));
                 if is_move {
                     log.journal[index].after_pos = cx
                         .world()
@@ -6191,6 +6252,8 @@ impl<M: CardModules> RulesBridge<M> {
                         .players
                         .get(seat.max(0) as usize)
                         .map(|p| p.pos);
+                } else if let Some(e) = &carried {
+                    log.journal[index].after_pos = e.after_pos;
                 }
                 // The slot is read *now*: a nested insertion during the body
                 // shifted it, and the enclosing answer must land after its
@@ -6575,12 +6638,7 @@ impl<M: CardModules> RulesBridge<M> {
             HostRequest::DiscardNextFx { player_id } => {
                 // 「若无手牌则弃掉下一张抽到的牌」 -- armed per seat; the draw
                 // loop consumes it (play.rs `draw_cards_with_hooks`).
-                if let Some(p) = cx
-                    .world_mut()
-                    .st
-                    .players
-                    .get_mut(player_id.max(0) as usize)
-                {
+                if let Some(p) = cx.world_mut().st.players.get_mut(player_id.max(0) as usize) {
                     p.discard_next = true;
                 }
                 return Ok(1);
@@ -10300,37 +10358,7 @@ impl<M: CardModules> RulesBridge<M> {
             chain[answered].link = on_link;
             dest
         };
-        // A field skill remains in place, even when its activation is negated.
-        if uid >= 0 {
-            return Ok(());
-        }
-        let mut w = cx.world_copy();
-        let spent = matches!(dest_from(dest), Dest::Graveyard) && !w.out(seat);
-        let mut refilled = false;
-        match dest_from(dest) {
-            Dest::Graveyard => {
-                if !w.out(seat) {
-                    w.hidden[seat].graveyard.push(id.clone());
-                    refilled = w.refill_after_pile_write(seat);
-                }
-            }
-            Dest::Hand => {
-                if id.starts_with("tile:") {
-                    eprintln!("PUSH counteract_tail seat={seat} card={id}");
-                }
-                w.hidden[seat].hand.push(id.clone())
-            }
-            Dest::Banished => {}
-            Dest::Field => {}
-        }
-        cx.swap_world(w);
-        if refilled {
-            self.raise_core(cx, "reshuffled", seat as i32, |_| {})?;
-        }
-        if spent {
-            self.raise_core(cx, "discarded", seat as i32, |t| t.card = Some(id.clone()))?;
-        }
-        Ok(())
+        self.hand_play_tail(cx, seat, &id, uid, negated, dest)
     }
 
     /// Run the post-order settles walk as a job list (STACK-01). On suspend,
@@ -10571,7 +10599,7 @@ impl<M: CardModules> RulesBridge<M> {
                 Err(e) => return Err(e),
             }
         };
-        self.settle_tail(cx, seat, &id, uid, dest)?;
+        self.settle_tail(cx, seat, &id, uid, negated, dest)?;
         chain[idx].settled = true;
         Ok(dest)
     }
@@ -10604,31 +10632,53 @@ impl<M: CardModules> RulesBridge<M> {
     }
 
     /// Apply a settled counter's dest (design G06 keeps the pre-existing
-    /// shape: hand counters are spent, field ones stay).
+    /// shape: hand counters are spent, field ones stay). `uid >= 0` is a field
+    /// skill and files nothing. `negated` rides the `cardPlayed` announcement
+    /// (G08 §2.4): a hand counter is a play even when it is counteracted, so
+    /// the outcome is what a 「被抵消时」 clause reads.
     fn settle_tail(
         &self,
         cx: &mut PlayCtx,
         seat: usize,
         id: &str,
         uid: i32,
+        negated: bool,
+        dest: i32,
+    ) -> Flow<()> {
+        self.hand_play_tail(cx, seat, id, uid, negated, dest)
+    }
+
+    /// File a spent hand counter, raise `discarded`, then announce the play
+    /// with `cardPlayed` (G08 §2.4, design: a hand counter goes through the
+    /// counteraction tree, not `play_from_hand`, but its play is still
+    /// announced -- exactly as `play_from_hand` does, on every dest and with
+    /// the outcome). A field skill (`uid >= 0`) stays in place, files nothing
+    /// and was already announced at its own body.
+    fn hand_play_tail(
+        &self,
+        cx: &mut PlayCtx,
+        seat: usize,
+        id: &str,
+        uid: i32,
+        negated: bool,
         dest: i32,
     ) -> Flow<()> {
         if uid >= 0 {
             return Ok(());
         }
         let mut w = cx.world_copy();
-        let spent = matches!(dest_from(dest), Dest::Graveyard) && !w.out(seat);
+        // A spent card is filed even when the seat went out on this play
+        // (C-Q5(a): the card is spent regardless).
+        let spent = matches!(dest_from(dest), Dest::Graveyard);
         let mut refilled = false;
         match dest_from(dest) {
             Dest::Graveyard => {
-                if !w.out(seat) {
-                    w.hidden[seat].graveyard.push(id.to_string());
-                    refilled = w.refill_after_pile_write(seat);
-                }
+                w.hidden[seat].graveyard.push(id.to_string());
+                refilled = w.refill_after_pile_write(seat);
             }
             Dest::Hand => {
                 if id.starts_with("tile:") {
-                    eprintln!("PUSH settle_tail seat={seat} card={id} uid={uid}");
+                    eprintln!("PUSH hand_play_tail seat={seat} card={id}");
                 }
                 w.hidden[seat].hand.push(id.to_string())
             }
@@ -10644,6 +10694,15 @@ impl<M: CardModules> RulesBridge<M> {
                 t.card = Some(id.to_string())
             })?;
         }
+        // `cardPlayed` (hook) -- the counter's hand effect finished; every dest
+        // announces, like `play_from_hand` (design G08 §2.4).
+        let outcome = game_kinds::PlayOutcome::from_i32(negated as i32);
+        self.raise_core(cx, "cardPlayed", seat as i32, |t| {
+            t.card = Some(id.to_string());
+            t.cards = vec![id.to_string()];
+            t.by_card = Some(seat as i32);
+            t.play_outcome = Some(outcome);
+        })?;
         Ok(())
     }
 
@@ -12356,7 +12415,8 @@ impl<M: CardModules> game_core::engine::WorkItem for JoinWork<M> {
                         let seat = chain[this.node].seat;
                         let id = chain[this.node].id.clone();
                         let uid = chain[this.node].uid;
-                        bridge.settle_tail(cx, seat, &id, uid, dest)?;
+                        let negated = chain[this.node].link.is_cancelled();
+                        bridge.settle_tail(cx, seat, &id, uid, negated, dest)?;
                         // Keep the box alive across the resume drop below; the
                         // cursor address stays valid.
                         if let Some(a) = take_chain_box(cx) {

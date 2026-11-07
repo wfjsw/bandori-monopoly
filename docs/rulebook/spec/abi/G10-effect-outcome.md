@@ -89,6 +89,8 @@ this one. What the draft got wrong:
 | R52 | `no_breakup`'s terminals derived the checkpoint as `BASE + 1` with nothing asserting it. | The body asserts the adjacency (`debug_assert`); the terminals keep the derivation because a latch written after the checkpoint is not inside it (§10.1 row 4). |
 | R35 | Every restore of the pass world (`Run::restore_from_world`, `restore_condition`, `restore_run_point`) dropped the body's `latch:` rows with it, so a cross-pass guard (`taki`'s reroll cap, stored under `latch:` keys as §6.5.1 requires) read `0` after each pause and the constant-die loop never reached it. | A restore is an undo of what the body derived; the latches are its frozen decisions, so each of the three paths re-lays the live `latch:` rows over the restored world (`World::latches` / `put_latches`, §6.5). |
 
+| R53 | The reload's money re-base took the row's recorded post-request figure even for a seat a nested request had already moved past it (the settle's build pay behind the buy's `bought` hook), so the crossing recorded the pay as a guest write and the next pass top reverted it: the `lose` line stayed, the balance did not (`band_free_house_then_paid_second_build`). | The diff base is the money the copy carries after the re-impose pass (the recorded figure for a seat at the pre-value, the newer figure for a seat past it), so the request's own debit is invisible to the crossing. |
+
 ## 1. Items
 
 | # | slug(s) | sev | rows | disposition |
@@ -224,23 +226,19 @@ Book (`RAS:EXIST`):
 
 > 若在此期间此卡没有造成影响，抽1张卡
 
-Current (`rules/cards/card-ras/src/exist.rs:65-72`): the latch is
-`On::Action(Action::Effect("target == owner && actor != owner", …))`. But
-`effect` is raised for **every** money movement too (`play.rs:4160`) and
-for any direct targeting, so:
+Current (`rules/cards/card-ras/src/exist.rs`): the latch is
+`On::Action(Action::Target("target == owner && actor != owner", …))`. An
+`effect` entry once stood here, but `effect` is raised for **every** money
+movement too (`play.rs:4160`) and for any direct targeting, so a plain rent,
+a bank print, or a direct effect that names the owner all marked the card.
 
-* a plain rent payment to the owner — `target == owner`, `actor != owner` —
-  marks the card as having had an influence;
-* a bank print to the owner — same;
-* an opponent's effect that directly names the owner, never redirected — same.
-
-Only a redirect that **landed** is an influence. `redirect` is a Filter on the
-declaration path (`wasm_rules.rs:6825-6920`, the fold at `:6855-6878`); a
-Filter body may not write an instance prop (`refuse_if_filter`), and the
-effect payload has no "redirected" flag, so the `effect` hook cannot tell
-whether the rename happened. The provisional `state::add` inside the Filter
-now also over-counts, because a probe pass and a counter can run the fold
-several times (`exist.rs:68`).
+Only a redirect that **landed** is an influence. `target` (kind 15) is the
+settlement fact -- `target_window` raises it only after the `effect` chain came
+back not-cancelled -- and `landed_redirect` additionally requires the
+designation to have survived (`!ctx::designation_cancelled(target)`): 网络链接
+异常 clause 1 cancels the pair without cancelling the link, so the link check
+alone would still latch. A probe pass no longer writes anything (the latch moved
+out of the Filter fold into `mark_used`).
 
 ### 1.5 `world-snapshot` (rows 782, 1077)
 
@@ -1234,18 +1232,23 @@ Before: `Action::Effect("target == owner && actor != owner", …)` with the
 After:
 
 ```rust
-On::Action(Action::Effect(
+On::Action(Action::Target(
     "target == owner && actor != owner", Some(landed_redirect), mark_used))
 ```
 
 ```rust
-fn landed_redirect(_: i32) -> bool { ctx::trigger::redirected() }
+fn landed_redirect(_: i32) -> bool {
+    ctx::trigger::redirected() && !ctx::designation_cancelled(ctx::trigger::target())
+}
 ```
 
 The latch write moves out of `redirect` into `mark_used` (`state::add` on the
 same per-instance key, unchanged), so it runs once per settled declaration and
 no longer on probe passes. A rent or a direct effect to the owner has no
-`redirected_from` and no longer latches.
+`redirected_from` and no `target` raise at all for EXIST (its condition needs a
+player target equal to the owner and a foreign actor). A negated link never
+reaches `target`; a cancelled designation is excluded by the second conjunct.
+C-Q8 resolved to settlement (option (b)).
 
 ### 7.6 `no_breakup`
 
@@ -1759,7 +1762,7 @@ the fix is now in the body.
 | # | clause | design element | test | verdict |
 |---|---|---|---|---|
 | 1 | 「场上及打出的所有对单一玩家生效的手卡…的目标将改为你」 | the existing `Redirect` Filter, unchanged | existing `exist_*` | matched |
-| 2 | 「若在此期间此卡没有造成影响」 | the `Effect` entry's `redirected()` guard (§6.4, §7.5) | `g10_exist_latch_needs_a_landed_redirect`, `g10_exist_latch_ignores_a_plain_rent_payment` | matched, assumption (Q3) |
+| 2 | 「若在此期间此卡没有造成影响」 | the `Target` (settlement) entry's guard: `redirected()` and `!designation_cancelled(target)` (§7.5) | `g10_exist_latch_needs_a_landed_redirect`, `g10_exist_latch_ignores_a_plain_rent_payment`, `g10_exist_latch_ignores_a_direct_target`, `g07_exist_redirect_then_negated_designation` | matched (C-Q8: settlement) |
 | 3 | 「你的下回合开始时将其翻入弃牌堆」 | the existing `TurnStart` body, unchanged | existing | matched |
 
 ### 14.6 `Sumimi:Sumimi不会解散哦`
@@ -1877,15 +1880,22 @@ Two shapes differ from the text above and are the ones the code uses:
     * **money** is an absolute total and the request's own effect is already
       on `live`; measured against the pass base the effect reads as a guest
       write and is crossed back (a `pay`'s debit undone by its own replay).
-      The reload therefore writes the recorded post-request figure over
-      **both** `live` and the copy instead of relying on a three-way guard:
-      the copy's own figure differs from `live` whenever the body wrote it in
-      an earlier pass, and a stale copy crossed back would undo the request
-      (a `world_restore` putting an old balance back, then the reload
-      re-imposing the pre-restore total). `Run::pass_base.money` keeps the
-      pass-start figure: the commit's row is the whole pass delta, or a write
-      made before the last request would be reverted by the pass top and
-      never re-applied.
+      The reload therefore writes the recorded post-request figure over a
+      seat still standing at the request's pre-value on **both** `live` and
+      the copy -- the copy's own figure differs from `live` whenever the body
+      wrote it in an earlier pass, and a stale copy crossed back would undo
+      the request (a `world_restore` putting an old balance back, then the
+      reload re-imposing the pre-restore total). A seat something has already
+      moved *past* the recorded figure keeps that newer one (a nested pay
+      behind the request, e.g. the settle's build inside the buy's hook), so
+      the diff base is the money the copy carries **after** that pass rather
+      than the row's figure: basing on the figure (higher than the nested pay
+      left the seat) recorded that pay as a guest write and the next pass top
+      reverted it, leaving the `lose` line with no balance move
+      (`band_free_house_then_paid_second_build`).
+      `Run::pass_base.money` keeps the pass-start figure: the commit's row is
+      the whole pass delta, or a write made before the last request would be
+      reverted by the pass top and never re-applied.
     * **position** has the same shape for a `Move`: the landing is the
       request's effect and the reload writes the recorded `after_pos` over
       both sides, while `after_host`'s copy refresh lays it down for the

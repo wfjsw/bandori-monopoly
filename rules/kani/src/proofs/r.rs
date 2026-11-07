@@ -75,10 +75,18 @@ crate::host_subset!(ako_dark_dispatch {
 /// `R:Fire bird` play — pay 1600, ask X, place, set crystals.
 crate::host_subset!(fire_bird_play_dispatch {
     pay => arm_pay,
+    pay_command => arm_pay_command,
     ask => arm_ask,
+    opt_str => arm_opt,
     set_dest => arm_set_fate,
     place_card_at => arm_place_card,
     set_counter_self => arm_set_counter_self,
+    // The turn-end tick countdown (`set_turns_left` → `set_self_prop`); the
+    // play proof does not read it back.
+    set_self_prop => arm_set_self_prop,
+    set_prop_at => arm_set_prop_at,
+    set_ineffective_at => arm_set_ineffective_at,
+    self_uid => arm_self_uid,
     log | effect => arm_log,
 });
 
@@ -605,6 +613,36 @@ pub fn fire_bird_place_mutant_is_detected() {
     crate::kassert!(
         !spec::fire_bird_place_log_ok_mutant(effects, user, card),
         "mutant: first effect is not a 1600 gain"
+    );
+}
+
+/// A payer who cannot cover 1600 arms 「视为此卡未生效」 (CH-07, C-Q5(a)): no
+/// place, no X, and the play's waste bit is set.
+#[kani::proof]
+#[kani::use_stub_set(crate::kani_stubs::LIB_COST_NOFMT)]
+#[kani::unwind(32)]
+pub fn fire_bird_shortfall_wasted_iff() {
+    let user = 0i32;
+    host::install_backend(fire_bird_play_dispatch);
+    sparse_r_world(user);
+    world::with_world_mut(|w| {
+        // A hand play's `self_uid()` is `-1` (the waste bit rides the play).
+        w.bound_uid = -1;
+        w.money[user as usize] = 0;
+        w.pay_shortfall = true;
+    });
+    invoke::unwrap_done(card_roselia::fire_bird::play_kani(user));
+    let (logbuf, log_n) = log_slice();
+    let effects = effects_of(&logbuf, log_n);
+    crate::kassert!(
+        !effects
+            .iter()
+            .any(|e| matches!(e, Effect::PlaceCard { .. })),
+        "C-R-Fire bird: no placement on a shortfall"
+    );
+    crate::kassert!(
+        world::with_world(|w| w.play_ineffective),
+        "C-R-Fire bird: the waste bit is armed"
     );
 }
 

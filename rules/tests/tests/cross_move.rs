@@ -429,12 +429,6 @@ fn m08_ran_undoes_forced_move() {
         t.decline();
     }
     drain(&mut t);
-    eprintln!(
-        "m08 record (RULING: refund?): pos1 = {} (want 0), money1 = {}, money0 = {}",
-        t.pos(1),
-        t.money(1),
-        t.money(0)
-    );
     assert_eq!(t.pos(1), 0, "P1 is back at its start tile");
     assert_eq!(
         t.money(1),

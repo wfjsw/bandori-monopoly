@@ -384,6 +384,63 @@ fn returns_grants_sticker_after_general_card() {
     );
 }
 
+/// Drive a window until `card` is offered, then never answer others.
+fn until_offered(t: &mut Table, card: &str) {
+    for _ in 0..10 {
+        if t.counteract_offered(card) {
+            return;
+        }
+        assert!(t.prompt().is_some(), "{}", t.dump_prompt());
+        t.decline();
+    }
+    panic!("{card} never offered: {}", t.dump_prompt());
+}
+
+// 规则书: 「（4）[拥有者]的通用卡的[手]效果全部生效后获得1个星星贴纸」
+// A 通用 [反击] that is itself countered never took effect -- no sticker.
+#[test]
+fn returns_no_sticker_for_a_cancelled_general_counter() {
+    let mut t = Table::vanilla(3);
+    t.place_raw(0, "PPP:Returns");
+    t.give(0, &["通用:网络链接异常"]);
+    t.give(1, &["TEST:outcomer"]);
+    t.give(2, &["TEST:deny"]);
+    t.begin_turn(1);
+    t.play(1, "TEST:outcomer").unwrap();
+    until_offered(&mut t, "通用:网络链接异常");
+    t.counteract(0, "通用:网络链接异常").unwrap();
+    until_offered(&mut t, "TEST:deny");
+    t.counteract(2, "TEST:deny").unwrap();
+    skip_all(&mut t);
+    assert_eq!(
+        t.token(0, STICKER),
+        0,
+        "the counter's effect never landed; events {:?}",
+        t.recent_keys(10)
+    );
+}
+
+// 规则书: 「（4）…[手]效果全部生效后获得1个星星贴纸」 -- a 通用 hand counter
+// that resolves pays, exactly like a hand play.
+#[test]
+fn returns_sticker_for_a_resolved_general_counter() {
+    let mut t = Table::vanilla(2);
+    t.place_raw(0, "PPP:Returns");
+    t.give(0, &["通用:网络链接异常"]);
+    t.give(1, &["TEST:outcomer"]);
+    t.begin_turn(1);
+    t.play(1, "TEST:outcomer").unwrap();
+    until_offered(&mut t, "通用:网络链接异常");
+    t.counteract(0, "通用:网络链接异常").unwrap();
+    skip_all(&mut t);
+    assert_eq!(
+        t.token(0, STICKER),
+        1,
+        "a resolved 通用 counter is a 通用 手 effect; events {:?}",
+        t.recent_keys(10)
+    );
+}
+
 // 规则书 [晕眩]: 「玩家的每回合结束时移除一层」 — the tick is a property of the
 // status, so a layer written by a raw `state_set` (the fuzzer's arrange, a card
 // that forgets the expiry) still wears off. Without it both seats stay stunned

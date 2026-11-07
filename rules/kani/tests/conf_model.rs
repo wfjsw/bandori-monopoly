@@ -1721,7 +1721,15 @@ impl InlineHost for ConfInline {
                     }
                     w.events.push(format!("pay_pipeline {from}->{to} {amount}"));
                 }
-                Some(amount)
+                // The receipt the engine packs (`pay_through`): the moved
+                // figure, `FIXED` for a fixed shape and `SETTLED` -- this stub
+                // models no shortfall, so the charge always completes.
+                let mut receipt = amount & card_sdk::abi::pay_receipt::AMOUNT_MASK;
+                if shape == 1 {
+                    receipt |= card_sdk::abi::pay_receipt::FIXED;
+                }
+                receipt |= card_sdk::abi::pay_receipt::SETTLED;
+                Some(receipt)
             }
             HostRequest::ApplyRedeem {
                 player_id,

@@ -804,6 +804,14 @@ pub trait CardWorld: Clone + 'static {
         _after_pos: Option<(i32, i32)>,
     ) {
     }
+    /// Drop the pile checkpoint recorded for `answer`. A re-run that makes a
+    /// different request **kind** at that slot supersedes the old request: the
+    /// pass top has already rewound the piles to the drive start, which is the
+    /// state the re-run's own writes replay from, so the old effect's pile half
+    /// must not be laid back over it (a consumed `Draw` else hands the card out
+    /// a second time). The default keeps standalone host fixtures independent
+    /// of engine replay.
+    fn drop_pile_checkpoint(&mut self, _answer: usize) {}
     /// Write a `World` checkpoint back (`HostJournalEntry::condition`, the
     /// request's pre-state). Worlds that carry no `World` keep the default.
     fn restore_from_world(&mut self, _from: &game_core::engine::World) {}

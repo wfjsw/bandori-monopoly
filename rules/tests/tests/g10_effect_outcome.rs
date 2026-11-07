@@ -753,13 +753,18 @@ fn g10_replay_reapplies_a_different_request_kind() {
         "the gain ran: {:?}",
         t.recent_keys(30)
     );
-    assert_eq!(t.money(0), 10_700, "the gain paid, not a reused draw answer");
+    assert_eq!(
+        t.money(0),
+        10_700,
+        "the gain paid, not a reused draw answer"
+    );
     // The pile half is rewound to the pass checkpoint and replayed by the
     // body's own writes; the superseded draw is not applied twice.
     assert!(
         !t.hand(0).contains(&DOOR.to_string()) && t.draw_pile(0).contains(&DOOR.to_string()),
-        "the draw sits once, on the pile: hand={:?}",
-        t.hand(0)
+        "the draw sits once, on the pile: hand={:?} pile={:?}",
+        t.hand(0),
+        t.draw_pile(0)
     );
 }
 
@@ -809,7 +814,12 @@ fn g10_body_write_before_redeem_is_seen_by_the_owner_guard() {
         .filter(|e| e.r#type == "redeem")
         .map(|e| e.value)
         .collect();
-    assert_eq!(redeems, vec![0], "one free redeem: {:?}", t.keys_since(mark));
+    assert_eq!(
+        redeems,
+        vec![0],
+        "one free redeem: {:?}",
+        t.keys_since(mark)
+    );
 }
 
 /// HOST-02: the `skillBlock:Pastel✽Palettes` held-token write is on live before

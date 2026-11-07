@@ -1062,6 +1062,16 @@ pub struct World {
     pub trig_play_outcome: i32,
     /// `Trigger.out_cause` wire code, `-1` = none.
     pub trig_out_cause: i32,
+    /// The seat whose designation was cancelled (`-1` = none). One bit stands
+    /// for the per-pair list (`ctx::cancel_designation`, WINDOW-03).
+    pub designated_cancelled: i32,
+    /// `Turn.play_ineffective` -- the `-1` mark of a hand play (CH-07).
+    pub play_ineffective: bool,
+    /// The payer cannot cover the amount: `pay` / `pay_command` move what is
+    /// there and report the shortfall (CH-07 short-pay families).
+    pub pay_shortfall: bool,
+    /// `ctx::target` / `ask_player_target` designations are refused (`-1`).
+    pub target_refused: bool,
     /// The `effective` value the last Graveyard landing left on the row after
     /// the transition cleared it (`true` once a wasted entry lands). The row
     /// itself dies, so this is how the read-then-clear is observable.
@@ -1361,6 +1371,10 @@ impl World {
             trig_zone_counted: false,
             trig_play_outcome: -1,
             trig_out_cause: -1,
+            designated_cancelled: -1,
+            play_ineffective: false,
+            pay_shortfall: false,
+            target_refused: false,
             last_leave_effective_after: true,
             marks: [Mark::EMPTY; MAX_MARKS],
             marks_n: 0,

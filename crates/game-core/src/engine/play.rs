@@ -1658,10 +1658,21 @@ impl PlayCtx<'_> {
         // The named tile is an identity: the frame pins it and does not let a
         // swap re-resolve it. The position is only the slot it stands at.
         let at = self.w.position_of_tile(tile as i32).max(0) as usize;
-        // A nested settle's counter writes must not shape the outer move.
+        // A nested settle's counter writes must not shape the outer move. The
+        // caller's `no_buy` (a card-forced settle that must buy, LOY-MUSTBUY-02)
+        // carries into the settle's own frame: the seed's staging inherit is
+        // not reliable for a frame opened from inside a counter body. The turn
+        // latch is one-shot -- consumed here -- so the body's later
+        // `set_no_buy(false)` cannot clear the settle's copy.
+        let no_buy = self.w.plan().no_buy || self.w.turn.settle_no_buy;
+        self.w.turn.settle_no_buy = false;
         self.w.begin_plan(player_id, PlanKind::SideMove, m.clone());
+        if no_buy {
+            self.w.plan_mut().no_buy = true;
+        }
         let mut frame = crate::engine::work::SettleFrame::new(player_id, at, tile as i32, m);
         frame.scoped = true;
+        frame.no_buy = no_buy;
         // Always go through the pump: nested jobs suspend and resume on the
         // work stack (the pump catches `Halt::Suspended` and keeps going).
         // A call from inside an active pump must not reach here -- the drive's
@@ -2759,6 +2770,10 @@ impl PlayCtx<'_> {
     /// recursing. See `docs/ENGINE.md` "settle work stack".
     fn settle_at(&mut self, i: usize, at: usize, tile: i32, m: &Move) -> Flow<()> {
         let mut frame = crate::engine::work::SettleFrame::new(i, at, tile, m.clone());
+        // 「必须购买」 (LOY-MUSTBUY-02) is one-shot per settle; a walk landing
+        // settles here, so the latch is consumed onto the frame too.
+        frame.no_buy = self.w.plan().no_buy || self.w.turn.settle_no_buy;
+        self.w.turn.settle_no_buy = false;
         self.step_settle(&mut frame)
     }
 
@@ -2815,6 +2830,7 @@ impl PlayCtx<'_> {
                     .clone()
                     .expect("planted by `with_move`"),
                 is_main_move: frame.m.is_main_move,
+                no_buy: frame.no_buy,
             });
             frame.stack_idx = self.settle_stack.len() - 1;
             // The guest factor API reads the product and the innermost base
@@ -3585,8 +3601,11 @@ impl PlayCtx<'_> {
     /// [结算]是：可选择[消耗]…获得格子地契和拥有权」).
     fn offer_buy(&mut self, i: usize, t: usize) -> Flow<()> {
         // Never prompt for an offer `buy` would refuse: the plan bars a buy,
-        // or a `BuyGate` hook vetoes it.
-        if self.w.plan().no_buy {
+        // this settle is a forced one, or a `BuyGate` hook vetoes it.
+        if self.w.plan().no_buy
+            || self.settle_stack.last().is_some_and(|e| e.no_buy)
+            || self.w.turn.settle_no_buy
+        {
             return Ok(());
         }
         let quote = self.buy_quote_for(i, t, purchase::BuyKind::Land);
@@ -5774,13 +5793,7 @@ impl PlayCtx<'_> {
     /// voided). `use_pool` selects the per-seat time pool over
     /// [`crate::clock::ClockSettings::bankrupt_auction_time`]; ordinary
     /// auctions pass `true`.
-    pub fn auction_deed(
-        &mut self,
-        t: usize,
-        from: usize,
-        use_pool: bool,
-        time: f32,
-    ) -> Flow<i32> {
+    pub fn auction_deed(&mut self, t: usize, from: usize, use_pool: bool, time: f32) -> Flow<i32> {
         // `BuyGate` filters bidders (`docs/PURCHASE.md` P4): a player the gate
         // refuses cannot bid.
         let mut players: Vec<usize> = Vec::new();
@@ -6386,27 +6399,28 @@ impl PlayCtx<'_> {
         let outcome = game_kinds::PlayOutcome::from_i32(cancelled as i32);
         match dest {
             Dest::Graveyard => {
-                if !self.out(i) {
-                    self.w.hidden[i].graveyard.push(id.to_string());
-                    // The played card's own filing is a pile write, not a draw:
-                    // an emptied deck stays empty while the play's look holds it
-                    // open (design G11 I2).
-                    if self.w.refill_after_pile_write(i) {
-                        raise!(self, "reshuffled", i)?;
-                    }
-                    // The look's hold ends with the play's own filing.
-                    if let Some(held) = self.w.look_hold.get_mut(i) {
-                        *held = false;
-                    }
-                    // `discarded` -- before the `cardPlayed` announcement.
-                    raise!(
-                        self,
-                        "discarded",
-                        i,
-                        card = Some(id.to_string()),
-                        zone = Some(arrival)
-                    )?;
+                // A play that bankrupted still files its card (C-Q5(a): the card
+                // is spent even when its effect did not take). The pile and its
+                // maintenance stay the ordinary ones.
+                self.w.hidden[i].graveyard.push(id.to_string());
+                // The played card's own filing is a pile write, not a draw:
+                // an emptied deck stays empty while the play's look holds it
+                // open (design G11 I2).
+                if self.w.refill_after_pile_write(i) {
+                    raise!(self, "reshuffled", i)?;
                 }
+                // The look's hold ends with the play's own filing.
+                if let Some(held) = self.w.look_hold.get_mut(i) {
+                    *held = false;
+                }
+                // `discarded` -- before the `cardPlayed` announcement.
+                raise!(
+                    self,
+                    "discarded",
+                    i,
+                    card = Some(id.to_string()),
+                    zone = Some(arrival)
+                )?;
             }
             Dest::Hand => {
                 if id.starts_with("tile:") {

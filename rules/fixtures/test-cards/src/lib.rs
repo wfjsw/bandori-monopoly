@@ -4186,7 +4186,11 @@ fn observer_outcome(player_id: i32) -> card_sdk::Asked {
     let outcome = trigger::play_outcome().map_or(-1, |o| o.as_i32());
     ctx::log(
         player_id,
-        &Msg::new("observer_outcome").i("outcome", outcome as i64),
+        &Msg::new("observer_outcome")
+            .i("outcome", outcome as i64)
+            // Which play this is about: a negating hand counter announces its
+            // own (resolved) play through the same listener.
+            .i("outcomer", trigger::card_is("TEST:outcomer") as i64),
     );
     Ok(())
 }

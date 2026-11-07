@@ -1746,3 +1746,40 @@ fn g04_misaki_span_uses_next_steps() {
     drain(&mut t);
     assert_eq!(t.pos(0), 14, "the plain walk landed");
 }
+
+// 规则书: 「视为此卡未生效」 on the 10000 shortfall (CH-07 / C-Q5(a)): the card is
+// spent with the waste bit; nothing is placed on CiRCLE.
+#[test]
+fn kkr_shortfall_is_wasted() {
+    let mut t = Table::vanilla(3);
+    t.place_raw(1, "TEST:zoner");
+    t.set_character_raw(0, "弦卷心");
+    t.give(0, &["HHW:（kkr）前往笑容集结的地方！"]);
+    t.set_money(0, 0);
+    let mark = t.mark();
+    assert!(
+        t.play(0, "HHW:（kkr）前往笑容集结的地方！").is_ok(),
+        "{:?}",
+        t.recent_keys(8)
+    );
+    drain(&mut t);
+    let ev = t.events_since(mark);
+    let waste: Vec<i64> = ev
+        .iter()
+        .filter(|e| log_key(e) == "zoner_discarded" && int_arg(&e.msg, "uid") == Some(-1))
+        .filter_map(|e| int_arg(&e.msg, "wasted"))
+        .collect();
+    assert!(
+        waste.contains(&1),
+        "the shortfall discard is wasted: {:?}",
+        t.keys_since(mark)
+    );
+    assert!(
+        !t.on_field(0, "HHW:（kkr）前往笑容集结的地方！"),
+        "{:?}",
+        t.field_ids(0)
+    );
+    assert!(t
+        .discard(0)
+        .contains(&"HHW:（kkr）前往笑容集结的地方！".to_string()));
+}

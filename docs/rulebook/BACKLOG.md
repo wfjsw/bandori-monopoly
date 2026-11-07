@@ -133,7 +133,7 @@ Design: `docs/rulebook/spec/abi/G02-pay-pipeline.md`
 
 Design: `docs/rulebook/spec/abi/G08-zone-lifecycle.md`
 
-- **cardplayed-payload** (medium, rows 34,677,680) — **partially landed**: `play_outcome` now rides `card` / `cardAfter` / `cardPlayed` (`play.rs:6253,6318-6325`), but no card reads it (`rules/cards/card-ppp/src/returns.rs:44-46` keeps its `TODO(ABI)`) and hand counters still raise no `cardPlayed` (single raise site, counteraction path bypasses `play_from_hand`); `rules/cards/card-ag/src/same_sky.rs`
+- **cardplayed-payload** (medium, rows 34,677,680) — **landed** (v122): `play_outcome` rides `card` / `cardAfter` / `cardPlayed`; PPP:Returns' `on_played` returns early on `Cancelled`; a hand counter now announces `cardPlayed` from `hand_play_tail` with its own outcome (both counter tails). Probe: a cancelled hand counter is announced `Cancelled` (G08 §2.4)
 
 ## G15 — Kani verification host support
 
@@ -218,10 +218,16 @@ Deferred from the `card-std-split` / ABI v56 pass (bandori-std + `tile_is`/
 - **question**: C-Q4.
 
 ## CH-07 — 「视为此卡未生效」 has no observer
-- **status**: **infrastructure landed** (G08, `3deba227`) — the `wasted` bit on
-  a discarded instance (`zone.rs:163`) and `ctx::set_ineffective_at` exist, and
-  `haneoka.rs:54` and `miracle.rs:150` set it. The remaining cards in the list
-  still do not, and the ruling C-Q5 is open.
+- **status**: **closed** (2026-11-07). The infrastructure landed in G08
+  (`3deba227`); this batch armed the clause at every remaining printed branch:
+  `fire_bird` (short 1600), `kokoro_circle` (short 10000), `starry_night`
+  (short X*1000), `noble_blue` (the tile is not yours), `no_road` (no other
+  player on a tile, the designation refused, the exile refused). The card is
+  still spent on every branch (C-Q5(a)), and the engine now files a play that
+  bankrupted so the card reaches the discard. Each card has a native pin
+  (`rules/tests/tests/{roselia,hhw,morfonica,mygo}.rs`) and a Kani proof
+  (`*_refused_wasted_iff`: effects empty, `ineffective`, position/hand/exile
+  unchanged, `discarded` carries `wasted`).
 - **kind**: rulebook divergence + ABI defect
 - **severity**: high (appears on many short-pay cards)
 - **suggested batch**: skills: MyGO / HHW cards / host ABI
@@ -235,30 +241,30 @@ Deferred from the `card-std-split` / ABI v56 pass (bandori-std + `tile_is`/
   - `rules/cards/card-morfonica/src/noble_blue.rs` (never sets)
   - related: `rules/cards/card-hhw/src/believe_you.rs` wasted flag
 - **rulebook**: 「视为此卡未生效」 (haneoka / fire_bird short-pay / starry_night / noble_blue / kokoro_circle / no_road / miracle (3)).
-- **current**: the observer exists; five of the seven cards never arm it.
-- **expected**: rule (a) does the card get spent / discarded (haneoka says yes; noble_blue/starry_night "spent anyway" implies no), (b) what counts as a "use" this suppresses (later 「抵消一次任意付款」 etc.).
-- **question**: C-Q5.
-- **capability (after the ruling)**: routine return value for took-effect + `CardWasted`.
+- **ruling** (C-Q5): (a) the card is still spent -- it is played, the effect
+  fails, and the play files it to the discard; (b) the waste bit on
+  `discarded` is the fact a listener reads (`ctx::is_ineffective_at` /
+  `bandori_std::zones::is_ineffective`). A body arms it exactly where its
+  printed 「视为此卡未生效」 branch is reached; a shortfall that bankrupts is
+  that branch.
 
 ## WINDOW-03 — EXIST redirect / 「造成影响」 latch is at declaration, not settlement
-- **status**: **partially fixed** (2026-10-13, `closeout-3-windows`) — the
-  C12 overlap (EXIST × 夏日合宿) is fixed: `target_player` now runs Redirect
-  **before** Untargetable, so EXIST 「目标将改为你」 re-names first and the gate
-  checks the final name. `c12_exist_vs_summer_camp` (`cross_chain.rs:641`) is
-  un-ignored and green. The 「造成影响」 latch itself (declaration vs
-  settlement, C-Q8) is still open.
+- **status**: **closed** (2026-11-07). The C12 overlap (EXIST × 夏日合宿) was
+  fixed earlier (`closeout-3-windows`): `target_player` runs Redirect **before**
+  Untargetable, and `c12_exist_vs_summer_camp` is green. The latch itself is
+  now a settlement fact: the entry is `Action::Target` (kind 15, raised only
+  after the `effect` link returned not-cancelled) and `landed_redirect` also
+  requires the designation to have survived (`!designation_cancelled`). A
+  cancelled designation redirected nothing, so EXIST draws. Ruling recorded at
+  C-Q8 option (b).
 - **kind**: rulebook divergence
 - **class**: C
-- **severity**: high
-- **suggested batch**: counteraction windows / draw/discard pipeline
 - **locations**
-  - `rules/cards/card-ras/src/exist.rs:82` (`mark_used` — 「造成影响」 = effect resolved vs declaration)
-  - `rules/tests/tests/gap_money.rs:377` `g07_exist_redirect_then_negated_designation` `#[ignore = "RULING: does a negated EXIST redirect count as 「造成影响」? assert draws 1"]`
+  - `rules/cards/card-ras/src/exist.rs` (`landed_redirect` / `mark_used`)
+  - `rules/tests/tests/gap_money.rs` `g07_exist_redirect_then_negated_designation` (un-ignored) and `g07_exist_relink_negated_does_not_latch`
   - `rules/tests/tests/cross_chain.rs:641` `c12_exist_vs_summer_camp` (green)
 - **rulebook**: EXIST — 「造成影响」 then draw.
-- **current**: flag written at declaration (redirect re-names the recipient before the chain opens); a later negate still leaves the flag set and the draw unearned.
-- **expected**: decide declaration vs settlement (「nothing landed on me」).
-- **question**: C-Q8.
+- **question**: C-Q8 (ruled: settlement).
 
 ## HOST-01 — HostRequest B2 equivalence gap (learn pass vs live+host_effects) — CLOSED
 - **kind**: ABI defect / implementation bug
@@ -1153,7 +1159,10 @@ or moves a 「…」 clause, and a “...” proper name that fails to resolve.
   in place the `latch:tsugu_ycm_moved` slot (`tsugu_ycm.rs:69,117`) is gone and
   both arms read `rules_status::move_blocked` plainly. A different kind
   rewinds the entry's `condition`, so the superseded effect is undone, and the
-  per-slot `reapplied` guard bounds it. Pinned by
+  per-slot `reapplied` guard bounds it. (The `same_request` conjunct was
+  defined but not wired into the `drifted` predicate, so the hand-copied
+  announcement left a dead `same_request` warning and a variant change still
+  ate the answer; the drift test caught it.) Pinned by
   `g10_replay_reapplies_a_different_request_kind` (`TEST:identitySwitch`) plus
   the existing `tsugu_effects_land_when_the_move_is_spent`; design in
   `docs/rulebook/spec/abi/G10-effect-outcome.md` §6.3.2 / §6.3.5.
@@ -1162,14 +1171,17 @@ or moves a 「…」 clause, and a “...” proper name that fails to resolve.
 - **class**: A. **severity**: high.
 - **rule text**: 「（4）[共鸣][反击][拥有者]回合结束时且在[拥有者]所在格子前后3格
   以内有无主的[可购买格子]：使用此卡上3个[奇迹水晶]，[拥有者]购买任意…」
-- **code**: `card-pp/src/dream_ahead.rs:35,50` — `On::Action(Action::TurnEndBefore(
-  "…", Some(has_free_near), buy_one))`. Field card; the residual guard is the
-  clause's third availability fact (a free unowned buyable tile within 3), not
-  the removed `can_buy` press shape.
-- **status**: **partially fixed** — the buy fires at the owner's turn end
-  (`dream_ahead_buys_a_tile_at_turn_end`). Still open: the printed shape is a
-  [反击] *declaration*; turn-end is hook-only, so the entry is an `On::Action`
-  and the [反击] window is the missing half (in-file `TODO(规则书) LOY-DREAM-01`).
+- **code**: `card-pp/src/dream_ahead.rs` — the entry is an `On::Counteract(
+  &[ChainKind::TurnEndBefore], …)` declared from the placed copy
+  (`COUNTERACT_FROM_FIELD`), and engine kind 53 (`turnEndBefore`) is no longer
+  hook-only, so the window opens. The residual guard is the clause's third
+  availability fact (a free unowned buyable tile within 3), not the removed
+  `can_buy` press shape.
+- **status**: **closed** — the [反击] window is a real declaration
+  (`dream_ahead_opens_the_turn_end_counteract_window`; the buy still settles in
+  `dream_ahead_buys_a_tile_at_turn_end`). A window candidate's condition may not
+  read `card.placed` (`fill_candidate` passes `placed = false`): the field
+  origin is `COUNTERACT_FROM_FIELD`, and the crystals are `card.counter`.
 
 ### LOY-ANON-01 residual — the 消耗 runs before the pair refusal
 - **class**: A on the payment order; **C** on whether a tile may sit in two
@@ -1223,26 +1235,22 @@ job tmp `wave2-{a,b,c}.md`. **32 new findings** (5 high, 8 medium, rest low).
 Display text / quoted names were clean on all 15 — the problems are behavioral.
 The 2026-11-06 sweep closed 7 of these (LOY-C eve_bushido, BLACK-01,
 GUERRILLA-01, TOMORI-03, GUERRILLA-02, RANDOM-01, WAIT-01) and left
-MUSTBUY-02 and the 再次闪耀 colour half partial; the rest stay open.
+the 再次闪耀 colour half partial (MUSTBUY-02 has since closed); the rest stay
+open.
 
 ## High
 
-### LOY-SEEYOU-01 `PP:[衍生]明天见` a declined play is still announced as played
+### LOY-SEEYOU-01 `PP:[衍生]明天见` a declined play is still announced as played — CLOSED
 - **class**: B (the announcement half). **severity**: high.
 - **rule text**: 「（1）只有[使用者]的正面[P✽P粉丝]数量少等于反面[P✽P粉丝]数量才可
   使用。」+「（2）[共鸣]无视此卡的[特]效果（1）。」
-- **code**: `card-pp/src/see_you_tomorrow.rs:61-74` — `cant_play` allows whenever
-  a 共鸣 is in hand even if `up > down`; the body `return Ok(())` on a declined
-  `try_resonance`.
-- **gap (announcement — open)**: the play is already announced when the body
-  runs, so a refused 共鸣 still counts as a played card -- the log, the `card`
-  window and the played/two-cards counters all ran and it can be counteracted
-  (`TODO(规则书)` at `:61-68`). The activation collector now exists
-  (`Activation::Decline`, `crates/card-sdk/src/lib.rs:133`). Fix: move the 共鸣
-  into the new activation
-  collector (`docs/ACTIVATION.md` §2) and `Activation::Decline` on refusal.
-- **note**: the bypass structure itself is right (gate holds → free play; gate
-  fails → only via 共鸣).
+- **closed**: the 共鸣 moved into the activation collector (`see_you_declare`,
+  `.declare` on the Play entry): when the (1) gate fails, a refusal returns
+  `Activation::Decline` before the point of no return, so no card leaves the
+  hand, no `play` is logged and neither played counter moves. The `cant_play`
+  gate and the bypass structure are unchanged. Pinned by
+  `seeyou_declined_echo_keeps_card_in_hand` (now asserting the untouched
+  counters) and `seeyou_accepted_play_counts`.
 
 ### LOY-NET-01 `通用:网络链接异常` clause 1/2 branch sees only `DESIGNATES` cards
 - **class**: B. **severity**: high.
@@ -1271,10 +1279,15 @@ Do not guess.
 - **LOY-MUSTBUY-01** 「必须购买」 shortfall on `RAS:游击演出` + `Sumimi:Sweet Escape`
   [low/C] — soft-fail (log broke, skip; `guerrilla.rs:145-152`,
   `sweet_escape.rs:144-148`) vs glossary `[破产]`. Decide once.
-- **LOY-MUSTBUY-02** [low/A] **partial** — `Sweet Escape` now suppresses the
-  settle's optional offer (`sweet_escape.rs:124` `set_no_buy(true)`), but
-  `RAS:游击演出` still runs the optional buy first (`guerrilla.rs:139-141`).
-  「必须购买」 should replace the optional on both.
+- **LOY-MUSTBUY-02** [low/A] — **status**: **closed** (2026-11-07).
+  「必须购买」 replaces the settle's optional offer on both `RAS:游击演出` and
+  `Sumimi:Sweet Escape` (`set_no_buy(true)` around the forced settle). The
+  flag is a one-shot latch consumed onto the settle frame
+  (`SettleFrame::no_buy` → `SettleEntry::no_buy`, read by `offer_buy`), so the
+  body's later `set_no_buy(false)` cannot re-open the offer; the latch also
+  crosses the drive pause (`adopt_turn_policy`) because a body's frame write is
+  dropped there. Pinned by `ras::guerrilla_teleports_and_must_buy` (no
+  `ask.buy.title` stands in for the forced buy).
 - **LOY-MUTSUMI-01** `CRYCHIC:（睦）从没有觉得...` [low/C] — (2)'s
   `set_dest(Banished)` is an unprinted `[移除]` (`mutsumi_never.rs:95-99`);
   only (3) prints 「此卡[移除]」.
@@ -1447,10 +1460,14 @@ AG:（巴）商店街的救世主 「立刻支付常规收购价一半的价格�
 (4b) Is 「收购」 a 「购买」 for 「购买…时」 listeners?
 (4c) Does the mortgage stay on the hand-over (the reading implemented keeps it; this port clears it so Afterglow's 「自动免费在上面加盖一栋房子」 can fire)?
 
-**C-Q5 (CH-07, 「视为此卡未生效」).**
-The clause 「视为此卡未生效」 appears on 羽丘的不可思议女孩, Fire bird, 星月夜, noble_blue, kokoro_circle, 无路矢, 奇迹 (3). Two decisions:
-(5a) Does the card still get spent / discarded when it is "not effective"? (haneoka 「放入弃牌堆且视为此卡未生效」 says yes; noble_blue / starry_night's "the card is spent anyway" implies no.)
-(5b) What counts as a "use" that this suppresses? (e.g. haneoka's later 「置入弃牌堆并抵消一次任意付款」, miracle (3)'s crystal-on-discard.)
+**C-Q5 (CH-07, 「视为此卡未生效」) — answered: (a) spent, (b) the waste bit.**
+The clause 「视为此卡未生效」 appears on 羽丘的不可思议女孩, Fire bird, 星月夜, noble_blue, kokoro_circle, 无路矢, 奇迹 (3). Ruled (a): the card is still
+spent and discarded -- it was played, its effect failed, and a play files
+itself. Ruled (b): the fact a listener reads is the `wasted` bit on
+`discarded` (`ctx::set_ineffective_at` on the running instance, surfaced by
+`bandori_std::zones::set_ineffective`), not a separate "use" ledger; the
+MyGO band (3) and miracle (3) consumers read it. Pinned per card in
+`g08`-style native tests and in the `*_refused_wasted_iff` Kani proofs.
 
 **C-Q6 (MOVE-03, multi-activation).**
 A card / band skill with several `On::Play` entries (MyGO band (2)/(3), Mor:（NNM）稍微努力了一下): should the player pick which activation fires, or should one entry branch on 「placed vs hand」? (NNM's 「发动以下效果中的一个」 is a choice *inside* one entry — is that the model for all of them?)
@@ -1458,8 +1475,8 @@ A card / band skill with several `On::Play` entries (MyGO band (2)/(3), Mor:（N
 **C-Q7 (MOVE-05, mid-turn [停留]).**
 Glossary 51 says [停留]=「无法移动」. If a player gains [停留] *during* a move (after the roll, before the walk ends), does the current move stop immediately, or does the prohibition only apply to the next move? (Engine now: the latter. Design reference also the latter.)
 
-**C-Q8 (WINDOW-03, EXIST 「造成影响」).**
-EXIST: 「造成影响」 then draw. If the redirect is later negated by a [反击], does that count as 「造成影响」? Options: (a) declaration (the redirect re-named the recipient — engine now), (b) settlement (nothing landed on me — no draw).
+**C-Q8 (WINDOW-03, EXIST 「造成影响」) — answered: (b) settlement.**
+EXIST: 「造成影响」 then draw. If the redirect is later negated by a [反击], does that count as 「造成影响」? Ruled **(b)**: the latch is spent on the `target` trigger, which fires only once the effect link settled not-cancelled; a cancelled designation (negate or 网络链接异常 clause 1) means nothing landed, so EXIST draws. Pinned by `g07_exist_redirect_then_negated_designation` and its link-negate twin.
 
 **C-Q9 (ABI-05, PP band (2) fan-flip).**
 PP band (2) is passive on 「将X个反面[P✽P粉丝]变正的效果且X大于拥有数时」. Is a fan-flip its own timing, or is this folded into the fan-spend / fan-gain points? (No flip-effect trigger exists today.)

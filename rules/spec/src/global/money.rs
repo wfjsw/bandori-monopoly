@@ -468,7 +468,30 @@ pub fn g_money_03(step: &Step<'_>) -> Result<(), String> {
     let delta = step.post_money(who) as i64 - step.pre_money(who) as i64;
     if delta != -amount {
         return Err(format!(
-            "[消耗]{amount}: player {who} money delta {delta}, expected -{amount}"
+            "[消耗]{amount}: player {who} money delta {delta}, expected -{amount}; \
+             act={:?} events={:?} pre={} post={}\n  played={:?} fields={:?}",
+            step.act,
+            step.events
+                .iter()
+                .map(|e| (
+                    e.r#type.as_str(),
+                    e.msg.key(),
+                    e.player_id,
+                    e.value,
+                    e.from,
+                    e.to,
+                    format!("{:?}", e.msg.args),
+                ))
+                .collect::<Vec<_>>(),
+            step.pre_money(who),
+            step.post_money(who),
+            step.condition.turn.played,
+            step.condition
+                .st
+                .players
+                .iter()
+                .map(|p| p.field.iter().map(|f| f.card.clone()).collect::<Vec<_>>())
+                .collect::<Vec<_>>(),
         ));
     }
     let n = step

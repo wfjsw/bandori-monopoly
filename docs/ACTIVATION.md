@@ -28,8 +28,9 @@ Everything after that line -- the `card` counteraction window, the body, the
 dest -- runs with the commitment already made. The only "undo" is a post-hoc
 `ctx::set_dest(Dest::Hand)` from inside the body, which still leaves the play
 announced (log, `card` window, played counters). That is
-`rules/cards/card-pp/src/see_you_tomorrow.rs:65-70` and backlog **LOY-SEEYOU-01**
-(docs/rulebook/BACKLOG.md): *"do not commit the play until 共鸣 is paid."*
+`rules/cards/card-pp/src/see_you_tomorrow.rs` (landed: the 共鸣 is now a
+`declare` collector and a refusal is `Activation::Decline`, so the play never
+commits) and backlog **LOY-SEEYOU-01** (closed).
 
 So a decision that is part of the activation -- which mode, which target, which
 sub-effect -- has to be collected **before** that line, and the body has to see

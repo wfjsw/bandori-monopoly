@@ -1041,6 +1041,16 @@ impl Table {
         self.m.world().hidden[who].graveyard.clone()
     }
 
+    /// Hand-card plays announced this turn (the `twoCards` counter).
+    pub fn cards_played(&self) -> usize {
+        self.m.world().turn.cards_played
+    }
+
+    /// The ids played from hand this turn.
+    pub fn turn_played(&self) -> &[String] {
+        &self.m.world().turn.played
+    }
+
     pub fn field(&self, who: usize) -> Vec<FieldCard> {
         self.m.world().st.players[who].field.clone()
     }

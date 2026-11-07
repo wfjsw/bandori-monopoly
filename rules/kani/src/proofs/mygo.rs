@@ -192,6 +192,23 @@ crate::host_subset!(tomori_no_longer_dispatch {
     log | effect => arm_log,
 });
 
+/// `MyGO:无路矢` play — the forced designation is refused (`target_refused`,
+/// the model of 网络链接异常 clause 2): no exile, no placement, no teleport
+/// state, and the play's waste bit armed (CH-07 / C-Q5(a): the card is spent).
+crate::host_subset!(no_road_dispatch {
+    player_count => arm_player_count,
+    player_out => arm_player_out,
+    state_get => arm_state_get,
+    opt_int => arm_opt,
+    ask => arm_ask,
+    target => arm_target,
+    opt_str => arm_opt,
+    trig_move_tag => arm_trig_move_tag,
+    set_ineffective_at => arm_set_ineffective_at,
+    self_uid => arm_self_uid,
+    log | effect => arm_log,
+});
+
 // ---------------------------------------------------------------------------
 // In-place 2-seat worlds. No `base_world`, no `reset_world` full copy.
 // ---------------------------------------------------------------------------
@@ -219,6 +236,43 @@ fn effects_of() -> ([Effect; world::MAX_LOG], usize) {
     let logbuf: [Effect; world::MAX_LOG] = world::with_world(|ww| ww.log);
     let log_n = world::with_world(|ww| ww.log_n);
     (logbuf, log_n)
+}
+
+// ===========================================================================
+// C-MYGO-no_road-01
+// 「视为此卡未生效」 — the announced player designation was refused.
+// ===========================================================================
+
+/// Iff at seat 0: a refused designation leaves the frame alone and arms the
+/// waste bit. Both on-board seats exist (2 used seats) so the only thing that
+/// can stop the designation is the refusal itself.
+#[kani::proof]
+#[kani::use_stub_set(crate::kani_stubs::LIB_COST_NOFMT)]
+#[kani::unwind(32)]
+pub fn no_road_refused_wasted_iff() {
+    let user = 0i32;
+    sparse2_user(no_road_dispatch, user);
+    world::with_world_mut(|w| {
+        // A hand play's `self_uid()` is `-1` (the waste bit rides the play).
+        w.bound_uid = -1;
+        w.target_refused = true;
+    });
+    let condition = world::snapshot();
+    invoke::unwrap_done(card_mygo::no_road::no_road_kani(user));
+    let post = world::snapshot();
+    let (logbuf, log_n) = effects_of();
+    let effects = &logbuf[..log_n];
+    crate::kassert!(
+        spec::no_road_refused_wasted_ok(
+            effects,
+            &condition,
+            &post,
+            user,
+            world::with_world(|w| w.play_ineffective),
+        ),
+        "C-MYGO-no_road-01: a refused designation wastes the play with a clean frame"
+    );
+    kani::cover!(world::with_world(|w| w.play_ineffective), "waste bit armed");
 }
 
 // ===========================================================================

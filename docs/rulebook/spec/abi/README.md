@@ -6,9 +6,8 @@ a generic capability, an exact ABI surface, engine wiring, card usage,
 save/record impact, versioning, tests/Kani obligations, alternatives and open
 questions.
 
-G01–G07 and G11–G14 have landed; G08, G09 and G10 have landed but for the
-`cardplayed-payload` residual and the two G02 pay-stage halves. G02 and G15 are
-the only groups still design-only.
+G01–G14 have landed (the G08 `cardplayed-payload` residual closed last). G15 is
+the only group still design-only.
 
 **The group is the unit of review.** Approve, reject or reshape a whole group —
 not individual cards. An item is fixed only after its group is approved and

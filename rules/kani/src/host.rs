@@ -322,7 +322,38 @@ pub fn outside_subset(op: Op) -> i64 {
     let n = op as i32;
     world::with_world_mut(|w| w.unmodeled_op = n);
     #[cfg(kani)]
-    kani::assert(false, "host op outside declared per-harness subset");
+    {
+        // The numeric op is bucketed so a failed run names the missing op's
+        // range in the report instead of only the bare message.
+        let b = (n.max(0) as u32) / 16;
+        match b {
+            0 => kani::assert(false, "subset miss 0..16"),
+            1 => kani::assert(false, "subset miss 16..32"),
+            2 => kani::assert(false, "subset miss 32..48"),
+            3 => kani::assert(false, "subset miss 48..64"),
+            4 => kani::assert(false, "subset miss 64..80"),
+            5 => kani::assert(false, "subset miss 80..96"),
+            6 => kani::assert(false, "subset miss 96..112"),
+            7 => kani::assert(false, "subset miss 112..128"),
+            8 => kani::assert(false, "subset miss 128..144"),
+            9 => kani::assert(false, "subset miss 144..160"),
+            10 => kani::assert(false, "subset miss 160..176"),
+            11 => kani::assert(false, "subset miss 176..192"),
+            12 => kani::assert(false, "subset miss 192..208"),
+            13 => kani::assert(false, "subset miss 208..224"),
+            14 => kani::assert(false, "subset miss 224..240"),
+            15 => kani::assert(false, "subset miss 240..256"),
+            16 => kani::assert(false, "subset miss 256..272"),
+            17 => kani::assert(false, "subset miss 272..288"),
+            18 => kani::assert(false, "subset miss 288..304"),
+            19 => kani::assert(false, "subset miss 304..320"),
+            20 => kani::assert(false, "subset miss 320..336"),
+            21 => kani::assert(false, "subset miss 336..352"),
+            22 => kani::assert(false, "subset miss 352..368"),
+            23 => kani::assert(false, "subset miss 368..384"),
+            _ => kani::assert(false, "subset miss 384+"),
+        }
+    }
     #[cfg(not(kani))]
     panic!("host op outside declared subset: {:?} ({})", op, n);
     #[allow(unreachable_code)]
@@ -725,7 +756,11 @@ pub fn dispatch(op: Op, a: Args) -> i64 {
         Op::set_created_by_at => arm_set_created_by_at(a),
         Op::set_ineffective_at => arm_set_ineffective_at(a),
         Op::is_ineffective_at => {
-            world::with_world(|w| w.field_by_uid(a0).is_some_and(|f| !f.effective) as i64)
+            if a0 < 0 {
+                world::with_world(|w| w.play_ineffective as i64)
+            } else {
+                world::with_world(|w| w.field_by_uid(a0).is_some_and(|f| !f.effective) as i64)
+            }
         }
         Op::rehome_card => arm_rehome_card(a),
         Op::play_hand_card => arm_play_hand_card(a),
@@ -1269,6 +1304,10 @@ pub fn dispatch(op: Op, a: Args) -> i64 {
         Op::gate => arm_gate(a),
         Op::rent_unit_mult => arm_ring_multiplier(a),
 
+        // ---- designation cancel (modelled: one bit, WINDOW-03) ----
+        Op::cancel_designation => arm_cancel_designation(a),
+        Op::designation_cancelled => arm_designation_cancelled(a),
+
         // ---- offers / buy / build (PROTOCOL-LEVEL) ----
         Op::pay_rent
         | Op::charge_rent
@@ -1295,8 +1334,6 @@ pub fn dispatch(op: Op, a: Args) -> i64 {
         | Op::add_rent_unit_bonus
         | Op::move_units
         | Op::designations
-        | Op::cancel_designation
-        | Op::designation_cancelled
         | Op::flash
         | Op::no_flash
         | Op::flash_card
@@ -3064,14 +3101,21 @@ pub fn arm_owned_count(a: Args) -> i64 {
 pub fn arm_pay(a: Args) -> i64 {
     let [a0, a1, a2, a3, a4, a5] = a;
     {
-        if a1 > 0 {
+        // `pay_shortfall` = the payer cannot cover the amount: move what is
+        // there and answer it (the real side's shortfall path).
+        let (short, avail) = world::with_world(|w| (w.pay_shortfall, w.money[player_idx(a0)]));
+        let moved = if short { a1.min(avail) } else { a1 };
+        if moved > 0 {
             world::with_world_mut(|w| {
                 let p = player_idx(a0);
-                w.money[p] = (w.money[p] - a1).max(0);
-                w.push(Effect::PayMoney { player: a0, n: a1 });
+                w.money[p] = (w.money[p] - moved).max(0);
+                w.push(Effect::PayMoney {
+                    player: a0,
+                    n: moved,
+                });
             });
         }
-        a1 as i64
+        moved as i64
     }
 }
 
@@ -3766,6 +3810,11 @@ pub fn arm_set_created_by_at(a: Args) -> i64 {
 
 pub fn arm_set_ineffective_at(a: Args) -> i64 {
     let [uid, on, ..] = a;
+    // `-1` is the running hand play, not a row (G08 §2.6 / CH-07).
+    if uid < 0 {
+        world::with_world_mut(|w| w.play_ineffective = on != 0);
+        return 1;
+    }
     world::with_world_mut(|w| match w.field_by_uid_mut(uid) {
         Some(f) => {
             f.effective = on == 0;
@@ -4375,6 +4424,10 @@ pub fn arm_take_card(a: Args) -> i64 {
 
 pub fn arm_target(a: Args) -> i64 {
     let [a0, a1, a2, a3, a4, a5] = a;
+    // A refused designation is the test-facing shape of 网络链接异常: answer -1.
+    if world::with_world(|w| w.target_refused) {
+        return -1;
+    }
     // Tile targeting (`ctx::target_tile` sends player = -1): the real side's
     // inline Target answers the tile itself when one is named, so a -1 here
     // made every tile designation fail closed on the model side.
@@ -4724,6 +4777,30 @@ pub fn arm_tok_names(a: Args) -> i64 {
     n as i64
 }
 
+/// `ctx::cancel_designation(seat)` -- the modelled cancel bit; the last write
+/// wins (the Kani world has no per-pair list).
+pub fn arm_cancel_designation(a: Args) -> i64 {
+    let seat = a[0] as i32;
+    world::with_world_mut(|w| w.designated_cancelled = seat);
+    1
+}
+
+/// `ctx::designation_cancelled(seat)`.
+pub fn arm_designation_cancelled(a: Args) -> i64 {
+    let seat = a[0] as i32;
+    world::with_world(|w| (w.designated_cancelled == seat) as i64)
+}
+
+/// `trigger::redirected_from()` -- the raw seat (`-1` = not redirected).
+pub fn arm_trig_redirected_from(_a: Args) -> i64 {
+    world::with_world(|w| w.trig_redirected_from as i64)
+}
+
+/// `trigger::play_outcome()` -- the raw bit (`-1` = none).
+pub fn arm_trig_play_outcome(_a: Args) -> i64 {
+    world::with_world(|w| w.trig_play_outcome) as i64
+}
+
 /// `trigger::kind()` — two-call out-buffer: write the spelling bytes.
 pub fn arm_trig_kind(a: Args) -> i64 {
     let [p, n, ..] = a;
@@ -4929,6 +5006,14 @@ pub fn arm_trig_move_roll(a: Args) -> i64 {
     world::with_world(|w| w.move_snap.roll) as i64
 }
 
+/// `trigger::move_tag(k)` — a named tag on the move payload (`0` when absent,
+/// which is also the answer with no move at all).
+pub fn arm_trig_move_tag(a: Args) -> i64 {
+    let [a0, a1, ..] = a;
+    let key = name_id(a0, a1);
+    world::with_world(|w| w.move_snap.tags.get(key)) as i64
+}
+
 /// `trigger::name()` — two-call out-buffer writing the interned name bytes.
 pub fn arm_trig_name(a: Args) -> i64 {
     let [p, n, ..] = a;
@@ -5042,23 +5127,41 @@ pub fn arm_pay_command(a: Args) -> i64 {
         w.trig_settle_tile = tile;
     });
     // A `Fixed` leg moves the amount verbatim; the symbolic model does not
-    // apply factors, so `Normal` moves it verbatim too.
-    if amount > 0 {
+    // apply factors, so `Normal` moves it verbatim too. A `pay_shortfall`
+    // world moves what the payer has and packs `SHORTFALL` (no `SETTLED`); a
+    // full move packs `SETTLED`.
+    let (short, avail) = world::with_world(|w| (w.pay_shortfall, w.money[player_idx(from)]));
+    let moved = if short { amount.min(avail) } else { amount };
+    if moved > 0 {
         world::with_world_mut(|w| {
             let f = player_idx(from);
-            w.money[f] = (w.money[f] - amount).max(0);
+            w.money[f] = (w.money[f] - moved).max(0);
             if to >= 0 {
                 let t = player_idx(to);
-                w.money[t] = w.money[t].saturating_add(amount);
+                w.money[t] = w.money[t].saturating_add(moved);
             }
-            w.push(Effect::PayTo {
-                from,
-                to,
-                n: amount,
-            });
+            // A bank payment (`to < 0`) is the `PayMoney` shape the specs read,
+            // the same one `arm_pay` pushes; a seat-to-seat leg is `PayTo`.
+            if to < 0 {
+                w.push(Effect::PayMoney {
+                    player: from,
+                    n: moved,
+                });
+            } else {
+                w.push(Effect::PayTo { from, to, n: moved });
+            }
         });
     }
-    amount as i64
+    let mut receipt = moved & card_sdk::abi::pay_receipt::AMOUNT_MASK;
+    if shape == 1 {
+        receipt |= card_sdk::abi::pay_receipt::FIXED;
+    }
+    if short {
+        receipt |= card_sdk::abi::pay_receipt::SHORTFALL;
+    } else {
+        receipt |= card_sdk::abi::pay_receipt::SETTLED;
+    }
+    receipt as i64
 }
 
 pub fn arm_trig_set_pay_kind(a: Args) -> i64 {

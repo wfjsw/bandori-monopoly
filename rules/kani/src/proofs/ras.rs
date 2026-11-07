@@ -462,3 +462,66 @@ pub fn pareo_01_marks_mutant_is_detected() {
         "mutant: card must not match the +3 marks spec"
     );
 }
+
+// ===========================================================================
+// C-RAS-exist-latch (WINDOW-03, C-Q8)
+// `landed_redirect` -- the 「造成影响」 latch predicate.
+// ===========================================================================
+
+crate::host_subset!(exist_dispatch {
+    trig_redirected_from => arm_trig_redirected_from,
+    trig_target => arm_trig_target,
+    cancel_designation => arm_cancel_designation,
+    designation_cancelled => arm_designation_cancelled,
+});
+
+fn exist_world(user: i32) {
+    host::install_backend(exist_dispatch);
+    crate::harness::sparse_play_world(crate::harness::SparsePlay {
+        used_seats: 2,
+        n_players: 2,
+        ..Default::default()
+    });
+    world::with_world_mut(|w| w.trig_target = user);
+}
+
+/// Truth table: not redirected -> false; redirected but the designation was
+/// cancelled -> false; redirected and survived -> true.
+#[kani::proof]
+#[kani::use_stub_set(crate::kani_stubs::LIB_COST_NOFMT)]
+#[kani::unwind(8)]
+pub fn exist_landed_redirect_iff() {
+    let user = 0i32;
+    exist_world(user);
+    for redirected in [false, true] {
+        for cancelled in [false, true] {
+            world::with_world_mut(|w| {
+                w.trig_redirected_from = if redirected { 1 } else { -1 };
+                w.designated_cancelled = if cancelled { user } else { -1 };
+            });
+            let got = card_ras::exist::landed_redirect_kani(user);
+            crate::kassert!(
+                got == spec::exist_landed_redirect(redirected, cancelled),
+                "exist latch: landed iff redirected and not cancelled"
+            );
+        }
+    }
+}
+
+/// Mutant companion: the cancel check dropped disagrees on a cancelled one.
+#[kani::proof]
+#[kani::use_stub_set(crate::kani_stubs::LIB_COST_NOFMT)]
+#[kani::unwind(8)]
+pub fn exist_landed_redirect_mutant_is_detected() {
+    let user = 0i32;
+    exist_world(user);
+    world::with_world_mut(|w| {
+        w.trig_redirected_from = 1;
+        w.designated_cancelled = user;
+    });
+    let got = card_ras::exist::landed_redirect_kani(user);
+    crate::kassert!(
+        got != spec::exist_landed_redirect_mutant(true, true),
+        "mutant: a cancelled redirect must not latch"
+    );
+}

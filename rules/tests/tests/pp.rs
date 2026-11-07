@@ -394,6 +394,7 @@ fn seeyou_declined_echo_keeps_card_in_hand() {
     let mut t = Table::vanilla(2);
     set_fans(&mut t, 0, 3, 1);
     t.give(0, &["PP:[衍生]共鸣", "PP:[衍生]明天见"]);
+    let mark = t.mark();
     assert!(t.play(0, "PP:[衍生]明天见").is_ok());
     while t.prompt().is_some() {
         t.decline();
@@ -408,6 +409,32 @@ fn seeyou_declined_echo_keeps_card_in_hand() {
         "共鸣 unspent: {hand:?}"
     );
     assert_eq!(fans(&t, 0), (3, 1), "no effect");
+    // A declined activation never announces: no `play` log, no played counter.
+    let keys = t.keys_since(mark);
+    assert!(
+        !keys.iter().any(|k| k == "log.play"),
+        "no play event: {keys:?}"
+    );
+    assert_eq!(t.cards_played(), 0, "the play counter did not move");
+    assert!(t.turn_played().is_empty(), "no played id: {:?}", t.turn_played());
+}
+
+/// A resolved play still moves both counters -- the decline path must not have
+/// taken the announcement away from the accepted one.
+#[test]
+fn seeyou_accepted_play_counts() {
+    let mut t = Table::vanilla(2);
+    set_fans(&mut t, 0, 1, 3);
+    t.give(0, &["PP:[衍生]明天见"]);
+    let mark = t.mark();
+    t.play(0, "PP:[衍生]明天见").unwrap();
+    drain(&mut t);
+    assert!(
+        t.keys_since(mark).iter().any(|k| k == "log.play"),
+        "the play is announced"
+    );
+    assert_eq!(t.cards_played(), 1);
+    assert_eq!(t.turn_played(), ["PP:[衍生]明天见"]);
 }
 
 // ============================================================ PP:不要背负期待
@@ -653,10 +680,10 @@ fn dream_ahead_extra_rent() {
 
 /// 规则书（4）: 「[共鸣][反击][拥有者]回合结束时且在[拥有者]所在格子前后3格以内有
 /// 无主的[可购买格子]：使用此卡上3个[奇迹水晶]，[拥有者]购买任意…无主的
-/// [可购买格子]」 (LOY-DREAM-01) -- wired as `On::Action(TurnEndBefore)` (Class-B:
-/// turn-end is hook-only, no counteraction window). The buy fires at the
-/// owner's turn end, spends 3 crystals and the [共鸣] cost, and buys one free
-/// buyable tile within 3.
+/// [可购买格子]」 (LOY-DREAM-01) -- a real [反击] declaration in the turn-end
+/// window (kind `TurnEndBefore` is not hook-only), declared from the placed
+/// copy via `COUNTERACT_FROM_FIELD`. The buy spends 3 crystals and the [共鸣]
+/// cost, and buys one free buyable tile within 3.
 #[test]
 fn dream_ahead_buys_a_tile_at_turn_end() {
     let mut t = Table::vanilla(2);
@@ -671,11 +698,14 @@ fn dream_ahead_buys_a_tile_at_turn_end() {
     drain(&mut t); // decline the settle's optional buy on 富士见坂
     assert_eq!(t.pos(0), 11, "landed on 富士见坂");
     t.end(0).unwrap();
-    // Prompts: [共鸣] yes/no, then the tile pick (「购买任意…无主的[可购买格子]」).
+    // Prompts: the turn-end [反击] window (declare this card), [共鸣] yes/no,
+    // then the tile pick (「购买任意…无主的[可购买格子]」).
     let mut bought: Option<usize> = None;
     while t.prompt().is_some() {
         let p = t.expect_prompt();
-        if p.title.key().contains("resonance") {
+        if t.counteract_offered("PP:梦在前方，结彩当下") {
+            t.counteract(0, "PP:梦在前方，结彩当下").unwrap();
+        } else if p.title.key().contains("resonance") {
             let _ = t.answer(0, 0); // yes -- pay the [共鸣] cost
         } else if p.title.key().contains("dream_ahead") {
             // Pick the first offered tile; record which index it is.
@@ -698,6 +728,34 @@ fn dream_ahead_buys_a_tile_at_turn_end() {
         t.crystals(0, "PP:梦在前方，结彩当下").unwrap_or(0),
         0,
         "spent 3 [奇迹水晶]"
+    );
+}
+
+/// 规则书（4）: 「[反击][拥有者]回合结束时…」 is a *declaration* in the turn-end
+/// window (LOY-DREAM-01), not a silent hook: the placed card is offered to its
+/// owner at `TurnEndBefore` and can be declined.
+#[test]
+fn dream_ahead_opens_the_turn_end_counteract_window() {
+    let mut t = Table::vanilla(2);
+    t.place_raw(0, "PP:梦在前方，结彩当下");
+    t.set_crystals(0, "PP:梦在前方，结彩当下", 3);
+    t.set_pos(0, 10);
+    t.dice(&[1]);
+    t.roll(0).unwrap();
+    drain(&mut t);
+    t.end(0).unwrap();
+    assert!(
+        t.counteract_offered("PP:梦在前方，结彩当下"),
+        "the turn-end [反击] window offers the card: {}",
+        t.dump_prompt()
+    );
+    // Declining the window leaves the buy unpicked.
+    t.decline();
+    drain(&mut t);
+    assert_eq!(
+        t.crystals(0, "PP:梦在前方，结彩当下").unwrap_or(0),
+        3,
+        "a declined declaration spends nothing"
     );
 }
 

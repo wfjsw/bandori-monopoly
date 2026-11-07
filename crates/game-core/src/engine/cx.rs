@@ -562,6 +562,11 @@ pub struct SettleEntry {
     pub mv: super::rules::TriggerMove,
     /// The settle's main-move flag, stamped on inheriting raises.
     pub is_main_move: bool,
+    /// 「必须购买」 for this settle only (LOY-MUSTBUY-02): the settle's own
+    /// optional buy offer is suppressed and the caller's forced buy is the
+    /// binding one. Seeded from the frame, so a later `set_no_buy(false)`
+    /// cannot clear it.
+    pub no_buy: bool,
 }
 
 /// Routine context: the world being mutated, read-only game data, card rules, and
@@ -2540,6 +2545,11 @@ impl<'a> PlayCtx<'a> {
         t.next_move_pay_factor = f.next_move_pay_factor;
         t.plan.can_build = f.plan.can_build;
         t.plan.no_buy = f.plan.no_buy;
+        // The 「必须购买」 one-shot latch (LOY-MUSTBUY-02) lives beside the
+        // plan: a card body's write is on its own copy's `turn`, and only the
+        // staging `plan` crosses above, so the latch has to cross here or a
+        // `settle_tile_at` on the far side of the pause loses it.
+        t.settle_no_buy = f.settle_no_buy;
         t.plan.tags = f.plan.tags.clone();
         // A card body may latch a decision across the pauses its host routines
         // cause -- e.g. 黑色生日 freezing 「每名你以外的资金不多于1000的玩家」 at

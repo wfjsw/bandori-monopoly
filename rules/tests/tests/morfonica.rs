@@ -2050,3 +2050,73 @@ fn interaction_xuanzhan_and_centrifuge_answer_the_same_targeting() {
     assert!(saw_centrifuge, "2nd: {}", t.dump_prompt());
     assert!(t.on_field(0, "Mor:离心力，不为所动"));
 }
+
+// 规则书: 「视为此卡未生效」 on the X*1000 shortfall (CH-07 / C-Q5(a)): X is
+// asked, the payment falls short, the card is spent with the waste bit and
+// nothing is placed. `TEST:zoner` on the other seat hears the discard.
+#[test]
+fn starry_shortfall_is_wasted() {
+    let mut t = Table::vanilla(3);
+    t.place_raw(1, "TEST:zoner");
+    t.give(0, &["Mor:蝴蝶飞舞的星月夜"]);
+    t.set_money(0, 0);
+    let mark = t.mark();
+    assert!(
+        t.play(0, "Mor:蝴蝶飞舞的星月夜").is_ok(),
+        "{:?}",
+        t.recent_keys(8)
+    );
+    // The X ask clamps to at least 1; answer the first option (1000).
+    if let Some(p) = t.prompt() {
+        if p.kind != "mortgage" {
+            t.answer(0, 0).unwrap();
+        }
+    }
+    decline_all(&mut t);
+    let ev = t.events_since(mark);
+    let waste: Vec<i64> = ev
+        .iter()
+        .filter(|e| log_key(e) == "zoner_discarded" && int_arg(&e.msg, "uid") == Some(-1))
+        .filter_map(|e| int_arg(&e.msg, "wasted"))
+        .collect();
+    assert!(
+        waste.contains(&1),
+        "the shortfall discard is wasted: {:?}",
+        t.keys_since(mark)
+    );
+    assert!(
+        !t.on_field(0, "Mor:蝴蝶飞舞的星月夜"),
+        "{:?}",
+        t.field_ids(0)
+    );
+    assert!(t.discard(0).contains(&"Mor:蝴蝶飞舞的星月夜".to_string()));
+}
+
+// 规则书: 「如果此地块属于你」's other half -- the foreign-tile branch is the
+// 「视为此卡未生效」 case (CH-07 / C-Q5(a)): the card is spent with the waste
+// bit, no mark and no forced settle.
+#[test]
+fn noble_foreign_tile_is_wasted() {
+    let mut t = Table::vanilla(2);
+    t.place_raw(1, "TEST:zoner");
+    let land = tile("弦卷豪宅");
+    t.own(1, &[land]);
+    t.set_pos(0, land);
+    t.give(0, &["Mor:高贵的微蓝"]);
+    let mark = t.mark();
+    t.play(0, "Mor:高贵的微蓝").unwrap();
+    decline_all(&mut t);
+    let ev = t.events_since(mark);
+    let waste: Vec<i64> = ev
+        .iter()
+        .filter(|e| log_key(e) == "zoner_discarded" && int_arg(&e.msg, "uid") == Some(-1))
+        .filter_map(|e| int_arg(&e.msg, "wasted"))
+        .collect();
+    assert!(
+        waste.contains(&1),
+        "the foreign-tile discard is wasted: {:?}",
+        t.keys_since(mark)
+    );
+    assert!(!t.on_field(0, "Mor:高贵的微蓝"), "{:?}", t.field_ids(0));
+    assert_eq!(t.pos(0), land, "no settle moved the player");
+}

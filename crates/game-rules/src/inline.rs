@@ -268,18 +268,6 @@ pub fn request_or_pause<C: HostCtx>(
     pause: Pause,
 ) -> Result<i32, HostError> {
     let mirrored = game_core::engine::JournalRequest::from(&req);
-    if std::env::var("DBG_H01").is_ok() {
-        let st = c.st_mut();
-        eprintln!(
-            "H01 ROP at={} answers={:?} last={:?} journal={} top={} req={:?}",
-            st.log.cursor,
-            st.log.answers,
-            st.log.last.keys().collect::<Vec<_>>(),
-            st.log.journal.len(),
-            top().is_some(),
-            mirrored
-        );
-    }
     let mut answer = None;
     {
         let st = c.st_mut();
@@ -359,7 +347,7 @@ pub fn request_or_pause<C: HostCtx>(
             // top of it -- `restore_condition` skips both.
             let drifted = !st.log.reapplied.contains(&at)
                 && row.as_ref().is_some_and(|e| {
-                    recomputed(&e.request, &mirrored)
+                    recomputed(&e.request, &mirrored) || !same_request(&e.request, &mirrored)
                 });
             if let Some(entry) = row.as_ref().filter(|_| drifted) {
                 let mut req = req;
@@ -378,12 +366,31 @@ pub fn request_or_pause<C: HostCtx>(
                 // answered (tsukushi: the settle yes was lost and the re-ask
                 // took the provider's default no).
                 st.log.journal.retain(|e| e.slot < at);
-                // `last` rows stay for the same reason as the answers: their
-                // absolute results (the settle's money, above all) have to be
-                // re-imposed when the re-run reaches the slot again.
+                // `last` rows stay: their absolute results (the settle's
+                // money, above all) have to be re-imposed when the re-run
+                // reaches the slot again. A kind drift keeps the replaced row
+                // enough for that -- `apply_host_request` carries its
+                // condition and post-state onto the replacement row rather
+                // than let the re-run's fresh pre-state name a world the
+                // drifted request is already past.
 
                 st.log.reapply.retain(|&k, _| k <= at);
                 st.log.reapplied.retain(|&k| k <= at);
+                // The slot's completed row keeps naming its absolute result:
+                // the replaced request's effect already landed on live, and a
+                // later pass must re-impose it rather than let the pass base's
+                // pre-request figure win.
+                let condition = request_condition(&st.log, at);
+                let after_money = request_after_money(&st.log, at);
+                let after_pos = request_after_pos(&st.log, at);
+                // The superseded request's pile half is not replayed (the body
+                // now makes a different call): the pass top has rewound the
+                // piles to the drive start and the re-run's own writes replay
+                // from there. Without this the checkpoint would hand a drawn
+                // card out a second time.
+                st.w().drop_pile_checkpoint(at);
+                st.w()
+                    .after_host(at, condition.as_ref(), after_money.as_deref(), after_pos);
                 st.log.reapplied.insert(at);
                 st.host_request = Some(req);
                 st.host_journal_start = Some(game_core::engine::JournalStart::Replace(at));
