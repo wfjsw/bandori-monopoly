@@ -402,16 +402,24 @@ fn tsugumi_answers_a_numeric_event() {
 
 #[test]
 fn vocal_not_offered_on_a_split_leg() {
-    // A [分摊] leg is not 「一次性」 even when the leg is >= 5000.
+    // The command **total** is one whole payment, so the window opens there
+    // once; a [分摊] leg is not 「一次性」 even when the leg is >= 5000, so
+    // declining the total leaves the legs unoffered (v120, G02 §2.20).
     let mut t = fresh(&["花园多惠", "仓田真白", "户山香澄"]);
     t.give(1, &[VOCAL]);
     t.give(2, &[VOCAL]);
     t.give(0, &["TEST:split12k"]);
     t.play(0, "TEST:split12k").unwrap();
+    assert!(
+        t.counteract_offered(VOCAL),
+        "the 12,000 command total is one payment: {}",
+        t.dump_prompt()
+    );
+    t.decline();
     let mut asked = Vec::new();
     assert!(
         !record_offers(&mut t, VOCAL, &mut asked),
-        "no offer on a split leg: {}",
+        "no leg-level offer: {}",
         t.dump_prompt()
     );
     drain(&mut t);

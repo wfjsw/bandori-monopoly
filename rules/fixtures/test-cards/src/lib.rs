@@ -105,7 +105,7 @@ const SETTLE_PROBE: CardDef = CardDef::new(
 const SNAP_TWICE: CardDef = CardDef::new("TEST:snapTwice", &[On::Play("", None, snap_twice)]);
 fn snap_twice(player_id: i32) -> card_sdk::Asked {
     let k = ctx::world_snapshot()?;
-    ctx::adjust_money(player_id, 500, &Msg::new(key!("snap_twice_change")));
+    ctx::adjust_money(player_id, 500, &Msg::new(key!("snap_twice_change")))?;
     ctx::world_restore(k)?;
     ctx::world_restore(k)?;
     ctx::world_snapshot_drop(k)?;
@@ -117,7 +117,7 @@ fn snap_twice(player_id: i32) -> card_sdk::Asked {
 const SNAP_ASK: CardDef = CardDef::new("TEST:snapAsk", &[On::Play("", None, snap_ask)]);
 fn snap_ask(player_id: i32) -> card_sdk::Asked {
     let k = ctx::world_snapshot()?;
-    ctx::adjust_money(player_id, 500, &Msg::new(key!("snap_ask_change")));
+    ctx::adjust_money(player_id, 500, &Msg::new(key!("snap_ask_change")))?;
     let _ = ctx::ask_yes(
         player_id,
         &Msg::new(key!("snap_ask_q")),
@@ -1099,7 +1099,81 @@ fn shape_late(player_id: i32, v: PayAddValue) -> PayAddValue {
 const LOSE_RAW: CardDef = CardDef::new("TEST:loseRaw", &[On::Play("", None, lose_raw)]);
 
 fn lose_raw(player_id: i32) -> card_sdk::Asked {
-    ctx::lose_raw(player_id, 1000, &Msg::new(key!("lose_raw_why")));
+    ctx::lose_raw(player_id, 1000, &Msg::new(key!("lose_raw_why")))?;
+    Ok(())
+}
+
+/// HOST-03 order probe: log at 支付阶段 1 (「支付计算前」) and window 3
+/// (「支付计算后」, `PaySplitMulBefore`), placed only, so a test can pin that
+/// window 1 is raised before window 3 on one payment.
+const PAY_CALC_PROBE: CardDef = CardDef::new(
+    "TEST:payCalcProbe",
+    &[
+        On::Play("", None, pay_calc_probe_place),
+        On::Action(Action::PayCalcBefore(
+            "",
+            Some(pay_calc_probe_placed),
+            pay_calc_w1,
+        )),
+        On::Action(Action::PaySplitMulBefore(
+            "",
+            Some(pay_calc_probe_placed),
+            pay_calc_w3,
+        )),
+    ],
+);
+
+fn pay_calc_probe_place(player_id: i32) -> card_sdk::Asked {
+    ctx::set_dest(ctx::Dest::Field, card_sdk::abi::ZoneChangeCause::Play);
+    ctx::place_card(
+        player_id,
+        "TEST:payCalcProbe",
+        &Msg::new(key!("pay_calc_probe_note")),
+    );
+    Ok(())
+}
+
+fn pay_calc_probe_placed(_player_id: i32) -> bool {
+    ctx::is_placed()
+}
+
+fn pay_calc_w1(player_id: i32) -> card_sdk::Asked {
+    ctx::log(player_id, &Msg::new(key!("pay_calc_w1")));
+    Ok(())
+}
+
+fn pay_calc_w3(player_id: i32) -> card_sdk::Asked {
+    ctx::log(player_id, &Msg::new(key!("pay_calc_w3")));
+    Ok(())
+}
+
+/// HOST-03 window 7 probe: logs the settled `paid` figure with the payer's
+/// seat (-1 for a print), so a test can pin that a receipt fires it too.
+const PAID_PROBE: CardDef = CardDef::new(
+    "TEST:paidProbe",
+    &[
+        On::Play("", None, paid_probe_place),
+        On::Action(Action::Paid("card.placed", None, paid_probe)),
+    ],
+);
+
+fn paid_probe_place(player_id: i32) -> card_sdk::Asked {
+    ctx::set_dest(ctx::Dest::Field, card_sdk::abi::ZoneChangeCause::Play);
+    ctx::place_card(
+        player_id,
+        "TEST:paidProbe",
+        &Msg::new(key!("paid_probe_note")),
+    );
+    Ok(())
+}
+
+fn paid_probe(player_id: i32) -> card_sdk::Asked {
+    ctx::log(
+        player_id,
+        &Msg::new(key!("paid_seen"))
+            .i("value", trigger::value() as i64)
+            .player_id("who", trigger::player_id()),
+    );
     Ok(())
 }
 
@@ -4335,6 +4409,8 @@ card_sdk::ruleset!(&[
     XFER_1000,
     GAIN_1000,
     LOSE_1000,
+    PAY_CALC_PROBE,
+    PAID_PROBE,
     MARKER_DENY,
     MARKER_SPEND,
     CHARGE_ROLL,

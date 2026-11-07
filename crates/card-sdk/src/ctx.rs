@@ -605,24 +605,30 @@ pub fn gain_typed(player_id: i32, amount: i32, typ: &str, text: &Msg) -> Result<
 /// `log.lose` line and **no** payment pipeline: no `paySplitAdd` / `paySplitMul` /
 /// `paySplitChoose` / `paySplitAt`, no `effect` [反击] window, no `payAfter`. 规则书
 /// 「不受其他任何效果影响」 -- the amount moves as-is (ONE OF US's 「被分享方
-/// 资金直接增加」). Positive `delta` is a gain, negative a loss. Non-pausing:
-/// returns the amount actually moved (0 = the seat was out).
+/// 资金直接增加」). Positive `delta` is a gain, negative a loss.
+///
+/// A gain is non-pausing and applies raw. A loss pauses and raises the
+/// `spendBefore` counteraction window at the full cost before the debit
+/// (G02 §2.21); a responder reduces it with `set_pay_amount`, and a cancel
+/// leaves the cost in place. Returns the amount actually moved (0 = the seat
+/// was out); `Err(Prompt)` pauses the run on the loss window.
 #[cfg_attr(kani, inline(always))]
-pub fn adjust_money(player_id: i32, delta: i32, src: &Msg) -> i32 {
+pub fn adjust_money(player_id: i32, delta: i32, src: &Msg) -> Result<i32, Prompt> {
     let (p, l) = msg_bytes(src);
-    unsafe { sys::adjust_money(player_id, delta, p, l) }
+    asked(unsafe { sys::adjust_money(player_id, delta, p, l) })
 }
 
 /// [`adjust_money`] with a positive `amount` -- a raw gain. Convenience.
 #[cfg_attr(kani, inline(always))]
-pub fn gain_raw(player_id: i32, amount: i32, src: &Msg) -> i32 {
+pub fn gain_raw(player_id: i32, amount: i32, src: &Msg) -> Result<i32, Prompt> {
     adjust_money(player_id, amount.max(0), src)
 }
 
-/// [`adjust_money`] with a positive `amount` taken away -- a raw loss.
-/// Convenience.
+/// [`adjust_money`] with a positive `amount` taken away -- a raw loss. It
+/// pauses on the `spendBefore` window like [`adjust_money`] does for a
+/// negative `delta`.
 #[cfg_attr(kani, inline(always))]
-pub fn lose_raw(player_id: i32, amount: i32, src: &Msg) -> i32 {
+pub fn lose_raw(player_id: i32, amount: i32, src: &Msg) -> Result<i32, Prompt> {
     adjust_money(player_id, -amount.max(0), src)
 }
 

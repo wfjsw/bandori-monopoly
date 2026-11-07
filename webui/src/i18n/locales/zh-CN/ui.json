@@ -72,6 +72,7 @@
   "anim.chainKind.cardFired": "卡牌发动",
   "anim.chainKind.markChanged": "标记变化",
   "anim.chainKind.spendBefore": "消耗前",
+  "anim.chainKind.payCalcBefore": "支付计算前",
   "anim.chainKind.abnormalRefused": "异常被拒",
   "anim.chainKind.bankruptBefore": "破产前",
   "anim.chainKind.bankruptResolved": "破产结算后",

@@ -4448,6 +4448,37 @@ impl PlayCtx<'_> {
         // depth (the rulebook has no depth limit); the re-entrancy guard
         // (`PlayCtx::reentrant_hooks`) is the termination argument.
         if amount > 0 {
+            // 支付阶段 1 「支付计算前」: the declared figure, immediately
+            // before the `effect` window. Hook-only -- no cancel or retarget
+            // power; a `set_pay_amount` / `set_pay_target` folds into the
+            // declaration `effect` then sees (HOST-03, G02 §4.1).
+            let t = raise!(
+                self,
+                "payCalcBefore",
+                side,
+                player_id = payer,
+                target = to.map_or(-1, |t| t as i32),
+                value = amount,
+                by_card = p.by_card,
+                @p TriggerPay::new(p.kind, rent, total_stage, p.shape),
+                tile = p.tile.map_or(-1, |t| t as i32),
+                effects = vec![super::rules::Effect {
+                    kind: "pay".into(),
+                    target: to.map_or(-1, |t| t as i32),
+                    from: payer,
+                    tile: p.tile.map_or(-1, |t| t as i32),
+                    value: amount,
+                }],
+            )?;
+            if t.value != amount {
+                modified = true;
+            }
+            amount = t.value;
+            to = (t.target >= 0).then_some(t.target as usize);
+            Self::fold_pay_payload(&mut p, &t, &mut rent, &mut fixed);
+            if partner.is_none() && p.shape == PayShape::PayeeHalf {
+                partner = to;
+            }
             let t = raise!(
                 self,
                 "effect",
@@ -4557,6 +4588,7 @@ impl PlayCtx<'_> {
                             &mut p,
                             amount,
                             &["payCombinedAdd"],
+                            false,
                         )?
                         .unwrap_or(amount);
                     // The pre-split windows may have rewritten kind / rent / shape
@@ -4627,6 +4659,7 @@ impl PlayCtx<'_> {
                         &mut p,
                         amount,
                         &["payCombinedMul", "payCombinedCancel"],
+                        false,
                     )? {
                         // `payCombinedCancel` dropped the whole command.
                         None => {
@@ -4772,9 +4805,10 @@ impl PlayCtx<'_> {
                 }
             }
         }
-        // `pay` is a settlement hook now: what the payment actually was. It
-        // runs after the chain, so it can no longer be used to reconstruct
-        // 「被…效果影响」 -- that is `effect`'s job.
+        // `pay` is 支付阶段 5 「支付时」 -- the cancel / retarget window, after
+        // the whole count chain. It runs after the chain, so it can no longer
+        // be used to reconstruct 「被…效果影响」 -- that is `effect`'s job.
+        // (进行支付 / 分摊 shaping stays on `paySplitChoose` / `paySplitAt`.)
         //
         // V5 (`NEGATION-AUDIT`): the settlement window honours
         // `set_cancelled()` -- a counter body that cancels the `pay` link stops
@@ -5031,13 +5065,18 @@ impl PlayCtx<'_> {
             settle_tile = self.settle_tile(),
             tile = p.tile.map_or(-1, |t| t as i32)
         )?;
-        if let Some(f) = p.from.filter(|_| loss > 0) {
+        // 支付阶段 7 「资金变动」: the settled figure, on a loss **and** on a
+        // receipt. A print has no payer, so the seat is the payee and
+        // `player_id` stays -1 there (HOST-03).
+        if moved > 0 {
+            let seat = p.from.or(to).expect("a payment has a side");
             raise!(
                 self,
                 "paid",
-                f,
+                seat,
+                player_id = payer,
                 target = to.map_or(-1, |t| t as i32),
-                value = loss,
+                value = moved,
                 by_card = p.by_card,
                 @p TriggerPay::new(p.kind, rent, total_stage, p.shape),
                 settle_tile = self.settle_tile(),
@@ -5100,6 +5139,7 @@ impl PlayCtx<'_> {
         p: &mut Pay,
         total: i32,
         kinds: &[&str],
+        split_total: bool,
     ) -> Flow<Option<i32>> {
         let total_stage = p.runs_total_stage;
         let mut amount = total;
@@ -5116,7 +5156,7 @@ impl PlayCtx<'_> {
                     target = to.map_or(-1, |t| t as i32),
                     value = amount,
                     by_card = p.by_card,
-                    @p TriggerPay::new(p.kind, p.rent, total_stage, p.shape),
+                    @p TriggerPay::new(p.kind, p.rent, total_stage, p.shape).with_split_total(split_total),
                     settle_tile = self.settle_tile(),
                     tile = p.tile.map_or(-1, |t| t as i32)
                 )?;
@@ -5134,7 +5174,7 @@ impl PlayCtx<'_> {
                 target = to.map_or(-1, |t| t as i32),
                 value = amount,
                 by_card = p.by_card,
-                @p TriggerPay::new(p.kind, p.rent, total_stage, p.shape),
+                @p TriggerPay::new(p.kind, p.rent, total_stage, p.shape).with_split_total(split_total),
                 settle_tile = self.settle_tile(),
                 tile = p.tile.map_or(-1, |t| t as i32)
             )?;
@@ -5161,7 +5201,7 @@ impl PlayCtx<'_> {
         &mut self,
         from: Option<usize>,
         to: Option<usize>,
-        total: i32,
+        mut total: i32,
         by_card: Option<i32>,
     ) -> Flow<Option<i32>> {
         if total <= 0 {
@@ -5175,14 +5215,82 @@ impl PlayCtx<'_> {
         let payer = from.map_or(-1, |f| f as i32);
         let mut probe = Pay::new(total, PayKind::Card);
         probe.by_card = by_card;
-        let shaped = self.pay_total_stages(
+        // The command total raises the same `effect` counteraction window a
+        // whole payment does (G02 §2.20, I11): a 「一次性…支付至少5000」 counter
+        // reads the one figure, never a share. The probe is the command's own
+        // `Pay` (`runs_total_stage = true`), so `pay_total_stage` is 1 here and
+        // 0 on every leg. A cancel drops the whole command (`None`).
+        let mut rent = probe.rent;
+        let mut fixed = probe.shape == PayShape::Fixed;
+        // 支付阶段 1 「支付计算前」 on the command total, before its
+        // `effect` window (HOST-03). Hook-only; the writes fold into the
+        // declaration `effect` sees.
+        let t = raise!(
+            self,
+            "payCalcBefore",
             side,
-            payer,
-            &mut to,
-            &mut probe,
-            total,
-            &["payCombinedAdd", "payCombinedMul", "payCombinedCancel"],
+            player_id = payer,
+            target = to.map_or(-1, |t| t as i32),
+            value = total,
+            by_card = probe.by_card,
+            @p TriggerPay::new(probe.kind, rent, true, probe.shape).with_split_total(true),
+            tile = -1,
+            effects = vec![super::rules::Effect {
+                kind: "pay".into(),
+                target: to.map_or(-1, |t| t as i32),
+                from: payer,
+                tile: -1,
+                value: total,
+            }],
         )?;
+        total = t.value;
+        probe.amount = total;
+        if t.target >= 0 {
+            to = Some(t.target as usize);
+        }
+        Self::fold_pay_payload(&mut probe, &t, &mut rent, &mut fixed);
+        let t = raise!(
+            self,
+            "effect",
+            side,
+            player_id = payer,
+            target = to.map_or(-1, |t| t as i32),
+            value = total,
+            by_card = probe.by_card,
+            @p TriggerPay::new(probe.kind, rent, true, probe.shape).with_split_total(true),
+            tile = -1,
+            effects = vec![super::rules::Effect {
+                kind: "pay".into(),
+                target: to.map_or(-1, |t| t as i32),
+                from: payer,
+                tile: -1,
+                value: total,
+            }],
+        )?;
+        Self::fold_pay_payload(&mut probe, &t, &mut rent, &mut fixed);
+        if t.is_cancelled() || !t.settles_for(side as i32) {
+            return Ok(None);
+        }
+        total = t.value;
+        probe.amount = total;
+        if t.target >= 0 {
+            to = Some(t.target as usize);
+        }
+        // A `Fixed` write at the total is the card's own figure: the combined
+        // stages are skipped, exactly as a `Fixed` leg skips its chain.
+        let shaped = if fixed {
+            Some(total)
+        } else {
+            self.pay_total_stages(
+                side,
+                payer,
+                &mut to,
+                &mut probe,
+                total,
+                &["payCombinedAdd", "payCombinedMul", "payCombinedCancel"],
+                true,
+            )?
+        };
         // A cancelled command is `None`. A non-positive shaped total is nothing
         // to divide -- the per-leg `money()` calls (and their Q3 reversal) live
         // on the shares, not here.

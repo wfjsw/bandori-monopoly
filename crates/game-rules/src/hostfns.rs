@@ -663,6 +663,12 @@ pub fn gain_typed<C: HostCtx>(
 /// `money += delta` with a `log.gain` / `log.lose` line and **no** payment
 /// pipeline (no `paySplitAdd`, no `effect` window, no `payAfter`). 规则书
 /// 「不受其他任何效果影响」 -- the amount moves as-is.
+///
+/// A **gain** is non-pausing: the inline host may intercept (bot /
+/// simulation); otherwise it applies straight to the world copy, like
+/// `set_slot`. A **loss** is a 消耗 and pauses: the engine raises the
+/// `spendBefore` counteraction window at the full cost before the debit
+/// (G02 §2.21, I5), so a counteraction can answer it.
 pub fn adjust_money<C: HostCtx>(
     c: &mut C,
     player_id: i32,
@@ -671,15 +677,17 @@ pub fn adjust_money<C: HostCtx>(
     n: i32,
 ) -> Result<i32, HostError> {
     let src = guest_msg(c, p, n)?;
-    // Non-pausing: the inline host may intercept (bot / simulation); otherwise
-    // apply straight to the world copy, like `set_slot`.
+    let req = HostRequest::AdjustMoney {
+        player_id,
+        delta,
+        src: Some(src.clone()),
+    };
+    if delta < 0 {
+        return crate::inline::request_or_pause(c, req, crate::inline::Pause::Sentinel);
+    }
     if let Some(v) = crate::inline::request_or_inline(
         c,
-        HostRequest::AdjustMoney {
-            player_id,
-            delta,
-            src: Some(src.clone()),
-        },
+        req,
         game_core::engine::JournalStart::Push,
     )? {
         return Ok(v);
@@ -883,6 +891,12 @@ pub fn mortgage_value<C: HostCtx>(c: &mut C, tile: i32) -> Result<i32, HostError
 
 pub fn owned_count<C: HostCtx>(c: &mut C, player_id: i32) -> Result<i32, HostError> {
     let n = c.st().wr().owned_count(player_id);
+    if std::env::var("DBG_H01").is_ok() && player_id == 0 {
+        eprintln!(
+            "H01 owned_count p0 = {n} owner16={:?}",
+            c.st().wr().tile_owner(16)
+        );
+    }
     Ok(n)
 }
 

@@ -343,6 +343,7 @@
   "anim.chainKind.cardFired": "卡牌发动",
   "anim.chainKind.markChanged": "标记发生变化",
   "anim.chainKind.spendBefore": "消耗前",
+  "anim.chainKind.payCalcBefore": "支付计算前",
   "anim.chainKind.abnormalRefused": "异常被拒",
   "anim.chainKind.zoneLeft": "离场",
   "anim.chainKind.zoneLeftAfter": "离场（后）",

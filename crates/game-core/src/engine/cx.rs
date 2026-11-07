@@ -1018,6 +1018,9 @@ impl BoardDelta {
     fn apply_scalar(rows: &[(usize, i32, i32)], live: &mut [i32]) {
         for (i, b, w) in rows {
             if let Some(v) = live.get_mut(*i) {
+                if std::env::var("DBG_H01").is_ok() && *i == 16 {
+                    eprintln!("H01 apply_scalar tile16 live={} base={b} wrote={w}", *v);
+                }
                 if *v == *b {
                     *v = *w;
                 } else if *v != *w {

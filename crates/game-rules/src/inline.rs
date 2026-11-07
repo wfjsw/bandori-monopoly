@@ -268,6 +268,18 @@ pub fn request_or_pause<C: HostCtx>(
     pause: Pause,
 ) -> Result<i32, HostError> {
     let mirrored = game_core::engine::JournalRequest::from(&req);
+    if std::env::var("DBG_H01").is_ok() {
+        let st = c.st_mut();
+        eprintln!(
+            "H01 ROP at={} answers={:?} last={:?} journal={} top={} req={:?}",
+            st.log.cursor,
+            st.log.answers,
+            st.log.last.keys().collect::<Vec<_>>(),
+            st.log.journal.len(),
+            top().is_some(),
+            mirrored
+        );
+    }
     let mut answer = None;
     {
         let st = c.st_mut();

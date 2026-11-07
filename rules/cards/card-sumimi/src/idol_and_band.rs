@@ -42,7 +42,7 @@ fn idol_and_band(player_id: i32) -> card_sdk::Asked {
         player_id,
         3000 - have,
         &Msg::new(key!("idol_and_band_reason")),
-    );
+    )?;
     Ok(())
 }
 

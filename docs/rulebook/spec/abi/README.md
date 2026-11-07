@@ -164,6 +164,11 @@ draft's `add_to_hand` duplicate is gone.
 numbers: **118→119** / **20→21** / kind **141**; its nine imports take the free
 **486–494** after G08's 485. `ABI_VERSION` is 119 and `SAVE_VERSION` 21.
 
+**2026-11-07 landing note (HOST-03, 支付阶段 half).** HOST-03's payment half
+takes the next free kind above G10's 141: `payCalcBefore` **142**,
+hook-only. `ABI_VERSION` is 120; no import and no `SAVE_VERSION` change. The
+行动阶段 3 / 6 halves stay open.
+
 Recommended landing order (foundation → dependent):
 
 1. **G15** Kani host — model-only, no version change.

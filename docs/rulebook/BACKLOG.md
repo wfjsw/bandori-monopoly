@@ -125,8 +125,8 @@ in `docs/rulebook/spec/abi/`.
 
 Design: `docs/rulebook/spec/abi/G02-pay-pipeline.md`
 
-- **pay-stage-presplit** (medium, rows 21,1397,1539) — **partially landed**: the pre-split stage (`payCombinedAddBefore`) and `TriggerPay.total_stage` exist, but no window is raised at the split **total**, so a 「支付至少5000」 test still reads the pre-modifier figure; `rules/cards/card-crychic/src/vocal_too_hard.rs:19-25`; ignored probe `g02_pay.rs` `g02_vocal_ignores_split_legs`
-- **raw-money-window** (medium, rows 572,1333) — **partially landed**: redeem and auction now raise `spendBefore` (consumed by `popipapapipopa.rs:34`, `aya_longing.rs:49`), but the raw **loss** path still answers inline (`ctx::adjust_money` → `hostfns.rs:676`), leaving `rules/cards/card-morfonica/src/tritone.rs:30,55` unreachable; ignored probe `g02_pay.rs` `g02_tritone_answers_raw_loss`
+- **pay-stage-presplit** (medium, rows 21,1397,1539) — **landed** (v120): `pay_total` raises the command-total `effect` chain with `pay_total_stage = 1`, so a 「一次性…支付至少5000」 counter answers the total once and never a leg; `vocal_too_hard` guards on `pay_total_stage`; probe `g02_vocal_ignores_split_legs` un-ignored; `pay_split_total` marks that one command window so a share-reading guard (tritone) excludes it
+- **raw-money-window** (medium, rows 572,1333) — **landed** (v120): a raw loss from `ctx::adjust_money` / `lose_raw` pauses and raises `spendBefore` at the full cost (redeem and auction already did); probe `g02_tritone_answers_raw_loss` un-ignored
 
 ## G08 — Zone and attachment lifecycle
 
@@ -707,17 +707,19 @@ Contrast `starry_night` / `eve`, which refuse over a fixed face.
   tables (开始游戏 / 回合流程 / 行动阶段 / 支付阶段) are now in
   `data/rules.txt` verbatim from `docs/rulebook/rulebook.txt` (`data/rules.txt:109-177`).
   **行动阶段 11 (移动前) also landed** as `ActionKind::MoveBefore` (ABI v43).
-  Still open: missing trigger kinds 行动阶段 3 (回合开始后) / 6 (经营、出牌阶段后)
-  and 支付阶段 3 (「支付计算后」), plus 支付阶段 1 / 5 / 7 shaping (one `effect`
-  raise carries window 5's power at window 1's position).
+  **支付阶段 half landed** (v120): window 3 「支付计算后」 is `paySplitMulBefore`
+  (v96), window 1 「支付计算前」 is the new hook-only `payCalcBefore`, window 5
+  「支付时」 is `pay` and window 7 「资金变动」 is `paid` (now raising on a
+  receipt too). Still open (another batch): 行动阶段 3 (回合开始后) / 6
+  (经营、出牌阶段后).
 - **kind**: rulebook divergence / engine surface
 - **class**: A (sync the tables) + B (timing kinds)
 - **severity**: medium
 - **suggested batch**: fuzz/determinism / settle stages
 - **locations**
   - `data/rules.txt:109-177` 时点流程 (tables synced: 开始游戏 :111, 回合流程 :121, 行动阶段 :136, 支付阶段 :160+)
-  - missing trigger kinds: 行动阶段 3 / 6, 支付阶段 3 (「支付计算后」) — absent from `crates/card-sdk/src/kinds.rs` / `game-kinds`
-  - 支付阶段 1 / 5 / 7 shaping (one `effect` raise carries window 5's power at window 1's position)
+  - missing trigger kinds: 行动阶段 3 / 6 — absent from `crates/card-sdk/src/kinds.rs` / `game-kinds`
+  - 支付阶段 windows: 1 `payCalcBefore`, 3 `paySplitMulBefore`, 5 `pay`, 7 `paid` (all landed, v120)
 - **expected**: sync the tables without rewording; raise the missing windows when a card hooks them.
 
 ## HOST-05 — `ask_tile(allowNone: true)` / free-amount `ask_money`

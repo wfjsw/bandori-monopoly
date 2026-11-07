@@ -1538,22 +1538,31 @@ pub fn arm_add_to_hand(a: Args) -> i64 {
 pub fn arm_adjust_money(a: Args) -> i64 {
     let [a0, a1, a2, a3, a4, a5] = a;
     {
-        // Raw money adjustment: `money += delta` with **no** payment
-        // pipeline (no paySplitAdd/paySplitMul, no effect window). Mirrors
-        // `hostfns::adjust_money` / `World::adjust_money_raw`.
+        // Raw money adjustment: a gain is `money += delta` with **no** payment
+        // pipeline. A loss is a 消耗: it first raises the `spendBefore` window
+        // at the full cost (G02 §2.21, I5), so a responder can reduce it with
+        // `set_pay_amount`; the fold below is the settled debit. Mirrors
+        // `hostfns::adjust_money` / the `AdjustMoney` arm of
+        // `apply_host_request_body`.
         let delta = a1;
         if delta != 0 {
+            let mut cost = delta;
+            if delta < 0 {
+                let name = intern::intern("spendBefore");
+                let _ = arm_raise([a0, intern::encode_handle(name), 0, -delta, 0, 0]);
+                cost = -fold_spend_before(-delta);
+            }
             world::with_world_mut(|w| {
                 let p = player_idx(a0);
-                if delta > 0 {
-                    w.money[p] = w.money[p].saturating_add(delta);
-                    w.gains_this_turn[p] = w.gains_this_turn[p].saturating_add(delta);
+                if cost > 0 {
+                    w.money[p] = w.money[p].saturating_add(cost);
+                    w.gains_this_turn[p] = w.gains_this_turn[p].saturating_add(cost);
                     w.push(Effect::GainMoney {
                         player: a0,
-                        n: delta,
+                        n: cost,
                     });
-                } else {
-                    let n = (-delta).min(w.money[p].max(0));
+                } else if cost < 0 {
+                    let n = (-cost).min(w.money[p].max(0));
                     w.money[p] -= n;
                 }
             });
@@ -5007,6 +5016,7 @@ pub fn arm_pay_command(a: Args) -> i64 {
         w.trig_pay_kind = kind;
         w.trig_pay_is_fixed = shape == 1;
         w.trig_pay_total_stage = flags & 4 != 0;
+        w.trig_pay_split_total = flags & 8 != 0;
         w.trig_settle_tile = tile;
     });
     // A `Fixed` leg moves the amount verbatim; the symbolic model does not

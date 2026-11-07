@@ -872,7 +872,19 @@ use crate::intern::NameId;
 ///    tells the engine the def's name is a rule, not a card, so a card area
 ///    (hand / draw pile / discard) drops the name instead of filing it
 ///    (`CardRules::rule_ids`, `World::note_non_card`).
-pub const ABI_VERSION: i32 = 119;
+/// v120: **支付阶段 1 「支付计算前」**. New hook-only (no counteraction
+///    window) Action / Trigger kind `PayCalcBefore = engine(142)` (wire
+///    `payCalcBefore`), raised on the **declared** figure immediately before
+///    the `effect` window; the command total raises it too (`pay_total`),
+///    before its own `effect`. `set_pay_amount` / `set_pay_target` fold into
+///    the declaration the `effect` window then sees. Hook-only, so window 5
+///    stays `pay` and window 7 stays `paid` (which now raises on a receipt
+///    as well, `player_id` = -1). The trigger payload also carries
+///    `split_total`, exposed as the `pay_split_total` guard scalar: it marks
+///    the one command-total window of a 「[分摊]」 command so a responder can
+///    answer the share instead. `ManifestOn` unchanged (an engine id).
+///    SAVE_VERSION / RECORD_VERSION unchanged.
+pub const ABI_VERSION: i32 = 120;
 /// v108: **stage folds and rent / settle stages (MONEY-01)**. The amount
 ///    stages no longer apply one responder after the other: every responder of
 ///    an add stage reads the **stage input** and its deltas are summed, every
@@ -2825,6 +2837,13 @@ impl ActionKind {
     /// with `set_pay_amount`; a cancel does not zero it (I5).
     pub const SpendBefore: Self = Self(TriggerKind::SpendBefore);
 
+    /// Action hook (hook-only, no counteraction window). 支付阶段 1
+    /// 「支付计算前」: the declared figure, immediately before the `effect`
+    /// window. Payload: player_id = the payer, target = the payee, value =
+    /// the declared figure, the pay flag, tile, by_card. `set_pay_amount` /
+    /// `set_pay_target` fold into what the `effect` window sees.
+    pub const PayCalcBefore: Self = Self(TriggerKind::PayCalcBefore);
+
     /// Action. The move's plan pass (行动阶段 8, before the dice are rolled) --
     /// the **declaring** side of [`FilterKind::DiceRollPlan`], same engine id
     /// 67 (dual: see [`Self::is_dual_action_filter`]). The entry's `declare`
@@ -3537,6 +3556,13 @@ impl TriggerKind {
     /// cost, `trigger::set_pay_amount` reduces it, and a cancel leaves the
     /// cost unchanged.
     pub const SpendBefore: Self = Self::engine(122);
+
+    /// `payCalcBefore` -- 支付阶段 1 「支付计算前」: the **declared** payment
+    /// figure, immediately before the `effect` window (and on the command
+    /// total before its `effect`). Hook-only (no counteraction window, so no
+    /// `ChainKind` window). `set_pay_amount` / `set_pay_target` fold into the
+    /// declaration the `effect` window then sees.
+    pub const PayCalcBefore: Self = Self::engine(142);
 
     /// `onBoardGate`
     pub const OnBoardGate: Self = Self::engine(108);

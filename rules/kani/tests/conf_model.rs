@@ -173,6 +173,7 @@ pub struct ConfWorld {
     pub trig_pay_kind: i32,
     pub trig_pay_is_fixed: bool,
     pub trig_pay_total_stage: bool,
+    pub trig_pay_split_total: bool,
     pub trig_charge_skill: bool,
     /// `settle_tile` / `outcome` stamps (`-1` = none).
     pub trig_settle_tile: i32,
@@ -259,6 +260,7 @@ impl ConfWorld {
             trig_pay_kind: -1,
             trig_pay_is_fixed: false,
             trig_pay_total_stage: true,
+            trig_pay_split_total: false,
             trig_charge_skill: false,
             trig_settle_tile: -1,
             trig_settle_outcome: -1,
@@ -1065,6 +1067,7 @@ impl CardWorld for ConfWorld {
                 shape: game_core::engine::PayShape::from_i32(self.trig_pay_is_fixed as i32),
                 is_rent: self.trig_pay_is_rent,
                 total_stage: self.trig_pay_total_stage,
+                split_total: self.trig_pay_split_total,
             });
         }
         t.charge_skill = self.trig_charge_skill;
@@ -1675,8 +1678,11 @@ impl InlineHost for ConfInline {
             HostRequest::AdjustMoney {
                 player_id, delta, ..
             } => {
-                // Raw money write (`ctx::adjust_money`): no pipeline, no
-                // window. Matches the model's `arm_adjust_money`.
+                // Raw money write (`ctx::adjust_money`): no payment pipeline.
+                // The loss `spendBefore` window is raised by the engine's
+                // `apply_host_request_body` arm, which this inline application
+                // bypasses -- so the debit here is the raw write. Matches the
+                // model's `arm_adjust_money` (whose raise is symbolic-only).
                 let p = player_id.max(0) as usize % 4;
                 if delta > 0 {
                     w.money[p] = w.money[p].saturating_add(delta);
@@ -1702,6 +1708,7 @@ impl InlineHost for ConfInline {
                 w.trig_pay_kind = kind;
                 w.trig_pay_is_fixed = shape == 1;
                 w.trig_pay_total_stage = flags & 4 != 0;
+                w.trig_pay_split_total = flags & 8 != 0;
                 w.trig_settle_tile = if raw_tile > 0 { raw_tile - 1 } else { -1 };
                 if amount > 0 {
                     if from >= 0 {
@@ -1753,7 +1760,9 @@ impl InlineHost for ConfInline {
             }
             HostRequest::Gate { .. } => Some(1),
             // Raw money rides no pipeline; let the hostfn's own
-            // `adjust_money_raw` fallback (`gain`/`pay` on the world) run.
+            // `adjust_money_raw` fallback (`gain`/`pay` on the world) run. (A
+            // loss now pauses instead, so the engine arm above -- or this
+            // inline one under a simulation host -- applies it.)
             HostRequest::AdjustMoney { .. } => None,
             // The shared mid-value dice formula (`d` / the model's
             // `roll_dice`): an effect roll is `count` mid faces, a move roll

@@ -743,10 +743,15 @@ pub enum HostRequest {
     /// `ctx::lose_raw`. Positive `delta` is a gain, negative a loss. Moves the
     /// balance directly (`World::gain_money` / a raw decrement) with a
     /// `log.gain` / `log.lose` line, **without** the `HostRequest::Pay` money
-    /// pipeline: no `paySplitAdd` / `paySplitMul` / `paySplitChoose` / `paySplitAt`, no `effect`
-    /// counteraction window, no `payAfter`. 规则书 「不受其他任何效果影响」 wants the
-    /// amount a designate split moves to land as-is (ONE OF US's 「被分享方资金
-    /// 直接增加」). Answers the amount actually moved (0 = the seat was out).
+    /// pipeline: no `paySplitAdd` / `paySplitMul` / `paySplitChoose` / `paySplitAt`,
+    /// no `effect` counteraction window, no `payAfter`. 规则书 「不受其他任何效果影响」
+    /// wants the amount a designate split moves to land as-is (ONE OF US's
+    /// 「被分享方资金直接增加」).
+    ///
+    /// The one exception is a **loss**: it raises the `spendBefore`
+    /// counteraction window at the full cost before the debit (G02 §2.21,
+    /// I5) and therefore pauses. Answers the amount actually moved (0 = the
+    /// seat was out).
     AdjustMoney {
         player_id: i32,
         delta: i32,

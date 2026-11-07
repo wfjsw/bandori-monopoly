@@ -87,6 +87,9 @@ pub enum VarId {
     /// The trigger's card id starts with `skill:` (`card.is_skill`) -- the
     /// 「技能」 precondition of a `cardFired` hook.
     CardIsSkill,
+    /// Is this the one window of a 「[分摊]」 command total
+    /// (`pay_split_total`)?
+    PaySplitTotal,
 }
 
 /// Always `VARS.len()` -- derived so adding a variable cannot leave the
@@ -155,6 +158,7 @@ pub const VARS: &[(VarId, &str, VarType)] = &[
     (VarId::CardPlaced, "card_placed", VarType::Bool),
     (VarId::CardTile, "card_tile", VarType::Int),
     (VarId::CardIsSkill, "card_is_skill", VarType::Bool),
+    (VarId::PaySplitTotal, "pay_split_total", VarType::Bool),
 ];
 
 /// Look up a flat name (after `root.field` rewrite).

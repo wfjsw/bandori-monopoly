@@ -1149,6 +1149,8 @@ pub struct World {
     pub trig_pay_is_fixed: bool,
     /// `TriggerPay.total_stage` (`pay_total_stage` pre); `true` is neutral.
     pub trig_pay_total_stage: bool,
+    /// `TriggerPay.split_total` (`pay_split_total` pre); `false` is neutral.
+    pub trig_pay_split_total: bool,
     /// `Trigger.charge_skill` (`charge_is_skill` pre).
     pub trig_charge_skill: bool,
     /// `Trigger.settle_tile` — the innermost open settle, `-1` = none.
@@ -1402,6 +1404,7 @@ impl World {
             trig_pay_kind: -1,
             trig_pay_is_fixed: false,
             trig_pay_total_stage: true,
+            trig_pay_split_total: false,
             trig_charge_skill: false,
             trig_settle_tile: -1,
             trig_settle_outcome: -1,

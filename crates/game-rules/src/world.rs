@@ -260,6 +260,8 @@ pub struct TriggerPay {
     pub is_rent: bool,
     /// Is this a command total (not a share, not a staged command)?
     pub total_stage: bool,
+    /// Is this the one window of a 「[分摊]」 command total?
+    pub split_total: bool,
 }
 
 /// The purchase a buy trigger is about (`docs/PURCHASE.md`).

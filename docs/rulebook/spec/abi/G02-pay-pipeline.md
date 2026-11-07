@@ -433,6 +433,15 @@ states both halves of the condition.
 
 Root cause **R8** (command-shape facts absent from the payload).
 
+**Landed.** `Pay.total_stage` already rode the trigger payload (v107) and
+`pay_total_stage` was already a condition scalar; the gap was the window.
+`PlayCtx::pay_total` (`play.rs`) now raises the command-total `effect` chain
+before the combined stages, on a probe `Pay` with `runs_total_stage = true`, so
+the total is answerable once at its full figure while every leg stays
+`pay_total_stage = 0`. `vocal_too_hard` guards on the bare
+`pay_total_stage` scalar and its probe `g02_vocal_ignores_split_legs` is
+un-ignored.
+
 ### 2.21 `tritone-lose-half-unreachable` (medium; row 1333)
 
 Fragment: 「[反击] 任意时刻当你将要失去或支付资金时打出此卡」 — the
@@ -453,6 +462,19 @@ registration beside its existing `Effect` one, and its body gains a
 `SpendBefore` arm that cashes `trigger::value()` with `ctx::gain_fixed`.
 
 Root cause **R4** (raw 消耗 bypasses the pipeline).
+
+**Landed.** `hostfns::adjust_money` now splits by sign: a gain keeps the raw
+inline write, a loss calls `request_or_pause` so the `AdjustMoney` handler
+raises `spendBefore` at the full cost before the debit (the handler copies the
+world **after** the window, so a counter's writes survive). `ctx::adjust_money`
+/ `lose_raw` became `Result<_, Prompt>`. No card change: tritone's existing
+`ChainKind::SpendBefore` registration and body arm answer it, and its probe
+`g02_tritone_answers_raw_loss` is un-ignored.
+
+The 分摊 command total is itself answerable (`pay_split_total`), but
+「此次失去的资金金额」 is the share, not the whole command: tritone's `Effect`
+guard carries `!pay_split_total`, so it answers the leg at the leg's own
+figure (`gap_money::g05_tritone_against_a_split_share`).
 
 ### 2.22 `tomori-charge-paying-skill-scope` (low; rows 458, 459)
 
@@ -569,6 +591,9 @@ Testable invariants:
 - **I11 (command shape).** `pay_total_stage` is `1` exactly when the
   payment runs the command-wide stages (`Pay.total_stage`), i.e. it is `0`
   on every 分摊 leg and on a command that has already staged.
+  `pay_split_total` is `1` only at the one command-total window of a 分摊
+  command, so a guard that must see the share (「此次失去的资金金额」) can
+  exclude the command window with `!pay_split_total`.
 - **I12 (charge source).** `charge_is_skill` is `1` exactly when the
   `ChargePaying` window was raised from a character-skill cost.
 - **I13 (credit).** Every credit to a player's money raises that player's
@@ -624,6 +649,11 @@ pub const ABI_VERSION: i32 = 107;              // was 106 (fourth group)
 impl TriggerKind { pub const SpendBefore: Self = Self::engine(122); }
 impl ActionKind { pub const SpendBefore: Self = Self::engine(122); }
 impl ChainKind { pub const SpendBefore: Self = Self(TriggerKind::SpendBefore); }
+
+// v120 (HOST-03): 支付阶段 1 「支付计算前」. Hook-only -- no ChainKind window,
+// so the existing `effect` / `pay` links keep their window power.
+impl TriggerKind { pub const PayCalcBefore: Self = Self::engine(142); }
+impl ActionKind { pub const PayCalcBefore: Self = Self::engine(142); }
 
 pub mod pay_kind {
     pub const CARD: i32 = 0; pub const RENT: i32 = 1; pub const BUY: i32 = 2;
@@ -728,12 +758,17 @@ recorded on the pending trigger and folded with the same precedence as
 `set_pay_amount`: **last writer wins**.
 
 `set_pay_shape` is honoured only **before the first split leg opens**, i.e. in
-`effect`, `payCombinedAddBefore`, `payCombinedAdd`, `payCombinedMul` and
-`payCombinedCancel`. A command's shape decides whether those stages run at all,
-so a later switch cannot un-skip them. A late write returns `false` and logs
-`log.pay_shape_too_late`; a `Fixed` leg that a responder turns `Normal` is the
-one case that matters and it always lands in `effect` (I2's observers then get
-the skipped stages after all).
+`payCalcBefore`, `effect`, `payCombinedAddBefore`, `payCombinedAdd`,
+`payCombinedMul` and `payCombinedCancel`. A command's shape decides whether
+those stages run at all, so a later switch cannot un-skip them. A late write
+returns `false` and logs `log.pay_shape_too_late`; a `Fixed` leg that a
+responder turns `Normal` is the one case that matters and it always lands in
+`effect` (I2's observers then get the skipped stages after all).
+
+Window power stays split: `payCalcBefore` (支付阶段 1) shapes the declaration
+only; the cancel / retarget power is `effect` and `pay`; 进行支付 shaping is
+`paySplitChoose` / `paySplitAt`. Window 5 「支付时」 is the `pay` raise and
+window 7 「资金变动」 the `paid` raise (a ledger signal, never a decision).
 
 ### 4.5 Factor API (`ctx::plan`)
 
@@ -792,6 +827,9 @@ them join the `GUARDS.md` §4.2 window schema with the default stated here, and
 - `pay_is_fixed` — `1` when the pending payment's shape is `Fixed`, else `0`.
 - `pay_total_stage` — `1` on a command total, `0` on a 分摊 leg and on a
   command that already staged (I11). Reads `TriggerPay.total_stage`, default `1`.
+- `pay_split_total` — `1` only at the one command-total window of a 分摊
+  command, `0` elsewhere (I11). Reads `TriggerPay.split_total`, default `0`;
+  tritone uses `!pay_split_total` to answer the share, not the command.
 - `charge_is_skill` — `1` when the `ChargePaying` window came from a skill cost
   (I12). Reads `Trigger.charge_skill`, default `0`.
 - `settle.tile`, `settle.owner`, `settle.houses`, `settle.mortgaged` — the
@@ -851,24 +889,32 @@ without another import.
 
 ### 5.1 Stage order, unchanged
 
-`money_inner` continues to run:
+`money_inner` continues to run (HOST-03 gives windows 1 / 5 / 7 their own
+positions):
 
 1. endpoint/dead/amount/locked/gate checks;
-2. `effect` declaration (read-only when `Fixed`);
-3. command-wide `payCombinedAddBefore` → `payCombinedAdd` → `payCombinedMul`
+2. `payCalcBefore` (支付阶段 1 「支付计算前」): the declared figure, hook-only;
+   `set_pay_amount` / `set_pay_target` fold into the declaration below;
+3. `effect` declaration (read-only when `Fixed`);
+4. command-wide `payCombinedAddBefore` → `payCombinedAdd` → `payCombinedMul`
    → `payCombinedCancel`, when `total_stage`;
-4. per-leg `paySplitAdd` → `paySplitMulBefore` → `paySplitMul` →
+5. per-leg `paySplitAdd` → `paySplitMulBefore` → `paySplitMul` →
    `paySplitChooseBefore` → `paySplitChoose` → `paySplitAt`;
-5. `pay` window;
-6. affordability (`must` raise-funds/bankruptcy, optional mortgage);
-7. debit/credit, `paid_in_settle` / `paid_in_settle_by`, credit bump, log;
-8. `payAfter`, `paid`;
-9. payee-half leg, when shaped.
+6. `pay` window (支付阶段 5 「支付时」: cancel / retarget);
+7. affordability (`must` raise-funds/bankruptcy, optional mortgage);
+8. debit/credit, `paid_in_settle` / `paid_in_settle_by`, credit bump, log;
+9. `payAfter`, `paid` (支付阶段 7 「资金变动」: the settled figure on a loss
+   **and** on a receipt, `player_id` = -1 for a print);
+10. payee-half leg, when shaped.
 
-No stage moves. Shape only decides which of 2-5 run and whether their rewrites
-fold. `SpendBefore` is a new **fifth** pipeline-shaped point that is not a
-payment and runs inside `commit_redeem`/auction/`lose_raw` before their direct
-debit.
+No stage moves. Shape only decides which of 2-6 run and whether their rewrites
+fold. `SpendBefore` is a separate pipeline-shaped point that is not a payment
+and runs inside `commit_redeem`/auction/`lose_raw` before their direct debit.
+
+`pay_total` (`PlayCtx`, the 分摊 command total) raises `payCalcBefore` and then
+`effect` on the **total** before its combined stages, on a probe `Pay` with
+`runs_total_stage = true`; each leg then runs its own full order above with
+`total_stage = false`.
 
 ### 5.2 Shape branches, command shape, charge source
 
@@ -995,6 +1041,13 @@ moves money itself. The fold is exactly the `*Before` stage fold (`cost =
 t.value`); a cancel is not signalled as failure and does not zero the cost —
 that is what lets 三全音 answer without changing it (I5). `t.value == 0` is a
 free spend.
+
+`ctx::adjust_money` / `lose_raw` route a **negative** delta through
+`request_or_pause(AdjustMoney, Pause::Sentinel)`; the handler's loss branch
+runs `cx.spend_before(...)` and then copies the world (after the window, so a
+counter's own writes survive to `swap_world`). A positive delta keeps the raw
+inline write -- a gain raises no window. `ctx::adjust_money` / `gain_raw` /
+`lose_raw` return `Result<i32, Prompt>`.
 
 ### 5.5 Factor scopes and storage
 
@@ -1276,7 +1329,7 @@ credit sites of 5.8 make it complete.
 
 ### 6.22 `tritone.rs:22-25`
 
-Before: one `On::Counteract(&[ChainKind::Effect], "actor == owner && effect.has(Pay) && value > 0", …)`.
+Before: one `On::Counteract(&[ChainKind::Effect], "actor == owner && !pay_split_total && effect.has(Pay) && value > 0", …)`.
 After **two** registrations to the same body, because the clause is
 「失去**或**支付」: the existing `Effect` one (payments) and
 `On::Counteract(&[ChainKind::SpendBefore], "actor == owner && value > 0", …)`
