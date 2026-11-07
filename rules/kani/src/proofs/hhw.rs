@@ -76,6 +76,11 @@ crate::host_subset!(athletic_dispatch {
     set_counter_self => arm_set_counter_self,
     add_counter_self => arm_add_counter_self,
     counter_self => arm_counter_self,
+    // `ctx::set_slot` is sugar over `state_set`; `dec_turns_left` reads and
+    // rewrites the marker's `turnsLeft` self-prop.
+    state_set => arm_state_set,
+    self_prop => arm_self_prop,
+    set_self_prop => arm_set_self_prop,
     log | effect => arm_log,
 });
 
