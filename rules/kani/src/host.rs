@@ -2071,14 +2071,25 @@ fn persona_skill_id(name: intern::NameId) -> u16 {
 /// name is a pre-interned `u16` compare (no interning in the arm — the CBMC
 /// cost of hashing here showed up as a timeout).
 pub fn arm_card_prop(a: Args) -> i64 {
+    // The `card_id!` table is feature-gated; the arm must still compile for
+    // units that do not enable the band (0 never matches a real table id).
+    #[cfg(feature = "band-sumimi")]
+    const UIKA_SKILL: usize = crate::card_id!("skill:三角初华（Sumimi）:成为偶像");
+    #[cfg(not(feature = "band-sumimi"))]
+    const UIKA_SKILL: usize = 0;
+    #[cfg(feature = "band-sumimi")]
+    const MANA_SKILL: usize = crate::card_id!("skill:纯田真奈:甜甜圈爱好者");
+    #[cfg(not(feature = "band-sumimi"))]
+    const MANA_SKILL: usize = 0;
+
     let [ip, il, kp, kl, ..] = a;
     let id = name_id(ip, il);
     let key = name_id(kp, kl);
     let k = known();
     let idx = if id == k.skill_uika {
-        crate::card_id!("skill:三角初华（Sumimi）:成为偶像")
+        UIKA_SKILL
     } else if id == k.skill_mana {
-        crate::card_id!("skill:纯田真奈:甜甜圈爱好者")
+        MANA_SKILL
     } else {
         return 0;
     };

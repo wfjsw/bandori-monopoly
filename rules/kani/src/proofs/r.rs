@@ -93,7 +93,13 @@ crate::host_subset!(fire_bird_play_dispatch {
 /// `R:Fire bird` TurnEnd — pay 400 + crystal decay.
 crate::host_subset!(fire_bird_burn_dispatch {
     pay => arm_pay,
+    pay_command => arm_pay_command,
     add_counter_self => arm_add_counter_self,
+    // The turn-end tick reads `turnsLeft` back (`dec_turns_left`); the crystal
+    // decay reads the count before the add.
+    self_prop => arm_self_prop,
+    set_self_prop => arm_set_self_prop,
+    counter_self => arm_counter_self,
     log | effect => arm_log,
 });
 
@@ -135,16 +141,34 @@ crate::host_subset!(nfo_play_dispatch {
     card_counter => arm_card_counter,
     add_card_counter => arm_add_card_counter,
     count_held | count_held_name => arm_count_held,
+    // The opener / designation gates read the cancellation flag (ABI-04).
+    designation_cancelled => arm_designation_cancelled,
+    cancel_designation => arm_cancel_designation,
     // v108 plan flags / walk control / geometry readers (G04).
     set_forced | set_main_override | void_walk | clear_steps | add_extra_steps => arm_stub_zero,
     move_planned_teleport | move_pay_factor | move_rent_factor | move_effective_steps
         | move_forced | trig_move_rolled | trig_move_effective_steps => arm_stub_zero,
     nearest_tile_on_axis | farthest_tile_on_axis => arm_stub_neg,
+    // 「移动到你前方最近一名玩家的前方一格」 -- `nearest_ahead`.
+    nearest | nearest_with_prop => arm_nearest,
 });
 
 /// `R:NFO` AtEnd — one [停留] layer.
 crate::host_subset!(nfo_at_end_dispatch {
     apply_abnormal => arm_apply_abnormal,
+    designation_cancelled => arm_designation_cancelled,
+    // `stay::add` is the status host's kernel: abnormal gate, state key
+    // writes, the raise, and the grant's `source_of`.
+    gate => arm_gate,
+    state_get => arm_state_get,
+    state_set => arm_state_set,
+    state_add => arm_state_add,
+    raise_after => arm_raise_after,
+    trig_player => arm_trig_player,
+    log_as => arm_log,
+    // The [停留] move-gate latch / un-latch.
+    skip_main_move => arm_skip_main_move,
+    clear_move_skip => arm_clear_move_skip,
     log | effect => arm_log,
 });
 
