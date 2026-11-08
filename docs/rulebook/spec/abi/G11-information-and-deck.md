@@ -249,7 +249,7 @@ that holds the card and returns `false` when none does.
 | `ruleset_inspection_end` | `(player, shuffle)` | released count | none | releases leftovers |
 | `ruleset_reveal_pile` | `(player, pile, reason_ptr, reason_len)` | — | none | publishes the pile's ids |
 | `ruleset_reveal_card` | `(player, card_ptr, card_len, reason_ptr, reason_len)` | — | none | publishes one id |
-| `ruleset_persona` | `(player, buf, cap)` | postcard `String` | none | the seat's character card (v120, op 495) |
+| `ruleset_persona` | `(player, buf, cap)` | postcard `String` | none | the seat's character card (v123, op 498) |
 
 `count` is clamped to the deck length. `public` is `0/1`.
 
@@ -849,8 +849,8 @@ the newest note, matching the tree's newest-first block):
 ///    frames are saved); RECORD_VERSION unchanged.
 ```
 
-**Later additions.** v120 adds the character-card read `ruleset_persona`
-(op 495, mutsumi 状态2) — additive, no id renumbered, SAVE / RECORD unchanged.
+**Later additions.** v123 adds the character-card read `ruleset_persona`
+(op 498, mutsumi 状态2) — additive, no id renumbered, SAVE / RECORD unchanged.
 
 **Renumbering rule.** Sibling drafts share a base; each reserves its row in
 the README. Under the README order this group lands twelfth, after G09

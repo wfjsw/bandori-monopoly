@@ -932,7 +932,7 @@ mod abi {
             link_name = "ruleset_persona_skill"
         )]
         pub fn persona_skill(player_id: i32, buf: i32, cap: i32) -> i32;
-        // v120: the character-card pile read (a persona name).
+        // v123: the character-card pile read (a persona name).
         #[cfg_attr(
             any(not(target_arch = "wasm32"), feature = "native-rules"),
             link_name = "ruleset_persona"
