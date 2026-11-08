@@ -81,7 +81,14 @@ fn swap(player_id: i32) {
             card_sdk::abi::ZoneChangeCause::Effect,
         );
     }
-    ctx::place_card(player_id, to.1, &Msg::new(key!("two_in_one_note")));
+    // `ctx::set_persona` binds the new face's skill rules itself (idempotent),
+    // so the card only places it when that left nothing to find, and just says
+    // so otherwise.
+    if ctx::find_card(player_id, to.1).is_none() {
+        ctx::place_card(player_id, to.1, &Msg::new(key!("two_in_one_note")));
+    } else {
+        ctx::log(player_id, &Msg::new(key!("two_in_one_note")));
+    }
     // Re-declare the new face's 「初始火罐数」 from its `CardDef` props.
     bandori_std::fire::redeclare_from(player_id, to.1);
     ctx::log(

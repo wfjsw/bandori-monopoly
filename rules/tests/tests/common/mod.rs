@@ -56,29 +56,62 @@ pub fn data() -> Arc<GameData> {
 /// The shipped cards and skills plus the `TEST:*` fixtures, loaded once.
 pub fn rules() -> Arc<WasmRules> {
     static RULES: OnceLock<Arc<WasmRules>> = OnceLock::new();
-    RULES
-        .get_or_init(|| {
-            // Kind flags ride the `ruleset_kind_flags` export on a rebuilt
-            // module; older dist wasm may lack it, so seed from the ruleset
-            // declaration (`bandori-std` is a dep of this test crate).
-            game_rules::set_kind_flags(bandori_std::kind::kind_hook_only());
-            let root = Path::new(env!("CARGO_MANIFEST_DIR")).join("../../dist");
-            let mut b = Ruleset::builder();
-            for sub in ["cards", "fixtures"] {
-                let dir = root.join(sub);
-                let index: serde_json::Value = serde_json::from_str(
-                    &std::fs::read_to_string(dir.join("index.json"))
-                        .expect("run node tools/build-ruleset.mjs"),
-                )
+    RULES.get_or_init(fresh_rules).clone()
+}
+
+/// The [`EngineStamp`] of this tree's build, for records a test exports: ABI
+/// and ruleset hash are read back from the built ruleset, the glue hash from
+/// `webui/src/wasm/engine_id.json` when `tools/build-glue.mjs` has run (the
+/// file is gitignored -- absent glue yields an empty hash and a bundle id the
+/// archive will not hold).
+pub fn dev_stamp() -> game_core::record::EngineStamp {
+    use game_core::record::{bundle_id, EngineStamp, RECORD_VERSION};
+    let root = Path::new(env!("CARGO_MANIFEST_DIR")).join("../../");
+    let idx: serde_json::Value =
+        serde_json::from_str(&std::fs::read_to_string(root.join("dist/cards/index.json")).unwrap())
+            .unwrap();
+    let glue = std::fs::read_to_string(root.join("webui/src/wasm/engine_id.json"))
+        .ok()
+        .and_then(|s| serde_json::from_str::<serde_json::Value>(&s).ok())
+        .and_then(|j| j["glueSha256"].as_str().map(str::to_string))
+        .unwrap_or_default();
+    let mut s = EngineStamp {
+        format: RECORD_VERSION,
+        save_version: game_core::engine::SAVE_VERSION,
+        abi: idx["abi"].as_u64().unwrap() as u32,
+        ruleset_sha256: idx["ruleset_sha256"].as_str().unwrap().into(),
+        data_sha256: String::new(),
+        engine: "game-core".into(),
+        build: "0.1.0".into(),
+        bundle: String::new(),
+    };
+    s.bundle = bundle_id(&glue, &s);
+    s
+}
+
+/// A ruleset of its own, like the one a fresh engine (a replay worker, another
+/// match) gets: some per-engine state is a thread-local, so a replay that runs
+/// in the same process as the match it records must not reuse the shared one.
+pub fn fresh_rules() -> Arc<WasmRules> {
+    // Kind flags ride the `ruleset_kind_flags` export on a rebuilt
+    // module; older dist wasm may lack it, so seed from the ruleset
+    // declaration (`bandori-std` is a dep of this test crate).
+    game_rules::set_kind_flags(bandori_std::kind::kind_hook_only());
+    let root = Path::new(env!("CARGO_MANIFEST_DIR")).join("../../dist");
+    let mut b = Ruleset::builder();
+    for sub in ["cards", "fixtures"] {
+        let dir = root.join(sub);
+        let index: serde_json::Value = serde_json::from_str(
+            &std::fs::read_to_string(dir.join("index.json"))
+                .expect("run node tools/build-ruleset.mjs"),
+        )
+        .unwrap();
+        for m in index["modules"].as_array().unwrap() {
+            b.add(&std::fs::read(dir.join(m["file"].as_str().unwrap())).unwrap())
                 .unwrap();
-                for m in index["modules"].as_array().unwrap() {
-                    b.add(&std::fs::read(dir.join(m["file"].as_str().unwrap())).unwrap())
-                        .unwrap();
-                }
-            }
-            Arc::new(WasmRules::new(b.build().unwrap(), data()))
-        })
-        .clone()
+        }
+    }
+    Arc::new(WasmRules::new(b.build().unwrap(), data()))
 }
 
 /// Board index of the tile with this exact name (`data/board.json`). The
@@ -243,12 +276,22 @@ impl Table {
 
     /// [`Self::pending`] on a chosen seed.
     pub fn pending_seed(chars: &[&str], seed: u64) -> Self {
+        Self::pending_seed_seats(chars, seed, false)
+    }
+
+    /// [`Self::pending_seed`] with every seat a bot -- the pump answers the
+    /// prompts, so a test can assert what a machine seat would actually do.
+    pub fn pending_seed_bots(chars: &[&str], seed: u64) -> Self {
+        Self::pending_seed_seats(chars, seed, true)
+    }
+
+    fn pending_seed_seats(chars: &[&str], seed: u64, bots: bool) -> Self {
         let n = chars.len();
         let members: Vec<RoomMember> = (1..=n as i32)
             .map(|id| RoomMember {
                 id,
                 player: format!("P{}", id - 1),
-                bot: false,
+                bot: bots,
                 ..Default::default()
             })
             .collect();
@@ -1039,6 +1082,16 @@ impl Table {
 
     pub fn discard(&self, who: usize) -> Vec<String> {
         self.m.world().hidden[who].graveyard.clone()
+    }
+
+    /// Hand-card plays announced this turn (the `twoCards` counter).
+    pub fn cards_played(&self) -> usize {
+        self.m.world().turn.cards_played
+    }
+
+    /// The ids played from hand this turn.
+    pub fn turn_played(&self) -> &[String] {
+        &self.m.world().turn.played
     }
 
     pub fn field(&self, who: usize) -> Vec<FieldCard> {

@@ -663,6 +663,12 @@ pub fn gain_typed<C: HostCtx>(
 /// `money += delta` with a `log.gain` / `log.lose` line and **no** payment
 /// pipeline (no `paySplitAdd`, no `effect` window, no `payAfter`). 规则书
 /// 「不受其他任何效果影响」 -- the amount moves as-is.
+///
+/// A **gain** is non-pausing: the inline host may intercept (bot /
+/// simulation); otherwise it applies straight to the world copy, like
+/// `set_slot`. A **loss** is a 消耗 and pauses: the engine raises the
+/// `spendBefore` counteraction window at the full cost before the debit
+/// (G02 §2.21, I5), so a counteraction can answer it.
 pub fn adjust_money<C: HostCtx>(
     c: &mut C,
     player_id: i32,
@@ -671,17 +677,17 @@ pub fn adjust_money<C: HostCtx>(
     n: i32,
 ) -> Result<i32, HostError> {
     let src = guest_msg(c, p, n)?;
-    // Non-pausing: the inline host may intercept (bot / simulation); otherwise
-    // apply straight to the world copy, like `set_slot`.
-    if let Some(v) = crate::inline::request_or_inline(
-        c,
-        HostRequest::AdjustMoney {
-            player_id,
-            delta,
-            src: Some(src.clone()),
-        },
-        game_core::engine::JournalStart::Push,
-    )? {
+    let req = HostRequest::AdjustMoney {
+        player_id,
+        delta,
+        src: Some(src.clone()),
+    };
+    if delta < 0 {
+        return crate::inline::request_or_pause(c, req, crate::inline::Pause::Sentinel);
+    }
+    if let Some(v) =
+        crate::inline::request_or_inline(c, req, game_core::engine::JournalStart::Push)?
+    {
         return Ok(v);
     }
     Ok(c.st_mut().w().adjust_money_raw(player_id, delta, src))
@@ -883,6 +889,12 @@ pub fn mortgage_value<C: HostCtx>(c: &mut C, tile: i32) -> Result<i32, HostError
 
 pub fn owned_count<C: HostCtx>(c: &mut C, player_id: i32) -> Result<i32, HostError> {
     let n = c.st().wr().owned_count(player_id);
+    if std::env::var("DBG_H01").is_ok() && player_id == 0 {
+        eprintln!(
+            "H01 owned_count p0 = {n} owner16={:?}",
+            c.st().wr().tile_owner(16)
+        );
+    }
     Ok(n)
 }
 
@@ -1432,6 +1444,11 @@ pub fn world_restore<C: HostCtx>(c: &mut C, key: i32) -> Result<i32, HostError> 
 
 pub fn world_snapshot_drop<C: HostCtx>(c: &mut C, key: i32) -> Result<i32, HostError> {
     let req = HostRequest::WorldSnapshotDrop { key };
+    crate::inline::request_or_pause(c, req, crate::inline::Pause::Sentinel)
+}
+
+pub fn discard_next_fx<C: HostCtx>(c: &mut C, player_id: i32) -> Result<i32, HostError> {
+    let req = HostRequest::DiscardNextFx { player_id };
     crate::inline::request_or_pause(c, req, crate::inline::Pause::Sentinel)
 }
 
@@ -1997,6 +2014,30 @@ pub fn persona<C: HostCtx>(c: &mut C, player_id: i32, buf: i32, cap: i32) -> Res
     Ok(bytes.len() as i32)
 }
 
+/// `ctx::persona_skins` -- the cosmetic skins of the player's character: every
+/// roster persona sharing their base character (`variant_of`), the current one
+/// excluded. Names are newline-joined UTF-8 (`\n` never occurs in a roster
+/// name); the two-call shape mirrors [`held_names`].
+pub fn persona_skins<C: HostCtx>(
+    c: &mut C,
+    player_id: i32,
+    buf: i32,
+    cap: i32,
+) -> Result<i32, HostError> {
+    let names = c.st().wr().persona_skins(player_id);
+    let mut bytes: Vec<u8> = Vec::new();
+    for (i, n) in names.iter().enumerate() {
+        if i > 0 {
+            bytes.push(b'\n');
+        }
+        bytes.extend_from_slice(n.as_bytes());
+    }
+    if bytes.len() as i32 <= cap {
+        c.write_guest(buf, &bytes)?;
+    }
+    Ok(bytes.len() as i32)
+}
+
 pub fn group_skills<C: HostCtx>(
     c: &mut C,
     player_id: i32,
@@ -2189,6 +2230,13 @@ pub fn raise_bought<C: HostCtx>(c: &mut C, player_id: i32, tile: i32) -> Result<
         let req = HostRequest::RaiseBought { player_id, tile };
         return crate::inline::request_or_pause(c, req, crate::inline::Pause::Trap);
     }
+}
+
+pub fn auction<C: HostCtx>(c: &mut C, player_id: i32, tile: i32) -> Result<i32, HostError> {
+    let req = HostRequest::Auction { player_id, tile };
+    // Sentinel: the guest wrapper hands the card `Err(Prompt)`; the auction
+    // body must abort its remaining logging when the run is suspended.
+    crate::inline::request_or_pause(c, req, crate::inline::Pause::Sentinel)
 }
 
 /// Pack a `DealValue` (BuyAssign) raise result into the single answer log
@@ -2598,7 +2646,7 @@ pub fn set_extreme<C: HostCtx>(c: &mut C, v: i32) -> Result<(), HostError> {
 }
 
 pub fn play_from_hand<C: HostCtx>(c: &mut C) -> Result<i32, HostError> {
-    Ok({ c.st().wr().play_from_hand() as i32 })
+    Ok(c.st().wr().play_from_hand() as i32)
 }
 
 pub fn gain_fixed<C: HostCtx>(
@@ -3307,7 +3355,10 @@ pub fn ask<C: HostCtx>(
         // and still resolves. Only a prompt about to be *shown* must offer
         // something.
         let replayed = st.log.answers.get(st.log.cursor).is_some();
-        if kind != PromptKind::YesNo && options.is_empty() && !replayed {
+        // `YesNo` and `Money` carry no option list: one is implicit, the
+        // other is a free amount whose bound rides `count`.
+        if !matches!(kind, PromptKind::YesNo | PromptKind::Money) && options.is_empty() && !replayed
+        {
             return Err(HostError::trap(format!(
                 "{} prompt with no options",
                 kind.as_str()

@@ -33,14 +33,30 @@ crate::host_subset!(idolband_dispatch {
 });
 
 /// `skill:三角初华（Sumimi）:成为偶像` `on_pass` — one `gain_charge`.
+/// `fire::gain` reads the pool through `writable` / `get` / `max`
+/// (`persona_skill` + `held_count` / `held_max`), re-binds a dead row with
+/// `set_held_name`, and logs the refuses.
 crate::host_subset!(hina_pass_dispatch {
+    persona_skill => arm_persona_skill,
+    field_instances => arm_field_instances,
+    count_held | count_held_name => arm_count_held,
+    held_max => arm_tok_max,
+    set_held_name => arm_set_held_name,
     gain_marker => arm_gain_marker,
+    log | effect => arm_log,
 });
 
 /// `Sumimi:(初华（Sumimi）)儿时玩伴的鼓励` `after_move` — `gain_charge` + `set_dest`.
+/// Same fire-pool reads as [`hina_pass_dispatch`].
 crate::host_subset!(childhood_after_move_dispatch {
+    persona_skill => arm_persona_skill,
+    field_instances => arm_field_instances,
+    count_held | count_held_name => arm_count_held,
+    held_max => arm_tok_max,
+    set_held_name => arm_set_held_name,
     gain_marker => arm_gain_marker,
     set_dest => arm_set_fate,
+    log | effect => arm_log,
 });
 
 /// `Sumimi:一人两个甜甜圈` play body — pos / exile hold / slots / dest / place /
@@ -62,15 +78,20 @@ crate::host_subset!(two_donuts_dispatch {
 });
 
 /// `Sumimi:Sumimi是二人一体的` play body — character flip + fire reset.
-/// `find_card` walks `field_instances`; under Kani that arm is a count-only
-/// stub (no uid/name buffer), so the `unplace_at` half of the swap is
-/// isolated (never entered) — still declared so isolation cannot drift.
+/// `find_card` walks `field_instances` (uid/name pairs); the fire reset runs
+/// through `fire::redeclare_from`: `card_prop` reads the new face's
+/// `fireInitial` / `fireCap` props, `persona_skill` resolves the freshly bound
+/// persona skill, and `set_held_name` writes its row. `state_set` stays
+/// declared for the play-gate residual.
 crate::host_subset!(two_in_one_dispatch {
     persona_is => arm_character_is,
     set_persona => arm_set_persona,
+    persona_skill => arm_persona_skill,
     field_instances => arm_field_instances,
     unplace_at | unplace_card | unplace_card_named => arm_unplace_card,
     place_card_at => arm_place_card_at,
+    card_prop => arm_card_prop,
+    set_held_name => arm_set_held_name,
     state_set => arm_state_set,
     log | effect => arm_log,
 });
@@ -600,6 +621,10 @@ fn two_in_one_persona_world(user: i32, persona: &str) {
     crate::harness::sparse_play_world(crate::harness::SparsePlay {
         used_seats: 2,
         n_players: 2,
+        // The swap reads none of the money / fan values (the frame only
+        // compares them), so keep the free variables narrow.
+        money_hi: 64,
+        fans_hi: 64,
         ..Default::default()
     });
     let cid = intern::intern(persona).0;
@@ -668,10 +693,21 @@ fn twoinone_01b_fire_iff_at(user: i32, is_hina: bool) {
         spec::sumimi::twoinone_fire_effects_ok(effects, user, fire_key, to),
         "C-SUMIMI-twoinone-01b: fire must be set to the other character's 初始火罐数"
     );
-    // Money / positions are outside the swap's frame.
+    // 「替换为sumimi的另一名角色」: the face itself. Without this the body
+    // could drop `ctx::set_persona` and every proof would still pass (the fire
+    // half redeclares from its argument).
+    let to_persona = intern::intern(spec::sumimi::twoinone_persona_target(is_hina)).0;
+    crate::kassert!(
+        post.persona[user as usize] == to_persona,
+        "C-SUMIMI-twoinone-01b: the character itself must be the other Sumimi face"
+    );
+    // Money / positions / other faces are outside the swap's frame.
     for p in 0..MAX_PLAYERS {
         crate::kassert!(post.money[p] == condition.money[p], "frame: money");
         crate::kassert!(post.pos[p] == condition.pos[p], "frame: pos");
+        if p != user as usize {
+            crate::kassert!(post.persona[p] == condition.persona[p], "frame: persona");
+        }
     }
 }
 

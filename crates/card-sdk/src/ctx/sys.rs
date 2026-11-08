@@ -1288,6 +1288,21 @@ mod abi {
         pub fn world_snapshot_drop(key: i32) -> i32;
         #[cfg_attr(
             any(not(target_arch = "wasm32"), feature = "native-rules"),
+            link_name = "ruleset_discard_next_fx"
+        )]
+        pub fn discard_next_fx(player_id: i32) -> i32;
+        #[cfg_attr(
+            any(not(target_arch = "wasm32"), feature = "native-rules"),
+            link_name = "ruleset_auction"
+        )]
+        pub fn auction(player_id: i32, tile: i32) -> i32;
+        #[cfg_attr(
+            any(not(target_arch = "wasm32"), feature = "native-rules"),
+            link_name = "ruleset_persona_skins"
+        )]
+        pub fn persona_skins(player_id: i32, buf: i32, cap: i32) -> i32;
+        #[cfg_attr(
+            any(not(target_arch = "wasm32"), feature = "native-rules"),
             link_name = "ruleset_trig_pay_is_rent"
         )]
         pub fn trig_pay_is_rent() -> i32;

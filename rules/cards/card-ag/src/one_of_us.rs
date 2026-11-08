@@ -292,8 +292,8 @@ fn share_at_resolved(owner: i32) -> card_sdk::Asked {
     };
     // 规则书: 「不受其他任何效果影响」 -- raw money moves, no payment pipeline.
     let src = Msg::new(key!("one_of_us_share"));
-    ctx::lose_raw(owner_of_tile, half, &src);
-    ctx::gain_raw(recipient, half, &src);
+    ctx::lose_raw(owner_of_tile, half, &src)?;
+    ctx::gain_raw(recipient, half, &src)?;
     ctx::log(
         recipient,
         &Msg::new(key!("one_of_us_shared"))

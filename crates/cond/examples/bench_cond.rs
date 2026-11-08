@@ -37,6 +37,7 @@ fn window() -> WindowCtx {
         pay_kind: 1,
         pay_is_fixed: 0,
         pay_total_stage: true,
+        pay_split_total: false,
         charge_is_skill: false,
         subject_range_card: false,
         extreme_armed: false,

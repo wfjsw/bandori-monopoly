@@ -15,10 +15,12 @@ pub const EXIST: CardDef = CardDef::new(
         On::Play("", None, exist),
         On::Filter(Filter::Redirect("target != owner", None, redirect)),
         // 规则书: 「若在此期间此卡没有造成影响，抽1张卡」 -- the latch is spent on
-        // the **landed** effect, not on the fold: an influence that never moved
-        // a target (a rent, a direct effect to the owner) is not one. A probe
-        // pass no longer latches either.
-        On::Action(Action::Effect(
+        // the **settled** declaration (`target`, kind 15), not at rewrite time:
+        // a designation that never survived the effect chain (negated, or
+        // cancelled by 网络链接异常 clause 1) redirected nothing. `target` is
+        // raised only after the `effect` link returned not-cancelled, so the
+        // latch and the draw agree (C-Q8).
+        On::Action(Action::Target(
             "target == owner && actor != owner",
             Some(landed_redirect),
             mark_used,
@@ -61,8 +63,8 @@ fn exist(player_id: i32) -> card_sdk::Asked {
     Ok(())
 }
 
-/// The retarget rides `RedirectValue.payee`; the fold reaching here is itself
-/// the 「造成影响」, so the latch is spent.
+/// The retarget rides `RedirectValue.payee`. The latch is **not** written on
+/// this fold (see [`landed_redirect`]).
 fn redirect(player_id: i32, v: RedirectValue) -> RedirectValue {
     // 规则书: 「场上及打出的所有对单一玩家生效的手卡（包括其他玩家指向自身的卡）的目标将改为你」
     // -- already aimed at us is the entry's condition (`target != owner`).
@@ -74,9 +76,17 @@ fn redirect(player_id: i32, v: RedirectValue) -> RedirectValue {
     }
 }
 
-/// Did a redirect land on this designation? Only a landed one is an influence.
+/// Did a redirect land on this designation? Only a survived one is an
+/// influence: it must have been redirected, and its designation must not have
+/// been cancelled (网络链接异常 clause 1) on the way.
 fn landed_redirect(_player_id: i32) -> bool {
-    ctx::trigger::redirected()
+    ctx::trigger::redirected() && !ctx::designation_cancelled(ctx::trigger::target())
+}
+
+#[cfg(kani)]
+#[inline(always)]
+pub fn landed_redirect_kani(player_id: i32) -> bool {
+    landed_redirect(player_id)
 }
 
 /// Spend the 「造成影响」 latch, once per settled declaration.

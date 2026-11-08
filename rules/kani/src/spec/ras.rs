@@ -200,3 +200,21 @@ pub fn pareo_01_log_ok_mutant(effects: &[Effect], player: i32, pareo_key: u16) -
             Effect::AddToken { player: p, key, n } if p == player && key == pareo_key && n == 3
         )
 }
+
+// ===========================================================================
+// C-RAS-exist-latch (WINDOW-03, C-Q8)
+// 「若在此期间此卡没有造成影响，抽1张卡」 -- 「造成影响」 is a settlement fact.
+// The redirect must have landed (`redirected`) and the designation must have
+// survived (`designation_cancelled` false). The declaration alone is not one.
+// ===========================================================================
+
+/// Did the redirect land? `redirected` = a redirect moved the designation;
+/// `designation_cancelled` = the pair was cancelled on the way.
+pub fn exist_landed_redirect(redirected: bool, designation_cancelled: bool) -> bool {
+    redirected && !designation_cancelled
+}
+
+/// Mutant: the redirect alone (the cancelled designation still latches).
+pub fn exist_landed_redirect_mutant(redirected: bool, _designation_cancelled: bool) -> bool {
+    redirected
+}

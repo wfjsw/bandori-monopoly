@@ -70,7 +70,7 @@ pub use kind_flags::{hook_only, set_kind_flags};
 /// Sandbox-only `CardRules` over [`Ruleset`].
 #[cfg(feature = "sandbox")]
 pub use wasm_rules::WasmRules;
-pub use wasm_rules::{take_silent_visible, RulesBridge, Run};
+pub use wasm_rules::{reset_resolving, take_silent_visible, RulesBridge, Run};
 mod trigger_reason;
 /// The 「效果适用」 why-clause builder.
 pub use trigger_reason::{

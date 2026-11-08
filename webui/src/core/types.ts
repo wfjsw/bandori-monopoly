@@ -189,7 +189,8 @@ export interface MatchPrompt {
    *  answer to `0..options.length`. */
   fallback: number; players: number[]; answers: number[]; timeLeft: number; tile: number;
   bid: number; bidder: number; items: string[]; count: number;
-  /** The quoted price on a buy / force_buy prompt; -1 when not a purchase. */
+  /** The quoted price on a buy / force_buy prompt (-1 when not a purchase);
+   *  on a `"money"` prompt the maximum amount. */
   price: number;
   /** Per-option prices on an agent prompt, parallel to `options`. */
   prices: number[];

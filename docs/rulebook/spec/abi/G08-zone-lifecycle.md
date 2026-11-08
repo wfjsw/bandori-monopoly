@@ -1,8 +1,9 @@
 # G08 — Zone, attachment and creator lifecycle
 
 Status: **implemented** (2026-11-03 revision of the 2026-10-28 draft; landed
-on master in `3deba227`, ABI v115). Nine of the ten items are closed; only
-`cardplayed-payload` remains partial (see BACKLOG G08).
+on master in `3deba227`, ABI v115). All ten items are closed; the
+`cardplayed-payload` residual (hand-counter announcement, §2.4) landed on
+`worktree-close-partials`.
 Worktree `/home/monopoly/web/.claude/worktrees/g08-design-review`, branch
 `worktree-g08-design-review`. Fits **on top of ABI v112** (G01 through G06 have
 landed; G07 is the next group and lands first). Group: **G08**. Family:
@@ -177,9 +178,9 @@ Current site: `rules/cards/card-ag/src/same_sky.rs:15-19,33-50,72-75`. The
 runs `draw(i, n, false)` in one batch (`play.rs:548`) and raises nothing per
 card; the mulligan redraw (`play.rs:634`) has the same gap, so the 「开局时
 抽到此卡洗回」 half cannot run at the deal and the copy stays visible through
-the mulligan (`:15-18`). `:72-75` carries a `TODO(ABI)` for the missing
-`cardPlayed` on the hand-carried auto-play that answers 「若此卡在你的手牌
-中，则将此卡打出」. A card dealt at opening has no event that says so (C2),
+the mulligan (`:15-18`). The mulligan half already plays through
+`ctx::play_hand_card` -> `play_from_hand`, so its `cardPlayed` is the ordinary
+one (no separate gap). A card dealt at opening has no event that says so (C2),
 and it is dealt *unwatched*, so no arrival fact exists either (C6).
 
 ### 2.4 `cardplayed-payload` — PPP:Returns and the play outcome, rows 34, 677, 680
@@ -188,14 +189,22 @@ Book (PPP:Returns（1）):
 
 > 每当一张[使用]的卡被[抵消]时…
 
-Current site: `rules/cards/card-ppp/src/returns.rs:31-37`. The card reads
-`CardPlayed` and has no way to ask whether the play it heard was cancelled;
-`play_from_hand` raises `discarded` and the two play announcements from one
-place (`play.rs:5781-5814`) and knows `t.is_cancelled()` at `:5762`, but every
-`raise!` builds a **fresh** `Trigger::new` (`rules.rs:680-685`) and does not
-copy the `card` link's negation, so `trigger::cancelled()` is false on
-`cardAfter`/`cardPlayed` even for a negated play (C2). `one_of_us`'s
-counter-half needs the same fact sideways.
+Current site: `rules/cards/card-ppp/src/returns.rs` reads `CardPlayed` and
+asks `trigger::play_outcome()`; a `Cancelled` play returns before the sticker
+(`on_played`). `play_from_hand` owns the whole play (`play.rs:6234`):
+`declare_activation` at `:6242`, the `card` announcement at `:6333`,
+`let cancelled = t.is_cancelled()` at `:6357`, the `PlayOutcome` at `:6386`
+riding both `cardAfter` (`:6441`) and `cardPlayed` (`:6451`) -- a fresh
+`Trigger` gets the value copied onto it, so `trigger::cancelled()` stays false
+on the announcements but the outcome field is exact.
+`one_of_us`'s counter-half needs the same fact sideways.
+
+A **hand counter** resolves in the counteraction tree, not `play_from_hand`,
+and used to raise no `cardPlayed` at all. `hand_play_tail`
+(`wasm_rules.rs`) now files it (Graveyard -> graveyard, Hand -> hand),
+raises `discarded` and then announces `cardPlayed` with `play_outcome`
+(`negated` = the link's `is_cancelled()`), on every dest. A field skill
+(`uid >= 0`) is untouched: it stays in place and announced itself.
 
 ### 2.5 `hand-changed-event` — rows 57, 58, 197, 642, 1688
 
@@ -223,14 +232,20 @@ Book (MyGO:MIRACLE （3）):
 
 > 若此卡进入弃牌堆时其上仍有奇迹水晶，视为此卡未生效。
 
-Current site: `rules/skills/skill-groups/src/mygo.rs:32-40` matches bare
-`Discarded` with only an actor guard, and its `TODO(规则书)` says every owner
-discard counts; `rules/cards/card-mygo/src/miracle.rs:171-177` logs
-`miracle_wasted` but marks nothing. `discarded` is raised from four unrelated
-sites (`play.rs:5781`, `:5596`, `wasm_rules.rs:5632`, the `to_discard` path)
-and none can say whether the card took effect (C2, C6). The `Discarded`
-condition also cannot see card identity, so a `wasted` bit is the only
-carrier that survives to the listener.
+Current site: `rules/skills/skill-groups/src/mygo.rs` matches `Discarded`
+through the `wasted` condition (not every owner discard). `discarded` is raised
+from four unrelated sites (`play.rs`, `wasm_rules.rs`'s `to_discard` path, and
+the two play tails) and none can say on its own whether the card took effect
+(C2, C6), so the writer arms the bit first. The `Discarded` condition also
+cannot see card identity, so a `wasted` bit is the only carrier that survives
+to the listener.
+
+Every 「视为此卡未生效」 card now arms it at each printed branch
+(CH-07, `bandori_std::zones::set_ineffective()`): haneoka, miracle (3),
+fire_bird, kokoro_circle, starry_night, noble_blue and no_road (both the
+no-target and the refused-designation/refused-exile branches). The engine also
+files a play that bankrupted, so the card reaches the discard (and the
+listener) even though the play aborted at the shortfall.
 
 ### 2.7 `card-on-card` — Here the world, rows 1075
 
@@ -368,7 +383,9 @@ trace of the order.
   transition into `Hand`; every other caller leaves it false.
 * **I10 (play outcome).** Both play announcements fire exactly once per
   committed play, carrying `play_outcome` = `Cancelled` iff the link was
-  cancelled.
+  cancelled. A hand counter announces from `hand_play_tail` with its link's
+  outcome, in both counter tails (the same value a `play_from_hand` play
+  carries).
 * **I11 (out cause).** `beforeOut` carries the cause (`Bankrupt`, `Forfeit`,
   `Removed`); the bankruptcy field clear runs the writer seat by seat with
   cause `Bankruptcy`, so every field card hears one `zoneLeft`.
@@ -743,8 +760,9 @@ and `remove_from_game` (`:5121`) all become callers. `ops.rs:1726-1727`'s
   (or `Turn.play_ineffective` for a `-1` mark); a Graveyard arrival reads it
   after the leave hooks (I8). `discarded` carries it.
 * `play_outcome`: `play_from_hand` already knows `t.is_cancelled()`
-  (`play.rs:5762`); both announcements read it (I10). `cardAfter`/`cardPlayed`
-  fire even for a cancelled play — that is what PPP:Returns negates.
+  (`play.rs:6357`); both announcements read it (I10), and a hand counter's
+  tail passes the link's `is_cancelled()`. `cardAfter`/`cardPlayed` fire even
+  for a cancelled play — that is what PPP:Returns negates.
 
 ### 7.3 Dispatch
 

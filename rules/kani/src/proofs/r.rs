@@ -75,17 +75,31 @@ crate::host_subset!(ako_dark_dispatch {
 /// `R:Fire bird` play — pay 1600, ask X, place, set crystals.
 crate::host_subset!(fire_bird_play_dispatch {
     pay => arm_pay,
+    pay_command => arm_pay_command,
     ask => arm_ask,
+    opt_str => arm_opt,
     set_dest => arm_set_fate,
     place_card_at => arm_place_card,
     set_counter_self => arm_set_counter_self,
+    // The turn-end tick countdown (`set_turns_left` → `set_self_prop`); the
+    // play proof does not read it back.
+    set_self_prop => arm_set_self_prop,
+    set_prop_at => arm_set_prop_at,
+    set_ineffective_at => arm_set_ineffective_at,
+    self_uid => arm_self_uid,
     log | effect => arm_log,
 });
 
 /// `R:Fire bird` TurnEnd — pay 400 + crystal decay.
 crate::host_subset!(fire_bird_burn_dispatch {
     pay => arm_pay,
+    pay_command => arm_pay_command,
     add_counter_self => arm_add_counter_self,
+    // The turn-end tick reads `turnsLeft` back (`dec_turns_left`); the crystal
+    // decay reads the count before the add.
+    self_prop => arm_self_prop,
+    set_self_prop => arm_set_self_prop,
+    counter_self => arm_counter_self,
     log | effect => arm_log,
 });
 
@@ -127,16 +141,34 @@ crate::host_subset!(nfo_play_dispatch {
     card_counter => arm_card_counter,
     add_card_counter => arm_add_card_counter,
     count_held | count_held_name => arm_count_held,
+    // The opener / designation gates read the cancellation flag (ABI-04).
+    designation_cancelled => arm_designation_cancelled,
+    cancel_designation => arm_cancel_designation,
     // v108 plan flags / walk control / geometry readers (G04).
     set_forced | set_main_override | void_walk | clear_steps | add_extra_steps => arm_stub_zero,
     move_planned_teleport | move_pay_factor | move_rent_factor | move_effective_steps
         | move_forced | trig_move_rolled | trig_move_effective_steps => arm_stub_zero,
     nearest_tile_on_axis | farthest_tile_on_axis => arm_stub_neg,
+    // 「移动到你前方最近一名玩家的前方一格」 -- `nearest_ahead`.
+    nearest | nearest_with_prop => arm_nearest,
 });
 
 /// `R:NFO` AtEnd — one [停留] layer.
 crate::host_subset!(nfo_at_end_dispatch {
     apply_abnormal => arm_apply_abnormal,
+    designation_cancelled => arm_designation_cancelled,
+    // `stay::add` is the status host's kernel: abnormal gate, state key
+    // writes, the raise, and the grant's `source_of`.
+    gate => arm_gate,
+    state_get => arm_state_get,
+    state_set => arm_state_set,
+    state_add => arm_state_add,
+    raise_after => arm_raise_after,
+    trig_player => arm_trig_player,
+    log_as => arm_log,
+    // The [停留] move-gate latch / un-latch.
+    skip_main_move => arm_skip_main_move,
+    clear_move_skip => arm_clear_move_skip,
     log | effect => arm_log,
 });
 
@@ -605,6 +637,36 @@ pub fn fire_bird_place_mutant_is_detected() {
     crate::kassert!(
         !spec::fire_bird_place_log_ok_mutant(effects, user, card),
         "mutant: first effect is not a 1600 gain"
+    );
+}
+
+/// A payer who cannot cover 1600 arms 「视为此卡未生效」 (CH-07, C-Q5(a)): no
+/// place, no X, and the play's waste bit is set.
+#[kani::proof]
+#[kani::use_stub_set(crate::kani_stubs::LIB_COST_NOFMT)]
+#[kani::unwind(32)]
+pub fn fire_bird_shortfall_wasted_iff() {
+    let user = 0i32;
+    host::install_backend(fire_bird_play_dispatch);
+    sparse_r_world(user);
+    world::with_world_mut(|w| {
+        // A hand play's `self_uid()` is `-1` (the waste bit rides the play).
+        w.bound_uid = -1;
+        w.money[user as usize] = 0;
+        w.pay_shortfall = true;
+    });
+    invoke::unwrap_done(card_roselia::fire_bird::play_kani(user));
+    let (logbuf, log_n) = log_slice();
+    let effects = effects_of(&logbuf, log_n);
+    crate::kassert!(
+        !effects
+            .iter()
+            .any(|e| matches!(e, Effect::PlaceCard { .. })),
+        "C-R-Fire bird: no placement on a shortfall"
+    );
+    crate::kassert!(
+        world::with_world(|w| w.play_ineffective),
+        "C-R-Fire bird: the waste bit is armed"
     );
 }
 

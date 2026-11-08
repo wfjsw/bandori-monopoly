@@ -6,9 +6,8 @@ a generic capability, an exact ABI surface, engine wiring, card usage,
 save/record impact, versioning, tests/Kani obligations, alternatives and open
 questions.
 
-G01–G07 and G11–G14 have landed; G08, G09 and G10 have landed but for the
-`cardplayed-payload` residual and the two G02 pay-stage halves. G02 and G15 are
-the only groups still design-only.
+G01–G14 have landed (the G08 `cardplayed-payload` residual closed last). G15 is
+the only group still design-only.
 
 **The group is the unit of review.** Approve, reject or reshape a whole group —
 not individual cards. An item is fixed only after its group is approved and
@@ -163,6 +162,11 @@ draft's `add_to_hand` duplicate is gone.
 **2026-11-06 landing note (G10).** G10 lands after G08 and takes the next free
 numbers: **118→119** / **20→21** / kind **141**; its nine imports take the free
 **486–494** after G08's 485. `ABI_VERSION` is 119 and `SAVE_VERSION` 21.
+
+**2026-11-07 landing note (HOST-03, 支付阶段 half).** HOST-03's payment half
+takes the next free kind above G10's 141: `payCalcBefore` **142**,
+hook-only. `ABI_VERSION` is 120; no import and no `SAVE_VERSION` change. The
+行动阶段 3 / 6 halves stay open.
 
 Recommended landing order (foundation → dependent):
 

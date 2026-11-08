@@ -379,14 +379,110 @@ fn play_outcome_cancelled() {
         t.decline();
     }
     let ev = t.events_since(0);
+    // The negating hand counter announces its own (resolved) play too, so the
+    // outcome is read per played card.
     let outs: Vec<i64> = ev
         .iter()
-        .filter(|e| log_key(e) == "observer_outcome")
+        .filter(|e| log_key(e) == "observer_outcome" && arg(e, "outcomer") == 1)
         .map(|e| arg(e, "outcome"))
         .collect();
     assert!(!outs.is_empty(), "{:?}", keys(&t, 0));
     assert!(outs.iter().all(|&o| o == 1), "cancelled: {outs:?}");
     assert!(!t.on_field(0, "TEST:outcomer"), "the play was negated");
+}
+
+// A **hand counter** is announced `cardPlayed` too (G08 §2.4, the counteraction
+// tree bypasses `play_from_hand`), and a counteracted counter reports
+// `Cancelled` while still being filed to the Graveyard -- the outcome is what
+// PPP:Returns' 「全部生效后」 reads.
+#[test]
+fn counter_play_outcome_cancelled_and_still_discarded() {
+    let mut t = Table::vanilla(3);
+    deep_decks(&mut t);
+    t.place_raw(1, "TEST:observer");
+    t.give(0, &["TEST:outcomer"]);
+    t.give(1, &["TEST:cardCopy"]);
+    t.give(2, &["TEST:deny"]);
+    t.play(0, "TEST:outcomer").unwrap();
+    // P1 answers the play with a hand counter, then P2 negates that counter's
+    // own `card` link (`TEST:deny` only answers a counter, `seq >= 2`).
+    for _ in 0..8 {
+        if t.counteract_offered("TEST:cardCopy") {
+            break;
+        }
+        assert!(t.prompt().is_some(), "{}", t.dump_prompt());
+        t.decline();
+    }
+    assert!(t.counteract_offered("TEST:cardCopy"), "{}", t.dump_prompt());
+    t.counteract(1, "TEST:cardCopy").unwrap();
+    for _ in 0..8 {
+        if t.counteract_offered("TEST:deny") {
+            break;
+        }
+        assert!(t.prompt().is_some(), "{}", t.dump_prompt());
+        t.decline();
+    }
+    assert!(t.counteract_offered("TEST:deny"), "{}", t.dump_prompt());
+    t.counteract(2, "TEST:deny").unwrap();
+    while t.prompt().is_some() {
+        t.decline();
+    }
+    let ev = t.events_since(0);
+    let outs: Vec<i64> = ev
+        .iter()
+        .filter(|e| log_key(e) == "observer_outcome" && arg(e, "outcomer") == 0)
+        .map(|e| arg(e, "outcome"))
+        .collect();
+    assert!(
+        outs.contains(&1),
+        "the counter's play reports cancelled: {outs:?} {:?}",
+        keys(&t, 0)
+    );
+    assert!(
+        t.discard(1).contains(&"TEST:cardCopy".to_string()),
+        "a cancelled counter is still spent: {:?}",
+        t.discard(1)
+    );
+    assert!(
+        !t.hand(1).contains(&"TEST:cardCopy".to_string()),
+        "it left the hand: {:?}",
+        t.hand(1)
+    );
+}
+
+// A plain (unnegated) hand counter announces `Resolved`.
+#[test]
+fn counter_play_outcome_resolved() {
+    let mut t = Table::vanilla(2);
+    deep_decks(&mut t);
+    t.place_raw(1, "TEST:observer");
+    t.give(0, &["TEST:outcomer"]);
+    t.give(1, &["TEST:cardCopy"]);
+    t.play(0, "TEST:outcomer").unwrap();
+    for _ in 0..8 {
+        if t.counteract_offered("TEST:cardCopy") {
+            break;
+        }
+        assert!(t.prompt().is_some(), "{}", t.dump_prompt());
+        t.decline();
+    }
+    assert!(t.counteract_offered("TEST:cardCopy"), "{}", t.dump_prompt());
+    t.counteract(1, "TEST:cardCopy").unwrap();
+    while t.prompt().is_some() {
+        t.decline();
+    }
+    let ev = t.events_since(0);
+    let outs: Vec<i64> = ev
+        .iter()
+        .filter(|e| log_key(e) == "observer_outcome" && arg(e, "outcomer") == 0)
+        .map(|e| arg(e, "outcome"))
+        .collect();
+    assert!(
+        outs.contains(&0),
+        "the counter's own play reports resolved: {outs:?} {:?}",
+        keys(&t, 0)
+    );
+    assert!(t.discard(1).contains(&"TEST:cardCopy".to_string()));
 }
 
 // The opening deal raises one `openingHandDealt` per dealt card, before the

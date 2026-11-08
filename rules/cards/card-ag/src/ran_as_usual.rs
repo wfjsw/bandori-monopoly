@@ -94,7 +94,7 @@ fn at_end(player_id: i32) -> card_sdk::Asked {
                 &Msg::new(key!("ran_as_usual_undo"))
                     .player_id("who", player_id)
                     .tile("tile", snap.pos),
-            );
+            )?;
         }
         // 规则书（2）: 「取消所有受到的效果」 -- deed ownership, houses and
         // mortgages taken off the turn-start board copy are put back.

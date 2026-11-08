@@ -445,7 +445,8 @@ struct Saved {
 /// counter, and the torn routine's host journal / guest answers on `Pending`.
 /// All are `serde(default)`; older saves are refused (replays ride archived
 /// engine bundles).
-pub const SAVE_VERSION: u32 = 21;
+/// v22: ABI-08's per-seat one-shot `discard_next` flag.
+pub const SAVE_VERSION: u32 = 22;
 
 /// Is the money-pipeline stage tracing on? `STAGE_DBG` is an environment
 /// variable, which wasm32 always answers `None` for: the browser build turns
@@ -2781,6 +2782,14 @@ impl Match {
                     return Err(Msg::new("err.no_option"));
                 }
                 l.answers[k] = v;
+            }
+            "money" => {
+                // A free amount in `0..=view.price`; no option list exists.
+                let max = l.ask.view.price.max(0);
+                if m.value < 0 || m.value > max {
+                    return Err(Msg::new("err.no_option"));
+                }
+                l.answers[k] = m.value;
             }
             "multi" => {
                 // Bitmask of exactly `count` distinct options. The popcount

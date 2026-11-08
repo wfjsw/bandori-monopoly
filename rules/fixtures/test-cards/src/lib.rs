@@ -105,7 +105,7 @@ const SETTLE_PROBE: CardDef = CardDef::new(
 const SNAP_TWICE: CardDef = CardDef::new("TEST:snapTwice", &[On::Play("", None, snap_twice)]);
 fn snap_twice(player_id: i32) -> card_sdk::Asked {
     let k = ctx::world_snapshot()?;
-    ctx::adjust_money(player_id, 500, &Msg::new(key!("snap_twice_change")));
+    ctx::adjust_money(player_id, 500, &Msg::new(key!("snap_twice_change")))?;
     ctx::world_restore(k)?;
     ctx::world_restore(k)?;
     ctx::world_snapshot_drop(k)?;
@@ -117,7 +117,7 @@ fn snap_twice(player_id: i32) -> card_sdk::Asked {
 const SNAP_ASK: CardDef = CardDef::new("TEST:snapAsk", &[On::Play("", None, snap_ask)]);
 fn snap_ask(player_id: i32) -> card_sdk::Asked {
     let k = ctx::world_snapshot()?;
-    ctx::adjust_money(player_id, 500, &Msg::new(key!("snap_ask_change")));
+    ctx::adjust_money(player_id, 500, &Msg::new(key!("snap_ask_change")))?;
     let _ = ctx::ask_yes(
         player_id,
         &Msg::new(key!("snap_ask_q")),
@@ -134,6 +134,26 @@ const DRAW_TWICE: CardDef = CardDef::new("TEST:drawTwice", &[On::Play("", None, 
 fn draw_twice(player_id: i32) -> card_sdk::Asked {
     ctx::draw_event(player_id)?;
     ctx::draw_event(player_id)?;
+    Ok(())
+}
+
+/// LOY-TSUGU-01: a body that makes a **different request kind** at the same
+/// slot when it is re-run. The first pass freezes a `latch:` row (which
+/// survives the rewind) and draws; the re-run reads the latch and gains
+/// instead, so the logged `Draw` answer must not be eaten by the `Pay`.
+const IDENTITY_SWITCH: CardDef = CardDef::new(
+    "TEST:identitySwitch",
+    &[On::Play("", None, identity_switch)],
+);
+fn identity_switch(player_id: i32) -> card_sdk::Asked {
+    if ctx::slot(player_id, "latch:identity_switch") != 0 {
+        ctx::gain(player_id, 700, &Msg::new(key!("identity_switch_gain")))?;
+        ctx::log(player_id, &Msg::new(key!("identity_switch_gain_done")));
+    } else {
+        ctx::set_slot(player_id, "latch:identity_switch", 1);
+        ctx::draw(player_id, 1)?;
+        ctx::log(player_id, &Msg::new(key!("identity_switch_draw_done")));
+    }
     Ok(())
 }
 
@@ -1099,7 +1119,81 @@ fn shape_late(player_id: i32, v: PayAddValue) -> PayAddValue {
 const LOSE_RAW: CardDef = CardDef::new("TEST:loseRaw", &[On::Play("", None, lose_raw)]);
 
 fn lose_raw(player_id: i32) -> card_sdk::Asked {
-    ctx::lose_raw(player_id, 1000, &Msg::new(key!("lose_raw_why")));
+    ctx::lose_raw(player_id, 1000, &Msg::new(key!("lose_raw_why")))?;
+    Ok(())
+}
+
+/// HOST-03 order probe: log at 支付阶段 1 (「支付计算前」) and window 3
+/// (「支付计算后」, `PaySplitMulBefore`), placed only, so a test can pin that
+/// window 1 is raised before window 3 on one payment.
+const PAY_CALC_PROBE: CardDef = CardDef::new(
+    "TEST:payCalcProbe",
+    &[
+        On::Play("", None, pay_calc_probe_place),
+        On::Action(Action::PayCalcBefore(
+            "",
+            Some(pay_calc_probe_placed),
+            pay_calc_w1,
+        )),
+        On::Action(Action::PaySplitMulBefore(
+            "",
+            Some(pay_calc_probe_placed),
+            pay_calc_w3,
+        )),
+    ],
+);
+
+fn pay_calc_probe_place(player_id: i32) -> card_sdk::Asked {
+    ctx::set_dest(ctx::Dest::Field, card_sdk::abi::ZoneChangeCause::Play);
+    ctx::place_card(
+        player_id,
+        "TEST:payCalcProbe",
+        &Msg::new(key!("pay_calc_probe_note")),
+    );
+    Ok(())
+}
+
+fn pay_calc_probe_placed(_player_id: i32) -> bool {
+    ctx::is_placed()
+}
+
+fn pay_calc_w1(player_id: i32) -> card_sdk::Asked {
+    ctx::log(player_id, &Msg::new(key!("pay_calc_w1")));
+    Ok(())
+}
+
+fn pay_calc_w3(player_id: i32) -> card_sdk::Asked {
+    ctx::log(player_id, &Msg::new(key!("pay_calc_w3")));
+    Ok(())
+}
+
+/// HOST-03 window 7 probe: logs the settled `paid` figure with the payer's
+/// seat (-1 for a print), so a test can pin that a receipt fires it too.
+const PAID_PROBE: CardDef = CardDef::new(
+    "TEST:paidProbe",
+    &[
+        On::Play("", None, paid_probe_place),
+        On::Action(Action::Paid("card.placed", None, paid_probe)),
+    ],
+);
+
+fn paid_probe_place(player_id: i32) -> card_sdk::Asked {
+    ctx::set_dest(ctx::Dest::Field, card_sdk::abi::ZoneChangeCause::Play);
+    ctx::place_card(
+        player_id,
+        "TEST:paidProbe",
+        &Msg::new(key!("paid_probe_note")),
+    );
+    Ok(())
+}
+
+fn paid_probe(player_id: i32) -> card_sdk::Asked {
+    ctx::log(
+        player_id,
+        &Msg::new(key!("paid_seen"))
+            .i("value", trigger::value() as i64)
+            .player_id("who", trigger::player_id()),
+    );
     Ok(())
 }
 
@@ -2745,6 +2839,39 @@ fn asking_guard_counter(player_id: i32) -> card_sdk::Asked {
 /// declaration commits. Declining there means **no counter is declared at
 /// all** -- the card stays in hand and the body never runs. The body has no
 /// decline path and logs unconditionally, so silence is proof it never ran.
+/// `TEST:askMoney` -- a free-amount ask (`ctx::ask_money`, HOST-05): the host
+/// answers a raw amount in `0..=5000` and the body logs it back.
+const ASK_MONEY: CardDef = CardDef::new("TEST:askMoney", &[On::Play("", None, ask_money)]);
+
+fn ask_money(player_id: i32) -> card_sdk::Asked {
+    let v = ctx::ask_money(
+        player_id,
+        &Msg::new(key!("ask_money_title")),
+        &Msg::new(key!("ask_money_ask")),
+        5_000,
+        1_000,
+    )?;
+    ctx::log(player_id, &Msg::new(key!("ask_money_value")).i("n", v as i64));
+    Ok(())
+}
+
+/// `TEST:personaSkins` -- log the player's cosmetic skins
+/// (`ctx::persona_skins`, ABI-09): a count line then one line per name.
+const PERSONA_SKINS: CardDef =
+    CardDef::new("TEST:personaSkins", &[On::Play("", None, persona_skins)]);
+
+fn persona_skins(player_id: i32) -> card_sdk::Asked {
+    let skins = ctx::persona_skins(player_id);
+    ctx::log(
+        player_id,
+        &Msg::new(key!("persona_skins_n")).i("n", skins.len() as i64),
+    );
+    for s in &skins {
+        ctx::log(player_id, &Msg::new(key!("persona_skins_name")).chara("name", s));
+    }
+    Ok(())
+}
+
 const PICK_COUNTER: CardDef = CardDef::new(
     "TEST:pick_counter",
     &[
@@ -4059,7 +4186,11 @@ fn observer_outcome(player_id: i32) -> card_sdk::Asked {
     let outcome = trigger::play_outcome().map_or(-1, |o| o.as_i32());
     ctx::log(
         player_id,
-        &Msg::new("observer_outcome").i("outcome", outcome as i64),
+        &Msg::new("observer_outcome")
+            .i("outcome", outcome as i64)
+            // Which play this is about: a negating hand counter announces its
+            // own (resolved) play through the same listener.
+            .i("outcomer", trigger::card_is("TEST:outcomer") as i64),
     );
     Ok(())
 }
@@ -4217,6 +4348,18 @@ fn drawer_play(player_id: i32) -> card_sdk::Asked {
     Ok(())
 }
 
+/// Runs a named card from **outside a hand press** (`play_from_hand` false),
+/// the shape a draw-pile auto-play takes (ABI-08).
+const PLAY_SAKIKO: CardDef = CardDef::new(
+    "TEST:playSakiko",
+    &[On::Play("", None, play_sakiko)],
+);
+
+fn play_sakiko(player_id: i32) -> card_sdk::Asked {
+    ctx::play_card("Mujica:（祥子）斩断留恋，忘却一切", player_id)?;
+    Ok(())
+}
+
 /// Tutors `TEST:zoner` from the draw pile into the hand (an uncounted
 /// arrival).
 const TUTOR: CardDef = CardDef::new("TEST:tutor", &[On::Play("", None, tutor_play)]);
@@ -4251,7 +4394,7 @@ fn flip_up_play(player_id: i32) -> card_sdk::Asked {
 const DUMPER: CardDef = CardDef::new("TEST:dumper", &[On::Play("", None, dumper_play)]);
 
 fn dumper_play(player_id: i32) -> card_sdk::Asked {
-    ctx::log(player_id, &Msg::new("dbg.dumper").n("uids", ctx::field_instances(player_id).iter().map(|(u, _)| *u).len() as i64).n("pick", ctx::field_instances(player_id).last().map_or(-1, |(u, _)| *u) as i64));
+    ctx::log(player_id, &Msg::new("dbg.dumper").i("uids", ctx::field_instances(player_id).iter().map(|(u, _)| *u).len() as i64).i("pick", ctx::field_instances(player_id).last().map_or(-1, |(u, _)| *u) as i64));
     if let Some(&(uid, _)) = ctx::field_instances(player_id).last() {
         ctx::unplace_at(
             uid,
@@ -4300,6 +4443,7 @@ card_sdk::ruleset!(&[
     SNAP_TWICE,
     SNAP_ASK,
     DRAW_TWICE,
+    IDENTITY_SWITCH,
     SHIELD,
     MOVER,
     DICE_MOVER,
@@ -4335,6 +4479,8 @@ card_sdk::ruleset!(&[
     XFER_1000,
     GAIN_1000,
     LOSE_1000,
+    PAY_CALC_PROBE,
+    PAID_PROBE,
     MARKER_DENY,
     MARKER_SPEND,
     CHARGE_ROLL,
@@ -4395,6 +4541,8 @@ card_sdk::ruleset!(&[
     DECLINE_SIB,
     GATE_CLOSED,
     ASKING_GUARD,
+    ASK_MONEY,
+    PERSONA_SKINS,
     PICK_COUNTER,
     TRIGGER_SEEN,
     TRAP_DECLARE,
@@ -4457,6 +4605,7 @@ card_sdk::ruleset!(&[
     REHOMER,
     TILE_PROBE,
     DRAWER,
+    PLAY_SAKIKO,
     TUTOR,
     FLIP_DOWN,
     FLIP_UP,

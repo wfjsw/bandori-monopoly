@@ -44,10 +44,9 @@ fn play(player_id: i32) -> card_sdk::Asked {
     .kind(PayKind::Buy)
     .send()?;
     if !receipt.settled() {
-        // TODO(规则书)（支付10000资金（视为买地花费））: the book does not say what
-        // happens when the 10000 cannot be paid -- we keep the card spent and
-        // place nothing. (The foreign phrasing 「视为此卡未生效」 is the
-        // effective-flag side channel; BACKLOG CH-07 owns it.)
+        // 规则书: 「视为此卡未生效」 -- a shortfall on the 10000. The card is
+        // spent anyway (C-Q5(a)); the waste bit carries the clause (CH-07).
+        bandori_std::zones::set_ineffective();
         return Ok(());
     }
     ctx::set_dest(ctx::Dest::Field, card_sdk::abi::ZoneChangeCause::Play);

@@ -62,6 +62,9 @@ impl CondView for SnapshotView<'_> {
     fn pay_total_stage(&self) -> bool {
         self.win.pay_total_stage
     }
+    fn pay_split_total(&self) -> bool {
+        self.win.pay_split_total
+    }
     fn charge_is_skill(&self) -> bool {
         self.win.charge_is_skill
     }

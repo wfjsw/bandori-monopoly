@@ -904,6 +904,168 @@ fn umiri_places_on_next_actors_field() {
 // C-MUJICA-（祥子）斩断留恋，忘却一切
 // =====================================================================
 
+/// ABI-08 「若直接从抽牌堆打出，可不弃置手牌发动，或选择不发动此卡」: a
+/// deck play first offers the decline; declining spends the card with no
+/// mortgage (「或选择不发动此卡」).
+#[test]
+fn sakiko_deck_play_offers_decline() {
+    let mut t = Table::vanilla(2);
+    t.own(0, &[3]);
+    t.set_hand(0, &["通用:GREAT"]);
+    t.give(0, &["TEST:playSakiko"]);
+    let pos = t.pos(0);
+    t.play(0, "TEST:playSakiko").unwrap();
+    let p = t.prompt();
+    let p = p.expect("prompt");
+    // `ctx::ask_yes` is a two-option choice (`ask.yes` / `ask.no`).
+    assert_eq!(p.kind, "choice", "{}", t.dump_prompt());
+    let no = t.option("ask.no").expect("a decline option");
+    t.answer(0, no).unwrap(); // decline
+    drain(&mut t);
+    assert!(!t.mortgaged(3), "no mortgage on a declined deck play");
+    assert_eq!(t.pos(0), pos, "no teleport on a decline");
+}
+
+/// ABI-08: accepting the deck play activates without the hand discard -- the
+/// hand card is kept through the teleport.
+#[test]
+fn sakiko_deck_play_skips_the_discard() {
+    let mut t = Table::vanilla(2);
+    t.own(0, &[3]);
+    t.set_hand(0, &["通用:GREAT"]);
+    t.give(0, &["TEST:playSakiko"]);
+    t.play(0, "TEST:playSakiko").unwrap();
+    let p = t.expect_prompt();
+    assert_eq!(p.kind, "choice", "{}", t.dump_prompt());
+    let yes = t.option("ask.yes").expect("a yes option");
+    t.answer(0, yes).unwrap(); // activate without discarding
+    let p = t.expect_prompt();
+    assert_eq!(p.kind, "tile", "{}", t.dump_prompt());
+    t.answer_tile(0, 42).unwrap();
+    drain(&mut t);
+    assert!(t.mortgaged(3), "the deck play still pays the mortgage");
+    assert!(
+        t.hand(0).contains(&"通用:GREAT".to_string()),
+        "the hand card was kept: {:?}",
+        t.hand(0)
+    );
+    assert_eq!(t.pos(0), 42);
+}
+
+/// ABI-08 「若无手牌则弃掉下一张抽到的牌」: the empty-hand hand play arms the
+/// one-shot (it survives the teleport's host pause), the next drawn card is
+/// discarded, and the draw after that stays.
+#[test]
+fn sakiko_empty_hand_discards_the_next_draw_once() {
+    let mut t = mujica_table(2, 0, "丰川祥子");
+    t.own(0, &[3]);
+    t.set_hand(0, &[]);
+    t.give(0, &[SAKIKO]);
+    t.play(0, SAKIKO).unwrap();
+    let p = t.expect_prompt();
+    assert_eq!(p.kind, "tile", "{}", t.dump_prompt());
+    t.answer_tile(0, 42).unwrap();
+    drain(&mut t);
+    assert!(t.mortgaged(3), "the hand play pays the mortgage");
+    assert_eq!(t.hand(0).len(), 0, "the hand was empty: {:?}", t.hand(0));
+    // Armed across the teleport's host pause.
+    assert!(
+        t.m.world().st.players[0].discard_next,
+        "the one-shot was armed"
+    );
+    // Two filler cards keep the pile from emptying, so the one-shot's discard
+    // stays in the graveyard instead of a refill reshuffling it straight back.
+    t.set_draw(
+        0,
+        &[
+            "通用:GREAT",
+            "通用:雨啊，快点来吧",
+            "通用:GREAT",
+            "通用:GREAT",
+        ],
+    );
+    // The teleport spent the main move, so the turn sits in 结束; re-open the
+    // 运营 step to play the draw card there (its body is what draws).
+    t.m.world_mut().st.step = 2;
+    t.give_play(0, "TEST:drawTwo").unwrap();
+    drain(&mut t);
+    assert!(
+        t.discard(0).contains(&"通用:GREAT".to_string()),
+        "the next drawn card was discarded: discard={:?} hand={:?}",
+        t.discard(0),
+        t.hand(0)
+    );
+    assert!(
+        !t.hand(0).contains(&"通用:GREAT".to_string()),
+        "the discarded card is not in the hand: {:?}",
+        t.hand(0)
+    );
+    assert!(
+        t.hand(0).contains(&"通用:雨啊，快点来吧".to_string()),
+        "the following draw stayed: {:?}",
+        t.hand(0)
+    );
+    assert!(
+        !t.m.world().st.players[0].discard_next,
+        "the one-shot cleared"
+    );
+}
+
+/// ABI-08 replay parity: the deck play reaches the same end state whether it
+/// runs through halt/replay or with every ask answered inline.
+///
+/// The provider answers by prompt *identity* (the deck-play yes/no and the
+/// tile 42 pick), not by position, so the two modes can differ in how many
+/// unrelated prompts they surface and still be compared on the world.
+#[test]
+fn sakiko_deck_play_replays_identically() {
+    use game_core::engine::{AnswerProvider, Answered, Ask};
+
+    #[derive(Default)]
+    struct Scripted;
+    impl AnswerProvider for Scripted {
+        fn answer(&mut self, ask: &Ask) -> Option<Answered> {
+            let answers = if ask.view.text.key() == "cards:card-mujica.sakiko_cut_deck_ask" {
+                vec![0] // yes: the deck play activates without a discard
+            } else if ask.view.kind == "tile" {
+                vec![ask.view.items.iter().position(|t| t == "42").unwrap_or(0) as i32]
+            } else {
+                vec![0]
+            };
+            Some(Answered {
+                answers,
+                picked: vec![],
+                bid: 0,
+                bidder: -1,
+            })
+        }
+    }
+
+    fn setup() -> Table {
+        let mut t = Table::vanilla(2);
+        t.own(0, &[3]);
+        t.set_hand(0, &["通用:GREAT"]);
+        t.give(0, &["TEST:playSakiko"]);
+        t
+    }
+
+    let mut base = setup();
+    base.m.set_provider(Some(Box::new(Scripted)));
+    base.play(0, "TEST:playSakiko").unwrap();
+    drain(&mut base);
+    base.m.set_provider(None);
+    assert_eq!(base.pos(0), 42, "baseline lands on the pick");
+
+    let mut inl = setup();
+    inl.m.set_provider(Some(Box::new(Scripted)));
+    inl.play(0, "TEST:playSakiko").unwrap();
+    drain(&mut inl);
+    inl.m.set_provider(None);
+    assert_eq!(inl.pos(0), base.pos(0), "same destination");
+    assert_eq!(inl.mortgaged(3), base.mortgaged(3), "same mortgage");
+    assert_eq!(inl.hand(0), base.hand(0), "same hand");
+}
+
 /// 规则书: 「抵押一张你拥有且未抵押的最贵地契并弃置一张手牌（若无手牌则弃掉下一张抽到的牌），立刻传送至任意可购买或已拥有的格子并触发结算，作为你的主要移动。」
 #[test]
 fn sakiko_mortgages_most_expensive_and_teleports() {

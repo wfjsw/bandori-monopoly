@@ -16,14 +16,17 @@ pub const VOCAL_TOO_HARD: CardDef = CardDef::new(
         &[ChainKind::Effect],
         // 规则书: 「[反击] 一次性向其他玩家支付至少5000资金时」 -- a payment to
         // another player (`target != owner`; the bank is `target < 0`), and
-        // 「一次性」 excludes a [分摊] share (`pay_total_stage`).
+        // 「一次性」 excludes a [分摊] share.
+        // `pay_total_stage` is the 「一次性」 half: the command total raises the
+        // `effect` window with it set (G02 §2.20, I11), a share with it clear.
         // TODO(规则书)（支付至少5000资金）: 门槛应是实际支付额 -- the `effect`
-        //   窗的 `value` 是修正前的宣告额 (CROSS-TESTS C20)。
-        // 「一次性」 is the entry's `Whole` contract now, not a condition
-        // variable: a 「[分摊]」 leg is refused at the offer. The `effect`
-        // window still only opens on legs, so a split *total* is unreachable
-        // until G02 §2.20's `payTotalBefore` (design G06 §2.5, §6.9).
-        "actor == owner && effect.has(Pay) && target >= 0 && target != owner && value >= 5000",
+        //   窗的 `value` 是修正前的宣告额 (CROSS-TESTS C20)。「一次性」 this
+        //   guard now settles through `pay_total_stage`; only the figure half
+        //   is still declared-before-modifiers.
+        // The entry's `Whole` contract already refuses a share at the offer
+        // (`answers_whole_payments`); the condition keeps the same half
+        // self-contained because a leg's own window never carries it.
+        "actor == owner && pay_total_stage && effect.has(Pay) && target >= 0 && target != owner && value >= 5000",
         None,
         counteract,
     )

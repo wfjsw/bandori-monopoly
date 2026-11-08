@@ -400,6 +400,12 @@ function clampAnswer(p: MatchPrompt, v: number): number {
   return Math.min(Math.max(0, v), Math.max(0, max));
 }
 
+/** A `"money"` answer is a raw amount bounded by `price` -- not an index. */
+function clampMoney(p: MatchPrompt, v: number): number {
+  const max = Math.max(0, p.price);
+  return Math.min(Math.max(0, Math.round(v)), max);
+}
+
 /** A `"multi"` answer is a bitmask naming exactly `count` options out of
  *  `0..options.len()` -- never an option index, so it must not be clamped.
  *  Mirrors the engine's `valid_multi_mask` (`engine/cx.rs`). */
@@ -500,11 +506,16 @@ function botPrompt(view: MatchView, ctx: AutopilotCtx, p: MatchPrompt): Command 
     // A multi answer is a bitmask; clamping it to an option index would
     // destroy e.g. `0b0111`. Take the precomputed mask when it is valid.
     if (p.kind === "multi") return { act: "answer", prompt: p.id, value: validMultiMask(p, ai.answer) ? ai.answer : multiMask(p) };
+    // A money answer is an amount in `0..=price`, not an option index.
+    if (p.kind === "money") return { act: "answer", prompt: p.id, value: clampMoney(p, ai.answer) };
     return { act: "answer", prompt: p.id, value: clampAnswer(p, ai.answer) };
   }
 
   switch (p.kind) {
     case "auction":
+      return auctionCommand(view, p, auctionWorth(view, ctx, params), ctx, "bot", params);
+    case "money":
+      return { act: "answer", prompt: p.id, value: clampMoney(p, p.fallback) };
       return auctionCommand(view, p, auctionWorth(view, ctx, params), ctx, "bot", params);
     case "mortgage":
       return { act: "answer", prompt: p.id, cards: autoMortgage(view.state, tiles, p.items, p.bid) };
@@ -583,6 +594,9 @@ function chaosPrompt(view: MatchView, ctx: AutopilotCtx, p: MatchPrompt): Comman
     case "auction":
       // Cap the ceiling at money - CHAOS_RESERVE so the seat keeps a float.
       return auctionCommand(view, p, money - CHAOS_RESERVE, ctx, "chaos", DEFAULT_STRATEGY);
+    case "money":
+      // Any amount keeps a float only by chance; chaos names a random one.
+      return { act: "answer", prompt: p.id, value: clampMoney(p, Math.floor(random() * (Math.max(0, p.price) + 1))) };
     case "mortgage":
       return { act: "answer", prompt: p.id, cards: randomMortgage(tiles, p.items, p.bid, random) };
     case "pick": {

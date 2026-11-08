@@ -605,24 +605,30 @@ pub fn gain_typed(player_id: i32, amount: i32, typ: &str, text: &Msg) -> Result<
 /// `log.lose` line and **no** payment pipeline: no `paySplitAdd` / `paySplitMul` /
 /// `paySplitChoose` / `paySplitAt`, no `effect` [反击] window, no `payAfter`. 规则书
 /// 「不受其他任何效果影响」 -- the amount moves as-is (ONE OF US's 「被分享方
-/// 资金直接增加」). Positive `delta` is a gain, negative a loss. Non-pausing:
-/// returns the amount actually moved (0 = the seat was out).
+/// 资金直接增加」). Positive `delta` is a gain, negative a loss.
+///
+/// A gain is non-pausing and applies raw. A loss pauses and raises the
+/// `spendBefore` counteraction window at the full cost before the debit
+/// (G02 §2.21); a responder reduces it with `set_pay_amount`, and a cancel
+/// leaves the cost in place. Returns the amount actually moved (0 = the seat
+/// was out); `Err(Prompt)` pauses the run on the loss window.
 #[cfg_attr(kani, inline(always))]
-pub fn adjust_money(player_id: i32, delta: i32, src: &Msg) -> i32 {
+pub fn adjust_money(player_id: i32, delta: i32, src: &Msg) -> Result<i32, Prompt> {
     let (p, l) = msg_bytes(src);
-    unsafe { sys::adjust_money(player_id, delta, p, l) }
+    asked(unsafe { sys::adjust_money(player_id, delta, p, l) })
 }
 
 /// [`adjust_money`] with a positive `amount` -- a raw gain. Convenience.
 #[cfg_attr(kani, inline(always))]
-pub fn gain_raw(player_id: i32, amount: i32, src: &Msg) -> i32 {
+pub fn gain_raw(player_id: i32, amount: i32, src: &Msg) -> Result<i32, Prompt> {
     adjust_money(player_id, amount.max(0), src)
 }
 
-/// [`adjust_money`] with a positive `amount` taken away -- a raw loss.
-/// Convenience.
+/// [`adjust_money`] with a positive `amount` taken away -- a raw loss. It
+/// pauses on the `spendBefore` window like [`adjust_money`] does for a
+/// negative `delta`.
 #[cfg_attr(kani, inline(always))]
-pub fn lose_raw(player_id: i32, amount: i32, src: &Msg) -> i32 {
+pub fn lose_raw(player_id: i32, amount: i32, src: &Msg) -> Result<i32, Prompt> {
     adjust_money(player_id, -amount.max(0), src)
 }
 
@@ -1000,6 +1006,14 @@ pub fn world_restore(key: i32) -> Result<bool, Prompt> {
 /// Drop a snapshot and forget its key. Pauses.
 pub fn world_snapshot_drop(key: i32) -> Result<(), Prompt> {
     asked(unsafe { sys::world_snapshot_drop(key) })?;
+    Ok(())
+}
+
+/// 「若无手牌则弃掉下一张抽到的牌」 -- arm a one-shot on `player_id`: the next
+/// card that seat draws is discarded instead of kept. Per seat, so two armed
+/// cards discard two draws; the flag clears on that draw. Pauses (ABI-08).
+pub fn discard_next_fx(player_id: i32) -> Result<(), Prompt> {
+    asked(unsafe { sys::discard_next_fx(player_id) })?;
     Ok(())
 }
 
@@ -2381,6 +2395,39 @@ pub fn raise_bought(player_id: i32, tile: i32) -> bool {
     unsafe { sys::raise_bought(player_id, tile) != 0 }
 }
 
+/// Run an auction over `tile` among every present player who may pay, starting
+/// at the current turn seat. Each seat names a raised bid (or passes); the
+/// highest bidder pays that bid and takes the deed. Answers the winner (`-1`
+/// when nobody bid). 「所有玩家进行竞价，出价最大的玩家支付选择数量的资金并
+/// 获得该格子的地契」 -- 弦卷集团地产开发.
+pub fn auction(player_id: i32, tile: i32) -> Result<i32, Prompt> {
+    asked(unsafe { sys::auction(player_id, tile) })
+}
+
+/// The cosmetic skins of `player_id`'s character: every roster persona that
+/// shares the player's base character (`variant_of`), the current one
+/// excluded. A skin keeps the bound skills, so the swap is name / art only
+/// (「更换角色皮肤（技能相同）」) -- apply it with [`set_persona`].
+pub fn persona_skins(player_id: i32) -> Vec<alloc::string::String> {
+    let n = unsafe { sys::persona_skins(player_id, 0, 0) };
+    if n <= 0 {
+        return Vec::new();
+    }
+    let need = n as usize;
+    let (bp, scratch) = out_buf(need);
+    if unsafe { sys::persona_skins(player_id, bp, need as i32) } != n {
+        return Vec::new();
+    }
+    let buf = out_read(bp, need as i32, scratch);
+    let mut out: Vec<alloc::string::String> = Vec::new();
+    for part in buf.split(|&b| b == b'\n') {
+        if !part.is_empty() {
+            out.push(alloc::string::String::from_utf8_lossy(part).into_owned());
+        }
+    }
+    out
+}
+
 /// Raise a trigger point from a guest body. `kind` is a [`TriggerKind`]
 /// (e.g. `bandori_std::kind::PassRewardAffected`); `value` is the trigger's `value`.
 /// Returns true when the link settled (nobody cancelled it). A hook that
@@ -2838,6 +2885,26 @@ pub fn ask_choice(
     }
 }
 
+/// Name a free amount of money in `0..=max`. No option list is built -- the
+/// bound rides `opt_count`; the answer is the raw amount. `ai` is the bot's
+/// preferred amount (`-1` = unset). 「支付选择数量的资金」 (弦卷集团地产开发's
+/// bid) is the shape this exists for: an `ask_choice` over every integer would
+/// carry thousands of options.
+pub fn ask_money(
+    player_id: i32,
+    title: &Msg,
+    text: &Msg,
+    max: i32,
+    ai: i32,
+) -> Result<i32, Prompt> {
+    unsafe { sys::opt_count(max.max(0)) }
+    if ai >= 0 {
+        unsafe { sys::opt_ai(ai) }
+    }
+    let v = ask_raw(PromptKind::Money, player_id, title, text)?;
+    Ok(v.clamp(0, max.max(0)))
+}
+
 /// Pick exactly `count` distinct options in one multi-select prompt. The answer
 /// is a bitmask (bit *i* = option *i*); the chosen indices come back
 /// **ascending**. `count` is clamped to `1..=options.len()`.
@@ -2949,6 +3016,43 @@ pub fn ask_player(player_id: i32, title: &Msg, text: &Msg, players: &[i32]) -> R
         let i = ask_raw(PromptKind::Player, player_id, title, text)?;
         Ok(players[(i.max(0) as usize).min(players.len().saturating_sub(1))])
     }
+}
+
+/// The forced play target (ABI-04): the seat a forced play is made against,
+/// written by the forcing card as the plan tag `"force"` before it plays the
+/// card (and cleared afterwards). `-1` when unset.
+///
+/// The tag holds the seat **plus one**: `trig_move_tag` answers 0 for a
+/// missing name and seat 0 is a valid holder, so the bare value cannot tell
+/// "nobody" from "player 0".
+#[cfg_attr(kani, inline(always))]
+pub fn forced_target() -> i32 {
+    let v = trigger::move_tag("force");
+    if v > 0 {
+        v - 1
+    } else {
+        -1
+    }
+}
+
+/// [`ask_player`] that skips the prompt when a forced play already named the
+/// target (ABI-04). `pool` is the card's own candidate set: when the forced
+/// seat is in it, the designation is the force's, so the seat is returned
+/// without pausing; otherwise this asks as usual. The caller still puts the
+/// answer through its targeting gate, so Immune / Untargetable / Redirect
+/// behave.
+#[cfg_attr(kani, inline(always))]
+pub fn ask_player_target(
+    player_id: i32,
+    title: &Msg,
+    text: &Msg,
+    pool: &[i32],
+) -> Result<i32, Prompt> {
+    let forced = forced_target();
+    if forced >= 0 && pool.contains(&forced) {
+        return Ok(forced);
+    }
+    ask_player(player_id, title, text, pool)
 }
 
 /// A player ask where each option also names a **card** to show with it (returns

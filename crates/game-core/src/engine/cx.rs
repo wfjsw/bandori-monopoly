@@ -150,6 +150,23 @@ impl Ask {
         a
     }
 
+    /// `Money`: name a free amount in `0..=max`. No option list; the bound is
+    /// carried on `view.price`, the answer is the raw amount. `ai` is the
+    /// seat's preferred amount (`-1` = let the host fill from `fallback`).
+    pub fn money(
+        player_id: usize,
+        max: i32,
+        title: Msg,
+        text: Msg,
+        fallback: i32,
+        time: f32,
+    ) -> Self {
+        let mut a = Self::new("money", vec![player_id], title, text, time);
+        a.view.price = max.max(0);
+        a.view.fallback = fallback.clamp(0, max.max(0));
+        a
+    }
+
     /// `TileAsk`: pick one of `tiles` (answer == len means "none"). Same AI
     /// fill as [`Self::choice`]; chaos never takes "none" while a tile exists.
     pub fn tile(
@@ -357,6 +374,22 @@ pub fn heuristic_answer_with(
     if ask.view.kind == "auction" {
         return heuristic_auction(ask, params);
     }
+    if ask.view.kind == "money" {
+        // The bound is `view.price`, not an option index.
+        let max = ask.view.price.max(0);
+        let answers = (0..n)
+            .map(|k| match ask.ai.get(k).copied().unwrap_or(AI_UNSET) {
+                AI_UNSET => ask.view.fallback,
+                v => v.clamp(0, max),
+            })
+            .collect();
+        return Answered {
+            answers,
+            picked: Vec::new(),
+            bid: 0,
+            bidder: -1,
+        };
+    }
     let picks = matches!(ask.view.kind.as_str(), "pick" | "mortgage");
     let multi = ask.view.kind == "multi";
     let max = if ask.view.kind == "tile" {
@@ -529,6 +562,11 @@ pub struct SettleEntry {
     pub mv: super::rules::TriggerMove,
     /// The settle's main-move flag, stamped on inheriting raises.
     pub is_main_move: bool,
+    /// 「必须购买」 for this settle only (LOY-MUSTBUY-02): the settle's own
+    /// optional buy offer is suppressed and the caller's forced buy is the
+    /// binding one. Seeded from the frame, so a later `set_no_buy(false)`
+    /// cannot clear it.
+    pub no_buy: bool,
 }
 
 /// Routine context: the world being mutated, read-only game data, card rules, and
@@ -761,6 +799,12 @@ pub struct GuestOverlay {
     /// pipeline applies on live instead and leaves no entry here.
     #[serde(default)]
     pub money: Vec<(usize, i32, i32)>,
+    /// `(player, base, wrote)` persona writes (`ctx::set_persona`, 二人一体's
+    /// swap). Absolute per-seat faces: `base` is the pass-start value and the
+    /// write crosses a pause like a money row, or a request between the write
+    /// and the body's end would rebuild the copy from live without it.
+    #[serde(default)]
+    pub persona: Vec<(usize, String, String)>,
     /// Board-row writes (`ctx::set_owner` / `ctx::set_houses` /
     /// `ctx::set_mortgaged`, embers, tile marks).
     #[serde(default)]
@@ -1018,6 +1062,9 @@ impl BoardDelta {
     fn apply_scalar(rows: &[(usize, i32, i32)], live: &mut [i32]) {
         for (i, b, w) in rows {
             if let Some(v) = live.get_mut(*i) {
+                if std::env::var("DBG_H01").is_ok() && *i == 16 {
+                    eprintln!("H01 apply_scalar tile16 live={} base={b} wrote={w}", *v);
+                }
                 if *v == *b {
                     *v = *w;
                 } else if *v != *w {
@@ -1390,6 +1437,8 @@ pub struct PassBase {
     pub owners: Vec<(i32, Vec<i32>)>,
     /// Every player's money.
     pub money: Vec<i32>,
+    /// Every player's persona face.
+    pub persona: Vec<String>,
     /// Every player's private piles (hand / deck / graveyard).
     pub piles: Vec<(Vec<String>, Vec<String>, Vec<String>)>,
     /// Every player's stored next-main-move step count.
@@ -1429,6 +1478,12 @@ impl PassBase {
     /// too, so it is the host's, not the guest's (same guard as
     /// [`PlayCtx::restore_guests_to`]). Snapshot owners are additive and stay
     /// on the row.
+    ///
+    /// Currently unwired: the pass top inlines these rules in
+    /// `Run::after_host_inner` (it needs the live base there, not a probe), and
+    /// no caller builds a base this way. Keep the arms here in step with
+    /// [`GuestOverlay::restore`] -- they are the documented revert for a new
+    /// surface either way.
     pub fn revert_guest_overlay(&mut self, own: &GuestOverlay, live: &World) {
         for (i, k, base_v, wrote_v, crossed) in &own.state {
             // A non-crossing increase never sat on live; overriding the
@@ -1512,10 +1567,24 @@ impl PassBase {
                 None => l.retain(|c| c.name != *name),
             }
         }
+        for (i, base_v, wrote_v) in &own.persona {
+            if let (Some(v), Some(b)) = (live.st.players.get(*i), self.persona.get_mut(*i)) {
+                if v.persona == *wrote_v {
+                    *b = base_v.clone();
+                }
+            }
+        }
         for (i, base_v, wrote_v) in &own.money {
             if let (Some(v), Some(b)) = (live.st.players.get(*i), self.money.get_mut(*i)) {
                 if v.money == *wrote_v {
                     *b = *base_v;
+                }
+            }
+        }
+        for (i, base_v, wrote_v) in &own.persona {
+            if let (Some(v), Some(b)) = (live.st.players.get(*i), self.persona.get_mut(*i)) {
+                if v.persona == *wrote_v {
+                    *b = base_v.clone();
                 }
             }
         }
@@ -1648,6 +1717,8 @@ fn retain_unseen_overlay_rows(seen: &mut SeenRows, o: &mut GuestOverlay) {
     // `capture_guest_tokens_from`), so every one of them is a real step.
     o.money
         .retain(|(i, _, _)| seen.insert((5, *i, String::new(), 0)));
+    o.persona
+        .retain(|(i, _, _)| seen.insert((16, *i, String::new(), 0)));
     o.board
         .owners
         .retain(|(t, _, _)| seen.insert((6, *t, String::new(), 0)));
@@ -1700,6 +1771,7 @@ fn revert_overlay_on(w: &mut World, o: GuestOverlay) -> Vec<i32> {
         roll_picks,
         scheduled,
         money,
+        persona,
         board,
         events,
         rule_bonus,
@@ -1720,6 +1792,13 @@ fn revert_overlay_on(w: &mut World, o: GuestOverlay) -> Vec<i32> {
         if let Some(p) = w.st.players.get_mut(i) {
             if p.money == wrote {
                 p.money = b;
+            }
+        }
+    }
+    for (i, b, wrote) in persona {
+        if let Some(p) = w.st.players.get_mut(i) {
+            if p.persona == wrote {
+                p.persona = b;
             }
         }
     }
@@ -2112,6 +2191,13 @@ impl GuestOverlay {
         if let Some(d) = &self.events {
             d.apply(w);
         }
+        for (i, base, wrote) in &self.persona {
+            if let Some(p) = w.st.players.get_mut(*i) {
+                if p.persona == *base {
+                    p.persona = wrote.clone();
+                }
+            }
+        }
         for (i, base, wrote) in &self.money {
             if let Some(p) = w.st.players.get_mut(*i) {
                 // A host move since the crossing is kept and the guest's own
@@ -2123,6 +2209,15 @@ impl GuestOverlay {
                 } else {
                     p.money + (*wrote - *base)
                 };
+            }
+        }
+        for (i, base, wrote) in &self.persona {
+            if let Some(p) = w.st.players.get_mut(*i) {
+                // Absolute: a face someone else moved to since the crossing is
+                // theirs, not the guest's.
+                if p.persona == *base {
+                    p.persona = wrote.clone();
+                }
             }
         }
         if let Some((base, wrote)) = &self.scheduled {
@@ -2475,6 +2570,11 @@ impl<'a> PlayCtx<'a> {
         t.next_move_pay_factor = f.next_move_pay_factor;
         t.plan.can_build = f.plan.can_build;
         t.plan.no_buy = f.plan.no_buy;
+        // The 「必须购买」 one-shot latch (LOY-MUSTBUY-02) lives beside the
+        // plan: a card body's write is on its own copy's `turn`, and only the
+        // staging `plan` crosses above, so the latch has to cross here or a
+        // `settle_tile_at` on the far side of the pause loses it.
+        t.settle_no_buy = f.settle_no_buy;
         t.plan.tags = f.plan.tags.clone();
         // A card body may latch a decision across the pauses its host routines
         // cause -- e.g. 黑色生日 freezing 「每名你以外的资金不多于1000的玩家」 at
@@ -2555,6 +2655,7 @@ impl<'a> PlayCtx<'a> {
             scheduled: self.capture_guest_scheduled_from(base, from),
             events: self.capture_guest_events_from(base, from),
             money: self.capture_guest_money_from(base, from),
+            persona: self.capture_guest_persona_from(base, from),
             board: self.capture_guest_board_from(base, from),
             frames: self.capture_guest_frames_from(from),
         }
@@ -2638,6 +2739,7 @@ impl<'a> PlayCtx<'a> {
                 .map(|(key, owners)| (*key, owners.clone()))
                 .collect(),
             money: w.st.players.iter().map(|p| p.money).collect(),
+            persona: w.st.players.iter().map(|p| p.persona.clone()).collect(),
             piles: w
                 .hidden
                 .iter()
@@ -2722,6 +2824,40 @@ impl<'a> PlayCtx<'a> {
                 };
             }
             out.push((i, b, wrote));
+        }
+        out
+    }
+
+    /// Capture the guest's persona writes against the pass base and carry them
+    /// into `self.w`. Nothing when the copy holds the face live already has.
+    ///
+    /// A face is an absolute name, so there is no delta to add: the guest's
+    /// newest word replaces live's, and the row records the value it replaced
+    /// as its base. The row is therefore measured against **live now**, not the
+    /// pass base -- a body that writes a face, pauses, and writes another
+    /// (`A -> B`, request, `A`) has a guest copy equal to the pass base at the
+    /// second pause, and the pass-base comparison would skip the write while
+    /// live still held `B`. No host routine ever writes a persona, so a live
+    /// face differing from the pass base is always this drive's own earlier
+    /// crossing.
+    pub fn capture_guest_persona_from(
+        &mut self,
+        base: &PassBase,
+        from: &World,
+    ) -> Vec<(usize, String, String)> {
+        let mut out = Vec::new();
+        let n = base.persona.len().min(from.st.players.len());
+        for i in 0..n {
+            let wrote = &from.st.players[i].persona;
+            let Some(p) = self.w.st.players.get_mut(i) else {
+                continue;
+            };
+            // The unchanged case (most seats, most requests) clones nothing.
+            if p.persona == *wrote {
+                continue;
+            }
+            let b = std::mem::replace(&mut p.persona, wrote.clone());
+            out.push((i, b, wrote.clone()));
         }
         out
     }

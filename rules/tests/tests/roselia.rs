@@ -1019,3 +1019,32 @@ fn g04_lisa_bond_opens_after_a_nested_skill_teleport() {
         t.field_ids(1)
     );
 }
+
+// 规则书: 「视为此卡未生效」 carry the 1600 shortfall (CH-07 / C-Q5(a)): with no
+// funds and nothing to mortgage, the play is spent anyway; the waste bit rides
+// the discard and the card never lands. `TEST:zoner` on the *other* seat hears
+// the hand play's discard (`uid -1`).
+#[test]
+fn fire_bird_shortfall_is_wasted() {
+    let mut t = Table::vanilla(3);
+    t.place_raw(1, "TEST:zoner");
+    t.give(0, &["R:Fire bird"]);
+    t.set_money(0, 0);
+    let mark = t.mark();
+    assert!(t.play(0, "R:Fire bird").is_ok(), "{:?}", t.recent_keys(8));
+    drain(&mut t);
+    let ev = t.events_since(mark);
+    let waste: Vec<i64> = ev
+        .iter()
+        .filter(|e| log_key(e) == "zoner_discarded" && int_arg(&e.msg, "uid") == Some(-1))
+        .filter_map(|e| int_arg(&e.msg, "wasted"))
+        .collect();
+    assert!(
+        waste.contains(&1),
+        "the shortfall discard is wasted: {:?}",
+        t.keys_since(mark)
+    );
+    assert!(!t.on_field(0, "R:Fire bird"), "{:?}", t.field_ids(0));
+    assert!(t.discard(0).contains(&"R:Fire bird".to_string()));
+    assert_eq!(t.hand(0).len(), 0, "the card was spent");
+}

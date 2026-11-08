@@ -6,6 +6,7 @@
 
 mod common;
 use common::*;
+use game_core::msg::Arg;
 use game_core::state::stage;
 
 // ---------------------------------------------------------------- helpers
@@ -1321,6 +1322,44 @@ fn miracle_discarded_with_crystals_is_wasted() {
     );
 }
 
+// 规则书（3）: 「（最多超出2个）」 -- the held total stops at 3. A fourth
+// ineffective discard still shows the guard line but grants nothing, so the
+// body line stays at three (the debug pair is honest about the cap).
+#[test]
+fn band_crystal_overflow_stops_at_three() {
+    let mut t = Table::new(&["高松灯", "千早爱音"]);
+    t.clean();
+    t.begin_turn(0);
+    let band = t.skill_id(0, "迷途之星");
+    t.set_draw(0, &["R:[衍生] 压"]);
+    // Each round places a miracle (which drains the band, its (1)) and dumps it
+    // while ineffective, forcing the band's pre-discard count to `n` first so
+    // the (3) cap itself is what is under test.
+    for n in 0..4 {
+        t.give(0, &["MyGO:难以复刻的奇迹", "TEST:dumper"]);
+        // Let the empty-hand play gate lift before playing.
+        drain(&mut t);
+        t.play(0, "MyGO:难以复刻的奇迹").unwrap();
+        let w = t.m.world_mut();
+        let f = w.st.players[0]
+            .field
+            .iter_mut()
+            .find(|f| f.card == band)
+            .unwrap();
+        f.counters.insert("crystals".into(), n);
+        set_crystals(&mut t, 0, "MyGO:难以复刻的奇迹", 2);
+        t.play(0, "TEST:dumper").unwrap();
+        drain(&mut t);
+    }
+    assert_eq!(t.crystals(0, &band), Some(3), "held total is capped at 3");
+    let bodies = t
+        .recent_keys(200)
+        .iter()
+        .filter(|k| k.ends_with("dbg.mygo_body"))
+        .count();
+    assert_eq!(bodies, 3, "no grant past the cap: {:?}", t.recent_keys(40));
+}
+
 // The (2) pass-out with crystals left logs `miracle_wasted` once: the bit and
 // its line belong to the `zoneLeft` body alone (review finding 6).
 #[test]
@@ -1837,6 +1876,28 @@ fn band_start_tile_does_not_settle() {
 }
 
 #[test]
+fn band_start_tile_does_not_settle_with_bots() {
+    // Same start teleport, but answered by the bot policy instead of the
+    // default prompt answer -- the live report ("the bot still manages to
+    // buy that land") came from a bot seat. Seed 25 lands P0 on 星星小巷
+    // (43), the tile from that log; a fumbled `settles` flag lets the bot
+    // accept the buy it should never have been offered.
+    let mut t = Table::pending_seed_bots(&["椎名立希", "高松灯"], 25);
+    assert_eq!(t.pos(0), 43, "P0's opening 3d20 start tile (seed-pinned)");
+    assert_eq!(
+        data().tiles[43].kind.as_str(),
+        "property",
+        "the pinned start tile must be a purchasable property"
+    );
+    // Play past the opening deal and the whole first turn.
+    for _ in 0..240 {
+        bot_core::sim::pump_bots(&mut t.m);
+        t.m.tick(0.25);
+    }
+    assert_eq!(t.owner(43), None, "the bot bought the start tile");
+}
+
+#[test]
 fn band_roll_16_plus_adds_crystal() {
     // 规则书: 「（2）若移动掷骰出目为16及以上，为此卡添加一个[奇迹水晶]（上限1）」
     let mut t = Table::new(&["高松灯", "千早爱音"]);
@@ -1983,10 +2044,14 @@ fn inter_declare_war_answers_no_road_targeting() {
     t.give(1, &["AG:宣战布告"]);
     t.set_draw(1, &["R:[衍生] 压"]);
     t.give_play(0, "MyGO:无路矢").unwrap();
-    let k = t.option("PlayerId(1)").expect("player choice");
-    t.answer(0, k).unwrap();
+    // A DESIGNATES play offers the Effect responders at the announce (C13), so
+    // the counter window comes before the forced target pick.
     assert!(t.counteract_offered("AG:宣战布告"), "{}", t.dump_prompt());
     t.counteract(1, "AG:宣战布告").unwrap();
+    let k = t
+        .option("PlayerId(1)")
+        .unwrap_or_else(|| panic!("player choice: {}", t.dump_prompt()));
+    t.answer(0, k).unwrap();
     // 规则书 (AG:宣战布告): 「被[指定]的玩家[支付][使用者]500资金且[使用者]抽1张卡。」
     assert_eq!(t.money(0), 10_000 - 500);
     assert_eq!(t.money(1), 10_000 + 500);
@@ -2108,7 +2173,9 @@ fn no_road_income_goes_to_the_designated_player() {
     t.set_pos(1, 10);
     t.own(0, &[2]); // P0 owns 天文馆
     t.give_play(0, "MyGO:无路矢").unwrap();
-    let k = t.option("PlayerId(1)").expect("player choice");
+    let k = t
+        .option("PlayerId(1)")
+        .unwrap_or_else(|| panic!("player choice: {}", t.dump_prompt()));
     t.answer(0, k).unwrap();
     assert_eq!(t.state(0, "exile"), 2);
     // While exiled, rent from P0's tile goes to P1 (the designated player).
@@ -2222,4 +2289,50 @@ fn no_road_in_ops_still_owes_the_roll_and_does_not_read_as_skip() {
     t.roll(0).unwrap();
     t.end(0).unwrap();
     assert_eq!(t.turn(), 1, "the turn passes on");
+}
+
+// 规则书: 「视为此卡未生效」 -- the announced designation is refused (网络链接
+// 异常 clause 1 cancels it). CH-07 / C-Q5(a): the card is spent anyway, with
+// the waste bit on the discard, and nothing else moves.
+#[test]
+fn no_road_refused_designation_is_wasted() {
+    let mut t = Table::vanilla(2);
+    t.place_raw(1, "TEST:zoner");
+    t.give(0, &["MyGO:无路矢"]);
+    t.give(1, &["通用:网络链接异常"]);
+    let mark = t.mark();
+    t.play(0, "MyGO:无路矢").unwrap();
+    // P1 counters the play; clause 1 drops its own designation.
+    for _ in 0..20 {
+        if t.counteract_offered("通用:网络链接异常") {
+            break;
+        }
+        t.decline();
+    }
+    t.counteract(1, "通用:网络链接异常").unwrap();
+    // The forced target ask still runs; answer P1 (its designation is gone).
+    if let Some(p) = t.prompt() {
+        if let Some(k) = p
+            .options
+            .iter()
+            .position(|o| o.args.get("who") == Some(&Arg::PlayerId(1)))
+        {
+            t.answer(0, k as i32).unwrap();
+        }
+    }
+    drain(&mut t);
+    let ev = t.events_since(mark);
+    let waste: Vec<i64> = ev
+        .iter()
+        .filter(|e| log_key(e) == "zoner_discarded" && int_arg(&e.msg, "uid") == Some(-1))
+        .filter_map(|e| int_arg(&e.msg, "wasted"))
+        .collect();
+    assert!(
+        waste.contains(&1),
+        "the refused designation is wasted: {:?}",
+        t.keys_since(mark)
+    );
+    assert!(!t.on_field(0, "MyGO:无路矢"), "{:?}", t.field_ids(0));
+    assert!(!t.p(0).bankrupt, "no exile was taken");
+    assert_eq!(t.hand(0).len(), 0, "the card was spent");
 }

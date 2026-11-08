@@ -169,15 +169,26 @@ pub fn twoinone_fire_target(from_is_hina: bool) -> i32 {
     }
 }
 
+/// The other character the swap names (the clause's 「另一名角色」).
+/// `from_is_hina`: the target is 纯田真奈.
+pub fn twoinone_persona_target(from_is_hina: bool) -> &'static str {
+    if from_is_hina {
+        "纯田真奈"
+    } else {
+        "三角初华（Sumimi）"
+    }
+}
+
 /// C-SUMIMI-twoinone-01b fire half: the user's fire becomes the other
-/// character's 初始火罐数. At least one SetState on the fire key to `to`;
-/// no GainFire / token writes that would double-count pots.
+/// character's 初始火罐数. The pool is a held row of the persona-skill
+/// instance (`MARKERS.md` §7), so the declaration is one `SetToken` on the
+/// fire key to `to`; no `GainFire` / `AddToken` that would double-count pots.
 pub fn twoinone_fire_effects_ok(effects: &[Effect], player: i32, fire_key: u16, to: i32) -> bool {
     let mut saw_fire = false;
     let mut i = 0usize;
     while i < effects.len() {
         match &effects[i] {
-            Effect::SetState { player: p, key, n } => {
+            Effect::SetToken { player: p, key, n } => {
                 if *p == player && *key == fire_key {
                     if saw_fire || *n != to {
                         return false;
@@ -185,9 +196,7 @@ pub fn twoinone_fire_effects_ok(effects: &[Effect], player: i32, fire_key: u16, 
                     saw_fire = true;
                 }
             }
-            Effect::GainFire { .. } | Effect::AddToken { .. } | Effect::SetToken { .. } => {
-                return false;
-            }
+            Effect::GainFire { .. } | Effect::AddToken { .. } => return false,
             _ => {}
         }
         i += 1;

@@ -156,6 +156,9 @@ pub struct WindowCtx {
     /// Is the pending payment a command total (`pay_total_stage`); neutral
     /// `true` without a payment, so a non-pay guard fails closed.
     pub pay_total_stage: bool,
+    /// Is this the one window of a 「[分摊]」 command total
+    /// (`pay_split_total`), before the legs?
+    pub pay_split_total: bool,
     /// The `ChargePaying` window came from a skill cost (`charge_is_skill`).
     pub charge_is_skill: bool,
     /// The answered effect's subject card declares `RANGE_CARD`
@@ -246,6 +249,7 @@ impl Default for WindowCtx {
             pay_kind: -1,
             pay_is_fixed: 0,
             pay_total_stage: true,
+            pay_split_total: false,
             charge_is_skill: false,
             subject_range_card: false,
             extreme_armed: false,

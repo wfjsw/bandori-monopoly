@@ -14,7 +14,7 @@
 //!
 //! Checkpoints are the saved `world` with the view/clock fields stripped.
 //!
-//! ## The one known divergence
+//! ## Traps and the event tail
 //!
 //! A card body that **swallows** `Err(Prompt)` (e.g. `ctx::decay()`'s
 //! `add_crystals(-1, 0).unwrap_or(0)`) and keeps going is trapped by the
@@ -24,15 +24,22 @@
 //! prompts), not in the answer plumbing: the inline path is strictly more
 //! permissive. The test therefore asserts
 //!
-//! * **exact** checkpoint equality whenever the baseline trapped nothing, and
-//! * that any divergence is accompanied by such a trap (so a real plumbing
-//!   bug cannot hide behind the known one).
+//! * no prompt is swallowed in either run,
+//! * the served answer count equals the baseline's (the same questions), and
+//! * the **world** matches exactly at every checkpoint. The checkpoint's live
+//!   event tail (`recent` / `next_event`) may differ in length: the halt/
+//!   replay model writes one line per pass and replaces it on the re-run,
+//!   while the inline pass writes once. That tail offset is reported only.
 //!
 //! `StubRules` (no card effects at all) is pinned separately and must be
 //! exactly equal, always.
 
+mod common;
+
 use std::collections::VecDeque;
 use std::path::Path;
+
+use common::Table;
 use std::sync::atomic::{AtomicUsize, Ordering};
 use std::sync::{Arc, OnceLock};
 
@@ -260,15 +267,19 @@ fn equivalence(seed: u64, n: usize, rules: Arc<dyn CardRules>) -> (usize, usize)
         base_run.swallow_cards
     );
     assert_eq!(inl_run.swallowed, 0);
-    // TODO(规则书) B2 equivalence gap: the learn pass's body runs against a
-    // copy of the live world taken *before* the HostRequests it discovers, so
-    // a body that queries state a host routine changed (money after a `pay`,
-    // say) sees the pre-effect value and can ask for different things than the
-    // replay model's last pass (which runs on `live + host_effects`). The
-    // answer plumbing itself is exact -- `stub_rules_inline_matches_halt_replay`
-    // pins that with no card effects at all -- but the two-pass drive's learn
-    // pass needs a rebase of the guest's writes onto the updated live world to
-    // be exact under real rules. Report the gap rather than assert through it.
+    // B2 equivalence contract (HOST-01 closed): a host routine's nested settle
+    // writes cross onto live at the pause (`PlayCtx::overlay_guest_state`), the
+    // guest diff re-bases on the updated live world, and the pass that lands is
+    // the commit pass -- so every body read sees the same `live + host_effects`
+    // world the replay model's last pass does. `strongest_inline_matches_halt_replay`
+    // pins the nested case (an agent offer's deed bought during a `Move`).
+    // The answer plumbing alone is exact even with no card effects at all:
+    // `stub_rules_inline_matches_halt_replay_exactly`.
+    //
+    // A divergence still has to be reported rather than asserted through:
+    // the inline pass answers pauses as they happen, so its event stream (and
+    // `next_event`) can be shorter than the halt/replay model's per-pass
+    // replace log even when the prompt sequence and every world field match.
     if served.load(Ordering::Relaxed) != log.len() {
         eprintln!(
             "seed {seed}: KNOWN B2 GAP -- inline asked {} vs baseline {} \
@@ -293,15 +304,32 @@ fn equivalence(seed: u64, n: usize, rules: Arc<dyn CardRules>) -> (usize, usize)
             }
         }
         if let Some(i) = first {
-            // Same questions, different world: the learn pass's body sees the
-            // pre-host-effect world at each `HostRequest` while the replay's
-            // last pass sees `live + host_effects`, so the overlay the engine
-            // routine runs against (and therefore e.g. `paid.moved()`) can
-            // differ. Same root cause as the prompt-count gap above.
+            // The live event tail is the whole snapshot difference the
+            // replay model's per-pass replace log produces. Strip it and the
+            // chassis world must be identical (HOST-01 made the body reads
+            // exact); the event-tail offset is then reported only.
+            let mut base_world = base_run.checkpoints[i].clone();
+            let mut inline_world = inl_run.checkpoints[i].clone();
+            for v in [&mut base_world, &mut inline_world] {
+                let obj = v.as_object_mut().expect("world is an object");
+                obj.remove("recent");
+                obj.remove("next_event");
+            }
+            assert_eq!(
+                base_world, inline_world,
+                "seed {seed}: world state diverged at checkpoint {i}"
+            );
             eprintln!(
-                "seed {seed}: KNOWN B2 GAP -- checkpoint {i} diverged with the \
-                 same prompt sequence (learn pass vs replay last pass see \
-                 different worlds at each HostRequest); see docs/BOT.md §3.2"
+                "seed {seed}: event-tail offset at checkpoint {i} ({} vs {} \
+                 events); same prompt sequence and world, see docs/BOT.md §3.2",
+                base_run.checkpoints[i]["recent"]
+                    .as_array()
+                    .map(|a| a.len())
+                    .unwrap_or(0),
+                inl_run.checkpoints[i]["recent"]
+                    .as_array()
+                    .map(|a| a.len())
+                    .unwrap_or(0),
             );
         }
     }
@@ -391,10 +419,10 @@ fn stub_rules_inline_matches_halt_replay_exactly() {
 }
 
 /// Real rules (`dist/cards`): no body may swallow a prompt (the pauses are
-/// traps now), and when the two runs ask the same questions their checkpoints
-/// must match exactly. The remaining gap -- the learn pass's body not seeing
-/// the host effects its own `HostRequest`s apply -- is reported, not asserted
-/// through (see the `TODO(规则书)` in [`equivalence`]).
+/// traps now), the two runs must ask the same questions, and their world
+/// checkpoints must match exactly. HOST-01 closed the nested-write gap, so the
+/// body sees the same `live + host_effects` world on every pass; only the
+/// event-tail length still differs (reported by [`equivalence`]).
 #[test]
 fn real_rules_inline_matches_halt_replay() {
     let seeds: Vec<u64> = std::env::var("INL_SEEDS")
@@ -404,6 +432,102 @@ fn real_rules_inline_matches_halt_replay() {
     for seed in seeds {
         equivalence(seed, 4, rules());
     }
+}
+
+// =====================================================================
+// HOST-01 -- a nested settle's write is on live before the next pass
+// =====================================================================
+
+const STRONGEST: &str = "RAS:成为最强";
+/// `RiNG 2`: the livehouse the agent offer buys.
+const RING2: usize = 16;
+/// `RiNG 1`: the face-1 livehouse the post-buy ownership check names.
+const RING1: usize = 8;
+
+/// A provider that answers strictly from a recorded log.
+struct ExactReplay {
+    answers: VecDeque<Answered>,
+}
+
+impl AnswerProvider for ExactReplay {
+    fn answer(&mut self, _ask: &Ask) -> Option<Answered> {
+        self.answers.pop_front()
+    }
+}
+
+fn host01_drain(t: &mut Table) {
+    for _ in 0..500 {
+        let Some(p) = t.prompt() else { return };
+        if p.kind == "auction" {
+            for who in t.asked() {
+                let _ = t.answer(who, -1);
+            }
+            continue;
+        }
+        t.decline();
+    }
+    panic!("drain livelock at {}", t.dump_prompt());
+}
+
+fn host01_setup() -> Table {
+    let mut t = Table::vanilla(2);
+    t.set_hand(0, &[]);
+    t.set_hand(1, &[]);
+    t.set_money(0, 50_000);
+    t.set_money(1, 50_000);
+    {
+        let w = t.m.world_mut();
+        for p in w.st.players.iter_mut() {
+            p.field.clear();
+        }
+    }
+    t
+}
+
+/// HOST-01: the deed a host routine's nested settle buys is on live before the
+/// next body pass reads ownership. `be_strongest` rolls face 1, moves onto the
+/// Live House agent tile, and the offer's nested settle buys RiNG 2. The
+/// re-run's ownership check must see that deed and name RiNG 1 (not fall back
+/// to Live House); with a provider the two-pass drive must match the
+/// halt/replay baseline exactly.
+#[test]
+fn strongest_inline_matches_halt_replay() {
+    let mut baseline = host01_setup();
+    baseline.dice(&[1]);
+    baseline.give_play(0, STRONGEST).unwrap();
+    let p = baseline.expect_prompt();
+    assert_eq!(
+        p.title.key(),
+        "ask.agent.title",
+        "{}",
+        baseline.dump_prompt()
+    );
+    baseline.answer_tile(0, RING2).unwrap();
+    host01_drain(&mut baseline);
+    let log = baseline.m.take_prompt_log();
+    assert_eq!(baseline.pos(0), RING1, "baseline destination");
+
+    let mut inline = host01_setup();
+    inline.dice(&[1]);
+    inline.m.set_provider(Some(Box::new(ExactReplay {
+        answers: log.into(),
+    })));
+    inline.give_play(0, STRONGEST).unwrap();
+    host01_drain(&mut inline);
+    inline.m.set_provider(None);
+
+    assert_eq!(
+        inline.owner(RING2),
+        Some(0),
+        "the nested agent offer's buy must stand: {:?}",
+        inline.recent_keys(30)
+    );
+    assert_eq!(
+        inline.pos(0),
+        RING1,
+        "the re-run sees the nested deed and names RiNG 1, not Live House: {:?}",
+        inline.recent_keys(30)
+    );
 }
 
 /// The default (no provider) path is untouched: a normal run still halts and

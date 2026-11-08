@@ -14,12 +14,12 @@ Harnesses invoke the unmodified bodies via `invoke::`. Guards use `guard_id!` /
 
 | class | count (clauses) | notes |
 |---|---:|---|
-| PROVEN (CBMC SUCCESSFUL) | 5 clauses | C-HHW-kokoro-01, kokoro-02, band-01 (decline), kkr-01, plus no-op companions |
+| PROVEN (CBMC SUCCESSFUL) | 7 clauses | C-HHW-kokoro-01, kokoro-02, band-01 (decline), kkr-01, athletic-01/02 (both seats), plus no-op companions |
 | FAILS (finding) | 2 (pre-registered) | kaoru-01, kaoru-02 (TEST-FINDINGS §6) |
 | BLOCKED-HOST | 3 card rows + 1 skill row | `rent_of`, `tile_at`×2, `trig_move_roll` |
 | PROTOCOL-LEVEL | ~20 clauses | counter windows, [触发结算], multi-turn clocks |
 | OPEN | ~15 clauses | OPEN-HHW-* list below |
-| TIMEOUT/OOM this pass | 1 | `athletic_place_three_crystals_iff` intern unwind cliff |
+| TIMEOUT/OOM this pass | 0 | — |
 | written, verdict pending | ~25 harnesses | code committed; slot-queued |
 
 The three card rows blocked on unmodeled ops (KANI-COVERAGE.md) are listed
@@ -65,8 +65,8 @@ Legend: **P**=PROVEN, **F**=FAILS(finding), **B**=BLOCKED-HOST, **PROTO**=PROTOC
 | C-HHW-parade-03 | 「[持续] [触发结算]后可将…放置于[移动终点]」 | PROTO | — | — | — | OPEN-HHW-触发结算 |
 | C-HHW-parade-04 | 「那格视为与弦卷集团交换位置」 | PROTO | — | — | — | tile-swap standing effect |
 | C-HHW-parade-05 | 「[触发结算]后此卡放入弃牌堆」 | PROTO | — | — | — | OPEN-HHW-触发结算 |
-| C-HHW-athletic-01 | 「放置于自己场上并放置3个奇迹水晶」 | TIMEOUT/OOM this pass | `athletic_place_three_crystals_iff` | FAILED 40.5s (intern unwind cliff) | — | re-run with a frozen card-name world |
-| C-HHW-athletic-02 | 「每回合结束时失去一个，为0时置入弃牌堆」 | P / F? | `athletic_turn_end_decay_iff`, `athletic_empty_discards` | pending | body may only `set_dest(Graveyard)` without unplace → LESS | — |
+| C-HHW-athletic-01 | 「放置于自己场上并放置3个奇迹水晶」 | P (both seats) | `athletic_place_three_crystals_iff`, `athletic_place_three_crystals_user1_iff` | **SUCCESSFUL** 291.4s / 436.4s | — | the earlier "intern cliff" was a harness gap: `ctx::set_slot` desugars to `state_set`, which the subset did not declare |
+| C-HHW-athletic-02 | 「每回合结束时失去一个，为0时置入弃牌堆」 | P (both seats) | `athletic_turn_end_decay_iff`, `athletic_turn_end_decay_user1_iff`, `athletic_decay_to_zero_discards` | **SUCCESSFUL** 381.4s / 247.5s / 338.1s | — | `dec_turns_left` reaches `self_prop` / `set_self_prop`; both arms are declared |
 | C-HHW-athletic-03 | 「每次掷骰获得一次资金，起始为700…下限100」 | P (spec) | (spec only this pass) | — | host `gain_fire` ignores cap (n/a here) | — |
 | C-HHW-athletic-04 | 「重骰…直至结果至少为10」 | P (spec) | (spec only) | — | inclusive floor ruling | — |
 | C-HHW-supply-01 | 「[反击] 经过CiRCLE…放置一个奇迹水晶」 | **B** | — | BLOCKED-HOST (`tile_at`) | — | — |
@@ -148,7 +148,7 @@ Machine-wide slot cap: 3 concurrent CBMC; queueing is normal.
 | `kkr_pay_10000_iff` | hhw | **SUCCESSFUL** (same runner tag quirk) | 250.7s |
 | `hhw_smoke_cover` | hhw | **SUCCESSFUL** | 6.7s |
 | `skills_hhw_smoke_cover` | skills_hhw | **SUCCESSFUL** | 5.2s |
-| `athletic_place_three_crystals_iff` | hhw | **FAILED** (40.5s — log ends mid-`intern_bytes` unwind; treat as TIMEOUT/OOM class this pass, re-run with a tighter world) | 40.5s |
+| `athletic_place_three_crystals_iff` | hhw | **SUCCESSFUL** (the earlier FAILED was a subset gap, not the intern cliff: `ctx::set_slot` desugars to `state_set`) | 291.4s |
 | remaining ~25 harnesses | hhw / skills_hhw | **written, verdict pending** (slot-queued; not run to a verdict this pass) | — |
 | `kokoro_01_mutant_500` | skills_hhw | pending | — |
 | `kokoro_01_mutant_is_detected` | skills_hhw | pending | — |
@@ -169,10 +169,12 @@ Machine-wide slot cap: 3 concurrent CBMC; queueing is normal.
 | `kkr_place_on_circle_iff` | hhw | pending | — |
 | `kkr_mutant_pay_1000` | hhw | pending | — |
 | `kkr_mutant_is_detected` | hhw | pending | — |
-| `athletic_place_three_crystals_iff` | hhw | pending | — |
-| `athletic_turn_end_decay_iff` | hhw | pending | — |
-| `athletic_decay_to_zero_discards` | hhw | pending | — |
-| `athletic_empty_discards` | hhw | pending | — |
+| `athletic_place_three_crystals_iff` | hhw | **SUCCESSFUL** | 291.4s |
+| `athletic_place_three_crystals_user1_iff` | hhw | **SUCCESSFUL** | 436.4s |
+| `athletic_turn_end_decay_iff` | hhw | **SUCCESSFUL** | 381.4s |
+| `athletic_turn_end_decay_user1_iff` | hhw | **SUCCESSFUL** | 247.5s |
+| `athletic_decay_to_zero_discards` | hhw | **SUCCESSFUL** | 338.1s |
+| `athletic_empty_discards` | hhw | **SUCCESSFUL** | 204.9s |
 | `believe_cost_800_iff` | hhw | pending | — |
 | `believe_discard_one_iff` | hhw | pending | — |
 | `believe_mutant_is_detected` | hhw | pending | — |
