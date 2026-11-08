@@ -107,7 +107,7 @@ Skills agent also confirmed SUCCESSFUL on: `megumi_skill_01a_tile_map`,
 | C-PPP-pipopa-01 | (see above) | | | | | |
 | C-PPP-popipapapipopa-c1 | [经过]五格时+1[奇迹水晶]（上限10） | PROVEN* (under cap) / BLOCKED-HOST (cap) | `popipapapipopa_c1_crystal_on_pass_iff`, `…_mutant_plus_2` | written, verdict pending | `add_counter_*` ignores max (no cap-10 clamp) | — |
 | C-PPP-popipapapipopa-c2 | 消耗/支付时每水晶减150（最少0） | PROVEN* | `popipapapipopa_c2_pay_reduce_iff`, `…_mutant_floor_1` | written, verdict pending | — | — |
-| C-PPP-auction-off-01 | 加入手牌时放置到自身场上 | BLOCKED-HOST | `auction_off_01_blocked_noop` | written | Drawn body gates on `trigger::card_is`; `Op::trig_card_is` is 0 | — |
+| C-PPP-auction-off-01 | 加入手牌时放置到自身场上 | P (both seeds) | `auction_off_01_blocked_noop`, `auction_off_01_unblocked_grants` | **SUCCESSFUL** 460.0s / 635.7s | — | was recorded BLOCKED-HOST only because the subset lacked `trig_*` / held-row / `opt_*` arms | — |
 | C-PPP-auction-off-02 | 回合开始移除 Random Star 并失去540 | PROTOCOL-LEVEL | — | — | turn-start field sweep | — |
 | C-PPP-auction-off-c1 | 火罐上限加1 | PROVEN* | in auction body (`add_fire_max`) | written | continuous bound | — |
 | C-PPP-auction-off-c2 | 不受任何其他效果影响 | OPEN | — | — | immunity is a card flag; no universal effect list | OPEN-immunity |
@@ -200,7 +200,7 @@ the shared 3-slot queue (coordinator will re-run centrally).
 |---|---|
 | `trig_move_main` | aoki-02 latch, aoki-03, band-04, several move hooks |
 | `trig_move_roll` | saaya-01b |
-| `trig_card_is` | auction-off-01 (Drawn body gate) |
+| ~~`trig_card_is`~~ (modeled, `arm_trig_card_is`) | auction-off-01 (Drawn body gate) — proven |
 | `trig_cards` | returns-c4 residual `on_played_is_general` |
 | `tile_named` (non-江户川乐器店) | door-02, maze-01, name-sky-01, everyone-01 |
 | `shuffle_into_deck` (real, not silent 0) | random-star-01 sweep |

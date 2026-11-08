@@ -91,7 +91,20 @@ crate::host_subset!(ppp_dispatch {
     persona_is => arm_character_is,
     in_group => arm_in_band,
     target => arm_target,
+    opt_int | opt_str | opt_tile | opt_price | opt_ai => arm_opt,
     ask => arm_ask,
+    // `auction_pulled`'s hook reads the trigger it rides.
+    trig_kind => arm_trig_kind,
+    trig_player => arm_trig_player,
+    trig_card_is => arm_trig_card_is,
+    trigger_zone => arm_trigger_zone,
+    // `fire::add_max` -> adjust_cap -> held_max / set_held / gain_marker.
+    held_max => arm_tok_max,
+    gain_marker => arm_gain_marker,
+    spend_marker => arm_spend_marker,
+    // `skill_uid` (the held row's instance): persona skill id + field scan.
+    persona_skill => arm_persona_skill,
+    field_instances => arm_field_instances,
     hand_count => arm_hand_count,
     gate => arm_gate,
     raise => arm_raise,
@@ -995,6 +1008,10 @@ fn auction_off_01_at(user: i32, match_id: bool) {
     };
 
     invoke::unwrap_done(card_ppp::auction_pulled::hook_kani(user));
+    // One cover for both seeds: each proof runs only one branch, so a per-
+    // branch cover would be unreachable in the other run and trip the vacuity
+    // gate. The branch's own assertions discriminate.
+    kani::cover!(true, "hook returns");
 
     let post = world::snapshot();
     let (logbuf, log_n) = log_slice();
@@ -1002,7 +1019,6 @@ fn auction_off_01_at(user: i32, match_id: bool) {
     let post_charge_max = world::with_world(|ww| ww.charge_max[player as usize]);
 
     if match_id {
-        kani::cover!(true, "unblocked: identity matches");
         // Book: 「此卡加入手牌时将此卡放置在自身场上」+「火罐上限加1」
         crate::kassert!(
             post_field_n == pre_field_n + 1,
@@ -1013,7 +1029,6 @@ fn auction_off_01_at(user: i32, match_id: bool) {
             "auction-off-01 (unblocked): charge_max +1"
         );
     } else {
-        kani::cover!(true, "blocked: identity gate fails");
         crate::kassert!(
             log_n == 0,
             "auction-off-01 (blocked): identity gate fails ⇒ no effects"
