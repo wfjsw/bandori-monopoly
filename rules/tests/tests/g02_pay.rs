@@ -1343,6 +1343,51 @@ fn g02_council_two_copies_keep_their_own_record() {
     );
 }
 
+// 规则书 `R:学生会的检查`: 「若此卡进入弃牌堆时…获得发动此卡消耗的资金」.
+// The refund rides the copy's own `zoneLeft`, not one settle route: a removal
+// by **another** effect is the same 「进入弃牌堆」.
+#[test]
+fn g02_council_external_discard_refunds() {
+    let space = tile("Space");
+    let own = space - 2;
+    let mut t = Table::vanilla(2);
+    t.strip_skills();
+    t.clean();
+    t.own(0, &[own, space]);
+    t.set_money(0, 10_000);
+    t.give(0, &[COUNCIL]);
+    t.set_pos(0, own - 1);
+    t.begin_turn(0);
+    t.dice(&[1]);
+    t.roll(0).unwrap();
+    assert!(t.counteract_offered(COUNCIL), "{}", t.dump_prompt());
+    t.counteract(0, COUNCIL).unwrap();
+    t.answer_one(0).unwrap(); // yes
+    t.answer_tile(0, space).unwrap();
+    drain(&mut t);
+    assert_eq!(t.money(0), 9_750, "half the Space build cost was paid");
+    let uid = t
+        .field(0)
+        .into_iter()
+        .find(|f| f.card == COUNCIL)
+        .expect("placed")
+        .uid;
+    // Another player's effect removes it to the discard before any passer-by.
+    t.begin_turn(1);
+    drain(&mut t);
+    t.give(1, &["TEST:drop"]);
+    t.set_state(1, "TEST.drop.uid", uid);
+    t.set_state(1, "TEST.drop.dest", card_sdk::ctx::Dest::Graveyard as i32);
+    t.give_play(1, "TEST:drop").unwrap();
+    drain(&mut t);
+    assert!(
+        !t.on_field(0, COUNCIL),
+        "the copy left: {:?}",
+        t.field_ids(0)
+    );
+    assert_eq!(t.money(0), 10_000, "the placement cost came back: uid {uid}");
+}
+
 // =====================================================================
 // 18 -- a normal CiRCLE settle and the 6000 (row 18)
 // =====================================================================

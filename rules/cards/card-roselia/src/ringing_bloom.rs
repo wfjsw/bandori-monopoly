@@ -171,6 +171,11 @@ fn recompute_view(player_id: i32) -> card_sdk::Asked {
 /// still live at `zoneLeft` (G08 I3), so `owned_tiles` reads the same set the
 /// view armed. Nothing is recomputed -- the card is gone.
 fn on_zone_left(player_id: i32) -> card_sdk::Asked {
+    // Instance kind: every placed copy hears this raise; only the leaving
+    // row's own view ends here.
+    if trigger::instance() != ctx::self_uid() {
+        return Ok(());
+    }
     ctx::set_prop(prop::RENT_HOUSES, 0);
     for &t in &ctx::owned_tiles(player_id) {
         if ctx::is_deed(t) {
@@ -178,12 +183,25 @@ fn on_zone_left(player_id: i32) -> card_sdk::Asked {
         }
         ctx::set_tile_prop(t, prop::RENT_FACTOR, 0);
     }
+    // A second copy of this player's is still in play and keeps the same view
+    // in force: the clearing above is whole-board for the seat, not per copy.
+    let second_copy = ctx::field_instances(player_id)
+        .iter()
+        .any(|&(uid, card)| uid != ctx::self_uid() && card == ctx::intern(ID));
+    if second_copy {
+        apply_view(player_id);
+    }
     Ok(())
 }
 
 /// The card's own discard: the counted view ends too (idempotent with the
-/// `zoneLeft` hook). The half-charges belong to that hook.
+/// `zoneLeft` hook). The half-charges belong to that hook. The raise names the
+/// card (`-1` instance on a name-only discard), so a surviving copy of the
+/// same card would otherwise clear its own view here.
 fn on_discarded(_player_id: i32) -> card_sdk::Asked {
+    if trigger::instance() != ctx::self_uid() {
+        return Ok(());
+    }
     ctx::set_prop(prop::RENT_HOUSES, 0);
     Ok(())
 }

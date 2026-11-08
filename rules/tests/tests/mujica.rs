@@ -1006,6 +1006,74 @@ fn mutsumi_cover_records_the_last_hand_player() {
     assert_eq!(t.st().players[0].persona, "若叶睦", "her card is back");
 }
 
+/// 规则书 / ruling: the cover is identity-only -- the skill binding and its hook
+/// stay hers. `set_persona` also binds the new name's skill rules on the host,
+/// so the freshly placed borrowed row must be taken back off the field: while
+/// it sits there its own turn-start / pass-tile / abnormal-fire hooks run.
+#[test]
+fn mutsumi_cover_keeps_the_borrowed_skill_off_the_field() {
+    let borrowed = "skill:丰川祥子:请把你们的人生交给我";
+    let mut t = Table::new(&["若叶睦", "丰川祥子"]);
+    t.clean();
+    t.begin_turn(1);
+    drain(&mut t);
+    t.give_play(1, "TEST:echo").unwrap();
+    drain(&mut t);
+    t.set_hand(
+        0,
+        &[
+            "通用:GREAT",
+            "通用:安可",
+            "通用:GREAT",
+            "通用:安可",
+            "通用:GREAT",
+        ],
+    );
+    t.begin_turn(0);
+    let mut answered = false;
+    for _ in 0..10 {
+        let Some(p) = t.prompt() else { break };
+        if p.title.key().contains("mutsumi") {
+            t.answer_one(0).unwrap();
+            answered = true;
+            break;
+        }
+        let who = t.asked()[0];
+        let v = if p.kind == "tile" {
+            p.items.len() as i32
+        } else {
+            p.fallback
+        };
+        let _ = t.answer(who, v);
+    }
+    assert!(answered, "{}", t.dump_prompt());
+    drain(&mut t);
+    assert_eq!(t.state(0, "skillState"), 2);
+    let covered = t.field_ids(0);
+    assert!(
+        !covered.iter().any(|c| c == borrowed),
+        "the borrowed row must not be placed while covered: {covered:?}"
+    );
+    assert_eq!(t.st().players[0].persona, "丰川祥子", "the cover displays");
+    // Leave state 2.
+    t.dice(&[1]);
+    t.roll(0).unwrap();
+    drain(&mut t);
+    t.set_hand(0, &["通用:GREAT"]);
+    t.end(0).unwrap();
+    drain(&mut t);
+    assert_eq!(t.st().players[0].persona, "若叶睦", "her card is back");
+    let after = t.field_ids(0);
+    assert!(
+        !after.iter().any(|c| c == borrowed),
+        "the borrowed row must not linger after exit: {after:?}"
+    );
+    assert!(
+        after.iter().any(|c| c.starts_with("skill:若叶睦")),
+        "her own row is still hers: {after:?}"
+    );
+}
+
 /// 「上一位打出过手牌的玩家」 is any seat: a rival's play latches, and her own
 /// later play re-latches to herself.
 #[test]

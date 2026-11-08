@@ -16,7 +16,7 @@
 
 use bandori_std::ctx::{self, state};
 use bandori_std::state_key;
-use card_sdk::abi::ActionKind;
+use card_sdk::abi::{ActionKind, ZoneChangeCause};
 use card_sdk::{key, Action, CardDef, Msg, On};
 
 /// Turns since the last hand play. A play resets it.
@@ -110,8 +110,9 @@ fn enter_state2(player_id: i32) {
         return;
     };
     // 「并获得其初始火罐」 -- the borrowed face's declared numbers.
-    if let Some(borrowed_skill) = bandori_std::persona_skill(last) {
-        bandori_std::fire::overlay(player_id, &borrowed_skill);
+    let borrowed_skill = bandori_std::persona_skill(last);
+    if let Some(skill) = &borrowed_skill {
+        bandori_std::fire::overlay(player_id, skill);
     }
     // The cover: mark the borrowed seat on her persona-skill instance, then
     // swap the displayed identity. (The own name is re-derived on exit: a
@@ -122,6 +123,17 @@ fn enter_state2(player_id: i32) {
         }
     }
     ctx::set_persona(player_id, &borrowed);
+    // The host's `set_persona` also binds the new name's skill rules
+    // (`bind_persona_skills`). The ruling keeps the binding hers, so take the
+    // freshly placed borrowed row back off the field -- otherwise its own
+    // hooks (turn start, pass-tile, abnormal fire) would run for this seat.
+    // Her own row never moved: `persona_skill` still answers it and the exit
+    // `set_persona` re-binds nothing.
+    if let Some(skill) = &borrowed_skill {
+        if let Some(uid) = ctx::find_card(player_id, skill) {
+            ctx::unplace_at(uid, ctx::Dest::Graveyard, ZoneChangeCause::Effect);
+        }
+    }
     ctx::log(
         player_id,
         &Msg::new(key!("mutsumi_cover")).card("card", borrowed.as_str()),
