@@ -2035,14 +2035,14 @@ pub fn arm_cards_in(a: Args) -> i64 {
 }
 
 /// `persona` -- the seat's character card name id, 0 (none) while
-/// [`World::persona_id`] is 0.
+/// [`World::persona_id`] is `NameId::INVALID` (`0` is a real intern slot).
 ///
 /// Kani wire: two LE bytes of the interned name id (`buf == 0` is the probe),
 /// mirroring the `cfg(kani)` guest twin of [`bandori_std::persona`].
 pub fn arm_persona(a: Args) -> i64 {
     let [a0, buf, cap, ..] = a;
     let id = world::with_world(|w| w.persona_id[player_idx(a0)]);
-    if id == 0 {
+    if id == u16::MAX {
         return 0;
     }
     if buf == 0 {
