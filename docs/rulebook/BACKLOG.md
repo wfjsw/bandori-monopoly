@@ -623,21 +623,22 @@ Contrast `starry_night` / `eve`, which refuse over a fixed face.
 - **question**: C-Q35.
 
 ## CRYSTAL-08 residual — ringing_bloom disarm on non-discard removal + owner change
-- **status**: **rise and fall paths landed** — `apply_view` recomputes the
-  counted max and the half-charge `RENT_FACTOR` set; `Action::HouseAdded` and
-  (G09) `Action::HouseRemoved` re-run the view, so both a build and a raze
-  past the snapshot are tracked. `rules/cards/card-roselia/src/ringing_bloom.rs:33-36`
-  re-runs on removal; the card's own discard disarms at `:45-46`.
+- **status**: **closed** — `apply_view` recomputes the counted max and the
+  half-charge `RENT_FACTOR` set; `HouseAdded` / `HouseRemoved` (conditioned on
+  `tile.owner`, so any seat's write counts) re-run it. A silent `zoneLeft` hook
+  (`ringing_bloom.rs:47-50,166-182`) clears `RENT_HOUSES` and every
+  `RENT_FACTOR` on *every* field departure (bounce, banish, deck, discard), and
+  a silent guarded `Effect`/`OwnerSet` hook (`:49-59,191-247`) re-runs the view
+  against the post-write tile set. Tests `g09_ringing_bloom_raze_by_another_effect_clears_the_half`,
+  `g09_ringing_bloom_owner_change_disarms_the_half`,
+  `g09_ringing_bloom_half_ends_on_a_bounce` cover the added paths.
 - **kind**: ABI defect (disarm)
 - **class**: B
 - **severity**: low
 - **suggested batch**: rent multipliers / HHW cards
-- **locations**
-  - `rules/cards/card-roselia/src/ringing_bloom.rs:118-124` — a tile leaving
-    its owner (or `set_owner` gift) still leaves the view stale.
-  - `rules/cards/card-roselia/src/ringing_bloom.rs:180-183` — a removal path
-    other than the card's own discard leaves the tile `RENT_FACTOR`s armed;
-    there is no general "instance left the field" disarm.
+- **remaining**: a plain **sale** goes `assign_deed`→`set_tile_owner` with no
+  effect event; the sold tile keeps its half until the next view. Recorded as a
+  `TODO(规则书)` at `apply_view`.
   - **still open (C-Q36)**: `pay_after`'s （3） `X` reads the **counted**
     (`rent_houses_of`) value, not the standing houses. The sheet says
     「房屋数」 without 「视为」; the reading taken is that (2) has already
@@ -824,16 +825,21 @@ the status crate's grant verbs do not yet enforce every glossary clause.
   the two-turn expiry stay open. In-source `TODO(规则书)[judgement]`.
 
 ## MARKERS-MUTSU-01 — 状态2 character cover pile has no vocabulary
+- **status**: **closed** — 「角色卡堆」 reads the seat's character card through
+  the new `ruleset_persona` import (op 495, `bandori_std::persona`); the cover
+  is `set_persona` + a `skill.mutsumiActor.cover` display prop on the
+  persona-skill instance, restored on exit (the own name is re-derived from her
+  bound skill id). The latch now records **any** player's play, 1-based. The
+  fire half stays `fire::overlay` / `end_overlay`. Tests
+  `mutsumi_cover_records_the_last_hand_player`,
+  `mutsumi_latch_tracks_any_player`.
 - **kind**: rulebook divergence
 - **class**: C
 - **severity**: medium
 - **suggested batch**: skills: Ave Mujica
-- **locations**: `rules/skills/skill-personas/src/mutsumi.rs:120-128`
-- **rulebook**: 状态2's 「从角色卡堆拿取一张上一位打出过手牌的玩家的角色卡将其
-  覆盖于自己角色卡上」 — 「角色卡堆」 is a pile the vocabulary has no read for.
-  The fire half (「并获得其初始火罐」) landed as a registry overlay
-  (`fire::overlay` / `end_overlay`) keyed on the last-play latch; the character
-  cover stays open. In-source `TODO(规则书)[judgement]`.
+- **ruling**: identity-only cover (the borrowed seat keeps its card, the skill
+  binding stays hers; the borrowed pots are the mechanical half). Documented
+  in-source and in `spec/cards/mujica.md`.
 
 ## MARKERS-KANI-01 — fire kernel iff proofs not yet added
 - **kind**: coverage gap
@@ -884,15 +890,20 @@ the status crate's grant verbs do not yet enforce every glossary clause.
 - **rulebook**: closest is stage 13 「传送后在终点触发重叠」.
 
 ## HARU-SOYO-FX — 春日影 rent-cancel half needs the `ExtraOf` lookup
-- **status**: **partial** — the cancel half works (`set_pay_amount(0)`), and
-  `0bb7e634` added the soyo-skill arming writes, but the card never invokes the
-  armed body itself (`invoke_entry_paid` / `DiceRollPlan` / `MoveAfter`), so the
-  teleport only resolves when the soyo skill is separately placed.
+- **status**: **closed** — `ctx::extra_of` (a guest scan of `field_instances`,
+  no import) now tells the card whether the seat has its own 雨中祈晴 row.
+  When it does not, `cancel_pay_skill` (`haruhikage.rs:307-325`) opens
+  `skill.soyoCrychic.borrowed`, and the card's own `DiceRollPlan` / `MoveAfter`
+  entries invoke the skill's declared `plan` / `after` bodies through
+  `invoke_entry_paid`; the skill's entries stand down on the same latch, so one
+  arm is consumed exactly once. Tests
+  `haruhikage_borrowed_soyo_arms_the_teleport_without_the_skill` and
+  `soyo_crychic_owns_the_arm_while_placed`.
 - **kind**: ABI defect
 - **class**: B
 - **severity**: medium
 - **suggested batch**: crystal/marker accounting
-- **locations**: `rules/cards/card-crychic/src/haruhikage.rs:286-295`
+- **locations**: `rules/cards/card-crychic/src/haruhikage.rs:307-325`
 
 ## DRAW-OUT-01 — 「受到抽卡效果」 includes self-caused out-of-turn draws?
 - **kind**: rulebook divergence
@@ -1031,8 +1042,12 @@ line-break join below.
   already matches the sheet (TILE-01 t05 fixed).
 
 ### W3-DISP-01 residual `.text()` line-break joins (display only)
-- **status**: nanami_effort (`:52`) and here_the_world (`:61-64`, an `items`
-  list rendered one `<li>` per line) are fixed. `tomorrows_door` remains.
+- **status**: **closed** — nanami_effort (`:52`) and here_the_world
+  (`:61-64`, an `items` list rendered one `<li>` per line) were already fixed;
+  the `tomorrows_door` line break before 「（1）效果的序列」 is restored at
+  `tomorrows_door.rs:50` and pinned by
+  `webui/src/core/cards.test.ts` (the (1)(2)(3) blank lines are the `items`
+  row separation).
 - **class**: A
 - **severity**: low
 - **locations**
@@ -1166,11 +1181,6 @@ or moves a 「…」 clause, and a “...” proper name that fails to resolve.
   linked.
 - `通用:该清CP了` — the "a copy is still in play" play gate is a 2026-10-07 user
   ruling attached to a `[特]` the sheet no longer carries (`clear_cp.rs:91-93`).
-- `PP:再次闪耀`（2）— 「[共鸣]记录一个此卡未记录的颜色」 has no 同色地契
-  restriction. **partial**: the board-wide `unrecorded_colors()` now serves the
-  record (`shine_again.rs:107-124,207-210`), so the old over-restriction is
-  gone; still open is which deed when several match for 「÷5」 (code takes
-  `max`, `:148-158`).
 - `PP:练习生解密指南` build-off layers — `set_build_discount(1000*n, 1)` +
   peel-1 gives −3000 total at n=2; neither pure reading of the quoted status
   「下次盖房的价格减少1000（可溢出），盖房后减少1层」 (`trainee_guide.rs:205-220`).
@@ -1181,8 +1191,9 @@ or moves a 「…」 clause, and a “...” proper name that fails to resolve.
 job tmp `wave2-{a,b,c}.md`. **32 new findings** (5 high, 8 medium, rest low).
 Display text / quoted names were clean on all 15 — the problems are behavioral.
 The 2026-11-06 sweep closed 7 of these (LOY-C eve_bushido, BLACK-01,
-GUERRILLA-01, TOMORI-03, GUERRILLA-02, RANDOM-01, WAIT-01) and left
-MUSTBUY-02 and the 再次闪耀 colour half partial; the rest stay open.
+GUERRILLA-01, TOMORI-03, GUERRILLA-02, RANDOM-01, WAIT-01); the 再次闪耀
+colour half (the ÷5 deed pick) and MUSTBUY-02 are now closed too; the rest
+stay open.
 
 ## High
 

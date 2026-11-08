@@ -249,8 +249,13 @@ that holds the card and returns `false` when none does.
 | `ruleset_inspection_end` | `(player, shuffle)` | released count | none | releases leftovers |
 | `ruleset_reveal_pile` | `(player, pile, reason_ptr, reason_len)` | — | none | publishes the pile's ids |
 | `ruleset_reveal_card` | `(player, card_ptr, card_len, reason_ptr, reason_len)` | — | none | publishes one id |
+| `ruleset_persona` | `(player, buf, cap)` | postcard `String` | none | the seat's character card (v120, op 495) |
 
 `count` is clamped to the deck length. `public` is `0/1`.
+
+`ruleset_persona` is the 「角色卡堆」 read (mutsumi 状态2): the seat's
+character-card name, the same spelling `persona_is` matches. Guest wrapper
+`bandori_std::persona`; it is a plain read with no window.
 
 `reason` is the `log.*` line shown with the reveal (a postcard `Msg`, the same
 encoding `place_card`'s note uses). A **public inspection's** auto-reveals use
@@ -844,6 +849,9 @@ the newest note, matching the tree's newest-first block):
 ///    frames are saved); RECORD_VERSION unchanged.
 ```
 
+**Later additions.** v120 adds the character-card read `ruleset_persona`
+(op 495, mutsumi 状态2) — additive, no id renumbered, SAVE / RECORD unchanged.
+
 **Renumbering rule.** Sibling drafts share a base; each reserves its row in
 the README. Under the README order this group lands twelfth, after G09
 (126–130) and G10 (131), so its rows are kinds 132–133 and ops 451–454. If it
@@ -885,6 +893,8 @@ invisible to `ruleset-tests`).
 | 2 | `pp.rs::a_published_deck_list_follows_the_pile` — a card taken out after the reveal leaves `reveal.deck` (fixture `TEST:lookKeep`) |
 | 2 | `pp.rs::a_card_kept_after_the_look_stays_listed_once` — public look, end, keep, then halt: each looked card appears once in the overlay and the keep lands in the hand |
 | 1 | `ako.rs::ako_flip_release_does_not_refill` also asserts `look_hold` is clear after the routine — a skill-press look has no filing of its own |
+| 2 | `mujica.rs::mutsumi_cover_records_the_last_hand_player` — the pile read borrows the last hand player's character card as a display cover, and clears it on state exit |
+| 2 | `mujica.rs::mutsumi_latch_tracks_any_player` — the latch names any seat, and her own play re-latches to her |
 
 ABI level: `crates/game-rules/tests/kind_table_pin.rs` (132/133 in its
 `named` list), `crates/game-rules/tests/live_match.rs` (`inspected` raised

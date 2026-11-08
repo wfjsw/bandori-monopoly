@@ -872,7 +872,12 @@ use crate::intern::NameId;
 ///    tells the engine the def's name is a rule, not a card, so a card area
 ///    (hand / draw pile / discard) drops the name instead of filing it
 ///    (`CardRules::rule_ids`, `World::note_non_card`).
-pub const ABI_VERSION: i32 = 119;
+///
+/// v120: **character-card pile read.** `ctx::persona(player_id) -> String`
+///    (import `ruleset_persona`, op 495) is the character card of a seat, the
+///    same spelling `persona_is` matches; mutsumi 状态2 borrows the last
+///    player's card through it. No id renumbered. SAVE / RECORD unchanged.
+pub const ABI_VERSION: i32 = 120;
 /// v108: **stage folds and rent / settle stages (MONEY-01)**. The amount
 ///    stages no longer apply one responder after the other: every responder of
 ///    an add stage reads the **stage input** and its deltas are summed, every

@@ -1889,6 +1889,65 @@ fn shine_again_rescue_on_short_pay() {
     .expect("C-PP-shine-again-01");
 }
 
+/// C-PP-shine-again-01b -- several same-colour deeds: the owner picks which one,
+/// and the ÷5 base is the picked deed's price, not the dearest.
+#[test]
+fn shine_again_deed_pick_when_several_match() {
+    let mut t = Table::vanilla(2);
+    t.place_raw(0, "PP:再次闪耀");
+    // Two deeds of the same colour (group 7): 天文馆 (tile 2, price 2600) and
+    // 富士见坂 (tile 11, price 600). P1 owns 江户川公园 (tile 7, rent 140).
+    t.own(0, &[2, 11]);
+    let money0 = 50;
+    t.set_money(0, money0);
+    t.own(1, &[7]);
+    t.set_houses(7, 0);
+    t.begin_turn(0);
+    t.set_pos(0, 5);
+    t.dice(&[2]);
+    t.roll(0).expect("roll rejected");
+    let mut saw_colour = false;
+    let mut saw_deed = false;
+    while t.prompt().is_some() {
+        let p = t.expect_prompt();
+        if p.title.key().contains("shine_again_deed_title") {
+            saw_deed = true;
+            assert_eq!(p.kind, "tile", "the deed pick is a tile ask: {:?}", p.items);
+            assert!(p.items.contains(&"2".to_string()), "{:?}", p.items);
+            assert!(p.items.contains(&"11".to_string()), "{:?}", p.items);
+            t.answer_tile(0, 11).expect("answer deed");
+        } else if p.title.key().contains("shine_again_title")
+            || p.title.key().contains("shine_again_ask")
+        {
+            // The colour ask: only group 7 is unrecorded.
+            saw_colour = true;
+            t.answer(0, 0).expect("answer colour");
+        } else if t.counteract_offered("PP:再次闪耀") {
+            t.counteract(0, "PP:再次闪耀").expect("counteract refused");
+        } else {
+            t.decline();
+        }
+    }
+    assert!(
+        saw_colour,
+        "C-PP-shine-again-01b: colour ask never offered: money={} pos={} keys={:?} prompt={}",
+        t.money(0),
+        t.pos(0),
+        t.recent_keys(30),
+        t.dump_prompt()
+    );
+    assert!(saw_deed, "C-PP-shine-again-01b: deed pick never offered");
+    // 600 / 5 = 120 rescue, then rent 140: 50 + 120 - 140 = 30. The dearest
+    // deed (2600) would have given 50 + 520 - 140 = 430.
+    assert_eq!(
+        t.money(0),
+        30,
+        "the picked deed (600) prices the rescue: events {}",
+        t.recent_keys(20).join(", ")
+    );
+    assert!(fans(&t, 0).0 >= 1, "the book also grants 1 positive fan");
+}
+
 // ============================================================ maya exclusive
 
 /// C-PP-maya-inf-02 -- after a draw with crystals < 4, +1 crystal on the card.

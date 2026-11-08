@@ -182,6 +182,7 @@
   "mutsumi_left": "Hand ≤1 -- left state 2",
   "mutsumi_title": "Born Actor",
   "mutsumi_two": "Entered state 2",
+  "mutsumi_cover": "Born Actor: borrows {{card}}'s character card",
   "mutsumi_crychic_ask": "Name which player?",
   "mutsumi_crychic_fixed": "This move's roll is pinned at {{n}}",
   "mutsumi_crychic_gain": "Exquisite Doll: +1 fire pot",

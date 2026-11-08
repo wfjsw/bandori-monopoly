@@ -144,18 +144,47 @@ fn pay_choose(player_id: i32) -> card_sdk::Asked {
         &options,
     )?;
     let g = colors[pick.min(colors.len() - 1)];
-    ctx::set_prop(PROP_COLORS, ctx::prop(PROP_COLORS) | (1 << g));
-    // TODO(规则书)（[拥有者]拥有的1个同色地契的购买价格）: the book does not say which deed when several
-    // in the colour match -- we take the dearest.
-    let mut best = 0;
-    for t in ctx::owned_tiles(player_id) {
-        if ctx::is_buyable(t) && ctx::tile_group(t) == g {
-            let p = ctx::tile_price(t);
-            if p > best {
-                best = p;
-            }
+    // 规则书[持续]（1）: 「[拥有者]拥有的1个同色地契」 -- when several deeds in the
+    // colour match, the owner picks which one; with a single candidate there is
+    // nothing to ask. The answer is a tile id (`ask_tiles`), so the re-run after
+    // the prompt lands the same deed.
+    let candidates: Vec<i32> = ctx::owned_tiles(player_id)
+        .into_iter()
+        .filter(|&t| ctx::is_buyable(t) && ctx::tile_group(t) == g)
+        .collect();
+    let mut tile = *candidates.first().unwrap_or(&-1);
+    if candidates.len() > 1 {
+        let labels: Vec<Msg> = candidates
+            .iter()
+            .map(|&t| Msg::new(key!("shine_again_deed")).tile("tile", t))
+            .collect();
+        let prices: Vec<i32> = candidates.iter().map(|&t| ctx::tile_price(t)).collect();
+        // Bot hint: the dearest candidate (the old `max` pick).
+        let ai = candidates
+            .iter()
+            .enumerate()
+            .max_by_key(|&(_, t)| ctx::tile_price(*t))
+            .map(|(i, _)| i as i32)
+            .unwrap_or(0);
+        let picked = ctx::ask_tiles(
+            player_id,
+            &Msg::new(key!("shine_again_deed_title")),
+            &Msg::new(key!("shine_again_deed_ask")),
+            &candidates,
+            &labels,
+            &prices,
+            ai,
+        )?;
+        // `ask_tiles` answers a tile id, -1 for 「不选」 -- the `contains` fallback
+        // also keeps a host answer that is an option index total.
+        if candidates.contains(&picked) {
+            tile = picked;
         }
     }
+    // The colour bit is written only after the deed ask: the body re-runs from
+    // the top after every prompt, and `unrecorded_owned_colors` would otherwise
+    // drop `g` on the re-run (`colors` indexes it).
+    ctx::set_prop(PROP_COLORS, ctx::prop(PROP_COLORS) | (1 << g));
     // Dict writes (`ctx::state`) do not open a `markerGain` [反击] window, so this
     // grant is safe nested in the pay pipeline.
     let _ = fans::grant(player_id, 1, 0)?;
@@ -169,7 +198,7 @@ fn pay_choose(player_id: i32) -> card_sdk::Asked {
     //   body is not re-entered past it -- everything after `ctx::gain`
     //   (the recorded colour and the fan here) is dropped, so the gain must
     //   stay raw until the pay-choose drive resumes its body.
-    let money = best / 5;
+    let money = if tile >= 0 { ctx::tile_price(tile) / 5 } else { 0 };
     if money > 0 {
         ctx::gain_raw(
             player_id,

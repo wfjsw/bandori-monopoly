@@ -135,3 +135,21 @@ test("a counterReason is a clause of the card's own prose, not a new sentence", 
     .map((c) => c.id);
   assert.deepEqual(off, []);
 });
+
+// W3-DISP-01: Tomorrow's Door (2) is printed across two lines -- the break sits
+// before 「（1）效果的序列」 (docs/rulebook/cards.json `PPP:Tomorrow's Door`).
+// Display only: the flat `\n` must survive the export, and the clause tail must
+// still be whole.
+test("Tomorrow's Door keeps its printed line break", () => {
+  if (!displayReady) return;
+  const text = display.cards["PPP:Tomorrow's Door"]?.text ?? "";
+  assert.ok(text.length > 0, "PPP:Tomorrow's Door must be in the display export");
+  assert.ok(
+    text.includes("到此卡\n（1）效果的序列"),
+    "the (2) clause must break before 「（1）效果的序列」",
+  );
+  assert.ok(
+    text.includes("大阪中之岛公园"),
+    "the flat text must keep the clause tail (a whitespace-stripping regression)",
+  );
+});

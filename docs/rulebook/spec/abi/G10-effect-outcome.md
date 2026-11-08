@@ -152,22 +152,22 @@ Book (`PPP:Tomorrow's Door`):
 > （3）此卡在自身游玩区域时[拥有者]以外的玩家在[拥有者]拥有的格子或梦开始的地方[结算]时额外支付[拥有者]星之鼓动山丘上房子数量×100的资金。
 
 Current (`rules/cards/card-ppp/src/tomorrows_door.rs`): the tax has two halves
-— a `paySplitAdd` add to the rent payment (`pay_add`) and a `settleBody`
-entry for the shapes no rent payment carries (`settle_body`, guarded by
-`trigger::cancelled()`). The `settleBody` half is wrong in the two directions
-the card's own TODOs name:
+— a `paySplitAdd` add to the rent payment (`pay_add`) and an
+`Action::SettleAfter` entry for the shapes no rent payment carries
+(`settle_after`, guarded by `tax_due_guard`). The `SettleAfter` half is wrong in
+the two directions the card's own TODOs name:
 
-* `trigger::cancelled()` in the settleBody hook is the **settleBody link's**
-  cancellation, i.e. "someone else replaced the body" — so a body replacer
-  (`rules/cards/card-general/src/parking_space.rs`) that runs *before* Door's
-  hook drops the tax, although the settle still resolves and the book still
-  charges it.
+* `trigger::settle_paid()` in the `SettleAfter` hook answers "was the rent
+  already paid", not "did the settle run": a body replacer
+  (`rules/cards/card-general/src/parking_space.rs`) leaves `settle_paid` false
+  and the hook charges, so the removed rent's own surcharge is still taken, but
+  the hook cannot tell a replaced body from an ordinary one.
 * Whether rent ran is guessed from `mortgaged_of(at)`; a body-replaced settle
   on a mortgaged tile therefore charges or not by hook order rather than by
   whether rent was actually paid.
 
-The settle-body stage cannot see a fact decided *after* it, and `settleAfter`
-cannot see whether rent was paid. The card needs the settle's own outcome
+The `Action::SettleAfter` stage cannot see a fact decided *before* it, and the
+settle-body stage cannot see whether rent was paid. The card needs the settle's own outcome
 bits. G02's `settle_outcome()` answers only `Settled` vs not and cannot say
 "body replaced" — it is `Cancelled` for a replaced body too
 (`play.rs:2758-2762`).

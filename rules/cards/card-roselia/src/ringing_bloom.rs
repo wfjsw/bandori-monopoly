@@ -25,13 +25,15 @@ pub const RINGING_BLOOM: CardDef = CardDef::new(
             None,
             pay_after)),
         // 规则书（2）: 「视为」 is continuous -- it tracks the max as houses move,
-        // so the fall re-runs the same view as the rise.
+        // so the fall re-runs the same view as the rise. The write may come from
+        // any seat; what matters is that the tile is the owner's (`actor` is the
+        // raiser, so it cannot be used here).
         On::Action(Action::HouseAdded(
-            "card.placed && actor == owner",
+            "card.placed && tile.owner == owner",
             None,
             recompute_view)),
         On::Action(Action::HouseRemoved(
-            "card.placed && actor == owner",
+            "card.placed && tile.owner == owner",
             None,
             recompute_view)),
         // 规则书（2）: 「你的所有格子」 -- a tile acquired while the card is placed
@@ -41,8 +43,25 @@ pub const RINGING_BLOOM: CardDef = CardDef::new(
             "card.placed && actor == owner",
             None,
             recompute_view)),
-        // Any removal route disarms what the card armed (the raise names the
-        // discarded card; `card.placed` is already false here). Silent.
+        // 规则书（2）: the 「视为」 view and every half-charge end wherever the
+        // card goes -- a bounce, a banish, a deck return and the card's own
+        // discard alike. `zoneLeft` runs on the still-live row (G08 I3), so
+        // `card.placed` answers here. Silent: it is not a question.
+        On::Action(Action::ZoneLeft("card.placed", None, on_zone_left)).silent(),
+        // 规则书（2）: a `set_owner` gift moves a tile out of 「你的格子」 and out
+        // of 「受此效果影响获得额外房屋数的格子」, so the half must follow the
+        // owner. `ownerSet` is an effect; the hook runs only after the
+        // counteraction round has let the write land (a cancelled write runs
+        // no hook). Silent.
+        On::Action(Action::Effect(
+            "card.placed",
+            Some(owner_set_guard),
+            on_owner_set,
+        ))
+        .silent(),
+        // The card's own discard, kept for the counted view (an idempotent
+        // backstop to the `zoneLeft` hook); the half-charges are the hook's.
+        // The raise names the discarded card; `card.placed` is false here.
         On::Action(Action::Discarded("trigger_card == card.id", None, on_discarded)).silent(),
     ],
 )
@@ -112,17 +131,15 @@ fn play(player_id: i32) -> card_sdk::Asked {
 
 /// 规则书（2）: 「你的所有格子上的房屋数视为与你房屋数最多的格子等同，但受此
 /// 效果影响获得额外房屋数的格子收费减半」 -- recompute the counted max and the
-/// half-charge set. Called at play, on every `HouseAdded` and on a `Bought`, so
-/// the 「视为」 tracks the max as houses rise and reaches newly acquired tiles.
+/// half-charge set. Called at play, on every `HouseAdded`, `HouseRemoved` and
+/// `Bought`, so the 「视为」 tracks the max as houses move either way and
+/// reaches newly acquired tiles.
 ///
-/// TODO(规则书)（2）: `HouseRemoved` now re-runs the view, but a half-charge on a
-///   tile that **leaves** its owner keeps standing (`RENT_FACTOR` is a
-///   board-tile prop, not a per-owner one), and the removal's owner is the
-///   tile's owner at write time -- a razed tile of another seat re-runs the
-///   card owner's view, which is harmless but does not clear the old tile.
-///   An ownership change that raises no `bought` (`ctx::set_owner`: gift/swap)
-///   leaves a gained tile un-halved until the next build, though the
-///   owner-wide `RENT_HOUSES` view already lifts it.
+/// Ownership leaving the owner does not go through here: `zoneLeft` disarms
+/// every half when the card leaves, and an `ownerSet` re-runs this view against
+/// the post-write tile set. TODO(规则书)（2）: a plain **sale** uses
+/// `assign_deed`→`set_tile_owner` with no effect event, so a sold tile keeps
+/// its half until the next view (play/build/raze). Not claimed covered.
 fn apply_view(player_id: i32) {
     let max_h = counted_max(player_id);
     // Written unconditionally: a max that drops back to 0 (every house razed)
@@ -148,12 +165,83 @@ fn recompute_view(player_id: i32) -> card_sdk::Asked {
     Ok(())
 }
 
-/// The card left play: clear the counted max and every half-charge it armed.
-/// Nothing is recomputed -- the card is gone.
-fn on_discarded(player_id: i32) -> card_sdk::Asked {
+/// The card left the field through `zoneLeft` -- the one hook every removal
+/// route crosses. The 「视为」 prop rides this instance and dies with it; the
+/// half-charges are board-tile props and are cleared here by hand. The row is
+/// still live at `zoneLeft` (G08 I3), so `owned_tiles` reads the same set the
+/// view armed. Nothing is recomputed -- the card is gone.
+fn on_zone_left(player_id: i32) -> card_sdk::Asked {
     ctx::set_prop(prop::RENT_HOUSES, 0);
     for &t in &ctx::owned_tiles(player_id) {
+        if ctx::is_deed(t) {
+            continue;
+        }
         ctx::set_tile_prop(t, prop::RENT_FACTOR, 0);
+    }
+    Ok(())
+}
+
+/// The card's own discard: the counted view ends too (idempotent with the
+/// `zoneLeft` hook). The half-charges belong to that hook.
+fn on_discarded(_player_id: i32) -> card_sdk::Asked {
+    ctx::set_prop(prop::RENT_HOUSES, 0);
+    Ok(())
+}
+
+/// Effect index `i`'s owner change as `(tile, new owner)`, if it is an
+/// `ownerSet` with a tile.
+fn owner_set(i: i32) -> Option<(i32, i32)> {
+    let t = ctx::effect::tile(i);
+    (t >= 0 && ctx::effect::kind(i) == TriggerKind::OwnerSet)
+        .then(|| (t, ctx::effect::value(i)))
+}
+
+/// Does any declared `ownerSet` move a tile to or away from this owner? The
+/// write is applied only after the trigger settles, so `tile_owner` is still
+/// the pre-write owner: `== owner` is a loss, `value == owner` a gain.
+fn owner_set_guard(owner: i32) -> bool {
+    (0..ctx::effect::count()).any(|i| {
+        owner_set(i).is_some_and(|(t, to)| {
+            if to == owner {
+                ctx::tile_owner(t) != owner
+            } else {
+                ctx::tile_owner(t) == owner
+            }
+        })
+    })
+}
+
+/// 规则书（2）: an `ownerSet` changes which tiles are 「你的格子」 and which of
+/// them the view lifts. Run the view against the **post-write** set (the lost
+/// tiles dropped, the gained ones added); the write itself lands after the
+/// hook, so neither list is in `owned_tiles` yet.
+fn on_owner_set(owner: i32) -> card_sdk::Asked {
+    let mut gained = alloc::vec::Vec::new();
+    let mut lost = alloc::vec::Vec::new();
+    for i in 0..ctx::effect::count() {
+        let Some((t, to)) = owner_set(i) else {
+            continue;
+        };
+        if to == owner {
+            gained.push(t);
+        } else if ctx::tile_owner(t) == owner {
+            lost.push(t);
+        }
+    }
+    for &t in &lost {
+        ctx::set_tile_prop(t, prop::RENT_FACTOR, 0);
+    }
+    let owned: alloc::vec::Vec<i32> = ctx::owned_tiles(owner)
+        .into_iter()
+        .filter(|t| !lost.contains(t))
+        .chain(gained)
+        .filter(|&t| !ctx::is_deed(t))
+        .collect();
+    let max_h = owned.iter().map(|&t| ctx::houses_of(t)).max().unwrap_or(0);
+    ctx::set_prop(prop::RENT_HOUSES, max_h);
+    for &t in &owned {
+        let factor = if ctx::houses_of(t) < max_h { 500 } else { 0 };
+        ctx::set_tile_prop(t, prop::RENT_FACTOR, factor);
     }
     Ok(())
 }
@@ -173,19 +261,11 @@ fn pay_after(player_id: i32) -> card_sdk::Asked {
     }
     // 规则书（3）: 「X为你收费格上的房屋数」 -- the **counted** value (「视为」),
     // i.e. what the rent table was read at, not the standing houses. A read of
-    // the standing houses makes X = 0 on the very tiles (2) lifted.
+    // the standing houses makes X = 0 on the very tiles (2) lifted. Read before
+    // `set_dest`, while the card and its counted view are still live.
     let x = ctx::rent_houses_of(tile);
-    // Disarm the half-charge before leaving: the 「视为」 ends with the card
-    // (the `RENT_HOUSES` prop rides this instance), and 「受此效果影响获得额外
-    // 房屋数的格子收费减半」 ends with it. TODO(规则书)（2）: a removal path
-    // other than this discard leaves the tile props armed; the counted value
-    // itself still ends (gone with the card).
-    for &t in &ctx::owned_tiles(player_id) {
-        if ctx::is_deed(t) {
-            continue;
-        }
-        ctx::set_tile_prop(t, prop::RENT_FACTOR, 0);
-    }
+    // The disarm is not repeated here: the leave crosses `zoneLeft`, which
+    // clears the counted view and every half-charge for *all* removal routes.
     ctx::set_dest(ctx::Dest::Graveyard, card_sdk::abi::ZoneChangeCause::Effect);
     ctx::log(
         player_id,
@@ -239,4 +319,16 @@ pub fn recompute_view_kani(player_id: i32) -> card_sdk::Asked {
 #[inline(always)]
 pub fn on_discarded_kani(player_id: i32) -> card_sdk::Asked {
     on_discarded(player_id)
+}
+
+#[cfg(kani)]
+#[inline(always)]
+pub fn on_zone_left_kani(player_id: i32) -> card_sdk::Asked {
+    on_zone_left(player_id)
+}
+
+#[cfg(kani)]
+#[inline(always)]
+pub fn on_owner_set_kani(player_id: i32) -> card_sdk::Asked {
+    on_owner_set(player_id)
 }

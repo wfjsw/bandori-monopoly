@@ -80,7 +80,7 @@ face-down/immune untracked, `add_counter_at` ignores uid, `stun_of` aliases
 | C-MUJICA-初华技能-02 | 「每当你经过CiRCLE的回合结束后…」 | PROTOCOL-LEVEL | — | — | multi-turn history | — |
 | C-MUJICA-初华技能-03 | 「状态2：…收取200…额外移动1d6」 | PROTOCOL-LEVEL | — | — | multi-walk; `plan::set_extra_steps` stub | OPEN-触发结算 |
 | C-MUJICA-睦技能-01 | 「每6回合…手牌数为5…状态2」 | PROVEN (gate arith) | `mutsumi_state2_gate_is_hand_exactly_5` | see run table | six-turn counter is multi-turn | — |
-| C-MUJICA-睦技能-02 | 「覆盖于自己角色卡上…」 | PROTOCOL-LEVEL | — | — | overlay machinery TODO | — |
+| C-MUJICA-睦技能-02 | 「覆盖于自己角色卡上…」 | PROTOCOL-LEVEL | `mutsumi_cover_records_the_last_hand_player`, `mutsumi_latch_tracks_any_player` (TT) | see run table | identity-only cover; new op `persona` (495), no Kani harness | — |
 | C-MUJICA-祥子技能-01 | 「经过…转移…停留，眩晕…1500」 | PROTOCOL-LEVEL | — | — | pass-hook + transfer | — |
 | C-MUJICA-祥子技能-02 | 「获得一个火罐（…上限3）」 | PROVEN (cap arith) | `sakiko_fire_cap_is_three` | see run table | — | — |
 | C-MUJICA-祥子技能-03 | 「保留至多一张手牌…自动打出…」 | PROTOCOL-LEVEL | — | — | auto-play | — |

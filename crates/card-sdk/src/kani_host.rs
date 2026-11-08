@@ -511,6 +511,7 @@ pub enum Op {
     world_snapshot = 492,
     world_restore = 493,
     world_snapshot_drop = 494,
+    persona = 495,
 }
 
 /// Six i32 wire slots, matching the ABI's arg convention.

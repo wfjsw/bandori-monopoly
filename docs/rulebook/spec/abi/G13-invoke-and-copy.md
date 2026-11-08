@@ -206,6 +206,12 @@ The implementation must hold:
   `Filter` / `SettleAfter` hooks do not dispatch. The borrower must therefore
   carry every latch and every post-settle clear the body would have left to
   those hooks (§7.2).
+  A second worked example is `CRYCHIC:春日影` (2) borrowing 雨中祈晴: the rent
+  cancel and the arm are the skill's, and the *armed* plan/after bodies are run
+  by the borrower through `invoke_entry_paid(…, "plan" / "after")` because the
+  skill's own field row is not there to dispatch. The borrower opens
+  `skill.soyoCrychic.borrowed` and the skill's own entries gate on it, so
+  exactly one of the two consumes the arm; the borrowed `after` clears it.
 * **Context.** `trigger.player_id` is the mover and `trigger.tile` is the
   abandoned landing — the borrowed clause reads both. `trigger.card` /
   `trigger.cards` name the borrowed card, so 「该技能」 in the body resolves to
@@ -897,7 +903,7 @@ several places:
 | `Mor:（NNM）稍微努力了一下` (3) | 「视为发动你的（2）技能」 | `invoke_entry(…, "2")` — landed |
 | `CRYCHIC:（睦）从没有觉得...` (2) | 「立即执行乐队技能的（2）效果」 | `invoke_skill` — landed |
 | `CRYCHIC:（灯）内心的呐喊` (3) | 「使用一次高松灯（MyGO!!!!!）的（2）技能」 | **this item** |
-| `CRYCHIC:春日影` (2) | 「使用一次Crychic角色的技能」 | `play_card` + `PRESS` (`haruhikage.rs:109-127`) |
+| `CRYCHIC:春日影` (2) | 「使用一次Crychic角色的技能」 | press path `play_card` + `PRESS` (`haruhikage.rs:109-127`); a live 雨中祈晴 arm also invokes that skill's declared `plan` / `after` entries (`invoke_entry_paid`, `soyo_plan` / `soyo_after`), standing the owner's own row down on `skill.soyoCrychic.borrowed` |
 | `R:（纱夜）弹奏弹奏弹奏，继续弹奏` | 「视为使用一次此卡使用者的技能」 | announces only; the invoke is the TODO (`sayo_play.rs:58-68`) |
 | `HHW:梦幻的回礼` | 「自动使用一次你的乐队技能」 | copy |
 | `Mujica:（海铃）` | takes every band skill card | no run yet |

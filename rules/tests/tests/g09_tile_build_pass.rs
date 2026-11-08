@@ -941,6 +941,87 @@ fn g09_ringing_bloom_recomputes_on_raze() {
     );
 }
 
+/// A raze by **another** seat on the owner's tile is still the owner's view
+/// move: the fall re-runs it even though `actor` is the raiser.
+#[test]
+fn g09_ringing_bloom_raze_by_another_effect_clears_the_half() {
+    let mut t = Table::vanilla(2);
+    t.set_character_raw(0, "白金燐子");
+    t.own(0, &[SPACE, BLUE]);
+    t.set_houses(BLUE, 2);
+    t.set_houses(SPACE, 1);
+    t.give_play(0, BLOOM).unwrap();
+    drain(&mut t);
+    assert_eq!(t.tile_prop(SPACE, card_sdk::abi::prop::RENT_FACTOR), 500);
+    // P1 razes the p0-owned max tile down to Space's level.
+    t.begin_turn(1);
+    t.set_pos(1, BLUE);
+    t.give_play(1, "TEST:house_remove").unwrap();
+    drain(&mut t);
+    assert_eq!(t.houses(BLUE), 1, "the raze landed");
+    assert_eq!(
+        t.tile_prop(SPACE, card_sdk::abi::prop::RENT_FACTOR),
+        0,
+        "another seat's raze cleared the stale half: {:?}",
+        t.recent_keys(25)
+    );
+}
+
+/// `set_owner` takes the tile out of 「你的格子」; the half must go with it.
+#[test]
+fn g09_ringing_bloom_owner_change_disarms_the_half() {
+    let mut t = Table::vanilla(2);
+    t.set_character_raw(0, "白金燐子");
+    t.own(0, &[SPACE, BLUE]);
+    t.set_houses(BLUE, 2);
+    t.set_houses(SPACE, 1);
+    t.give_play(0, BLOOM).unwrap();
+    drain(&mut t);
+    assert_eq!(t.tile_prop(SPACE, card_sdk::abi::prop::RENT_FACTOR), 500);
+    // P0 sits on the lifted Space and gifts it away.
+    t.set_pos(0, SPACE);
+    t.give_play(0, "TEST:owner_set").unwrap();
+    drain(&mut t);
+    assert_eq!(t.st().owners[SPACE], 1, "the gift landed");
+    assert_eq!(
+        t.tile_prop(SPACE, card_sdk::abi::prop::RENT_FACTOR),
+        0,
+        "a tile leaving the owner is no longer lifted: {:?}",
+        t.recent_keys(25)
+    );
+}
+
+/// A bounce off the field (not a discard) ends the view and the half too.
+#[test]
+fn g09_ringing_bloom_half_ends_on_a_bounce() {
+    let mut t = Table::vanilla(2);
+    t.set_character_raw(0, "白金燐子");
+    t.own(0, &[SPACE, BLUE]);
+    t.set_houses(BLUE, 2);
+    t.set_houses(SPACE, 1);
+    t.give_play(0, BLOOM).unwrap();
+    drain(&mut t);
+    assert_eq!(t.tile_prop(SPACE, card_sdk::abi::prop::RENT_FACTOR), 500);
+    let uid = t
+        .field(0)
+        .into_iter()
+        .find(|f| f.card == BLOOM)
+        .expect("the bloom is placed")
+        .uid;
+    t.set_state(0, "TEST.drop.uid", uid);
+    t.set_state(0, "TEST.drop.dest", card_sdk::ctx::Dest::Hand as i32);
+    t.give_play(0, "TEST:drop").unwrap();
+    drain(&mut t);
+    assert!(!t.on_field(0, BLOOM), "{:?}", t.field_ids(0));
+    assert_eq!(
+        t.tile_prop(SPACE, card_sdk::abi::prop::RENT_FACTOR),
+        0,
+        "the bounce cleared the half: {:?}",
+        t.recent_keys(25)
+    );
+    assert!(t.hand(0).contains(&BLOOM.to_string()), "{:?}", t.hand(0));
+}
+
 #[test]
 fn g09_ringing_bloom_half_ends_when_the_card_leaves() {
     let mut t = Table::vanilla(2);

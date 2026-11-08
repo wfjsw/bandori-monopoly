@@ -559,10 +559,16 @@ scope.)
 * **ID:** `C-MUJICA-睦技能-02`
 * **Source:** `characters.json#若叶睦`
 * **Quote:** 「状态2：进入该状态后，你从角色卡堆拿取一张上一位打出过手牌的玩家的角色卡将其覆盖于自己角色卡上并获得其初始火罐，直至退出状态2；若回合结束时你的手牌小于等于1，退出状态2。」
-* **Effect:** overlay the last hand-player's character card (and its starting
-  fire pots); exit 状态2 at turn end with ≤1 card in hand.
-* **Rulings & OPEN:** untested (overlay machinery).
-* **Executable:** (none).
+* **Effect:** cover her character card with the last hand-player's (the
+  「角色卡堆」 read is `bandori_std::persona`) and overlay its starting fire
+  pots; exit 状态2 at turn end with ≤1 card in hand.
+* **Rulings:** the cover is identity-only — `persona_is` / `in_group` see the
+  borrowed name, the skill binding and its hook stay hers, and the borrowed
+  seat keeps its own card. The borrowed **initial fire pots** are the real half
+  and ride `fire::overlay`; the cover prop is display state that dies with the
+  persona-skill instance. The latch names any seat (「上一位打出过手牌的玩家」).
+* **Executable:** `mutsumi_cover_records_the_last_hand_player`,
+  `mutsumi_latch_tracks_any_player` (rules/tests/tests/mujica.rs).
 
 ### C-MUJICA-祥子技能 -- 丰川祥子 / 请把你们的人生交给我
 

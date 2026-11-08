@@ -1892,6 +1892,10 @@ pub const SLOT_NAMES: &[&str] = &[
     "skill.takiCrychic.armed",
     // `soyo_crychic` teleport one-shot flag (`state::set(player_id, ARMED, 1)`).
     "skill.soyoCrychic.armed",
+    // `CRYCHIC:春日影` borrower stand-down -- the borrowing card runs the
+    // borrowed plan bodies itself while this is set (`state::set(player_id,
+    // BORROWED, 1)`).
+    "skill.soyoCrychic.borrowed",
     "skill.chuchu.builtThis",
     // `kaoru_thief` mark-turn latch (`ctx::set_slot(player_id, TURN, turn_key)`).
     "kaoru_thief_turn",

@@ -938,6 +938,93 @@ fn mutsumi_skill_bound() {
     assert!(t.skills(0).iter().any(|s| s.contains("若叶睦")));
 }
 
+const MUTSUMI_COVER: &str = "skill.mutsumiActor.cover";
+
+fn mutsumi_cover(t: &Table, who: usize) -> i32 {
+    t.field(who)
+        .into_iter()
+        .find(|f| f.card.starts_with("skill:若叶睦"))
+        .and_then(|f| f.props.get(MUTSUMI_COVER).copied())
+        .unwrap_or(0)
+}
+
+/// 状态2 「从角色卡堆拿取一张上一位打出过手牌的玩家的角色卡将其覆盖于自己角色卡上」
+/// -- the latch names the last **hand player**, not merely the owner, and the
+/// cover swaps the displayed persona until the state ends.
+#[test]
+fn mutsumi_cover_records_the_last_hand_player() {
+    let mut t = Table::new(&["若叶睦", "丰川祥子"]);
+    t.clean();
+    // P1's turn: the play latches seat 1 (stored 1-based = 2).
+    t.begin_turn(1);
+    drain(&mut t);
+    t.give_play(1, "TEST:echo").unwrap();
+    drain(&mut t);
+    assert_eq!(t.state(0, "skill.mutsumiActor.lastPlay"), 2);
+    // Her turn starts with exactly 5 cards and she answers yes.
+    t.set_hand(
+        0,
+        &[
+            "通用:GREAT",
+            "通用:安可",
+            "通用:GREAT",
+            "通用:安可",
+            "通用:GREAT",
+        ],
+    );
+    t.begin_turn(0);
+    let mut answered = false;
+    for _ in 0..10 {
+        let Some(p) = t.prompt() else { break };
+        if p.title.key().contains("mutsumi") {
+            t.answer_one(0).unwrap();
+            answered = true;
+            break;
+        }
+        let who = t.asked()[0];
+        let v = if p.kind == "tile" {
+            p.items.len() as i32
+        } else {
+            p.fallback
+        };
+        let _ = t.answer(who, v);
+    }
+    assert!(answered, "{}", t.dump_prompt());
+    drain(&mut t);
+    assert_eq!(t.state(0, "skillState"), 2);
+    assert_eq!(mutsumi_cover(&t, 0), 2, "the borrowed seat is marked");
+    assert_eq!(t.st().players[0].persona, "丰川祥子", "the cover displays");
+    // Hand <= 1 ends the state: the cover clears and her own card returns.
+    t.dice(&[1]);
+    t.roll(0).unwrap();
+    drain(&mut t);
+    t.set_hand(0, &["通用:GREAT"]);
+    t.end(0).unwrap();
+    drain(&mut t);
+    assert_eq!(t.state(0, "skillState"), 1);
+    assert_eq!(mutsumi_cover(&t, 0), 0, "the cover died with the state");
+    assert_eq!(t.st().players[0].persona, "若叶睦", "her card is back");
+}
+
+/// 「上一位打出过手牌的玩家」 is any seat: a rival's play latches, and her own
+/// later play re-latches to herself.
+#[test]
+fn mutsumi_latch_tracks_any_player() {
+    let mut t = Table::new(&["若叶睦", "丰川祥子"]);
+    t.clean();
+    t.begin_turn(1);
+    drain(&mut t);
+    t.give_play(1, "TEST:echo").unwrap();
+    drain(&mut t);
+    assert_eq!(t.state(0, "skill.mutsumiActor.lastPlay"), 2);
+    t.begin_turn(0);
+    drain(&mut t);
+    t.give_play(0, "TEST:echo").unwrap();
+    drain(&mut t);
+    assert_eq!(t.state(0, "skill.mutsumiActor.lastPlay"), 1);
+    assert_eq!(t.state(0, "skill.mutsumiActor.quiet"), 0);
+}
+
 // -- skill:丰川祥子:请把你们的人生交给我 ------------------------------
 
 #[test]

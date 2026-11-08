@@ -263,7 +263,7 @@ Filter::PaySplitAdd("card.placed && pay_is_rent && actor != owner && tile.id >= 
 `tile` is the payment's tile. 练习室里的风暴's remote 「收费」 is stamped with
 the owner's tile, so the surcharge folds into a settle on an unowned tile; and
 because the filter requires an owner, a settle on the unowned 梦开始的地方
-(which the clause also names) is missed unless `settle_body` catches it.
+(which the clause also names) is missed unless the `Action::SettleAfter` body catches it.
 
 Root cause **R7** (settle identity absent).
 
@@ -1200,7 +1200,7 @@ Before: `pay_is_rent && tile.id >= 0 && tile.owner == owner`.
 After:
 `actor != owner && (settle.owner == owner || settle.tile == tile_named('梦开始的地方'))`
 (no `pay_is_rent`; the clause is about a settle, and 梦开始的地方 is the
-unowned half of it). `settle_body` keeps its existing fallback.
+unowned half of it). The `Action::SettleAfter` entry keeps its existing fallback.
 
 ### 6.12 `anon_tokyo.rs:222`
 

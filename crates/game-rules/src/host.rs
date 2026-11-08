@@ -5925,6 +5925,13 @@ fn build_linker<W: CardWorld>(engine: &Engine) -> Result<Linker<HostState<W>>, E
     )?;
     l.func_wrap(
         m,
+        "persona",
+        |mut c: C<W>, player_id: i32, buf: i32, cap: i32| -> Result<i32, Error> {
+            hostfns::persona(&mut c, player_id, buf, cap).map_err(HostError::into_err)
+        },
+    )?;
+    l.func_wrap(
+        m,
         "group_skills",
         |mut c: C<W>, player_id: i32, buf: i32, cap: i32| -> Result<i32, Error> {
             hostfns::group_skills(&mut c, player_id, buf, cap).map_err(HostError::into_err)

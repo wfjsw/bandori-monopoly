@@ -392,7 +392,9 @@ pub fn no_expect_02_effects_ok(effects: &[Effect], player: i32) -> bool {
 // [反击] window — PROTOCOL-LEVEL for the window; the formula is pinned.
 // ===========================================================================
 
-/// Money leg = `purchase_price / 5` (integer division).
+/// Money leg = `picked_price / 5` (integer division). When several deeds share
+/// the recorded colour the owner picks one, so the caller passes the picked
+/// deed's price.
 pub fn shine_again_01_money(purchase_price: i32) -> i32 {
     purchase_price / 5
 }

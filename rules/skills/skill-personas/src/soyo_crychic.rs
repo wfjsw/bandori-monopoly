@@ -17,8 +17,8 @@
 //! the residual guard is gone.
 
 use bandori_std::ctx::{self, state};
-use card_sdk::abi::{ActionKind, FilterKind, MoveKind, Tile};
-use card_sdk::{key, Action, CardDef, Filter, Msg, On, PlanValue};
+use card_sdk::abi::MoveKind;
+use card_sdk::{key, Action, CardDef, Msg, On};
 
 /// The teleport is armed (0/1). Presence only -- the tile to teleport to rides
 /// in [`TILE`], so no value doubles as "nothing owed".
@@ -26,6 +26,11 @@ const ARMED: &str = "skill.soyoCrychic.armed";
 /// The tile 「触发此技能的那格」 to teleport back to. Only read while [`ARMED`]
 /// is set; tile 0 is a real tile, not "nothing".
 const TILE: &str = "skill.soyoCrychic.tile";
+/// Set by a **borrower** (`CRYCHIC:春日影`) that has no own soyo row to answer
+/// the armed latch for; an owning seat leaves it 0 and its own entries consume
+/// the arm. The same stand-down key as `skill.tomoriPoem.borrowed` — the two
+/// cards keep the spelling in sync (card-crychic does not depend on this crate).
+const BORROWED: &str = "skill.soyoCrychic.borrowed";
 
 pub const SOYO_CRYCHIC: CardDef = CardDef::new(
     "skill:长崎素世（CRYCHIC）:雨中祈晴",
@@ -48,19 +53,27 @@ pub const SOYO_CRYCHIC: CardDef = CardDef::new(
         // the armed one-shot (`actor == owner` on `DiceRollPlan`). The latch is a
         // CEL `slot` presence flag (`skill.soyoCrychic.armed` is in SLOT_NAMES),
         // so the condition alone decides and no residual guard remains.
-        On::Filter(Filter::DiceRollPlan(
-            "actor == owner && slot('skill.soyoCrychic.armed') != 0",
+        // An `Action` (not a `Filter`) so a borrower can run it through
+        // `invoke_entry`: only Action bodies are invocable. The `borrowed`
+        // stand-down keeps this seat's own entry from double-consuming an arm
+        // the borrower opened.
+        On::Action(Action::DiceRollPlan(
+            "actor == owner && slot('skill.soyoCrychic.armed') != 0 \
+             && slot('skill.soyoCrychic.borrowed') == 0",
             None,
             on_plan,
-        )),
+        ))
+        .id("plan"),
         // One-shot latch clear once the rewritten move has been taken. This is
         // a teleport plan, so `DiceRollAfter` never fires (no dice) -- `MoveAfter`
         // is the next event for both teleports and walks.
         On::Action(Action::MoveAfter(
-            "actor == owner && slot('skill.soyoCrychic.armed') != 0",
+            "actor == owner && slot('skill.soyoCrychic.armed') != 0 \
+             && slot('skill.soyoCrychic.borrowed') == 0",
             None,
             on_plan_after,
-        )),
+        ))
+        .id("after"),
     ],
 )
 .rule();
@@ -92,25 +105,27 @@ fn on_pay(player_id: i32) -> card_sdk::Asked {
 }
 
 /// 「下回合的主要移动变为传送至…那格」 -- consumed by the next plan. The latch
-/// is the entry's condition (`slot('skill.soyoCrychic.armed') != 0`).
-/// Pure: the teleport rides `PlanValue.move_kind` / `teleport_to` / `resolve`.
-/// The one-shot latch clear is [`on_plan_after`] on `MoveAfter` (teleports
-/// skip `DiceRollAfter`).
-fn on_plan(player_id: i32, mut v: PlanValue) -> PlanValue {
+/// is the entry's condition (`slot('skill.soyoCrychic.armed') != 0`). The plan
+/// is rewritten through `ctx::plan`, so a borrower's `invoke_entry` lands on
+/// the same plan the owner's own entry would. The one-shot latch clear is
+/// [`on_plan_after`] on `MoveAfter` (teleports skip `DiceRollAfter`).
+fn on_plan(player_id: i32) -> card_sdk::Asked {
     let t = state::get(player_id, TILE);
-    v.move_kind = Some(MoveKind::Teleport);
-    v.teleport_to = Some(Tile(t));
-    v.settles = Some(true);
+    ctx::plan::set_kind(MoveKind::Teleport);
+    ctx::plan::set_teleport_to(t);
+    ctx::plan::set_settles(true);
     ctx::log(
         player_id,
         &Msg::new(key!("soyo_crychic_moved")).tile("tile", t),
     );
-    v
+    Ok(())
 }
 
-/// Drop the one-shot [`ARMED`] latch once the teleport move has been taken.
+/// Drop the one-shot [`ARMED`] latch (and the borrower's [`BORROWED`] stand-down)
+/// once the teleport move has been taken.
 fn on_plan_after(player_id: i32) -> card_sdk::Asked {
     state::set(player_id, ARMED, 0);
+    state::set(player_id, BORROWED, 0);
     Ok(())
 }
 
@@ -125,8 +140,8 @@ pub fn on_pay_kani(player_id: i32) -> card_sdk::Asked {
 
 #[cfg(kani)]
 #[inline(always)]
-pub fn on_plan_kani(player_id: i32, v: card_sdk::PlanValue) -> card_sdk::PlanValue {
-    on_plan(player_id, v)
+pub fn on_plan_kani(player_id: i32) -> card_sdk::Asked {
+    on_plan(player_id)
 }
 
 #[cfg(kani)]

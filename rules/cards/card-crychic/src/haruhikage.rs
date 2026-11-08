@@ -44,6 +44,23 @@ pub const HARUHIKAGE: CardDef = CardDef::new(
         // §4.2). `Drawn` fires with the card already in hand (`wasm_rules.rs`
         // 「it is still in hand」), so 「手牌」 counts this card.
         On::Action(Action::Drawn("trigger_card == card.id", Some(assets_ready), on_drawn)),
+        // 规则书（2）: 「使用一次Crychic角色的技能」 -- when the borrowed 雨中祈晴
+        // armed a teleport, the borrower runs the skill's own plan/after bodies
+        // itself (the skill's entries stand down on the `borrowed` latch). The
+        // arm is gated on the latch, not on admission order, so the two cards
+        // can never both consume one arm.
+        On::Action(Action::DiceRollPlan(
+            "actor == owner && slot('skill.soyoCrychic.armed') != 0 \
+             && slot('skill.soyoCrychic.borrowed') != 0",
+            None,
+            soyo_plan,
+        )),
+        On::Action(Action::MoveAfter(
+            "actor == owner && slot('skill.soyoCrychic.armed') != 0 \
+             && slot('skill.soyoCrychic.borrowed') != 0",
+            None,
+            soyo_after,
+        )),
     ],
 )
 .props(&[(card_sdk::abi::prop::SONG, 1)]).meta(&card_sdk::meta::CardMeta::new()
@@ -58,6 +75,13 @@ pub const HARUHIKAGE: CardDef = CardDef::new(
         .fields(&[("group", r#"CRYCHIC"#), ("owner", "")]));
 
 const ID: &str = "CRYCHIC:春日影";
+/// 长崎素世（CRYCHIC）'s 雨中祈晴 -- the borrowed skill whose teleport plan/after
+/// bodies this card runs when the seat has no soyo row of its own.
+const SOYO: &str = "skill:长崎素世（CRYCHIC）:雨中祈晴";
+/// Borrower-set stand-down latch. The spelling is shared with
+/// `soyo_crychic.rs`; this crate does not depend on `skill-personas`, so the
+/// two must be kept in sync.
+const BORROWED: &str = "skill.soyoCrychic.borrowed";
 
 fn within5(player_id: i32) -> Vec<i32> {
     let pos = ctx::player_pos(player_id);
@@ -288,12 +312,44 @@ fn cancel_pay_skill(player_id: i32) {
     );
     trigger::set_pay_amount(0);
     // 规则书（2）: 「使你下回合的主要移动变为传送至触发此技能的那格」 -- the
-    // skill's own armed latch: the attached 长崎素世 skill consumes these two
-    // state keys in its `DiceRollPlan` / `MoveAfter` entries (soyo_crychic.rs).
+    // skill's own armed latch. An owning seat's attached 长崎素世 skill consumes
+    // these keys in its `DiceRollPlan` / `MoveAfter` entries; a borrower has no
+    // such row, so it opens the `borrowed` loan and runs the bodies itself.
+    // TODO(规则书)（使你下回合的主要移动变为传送至触发此技能的那格）: the latch keys
+    //   are private consts in soyo_crychic.rs -- keep the spellings in sync.
     ctx::state::set(player_id, "skill.soyoCrychic.tile", tile);
     ctx::state::set(player_id, "skill.soyoCrychic.armed", 1);
-    // TODO(规则书)（使你下回合的主要移动变为传送至触发此技能的那格）: the two state
-    //   keys are private consts in soyo_crychic.rs -- keep the spellings in sync.
+    if ctx::extra_of(player_id, SOYO) < 0 {
+        ctx::state::set(player_id, BORROWED, 1);
+        // No soyo row is left to dispatch the arm, so this card is the vehicle
+        // for it: place it and keep it in play until the after body disposes of
+        // it (the `even_lost` shape). A borrower with the skill placed lets the
+        // skill's own row run and the card goes to the discard pile as a used
+        // non-[持续] hand card.
+        ctx::set_dest(ctx::Dest::Field, card_sdk::abi::ZoneChangeCause::Effect);
+        ctx::place_card(
+            player_id,
+            ID,
+            &Msg::new(key!("haruhikage_pay_note")),
+        );
+    }
+}
+
+/// The borrowed skill's plan body: rewrite the plan through the skill's own
+/// declared entry `plan`, so the arm resolves without the skill being placed.
+fn soyo_plan(player_id: i32) -> card_sdk::Asked {
+    ctx::invoke_entry_paid(player_id, SOYO, "plan")?;
+    Ok(())
+}
+
+/// The borrowed skill's after body: run its `after` entry (it drops the
+/// `ARMED` / `BORROWED` latches), then clear the loan and dispose of this card
+/// (a used non-[持续] hand card goes to the discard pile).
+fn soyo_after(player_id: i32) -> card_sdk::Asked {
+    ctx::invoke_entry_paid(player_id, SOYO, "after")?;
+    ctx::state::set(player_id, BORROWED, 0);
+    ctx::to_discard(player_id, ID);
+    Ok(())
 }
 
 //
@@ -317,4 +373,16 @@ pub fn counteract_kani(player_id: i32) -> card_sdk::Asked {
 #[inline(always)]
 pub fn on_drawn_kani(player_id: i32) -> card_sdk::Asked {
     on_drawn(player_id)
+}
+
+#[cfg(kani)]
+#[inline(always)]
+pub fn soyo_plan_kani(player_id: i32) -> card_sdk::Asked {
+    soyo_plan(player_id)
+}
+
+#[cfg(kani)]
+#[inline(always)]
+pub fn soyo_after_kani(player_id: i32) -> card_sdk::Asked {
+    soyo_after(player_id)
 }

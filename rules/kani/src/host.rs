@@ -942,6 +942,7 @@ pub fn dispatch(op: Op, a: Args) -> i64 {
         Op::add_group_pool => arm_add_band_crystals(a),
         Op::group_skill => arm_band_skill(a),
         Op::persona_skill => arm_persona_skill(a),
+        Op::persona => arm_persona(a),
         Op::group_skills => arm_band_skills(a),
         Op::add_group_skill => arm_add_band_skill(a),
         Op::invoke_entry => arm_invoke_entry(a),
@@ -1962,6 +1963,27 @@ pub fn arm_cards_in(a: Args) -> i64 {
         card_sdk::native::write(a2, &encoded[..need as usize]);
         need as i64
     }
+}
+
+/// `persona` -- the seat's character card name id, 0 (none) while
+/// [`World::persona_id`] is 0.
+///
+/// Kani wire: two LE bytes of the interned name id (`buf == 0` is the probe),
+/// mirroring the `cfg(kani)` guest twin of [`bandori_std::persona`].
+pub fn arm_persona(a: Args) -> i64 {
+    let [a0, buf, cap, ..] = a;
+    let id = world::with_world(|w| w.persona_id[player_idx(a0)]);
+    if id == 0 {
+        return 0;
+    }
+    if buf == 0 {
+        return 2;
+    }
+    if cap < 2 {
+        return -1;
+    }
+    card_sdk::native::write(buf, &id.to_le_bytes());
+    2
 }
 
 pub fn arm_character_is(a: Args) -> i64 {
