@@ -35,8 +35,8 @@
 //!   prefix. `derived` is engine data and is not exported.
 //! * `counterReason` is read from the card's [`On::counter_reason_key`] -- the
 //!   「…时」 clause the counteraction prompt shows, as a **locale key** the
-//!   client resolves (`cards:<crate>.…` / `counter.*`). Several entries join
-//!   their keys with `\n`.
+//!   client resolves (`cards:<crate>.…` / `counter.*`). Several distinct keys
+//!   join with `\n`; a key repeated across links is emitted once.
 //! * Deterministic: every map is a `BTreeMap` (sorted keys), pretty JSON,
 //!   one trailing newline -- byte-stable across runs.
 //! * No argument prints the document to stdout. A path argument (or
@@ -145,7 +145,10 @@ fn counter_reason(card: &card_sdk::CardDef) -> String {
     let mut parts: Vec<&str> = Vec::new();
     for entry in card.on {
         if let Some(reason) = entry.counter_reason_key() {
-            if !reason.is_empty() {
+            // The same clause can hang on several links of one card (e.g. a
+            // payment link and a raw-loss link); the prompt reads them joined,
+            // so a repeated key must not repeat in the prompt.
+            if !reason.is_empty() && !parts.contains(&reason) {
                 parts.push(reason);
             }
         }

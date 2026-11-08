@@ -75,7 +75,7 @@
   "sunset_x": "即使夕阳落山：X = {{x}}",
   "tomoe_savior_bought": "{{who}} 从 {{from}} 那里收购了 {{tile}}（商店街的救世主）",
   "tomoe_savior_buy": "商店街的救世主：收购地契",
-  "tomoe_savior_when": "商店街地契被抵押时",
+  "tomoe_savior_when": "其他玩家抵押商店街地契时",
   "tomoe_savior_reason": "商店街的救世主",
   "tsugumi_can_ask": "掷骰按什么结算？",
   "tsugumi_can_choice_counter": "（1）【反击】使掷骰按理论极值结算",

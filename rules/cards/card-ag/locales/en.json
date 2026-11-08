@@ -75,7 +75,7 @@
   "sunset_x": "Even If the Sun Sets: X = {{x}}",
   "tomoe_savior_bought": "{{who}} bought {{tile}} from {{from}} (Savior of Shopping Street)",
   "tomoe_savior_buy": "Savior of Shopping Street: buy the deed",
-  "tomoe_savior_when": "when a shopping-street deed is mortgaged",
+  "tomoe_savior_when": "when another player mortgages a shopping-street deed",
   "tomoe_savior_reason": "Savior of Shopping Street",
   "tsugumi_can_ask": "Resolve the dice at which value?",
   "tsugumi_can_choice_counter": "(1) [Counteraction] force the dice to a theoretical extreme",

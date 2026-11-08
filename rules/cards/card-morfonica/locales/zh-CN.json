@@ -45,7 +45,7 @@
   "rui_devil_reason": "（Rui）正论恶魔",
   "secret_rainbow_boost": "秘密与青春的虹彩：支付 {{money}} 变为 {{n}}",
   "secret_rainbow_half": "秘密与青春的虹彩：支付 {{money}} 减半为 {{n}}",
-  "secret_rainbow_when": "你向学妹或同级生支付／学姐或同级生向你支付",
+  "secret_rainbow_when": "你向学妹或同级生支付时",
   "starry_night_ask_text": "支付几次 1,000？（每次放 1 个 [奇迹水晶]）",
   "starry_night_ask_title": "蝴蝶飞舞的星月夜",
   "starry_night_attack_ask": "你掷出了偶数：要 [消耗] 1,000，移除 {{who}} 的「蝴蝶飞舞的星月夜」上的一个奇迹水晶吗？（Ta 会获得 1,000）",
