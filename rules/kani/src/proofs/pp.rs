@@ -1600,7 +1600,7 @@ pub fn shine_again_01_rescue_iff() {
     let pre_fans = world::with_world(|ww| fans_pos_of(me as usize));
     invoke::unwrap_done(invoke::hook_only_idx(
         crate::card_id!("PP:再次闪耀"),
-        "PaySplitChoose",
+        "PaySplitChooseBefore",
         me,
     ));
     let post_fans = world::with_world(|ww| fans_pos_of(me as usize));

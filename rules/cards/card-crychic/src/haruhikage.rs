@@ -348,7 +348,15 @@ fn soyo_plan(player_id: i32) -> card_sdk::Asked {
 fn soyo_after(player_id: i32) -> card_sdk::Asked {
     ctx::invoke_entry_paid(player_id, SOYO, "after")?;
     ctx::state::set(player_id, BORROWED, 0);
-    ctx::to_discard(player_id, ID);
+    // The card rode the field as the arm's vehicle, so it is no longer in hand
+    // for the play tail to dispose of: take the live instance off play into the
+    // discard pile (a used non-[持续] hand card's destination).
+    let uid = ctx::extra_of(player_id, ID);
+    if uid >= 0 {
+        ctx::unplace_at(uid, ctx::Dest::Graveyard, card_sdk::abi::ZoneChangeCause::Effect);
+    } else {
+        ctx::to_discard(player_id, ID);
+    }
     Ok(())
 }
 

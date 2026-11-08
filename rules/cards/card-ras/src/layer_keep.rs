@@ -58,8 +58,15 @@ pub const LAYER_KEEP: CardDef = CardDef::new(
 
 const ID: &str = "RAS:（和奏瑞依）寄于指尖的执念";
 
-/// How many dice are kept.
+/// How many dice are kept, stored **1-based** (`count + 1`): the key then
+/// carries a written value from the first kept die on, and its `0` default
+/// means only "nothing was ever kept" rather than doubling as "zero kept".
 const SLOT_COUNT: &str = "layer_keep_count";
+
+/// The kept-dice count, decoded from the 1-based slot (`0` before the first).
+fn kept_count(player_id: i32) -> i32 {
+    (ctx::slot(player_id, SLOT_COUNT) - 1).max(0)
+}
 const SLOT_DICE: [&str; 8] = [
     "layer_keep_0",
     "layer_keep_1",
@@ -77,7 +84,7 @@ fn cant_play(player_id: i32) -> Option<Msg> {
     if !ctx::is_placed() {
         return None;
     }
-    if ctx::slot(player_id, SLOT_COUNT) < 1 {
+    if kept_count(player_id) < 1 {
         return Some(Msg::new(key!("layer_keep_no_die")));
     }
     // 规则书: 「在后续任意回合中消耗一个火罐以用于替代当回合的移动掷骰」
@@ -126,11 +133,12 @@ fn roll_after(player_id: i32) -> card_sdk::Asked {
         return Ok(());
     };
     // The kept-dice list; slots stand in for the per card list memory.
-    let n = ctx::slot(player_id, SLOT_COUNT);
+    let n = kept_count(player_id);
     if n >= 0 && (n as usize) < SLOT_DICE.len() {
         ctx::set_slot(player_id, SLOT_DICE[n as usize], die);
     }
-    ctx::set_slot(player_id, SLOT_COUNT, n + 1);
+    // New count `n + 1`, stored 1-based.
+    ctx::set_slot(player_id, SLOT_COUNT, n + 2);
     ctx::log(
         player_id,
         &Msg::new(key!("layer_keep_kept"))
@@ -144,7 +152,7 @@ fn roll_after(player_id: i32) -> card_sdk::Asked {
 /// placed-press branch of the merged Play entry.
 /// 「随后删去该骰点。可保留多个骰点。」
 fn use_die(player_id: i32) -> card_sdk::Asked {
-    let n = ctx::slot(player_id, SLOT_COUNT);
+    let n = kept_count(player_id);
     if n < 1 {
         return Ok(());
     }
@@ -187,7 +195,7 @@ fn use_die(player_id: i32) -> card_sdk::Asked {
     for i in 0..SLOT_DICE.len() {
         ctx::set_slot(player_id, SLOT_DICE[i], *kept.get(i).unwrap_or(&0));
     }
-    ctx::set_slot(player_id, SLOT_COUNT, kept.len() as i32);
+    ctx::set_slot(player_id, SLOT_COUNT, kept.len() as i32 + 1);
     // 规则书: 「消耗一个火罐以用于替代当回合的移动掷骰」
     // TODO(规则书)（用于替代当回合的移动掷骰）: `fixed_roll` is never one-shot
     // cleared -- it also feeds any later move roll of the same turn, while the

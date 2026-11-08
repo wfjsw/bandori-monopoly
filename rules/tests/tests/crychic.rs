@@ -393,6 +393,18 @@ fn haruhikage_borrowed_soyo_arms_the_teleport_without_the_skill() {
         0,
         "the loan is cleared"
     );
+    // The used non-[持续] hand card goes to the discard pile, not into a
+    // lingering field row.
+    assert!(
+        !t.on_field(0, "CRYCHIC:春日影"),
+        "the used card leaves play: {:?}",
+        t.field_ids(0)
+    );
+    assert!(
+        t.discard(0).iter().any(|c| c == "CRYCHIC:春日影"),
+        "the used card is discarded: {:?}",
+        t.discard(0)
+    );
 }
 
 /// The same borrow with the soyo skill actually placed: the owner's own row owns
@@ -457,6 +469,16 @@ fn soyo_crychic_owns_the_arm_while_placed() {
         t.state(0, "skill.soyoCrychic.borrowed"),
         0,
         "an own row never opens the loan"
+    );
+    assert!(
+        !t.on_field(0, "CRYCHIC:春日影"),
+        "the counteraction never lingers on the field: {:?}",
+        t.field_ids(0)
+    );
+    assert!(
+        t.discard(0).iter().any(|c| c == "CRYCHIC:春日影"),
+        "the used counteraction is discarded: {:?}",
+        t.discard(0)
     );
 }
 

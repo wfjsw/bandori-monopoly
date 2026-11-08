@@ -1262,6 +1262,16 @@ After:
 comparison to its `trig_settle_facts` bits for `body_replaced`; the G02 form is
 already correct for `Cancelled`/`PayerOut`.
 
+STATE-INIT-01: the paid / got / stop / expect record is per **instance**
+(`ctx::prop`, written only when a value takes one; nothing is pre-zeroed), so
+two placed copies no longer overwrite each other's per-player slots and the
+`trigger::tile()` check is only the raise-to-copy pin, not the storage
+disambiguator. The 「弃牌堆」 refund moves from `Discarded` to a `zoneLeft` hook
+(`card.placed && trigger_card == card.id`, destination `Graveyard`, and
+`trigger::instance() == ctx::self_uid()` because the `discarded` raise names the
+card, not the row) -- it runs on the still-live row, so the props are
+readable.
+
 ### 6.20 `vocal_too_hard.rs:22`
 
 Before: `"... && value >= 5000"`.

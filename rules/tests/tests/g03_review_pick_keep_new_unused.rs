@@ -55,5 +55,5 @@ fn probe_layer_keep_keep_new_banks_the_old_face() {
         5,
         "the card banks the unpicked old face on keep-new"
     );
-    assert_eq!(t.state(0, "layer_keep_count"), 1, "one die kept");
+    assert_eq!(t.state(0, "layer_keep_count"), 2, "one die kept (stored 1-based)");
 }

@@ -1388,7 +1388,7 @@ fn layer_press_contract() {
         drain(&mut t);
         let kept = rng.range(3, 12);
         t.place_raw(0, "RAS:（和奏瑞依）寄于指尖的执念");
-        t.set_state(0, "layer_keep_count", 1);
+        t.set_state(0, "layer_keep_count", 2); // 1-based: one kept die
         t.set_state(0, "layer_keep_0", kept);
         t.set_fire(0, 1, 1);
         t.skill(0, "RAS:（和奏瑞依）寄于指尖的执念")
@@ -1400,9 +1400,9 @@ fn layer_press_contract() {
         if t.charge(0) != 0 {
             return Err(format!("C-RAS-layer-03: fire {}, expected 0", t.charge(0)));
         }
-        if t.state(0, "layer_keep_count") != 0 {
+        if t.state(0, "layer_keep_count") != 1 {
             return Err(format!(
-                "C-RAS-layer-03: kept {}, expected 0",
+                "C-RAS-layer-03: count slot {}, expected 1 (zero kept, 1-based)",
                 t.state(0, "layer_keep_count")
             ));
         }

@@ -983,6 +983,11 @@ The `roll_after` entry changes from `Action::DiceRollAfter` to
 reads `roll_unused_face` and banks it. `use_die` calls
 `set_fixed_roll(die, roll_source::CHARGE)`.
 
+STATE-INIT-01: the kept-dice count slot is stored **1-based** (`count + 1`), so
+the key carries a written value from the first kept die and never needs a
+pre-zeroed placement write; `0` is exactly "nothing kept yet". Readers decode
+through `kept_count` (`stored - 1`, clamped).
+
 ### 6.15 `please_choose.rs:74-95`
 
 Filter the hand by `prop::DESIGNATES` plus `cond_pre::admits` against the

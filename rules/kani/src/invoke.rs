@@ -742,6 +742,7 @@ fn hook_kind_parse(name: &str) -> Option<card_sdk::abi::TriggerKind> {
     const PAY_ADD: (u8, u64, u64) = tag_key_const("PaySplitAdd");
     const PAY_MUL: (u8, u64, u64) = tag_key_const("PaySplitMul");
     const PAY_CHOOSE: (u8, u64, u64) = tag_key_const("PaySplitChoose");
+    const PAY_CHOOSE_BEFORE: (u8, u64, u64) = tag_key_const("PaySplitChooseBefore");
     const PAY_AT: (u8, u64, u64) = tag_key_const("PaySplitAt");
     const PAY_AFTER: (u8, u64, u64) = tag_key_const("PayAfter");
     const PAY: (u8, u64, u64) = tag_key_const("Pay");
@@ -778,6 +779,7 @@ fn hook_kind_parse(name: &str) -> Option<card_sdk::abi::TriggerKind> {
         PAY_ADD => Some(T::PaySplitAdd),
         PAY_MUL => Some(T::PaySplitMul),
         PAY_CHOOSE => Some(T::PaySplitChoose),
+        PAY_CHOOSE_BEFORE => Some(T::PaySplitChooseBefore),
         PAY_AT => Some(T::PaySplitAt),
         PAY_AFTER => Some(T::PayAfter),
         PAY => Some(T::Pay),
