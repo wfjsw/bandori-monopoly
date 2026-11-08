@@ -1969,8 +1969,8 @@ fn layer_keep_press_refused_without_die_or_fire() {
     // no kept die
     assert!(t.skill(0, "RAS:（和奏瑞依）寄于指尖的执念").is_err());
     drain(&mut t);
-    // a kept die but no fire
-    t.set_state(0, "layer_keep_count", 1);
+    // a kept die but no fire (the count is 1-based: one kept die reads 2)
+    t.set_state(0, "layer_keep_count", 2);
     t.set_state(0, "layer_keep_0", 7);
     t.set_fire(0, 0, 1);
     assert!(t.skill(0, "RAS:（和奏瑞依）寄于指尖的执念").is_err());
@@ -1985,7 +1985,7 @@ fn layer_keep_press_replaces_the_move_roll_with_a_kept_die() {
     t.begin_turn(0);
     drain(&mut t);
     t.place_raw(0, "RAS:（和奏瑞依）寄于指尖的执念");
-    t.set_state(0, "layer_keep_count", 1);
+    t.set_state(0, "layer_keep_count", 2); // 1-based: one kept die
     t.set_state(0, "layer_keep_0", 7);
     t.set_fire(0, 1, 1);
     t.skill(0, "RAS:（和奏瑞依）寄于指尖的执念").unwrap();
@@ -1996,7 +1996,7 @@ fn layer_keep_press_replaces_the_move_roll_with_a_kept_die() {
     drain(&mut t);
     // 「消耗一个火罐」 and 「删去该骰点」
     assert_eq!(t.charge(0), 0, "one fire pot spent");
-    assert_eq!(t.state(0, "layer_keep_count"), 0, "the die was deleted");
+    assert_eq!(t.state(0, "layer_keep_count"), 1, "the die was deleted (zero kept, 1-based)");
     // 「替代当回合的移动掷骰」 -- the next move roll is the kept face (7).
     t.dice(&[1]); // loaded face is overridden by the fixed roll
     t.roll(0).unwrap();
