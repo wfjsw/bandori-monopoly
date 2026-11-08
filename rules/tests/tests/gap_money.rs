@@ -417,6 +417,46 @@ fn g07_exist_redirect_then_negated_designation() {
     );
 }
 
+// Two copies of one owner: the settled declaration is one raise, and both
+// copies' `target` hooks hear it, so each copy's own latch is spent -- neither
+// draws at its flip even though only one rewrite could "win". The latch is
+// stored per instance (`exist.used.<uid>`), so the two do not share a slot.
+#[test]
+fn g07_exist_second_copy_latches_on_the_same_redirect() {
+    let mut t = Table::new(&["花园多惠", "仓田真白", "三角初华", "山吹沙绫"]);
+    t.clean();
+    t.begin_turn(0);
+    drain(&mut t);
+    set_draw_n(&mut t, 2, 3);
+    t.place_raw(2, "RAS:EXIST");
+    t.place_raw(2, "RAS:EXIST");
+    t.give(0, &["PP:找回珍妮弗"]);
+    t.play(0, "PP:找回珍妮弗").unwrap();
+    // If the play asks for a target, aim at P1 -- EXIST retargets it to P2.
+    if t.prompt().is_some() && offers_player(&t, 1) {
+        answer_player(&mut t, 0, 1);
+    }
+    drain(&mut t);
+    let hand = t.hand(2).len();
+    t.begin_turn(2);
+    drain(&mut t);
+    assert_eq!(
+        t.hand(2).len(),
+        hand,
+        "both copies count as having influenced: {:?}",
+        t.hand(2)
+    );
+    assert_eq!(
+        t.discard(2)
+            .iter()
+            .filter(|c| c.as_str() == "RAS:EXIST")
+            .count(),
+        2,
+        "both copies flipped: {:?}",
+        t.discard(2)
+    );
+}
+
 // The same settlement reading via the other door: the play's own `card` link is
 // negated before the effect window, so `target` never fires and EXIST's latch
 // stays unspent. It must draw 1 too.

@@ -1140,6 +1140,11 @@ const PAY_CALC_PROBE: CardDef = CardDef::new(
             Some(pay_calc_probe_placed),
             pay_calc_w3,
         )),
+        On::Action(Action::Pay(
+            "",
+            Some(pay_calc_probe_placed),
+            pay_calc_w5,
+        )),
     ],
 );
 
@@ -1164,6 +1169,15 @@ fn pay_calc_w1(player_id: i32) -> card_sdk::Asked {
 
 fn pay_calc_w3(player_id: i32) -> card_sdk::Asked {
     ctx::log(player_id, &Msg::new(key!("pay_calc_w3")));
+    Ok(())
+}
+
+/// Window 5 「支付时」 -- carries the computed figure; the settlement window.
+fn pay_calc_w5(player_id: i32) -> card_sdk::Asked {
+    ctx::log(
+        player_id,
+        &Msg::new(key!("pay_calc_w5")).n("value", trigger::value() as i64),
+    );
     Ok(())
 }
 
