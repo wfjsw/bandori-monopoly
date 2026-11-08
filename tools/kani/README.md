@@ -19,7 +19,7 @@ tools/kani/run.sh [--unit pp] [--harness name] [--jobs 4] [--timeout 900] [--out
 | `--harness NAME` | all | exact harness fn name. Repeatable. |
 | `--jobs N` / `JOBS` | `4` | concurrent harnesses (box: 24 cores / 16 GB; CBMC uses several GB each). |
 | `KANI_GLOBAL_SLOTS` | `2` | machine-wide cap across ALL run.sh invocations (flock slots in `$KANI_SLOT_DIR`, default `~/.kani-slots`); always run proofs through run.sh so they count against it. |
-| `--timeout SEC` / `TIMEOUT` | `900` | wall-clock per harness. |
+| `--timeout SEC` / `TIMEOUT` | `900` | wall-clock per harness. An explicit flag overrides the per-harness table `rules/kani/timeout_table.toml` (for bodies over budget by symex volume alone). |
 | `--out DIR` | `target/kani-results` | JSON + markdown + per-harness logs. |
 | `--unwind N` | `80` | passed as `--default-unwind`. Unwinding assertions are ON (insufficient unwind = FAILED, never a silent vacuous pass). `--no-unwind-checks` is a loud exploration-only opt-out whose runs report UNSOUND. |
 | verdicts | | SUCCESSFUL, FAILED, TIMEOUT, UNMODELED, VACUOUS (a `kani::cover!` was proven unreachable: the proof never reached its interesting path), UNSOUND. Only SUCCESSFUL counts; the runner exits non-zero otherwise. |

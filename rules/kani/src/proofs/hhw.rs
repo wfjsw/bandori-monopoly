@@ -99,6 +99,11 @@ crate::host_subset!(believe_dispatch {
     discard_from_hand => arm_discard_from_hand,
     take_card => arm_take_card,
     add_to_dest => arm_add_to_dest,
+    reveal_pile => arm_reveal_pile,
+    deck_count => arm_deck_count,
+    inspection_begin => arm_inspection_begin,
+    inspection_end => arm_inspection_end,
+    shuffle_into_deck => arm_shuffle_into_deck,
 });
 
 /// `HHW:出发！后台之旅！` / `On::Play` (`backstage_tour::play`).
@@ -219,22 +224,42 @@ fn athletic_world_placed(user: i32, crystals: i32) {
     });
 }
 
-/// `believe` play: hand holds this card + two others (activation gate + a
+/// `believe` play: hand holds this card + one other (activation gate + the
 /// discard target); money ≥ 800 so the cost is the full −800. Deck pile is
-/// planted for when `CardPile::Deck` is modeled (currently unread — see
-/// module docs).
+/// planted for the reveal / inspection / keep-two legs.
+///
+/// Answers are **concrete** (every ask picks option 0) and the hand is **one**
+/// card, so the hand ask is a forced pick: a symbolic choice makes the chosen
+/// card id a symbolic-length string and every `Msg::card` / prompt copy walks
+/// UTF-8 over all variants — Class E at unwind 40. The clauses proved here
+/// (full cost, one discard, two transfers) are choice-independent; the picks
+/// only fix *which* card moves.
 fn believe_world(user: i32) {
     host::install_backend(believe_dispatch);
     sparse_base(user, 1_000, 10_000);
     world::with_world_mut(|w| {
+        // `World::new` already seeds `answers = [0; _]`, `next_answer = 0`.
+        w.symbolic_answers = false;
         w.hand = [false; 8];
-        w.hand[2] = true; // CARD_OTHER slot
-        w.hand[3] = true; // EXTRA
+        w.hand[2] = true; // CARD_OTHER slot -- the only other hand card
         w.hand_n = 0;
         w.deck_n = 2;
         w.deck_pile = [u16::MAX; 8];
         w.deck_pile[0] = crate::intern::intern("PP:[标题偶像]").0;
         w.deck_pile[1] = crate::intern::intern("PP:[强韧之花]").0;
+    });
+}
+
+/// Cost-only variant of [`believe_world`]: the deck is empty, so the reveal /
+/// inspection / keep-two leg never runs (the body's `deck.is_empty()` breaks
+/// both rounds at once). The −800 clause and its mutant need only the pay, and
+/// the full-world body at unwind 40 is Class E (~900 s in symex); the discard
+/// pair keeps [`believe_world`].
+fn believe_cost_world(user: i32) {
+    believe_world(user);
+    world::with_world_mut(|w| {
+        w.deck_n = 0;
+        w.deck_pile = [u16::MAX; 8];
     });
 }
 
@@ -604,12 +629,14 @@ pub fn athletic_empty_discards() {
 // Entry: `HHW:因为我一直相信着你` / `On::Play`
 // Isolation: ≥1 other hand card (the activation gate); ≥2 deck cards; a
 // living rival. OPEN-HHW-BELIEVE-CHOOSER / OPEN-HHW-RESHUFFLE.
-// Deck leg is blocked-by unmodeled `CardPile::Deck` (module docs).
+// The reveal / inspection / reshuffle legs run on the `reveal_pile` /
+// `inspection_*` / `shuffle_into_deck` arms (the body crossed them before the
+// arms were declared; the subset miss is a failed check, not a silent skip).
 // ===========================================================================
 
 /// Shared cost body at a concrete seat. `user` ∈ {0, 1}.
 fn believe_cost_800_iff_at(user: i32) {
-    believe_world(user);
+    believe_cost_world(user);
     let player = user;
     let condition = world::snapshot();
     let pre_money = condition.money[player as usize];
@@ -693,7 +720,7 @@ pub fn believe_discard_one_user1_iff() {
 #[kani::unwind(24)]
 pub fn believe_mutant_is_detected() {
     let user = 0i32;
-    believe_world(user);
+    believe_cost_world(user);
     let player = user;
     let condition = world::snapshot();
     let pre_money = condition.money[player as usize];

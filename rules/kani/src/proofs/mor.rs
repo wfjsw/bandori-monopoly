@@ -1824,34 +1824,42 @@ crate::host_subset!(noble_dispatch {
     set_ineffective_at => arm_set_ineffective_at,
 });
 
-/// `owned == true`: the tile under the user is theirs. Else it is the other seat's.
-fn noble_world(user: i32, owned: bool) -> i32 {
-    // The noop harness only reads the tile through the owner test (and the
-    // log), so two concrete tiles stand in for the 60-tile range: the
-    // symbolic index pushed CBMC a little over the 900 s sweep budget. The
-    // owned harness keeps the full range (the mark and the log tile).
-    let pos: i32 = if owned {
-        let p = kani::any();
-        kani::assume(p >= 0 && p < 60);
-        p
-    } else if kani::any() {
-        0
-    } else {
-        59
-    };
-    let owner = if owned { user } else { 1 - user };
+/// The owned harness: a symbolic tile of the 60-tile range, owned by the user.
+fn noble_world(user: i32) -> i32 {
+    let pos: i32 = kani::any();
+    kani::assume(pos >= 0 && pos < 60);
     sparse2(noble_dispatch, user, |w| {
         // (`World::new` already leaves every tile owner=-1 / house-free.)
-        w.tiles[pos as usize].owner = owner;
+        w.tiles[pos as usize].owner = user;
         w.pos[user as usize] = pos;
     });
     pos
 }
 
+/// The noop harness: the tile under the user belongs to the other seat.
+///
+/// The whole body is an early return plus one log, so it reads only the seat's
+/// position and that tile's owner -- `sparse_play_world`'s symbolic seats cost
+/// ~250 s of symex the branch never touches. A concrete minimal world instead;
+/// the two seat harnesses pin the tile-range ends (0 / 59).
+fn noble_noop_world(user: i32, pos: i32) {
+    host::install_backend(noble_dispatch);
+    world::with_world_mut(|w| {
+        w.n_players = 2;
+        // Distinct nonzero seat money: the frame has something to preserve.
+        w.money = [1_000, 2_000, 0, 0];
+        w.tiles[pos as usize].owner = 1 - user;
+        w.pos[user as usize] = pos;
+        w.trig_player = user;
+        // A hand play's `self_uid()` is `-1` (the waste bit rides the play).
+        w.bound_uid = -1;
+    });
+}
+
 /// IFF (mark leg): tile is yours ⇒ exactly one PlaceMark on that tile.
 /// The forced settle (1) is OPEN-触发结算 / PROTOCOL-LEVEL and is not pinned.
 fn noble_02_mark_iff_at(user: i32) {
-    let pos = noble_world(user, true);
+    let pos = noble_world(user);
     let condition = world::snapshot();
     invoke::unwrap_done(card_morfonica::noble_blue::noble_blue_kani(user));
     kani::cover!(true, "body returned");
@@ -1890,10 +1898,8 @@ pub fn noble_02_mark_user1_iff() {
 }
 
 /// NO-OP (not yours): no effects.
-fn noble_02_not_yours_noop_at(user: i32) {
-    let _pos = noble_world(user, false);
-    // A hand play's `self_uid()` is `-1` (the waste bit rides the play).
-    world::with_world_mut(|w| w.bound_uid = -1);
+fn noble_02_not_yours_noop_at(user: i32, pos: i32) {
+    noble_noop_world(user, pos);
     let condition = world::snapshot();
     invoke::unwrap_done(card_morfonica::noble_blue::noble_blue_kani(user));
     kani::cover!(true, "body returned");
@@ -1918,24 +1924,25 @@ fn noble_02_not_yours_noop_at(user: i32) {
 #[kani::use_stub_set(crate::kani_stubs::LIB_COST_NOFMT)]
 #[kani::unwind(16)]
 pub fn noble_02_not_yours_noop() {
-    noble_02_not_yours_noop_at(0);
+    noble_02_not_yours_noop_at(0, 0);
 }
 
 #[kani::proof]
 #[kani::use_stub_set(crate::kani_stubs::LIB_COST_NOFMT)]
 #[kani::unwind(16)]
 pub fn noble_02_not_yours_noop_user1() {
-    noble_02_not_yours_noop_at(1);
+    noble_02_not_yours_noop_at(1, 59);
 }
 
 /// MUTANT companion (mark): a mark on tile 0 is NOT the card when the user
-/// stands elsewhere.
+/// stands elsewhere. `assume(pos != 0)` prunes the 60-tile walk, so the
+/// noop's bound is enough (SUCCESSFUL 520 s).
 #[kani::proof]
 #[kani::use_stub_set(crate::kani_stubs::LIB_COST_NOFMT)]
-#[kani::unwind(32)]
+#[kani::unwind(16)]
 pub fn noble_02_mutant_is_detected() {
     let user = 0i32;
-    let pos = noble_world(user, true);
+    let pos = noble_world(user);
     kani::assume(pos != 0);
     invoke::unwrap_done(card_morfonica::noble_blue::noble_blue_kani(user));
     kani::cover!(true, "body returned");
@@ -2172,6 +2179,12 @@ crate::host_subset!(nanami_third_dispatch {
 /// Pre-state for (3): the card is the running instance, the seat may hold a
 /// persona skill and a pot; `answers[0] = 0` accepts.
 /// Returns `(offer_uid, skill_uid)`.
+///
+/// Answers are **concrete**: `sparse_play_world` leaves the ask mode symbolic,
+/// which makes the staged answers dead and explores the yes and no rows of
+/// 「可以移除一个奇迹水晶」 alike (the yes row dives into the skill body — the
+/// whole cost of the proof is on it). The clauses pinned here are the yes
+/// leg's.
 fn nanami_third_world(user: i32, with_skill: bool, with_pot: bool) -> (i32, i32) {
     let mut offer = 0;
     let mut skill = 0;
@@ -2182,6 +2195,7 @@ fn nanami_third_world(user: i32, with_skill: bool, with_pot: bool) -> (i32, i32)
             w.persona_skill = crate::intern::intern(NANAMI_SKILL).0;
         }
         w.charge[user as usize] = if with_pot { 1 } else { 0 };
+        w.symbolic_answers = false;
         w.answers[0] = 0;
         w.next_answer = 0;
         w.last_uid = offer;

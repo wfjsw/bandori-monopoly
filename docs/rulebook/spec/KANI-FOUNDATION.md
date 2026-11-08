@@ -631,6 +631,10 @@ tools/kani/run.sh [--unit pp] [--harness name] [--jobs 4] [--timeout 900] [--out
 * JSON + markdown results: harness, verdict `SUCCESSFUL|FAILED|TIMEOUT|UNMODELED`,
   time, unwind.
 * Exits nonzero on any failure / timeout / unmodeled. Fail-closed.
+* The default budget is 900 s per harness; `rules/kani/timeout_table.toml`
+  raises it for harness bodies that are over budget by symex volume alone
+  (long message/string copies). An explicit `--timeout` overrides the table
+  for every harness.
 * `CARGO_TARGET_DIR=/home/monopoly/kani-target-f`, `CARGO_BUILD_JOBS=8`.
 * Details: `tools/kani/README.md`.
 

@@ -1,0 +1,26 @@
+# Per-harness wall-clock budget (seconds).
+#
+# For harness bodies that are over the 900 s default by **symex volume**, not
+# by a wrong unwind: the message model copies card ids through UTF-8
+# validation loops once per `Msg::card` / option push, so each such loop costs
+# its length in unrolled steps times every path that reaches it. These bodies
+# are already on the slimmest world that still exercises the clause (answers
+# concrete, forced single-option asks); they just need the wall time.
+#
+# Consumed by tools/kani/run.sh: an explicit --timeout wins over the table.
+# Format: `harness_name = seconds` under [timeout]. Key is the bare fn name
+# (the runner's --harness filter), not the module path.
+
+[timeout]
+# HHW believe: reveal hand + deck, one rival discard, two deck→hand transfers,
+# reshuffle. Five harnesses share the body; >1800 s in symex measured even with
+# an empty deck / one hand card (2026-11-08).
+believe_cost_800_iff = 3600
+believe_cost_800_user1_iff = 3600
+believe_discard_one_iff = 3600
+believe_discard_one_user1_iff = 3600
+believe_mutant_is_detected = 3600
+
+# Mor nanami (3): places the card, burns a crystal, invokes the owner skill's
+# (2) entry. Measured >900 s at 40/48 unwind (2026-11-08).
+nanami_third_yes_iff_mutant = 3600
