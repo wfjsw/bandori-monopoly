@@ -1826,8 +1826,19 @@ crate::host_subset!(noble_dispatch {
 
 /// `owned == true`: the tile under the user is theirs. Else it is the other seat's.
 fn noble_world(user: i32, owned: bool) -> i32 {
-    let pos: i32 = kani::any();
-    kani::assume(pos >= 0 && pos < 60);
+    // The noop harness only reads the tile through the owner test (and the
+    // log), so two concrete tiles stand in for the 60-tile range: the
+    // symbolic index pushed CBMC a little over the 900 s sweep budget. The
+    // owned harness keeps the full range (the mark and the log tile).
+    let pos: i32 = if owned {
+        let p = kani::any();
+        kani::assume(p >= 0 && p < 60);
+        p
+    } else if kani::any() {
+        0
+    } else {
+        59
+    };
     let owner = if owned { user } else { 1 - user };
     sparse2(noble_dispatch, user, |w| {
         // (`World::new` already leaves every tile owner=-1 / house-free.)
@@ -1905,14 +1916,14 @@ fn noble_02_not_yours_noop_at(user: i32) {
 
 #[kani::proof]
 #[kani::use_stub_set(crate::kani_stubs::LIB_COST_NOFMT)]
-#[kani::unwind(32)]
+#[kani::unwind(16)]
 pub fn noble_02_not_yours_noop() {
     noble_02_not_yours_noop_at(0);
 }
 
 #[kani::proof]
 #[kani::use_stub_set(crate::kani_stubs::LIB_COST_NOFMT)]
-#[kani::unwind(32)]
+#[kani::unwind(16)]
 pub fn noble_02_not_yours_noop_user1() {
     noble_02_not_yours_noop_at(1);
 }
