@@ -55,7 +55,7 @@
   "one_of_us_shared": "ONE OF US 的效果：{{who}} 获得 {{tile}} 结算收益的一半 {{money}}",
   "one_of_us_theirs": "[指定] {{who}} 的哪块地契？（有商店街格子时必须选商店街）",
   "one_of_us_title": "ONE OF US",
-  "one_of_us_transferred": "ONE OF US 的效果：{{tile}} 的地契转给了 {{who}}（{{out}} 出局了）",
+  "one_of_us_transferred": "ONE OF US 的效果：{{tile}} 的地契转给了 {{who}}（{{out}} 出局了），{{who}} 视为拥有该地契",
   "proud_light_when": "你经过一名角色",
   "proud_light_reason": "刻入天穹傲岸的烈光",
   "ran_as_usual_armed": "像往常一样 的效果：这回合结束前：如果受到过异常移动效果，{{who}} 回到这回合开始时的格子并取消受到的效果",

@@ -1594,13 +1594,19 @@ standing with 薰.
 the `slot('here_held_len') <= 0` guard on `Drew` would re-arm (2) on the next draw. Does the card
 leave play on (2) completion, or stay and re-arm?
 
-**C-Q50 (W3-ONEOFUS-01, ONE OF US bankruptcy hand-over).** *(filed 2026-10-21)*
+**C-Q50 (W3-ONEOFUS-01, ONE OF US bankruptcy hand-over).** *(filed 2026-10-21;
+closed 2026-11-08)*
 `AG:ONE OF US`: 「当其中一方破产时，将两张被指定地契放置在该卡上并转移到存活方的
 游戏区，该方视为拥有此地契」. (a) Is 「视为拥有」 a **view** on top of the old
 owner, or a real ownership move? (b) Must **both** designated deeds move even if
 one was sold to a third party before the bankruptcy (the text says 「两张被指定地契」
 unconditionally)? (c) Does 「放置在该卡上」 have any mechanical consequence beyond
 the intermediate park / log shape?
+**Ruling:** (a) real ownership move (`ctx::rehome_card`; no tile-level
+deemed-owner primitive, and a real move carries every owner-derived view with
+no reader changes). (b) yes, unconditional -- a deed sold on is rehomed too
+(`one_of_us_hands_over_a_deed_sold_to_a_third_party`). (c) yes: the deeds are
+attachments on the card, not marks on their tiles, so they die with the card.
 
 ---
 

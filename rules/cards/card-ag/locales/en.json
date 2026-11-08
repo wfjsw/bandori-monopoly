@@ -55,7 +55,7 @@
   "one_of_us_shared": "ONE OF US's effect: {{who}} got {{money}} of {{tile}}'s settlement income",
   "one_of_us_theirs": "[Designate] which of {{who}}'s deeds? (must pick a shop-street tile if they have one)",
   "one_of_us_title": "ONE OF US",
-  "one_of_us_transferred": "ONE OF US's effect: {{tile}}'s deed went to {{who}} ({{out}} is out)",
+  "one_of_us_transferred": "ONE OF US's effect: {{tile}}'s deed went to {{who}} ({{out}} is out) -- {{who}} is deemed to own it",
   "proud_light_when": "when you pass a character",
   "proud_light_reason": "Proud Light Engraved in the Sky",
   "ran_as_usual_armed": "As Usual's effect: Before this turn ends: if hit by abnormal movement, {{who}} returns to the turn-start tile and the effects are cancelled",

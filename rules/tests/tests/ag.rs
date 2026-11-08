@@ -877,6 +877,64 @@ fn one_of_us_deeds_and_card_follow_the_survivor() {
     assert_eq!(t.owner(FUJIMI), Some(1));
 }
 
+// 规则书: 「将两张被指定地契放置在该卡上并转移到存活方的游戏区，该方视为拥有此地契」
+// -- 「两张」 is unconditional: a designated deed the partner had already sold
+// to a third party moves to the survivor too.
+#[test]
+fn one_of_us_hands_over_a_deed_sold_to_a_third_party() {
+    let mut t = Table::vanilla(3);
+    t.set_character_raw(0, "美竹兰");
+    t.set_character_raw(1, "青叶摩卡");
+    t.set_character_raw(2, "羽泽鸫");
+    t.own(0, &[HILL]);
+    t.own(1, &[FUJIMI]);
+    t.give_play(0, "AG:ONE OF US").unwrap();
+    t.answer(0, 0).unwrap(); // the partner: P1
+    t.answer(0, 0).unwrap(); // P0's deed: 星之鼓动山丘
+    t.answer(0, 0).unwrap(); // P1's deed: 富士见坂
+    skip_all(&mut t);
+    let cards = t
+        .field(0)
+        .iter()
+        .find(|f| f.card == "AG:ONE OF US")
+        .unwrap()
+        .uid;
+    assert_eq!(
+        t.m.world().attached_cards(cards).len(),
+        2,
+        "both deeds parked"
+    );
+    // The partner sells 富士见坂 to P2 before the bankruptcy: the deed leaves
+    // the partner's area but stays a designated deed.
+    t.set_owner(FUJIMI, Some(2));
+    // P0 goes bankrupt on P1's five-house 购物中心.
+    t.set_money(0, 0);
+    let mall = tile("购物中心");
+    t.own(1, &[mall]);
+    t.set_houses(mall, 5);
+    t.begin_turn(0);
+    t.set_pos(0, mall - 1);
+    t.dice(&[1]);
+    t.roll(0).unwrap();
+    while t.prompt().is_some() {
+        t.decline();
+    }
+    assert!(t.p(0).bankrupt, "{:?}", t.recent_keys(20));
+    assert!(t.on_field(1, "AG:ONE OF US"), "{:?}", t.field_ids(1));
+    let held = t.m.world().attached_cards(cards).to_vec();
+    assert_eq!(held.len(), 2, "the deeds stay parked");
+    assert!(
+        held.iter().all(|&u| t.m.world().holder_of(u) == 1),
+        "each deed is the survivor's"
+    );
+    assert_eq!(t.owner(HILL), Some(1), "the leaver's deed follows");
+    assert_eq!(
+        t.owner(FUJIMI),
+        Some(1),
+        "the deed sold to a third party follows too"
+    );
+}
+
 // =====================================================================
 // Character skills
 // =====================================================================

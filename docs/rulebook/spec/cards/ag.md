@@ -126,11 +126,15 @@ Exclusive to 美竹兰 (`characters.json#美竹兰.exclusiveCards`).
 * **Quote:** 「当其中一方破产时，将两张被指定地契放置在该卡上并转移到存活方的游戏区，该方视为拥有此地契」
 * **Trigger:** bankruptcy of either designated owner.
 * **Condition:** both designated deeds still exist.
-* **Effect:** the two deeds are placed on this card and move to the surviving
-  side's play area; that side is treated as owning them.
+* **Effect:** both designated deeds move to the surviving side's play area;
+  that side is treated as owning them. 「两张」 is unconditional: a designated
+  deed sold to a third party moves too.
 * **Frame:** `owner:*` of the two deeds, `bfield:*`, `field:P*`.
-* **Rulings & OPEN:** depends on C-AG-one-of-us-03's designation surviving.
-* **Executable:** documented, not contracted -- needs a full bankruptcy + designation setup.
+* **Rulings & OPEN:** C-Q50(b) closed -- both deeds move whatever their
+  current owner. 「视为拥有」 is a real owner move (no tile-level deemed-owner
+  primitive); C-Q50(a). Depends on C-AG-one-of-us-03's designation surviving.
+* **Executable:** `one_of_us_deeds_and_card_follow_the_survivor`,
+  `one_of_us_hands_over_a_deed_sold_to_a_third_party`.
 
 ---
 
