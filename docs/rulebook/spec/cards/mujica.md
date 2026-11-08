@@ -567,8 +567,12 @@ scope.)
   seat keeps its own card. The borrowed **initial fire pots** are the real half
   and ride `fire::overlay`; the cover prop is display state that dies with the
   persona-skill instance. The latch names any seat (「上一位打出过手牌的玩家」).
+  `set_persona` also binds the new name's skill rules on the host, so the
+  freshly placed borrowed row is taken back off the field on entry -- it must
+  not run its turn-start / pass-tile / abnormal-fire hooks for her.
 * **Executable:** `mutsumi_cover_records_the_last_hand_player`,
-  `mutsumi_latch_tracks_any_player` (rules/tests/tests/mujica.rs).
+  `mutsumi_latch_tracks_any_player`, `mutsumi_cover_keeps_the_borrowed_skill_off_the_field`
+  (rules/tests/tests/mujica.rs).
 
 ### C-MUJICA-祥子技能 -- 丰川祥子 / 请把你们的人生交给我
 

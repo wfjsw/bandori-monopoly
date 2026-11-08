@@ -901,7 +901,7 @@ use crate::intern::NameId;
 ///    roster personas sharing the player's base character (`variant_of`),
 ///    for 「更换角色皮肤（技能相同）」. SAVE_VERSION / RECORD_VERSION
 ///    unchanged (the auction request rides the host journal; skins are data).
-/// v123: **character-card pile read.** `ctx::persona(player_id) -> String`
+/// v123: **character-card pile read.** `bandori_std::persona(player_id) -> String`
 ///    (import `ruleset_persona`, op 498) is the character card of a seat, the
 ///    same spelling `persona_is` matches; mutsumi 状态2 borrows the last
 ///    player's card through it. No id renumbered. SAVE / RECORD unchanged.

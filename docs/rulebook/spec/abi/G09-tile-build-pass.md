@@ -177,8 +177,10 @@ Book (`R:（燐子）Ringing Bloom` (2)):
 
 **Current.** The 「视为」 is recomputed on `HouseAdded` / `HouseRemoved` /
 `Bought` (`ringing_bloom.rs:33-43,143-159`), and the half-charge is disarmed on
-every field departure through a `zoneLeft` hook (`:47-50,166-182`) and on an
-`ownerSet` (`:49-59,191-247`). A **plain sale** still uses
+every field departure through a `zoneLeft` hook (`:50,173-199`) and on an
+`ownerSet` (`:52-62,205-261`). The departure hooks are pinned to the leaving
+instance (the card id alone is shared by a second copy), and a copy still on the
+same seat re-runs the view so the seat's board is not left cleared. A **plain sale** still uses
 `assign_deed`→`set_tile_owner` with no effect event, so a sold tile keeps its
 half until the next view (row 826; `BACKLOG.md` CRYSTAL-08). `add_house` logs a
 rise only (`wasm_rules.rs:2060-2087`) and `set_houses` logs nothing at all;
