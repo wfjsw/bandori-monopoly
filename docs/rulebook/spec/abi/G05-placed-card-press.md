@@ -1201,6 +1201,17 @@ Kani obligations (`rules/kani`):
   `paid = 0`, exactly one effect log, frame unchanged;
   `…_third_no_crystal_noop_at`; `…_third_no_pot_noop_at`;
   `…_third_binds_second_instance`.
+  Status 2026-11-08: the mutant (`nanami_third_yes_iff_mutant`, burn the
+  **offered** copy) is **SUCCESSFUL** in 3787 s at unwind 24, on a concrete
+  world with a short sentinel skill id (`"sk"` — the mutant asserts nothing
+  about the skill name and the real ~46-byte CJK id doubles the symex). All
+  three press harnesses (`yes_iff`, `yes_iff_user1`,
+  `binds_second_instance`) now run the same short-sentinel world at unwind
+  24: `binds_second_instance` is **SUCCESSFUL** in 4790.5 s (2026-11-09);
+  the yes pair carries a 16200 s table budget — Kani runs two verification
+  passes and the first alone took 5997 s, so earlier 5400 / 10800 attempts
+  timed out a hair short. The pair was still running when this pass closed
+  and is recorded as pending.
 * `proofs/hhw.rs`: `kanon_jump_at_nine_iff` (pool cleared, teleport plan, dest
   graveyard), `…_jump_below_nine_noop`, `…_jump_claimed_move_noop`,
   `…_jump_declined_noop_and_silent` (world and log equal, nothing announced).

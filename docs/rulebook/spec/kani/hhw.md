@@ -45,9 +45,9 @@ Legend: **P**=PROVEN, **F**=FAILS(finding), **B**=BLOCKED-HOST, **PROTO**=PROTOC
 | C-HHW-backstage-01 | 「看牌堆顶2张…0~2张…放回…翻入弃牌堆」 | O / partial | `backstage_pays_1000_per_discard_iff` (count) | pending | — | OPEN-HHW-SHORT-PILE; order is player choice |
 | C-HHW-backstage-02 | 「每翻入一张获得1000资金」 | P | `backstage_pays_1000_per_discard_iff` | pending | — | — |
 | C-HHW-believe-01 | 「至少有另一张手牌时可发动」 | O (residual gate) | isolation assume | — | — | — |
-| C-HHW-believe-02 | 「消耗800资金」 | P | `believe_cost_800_iff` | pending | — | — |
-| C-HHW-believe-03 | 「…选择一张放入弃牌堆」 | P (count) | `believe_discard_one_iff` | pending | — | OPEN-HHW-BELIEVE-CHOOSER |
-| C-HHW-believe-04 | 「…选择两张加入你的手牌，重洗」 | P (count) | `believe_discard_one_iff` | pending | — | OPEN-HHW-RESHUFFLE |
+| C-HHW-believe-02 | 「消耗800资金」 | P | `believe_cost_800_iff` + `_user1` + mutant | **SUCCESSFUL** 489.6s / 495.0s (unwind 20); mutant 469.8s (unwind 20) | — | — |
+| C-HHW-believe-03 | 「…选择一张放入弃牌堆」 | P (count) | `believe_discard_one_iff` (+ `_user1`) | **SUCCESSFUL** 5649.5s / 5377.3s (unwind 12) | — | OPEN-HHW-BELIEVE-CHOOSER |
+| C-HHW-believe-04 | 「…选择两张加入你的手牌，重洗」 | P (count) | `believe_keep_two_iff` (+ `_user1`) | pending (skipped this pass; budget recorded) | — | OPEN-HHW-RESHUFFLE |
 | C-HHW-patrol-01 | 「付款并在任意自己的格子加盖一层房屋」 | O | — | — | — | OPEN-HHW-PATROL-PRICE |
 | C-HHW-patrol-02 | 「投掷3d20…额外免费加盖…（若为可建造格子）」 | O | — | — | — | OPEN-HHW-PATROL-3D20, OPEN-HHW-BUILDABLE |
 | C-HHW-return-01 | 「[反击]…即将被不属于你的格子收费时」 | **B** + PROTO | — | BLOCKED-HOST | — | counter window + `rent_of` |
@@ -175,9 +175,13 @@ Machine-wide slot cap: 3 concurrent CBMC; queueing is normal.
 | `athletic_turn_end_decay_user1_iff` | hhw | **SUCCESSFUL** | 247.5s |
 | `athletic_decay_to_zero_discards` | hhw | **SUCCESSFUL** | 338.1s |
 | `athletic_empty_discards` | hhw | **SUCCESSFUL** | 204.9s |
-| `believe_cost_800_iff` | hhw | pending | — |
-| `believe_discard_one_iff` | hhw | pending | — |
-| `believe_mutant_is_detected` | hhw | pending | — |
+| `believe_cost_800_iff` | hhw | **SUCCESSFUL** | 489.6s |
+| `believe_cost_800_user1_iff` | hhw | **SUCCESSFUL** | 495.0s |
+| `believe_mutant_is_detected` | hhw | **SUCCESSFUL** | 469.8s |
+| `believe_discard_one_iff` | hhw | **SUCCESSFUL** | 5649.5s |
+| `believe_discard_one_user1_iff` | hhw | **SUCCESSFUL** | 5377.3s |
+| `believe_keep_two_iff` | hhw | pending | — |
+| `believe_keep_two_user1_iff` | hhw | pending | — |
 | `backstage_pays_1000_per_discard_iff` | hhw | pending | — |
 | `backstage_mutant_is_detected` | hhw | pending | — |
 | `balloon_teleports_to_a_chosen_result_iff` | hhw | pending | — |
@@ -218,6 +222,24 @@ blocked-by `trig_move_roll`. Listed BLOCKED-HOST and left alone per the brief.)
 ## What was tried for BLOCKED / OOM
 
 * BLOCKED rows: not proven. Exact missing Op listed above. No silent zeros.
+* The believe harnesses first ran the whole body in one world and went over
+  3600 s in symex. Each clause now runs only its own leg (pay / discard /
+  keep), at unwind 20; the two cost clauses and the mutant finished in
+  ~470–495 s. The discard and keep halves were then extracted from `play`
+  (`discard_one_kani` / `keep_two_kani`, the `place_with_offer_kani` pattern)
+  and also run at unwind 12; even alone the keep body does not fit 1800 s, so
+  the heavy legs carry a per-harness `rules/kani/timeout_table.toml` budget.
+  The extracted discard half measured 5377 s (user1) — the budget has to be
+  the table's 10800 s, not the 900 s default.
+* The keep half runs **two** ask round-trips, so it is heavier than discard:
+  it missed 10800 s twice, still in symex, with the world's two CJK card ids
+  being copied through every `Msg`. Two levers: the world now seeds the
+  guest's own 2-byte facade ids `"c2"` / `"c3"` (a `card_slot_of_bytes`
+  facade branch maps them to slots 2 / 3), and the pair carries a 18000 s
+  table budget.
+* The `believe_04_log_ok` spec was wrong until this pass: it counted
+  `TakeFromPile { pile: 0 }` (Hand) while the body takes from the inspection
+  frame (`pile: 4`).
 * The kani runner is queued behind other units' CBMC jobs (machine-wide slot
   cap 3). Harness times are recorded as they complete.
 

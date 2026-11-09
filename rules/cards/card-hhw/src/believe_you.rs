@@ -64,6 +64,16 @@ fn play(player_id: i32) -> card_sdk::Asked {
         //   whether the user may choose themself is open (OPEN-HHW-BELIEVE-CHOOSER).
         &ctx::others(player_id),
     )?;
+    discard_one(player_id, who)?;
+    keep_two(player_id)
+}
+
+/// 「选择一名玩家，使其从你的手牌中选择一张放入弃牌堆」 — the chosen rival
+/// picks one of the user's remaining hand cards into the discard.
+///
+/// Split out of [`play`] for the same reason as [`keep_two`]: the discard
+/// proof runs without the pay / reveal / chooser front.
+fn discard_one(player_id: i32, who: i32) -> card_sdk::Asked {
     let hand = ctx::cards_in(player_id, CardPile::Hand);
     if !hand.is_empty() {
         let ids: Vec<&str> = hand.iter().map(|c| c.as_str()).collect();
@@ -82,6 +92,16 @@ fn play(player_id: i32) -> card_sdk::Asked {
                 .card("card", id),
         );
     }
+    Ok(())
+}
+
+/// 「然后从你的卡组中选择两张加入你的手牌，重洗你的抽牌堆」 — take two cards
+/// out of the open inspection frame, then return the leftovers and reshuffle.
+///
+/// Split out of [`play`] so the Kani keep proof drives the loop alone: the
+/// front half (pay / reveal / discard) is proven by its own harnesses, and the
+/// whole-body proof was over 5400 s in symex.
+fn keep_two(player_id: i32) -> card_sdk::Asked {
     for k in 0..2 {
         let deck = ctx::cards_in(player_id, CardPile::Inspection);
         if deck.is_empty() {
@@ -128,4 +148,20 @@ fn play(player_id: i32) -> card_sdk::Asked {
 #[inline(always)]
 pub fn play_kani(player_id: i32) -> card_sdk::Asked {
     play(player_id)
+}
+
+/// The keep-two half alone: the pay / reveal / discard front is outside, so
+/// the loop can be proven without re-running the whole body.
+#[cfg(kani)]
+#[inline(always)]
+pub fn keep_two_kani(player_id: i32) -> card_sdk::Asked {
+    keep_two(player_id)
+}
+
+/// The discard half alone: the front is outside, and `who` is the chooser the
+/// caller already picked.
+#[cfg(kani)]
+#[inline(always)]
+pub fn discard_one_kani(player_id: i32, who: i32) -> card_sdk::Asked {
+    discard_one(player_id, who)
 }
