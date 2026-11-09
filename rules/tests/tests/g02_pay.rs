@@ -1219,6 +1219,175 @@ fn g02_council_cancelled_settle_refunds() {
     );
 }
 
+// 规则书 `R:学生会的检查`: the cost / rent / stop record belongs to the **copy**.
+// Two copies of one owner used to share a per-player slot record, so the second
+// placement (and its stop) clobbered the first: the first copy's settle found
+// its stop latch cleared and neither left nor refunded. Instance props keep the
+// two apart, and nothing is pre-zeroed onto the player's state map.
+#[test]
+fn g02_council_two_copies_keep_their_own_record() {
+    let space = tile("Space");
+    let other = space - 4; // 四叶女子大学: P1's other deed
+    let own = space - 2;
+    let support = space - 1;
+    let mut t = Table::vanilla(3);
+    t.strip_skills();
+    t.clean();
+    t.own(1, &[other, own, support, space]);
+    t.set_money(1, 20_000);
+    t.give(1, &[COUNCIL, COUNCIL]);
+
+    let council_uid = |t: &Table, tile: usize| -> i32 {
+        t.m.world()
+            .st
+            .players
+            .iter()
+            .flat_map(|p| p.field.iter())
+            .chain(t.m.world().st.board_field.iter())
+            .find(|f| f.card == COUNCIL && f.tile == tile as i32)
+            .unwrap_or_else(|| panic!("no copy on tile {tile}"))
+            .uid
+    };
+
+    // Both copies in one window: Space first, then 四叶女子大学.
+    t.set_pos(1, own - 1);
+    t.begin_turn(1);
+    t.dice(&[1]);
+    t.roll(1).unwrap();
+    assert!(t.counteract_offered(COUNCIL), "{}", t.dump_prompt());
+    t.counteract(1, COUNCIL).unwrap();
+    // The window re-opens for the second copy.
+    t.answer_one(0).unwrap();
+    t.answer_one(0).unwrap();
+    t.answer_tile(1, space).unwrap();
+    t.answer_one(0).unwrap();
+    t.answer_tile(1, other).unwrap();
+    drain(&mut t);
+    let a = council_uid(&t, space);
+    let b = council_uid(&t, other);
+    assert_eq!(
+        t.m.world().prop_at(a, "council.paid"),
+        250,
+        "the first copy carries its own cost"
+    );
+    assert_eq!(
+        t.m.world().prop_at(b, "council.paid"),
+        750,
+        "the second copy carries its own cost"
+    );
+    assert_eq!(
+        t.m.world().prop_at(a, "council.stop"),
+        0,
+        "the stop latch is not pre-zeroed"
+    );
+    // Nothing was pre-zeroed onto the player: the records live only on the
+    // instances.
+    for k in ["council.paid", "council.got", "council.stop", "council.expect"] {
+        assert!(
+            !t.m.world().st.players[1].state.contains_key(k),
+            "no player-state key {k}"
+        );
+    }
+
+    // The walker first passes the 四叶 copy (it lies between the start and
+    // Space): its stop resolves on its own record and it leaves.
+    t.set_pos(0, space - 5);
+    t.begin_turn(0);
+    t.dice(&[6]);
+    t.roll(0).unwrap();
+    drain(&mut t);
+    assert_eq!(t.pos(0), other, "the 四叶 copy stopped the walker");
+    assert_eq!(t.money(0), 10_000 - 140, "the halved 四叶 rent");
+    assert_eq!(t.money(1), 20_000 - 1_000 + 140, "paid out, collected 140");
+    assert!(
+        !t.m
+            .world()
+            .st
+            .players
+            .iter()
+            .flat_map(|p| p.field.iter())
+            .chain(t.m.world().st.board_field.iter())
+            .any(|f| f.uid == b),
+        "the 四叶 copy left on its own record"
+    );
+
+    // The Space copy is untouched: its paid record stays and it still stops a
+    // walker at its own halved rent.
+    assert_eq!(
+        t.m.world().prop_at(a, "council.paid"),
+        250,
+        "the Space copy's record is still its own"
+    );
+    t.set_pos(0, other);
+    t.begin_turn(0);
+    t.dice(&[5]);
+    t.roll(0).unwrap();
+    drain(&mut t);
+    assert_eq!(t.pos(0), space, "the Space copy still stops the walker");
+    assert_eq!(t.money(0), 10_000 - 140 - 60, "the halved Space rent");
+    assert!(
+        !t.m
+            .world()
+            .st
+            .players
+            .iter()
+            .flat_map(|p| p.field.iter())
+            .chain(t.m.world().st.board_field.iter())
+            .any(|f| f.uid == a),
+        "the Space copy left on its own record"
+    );
+    assert_eq!(
+        t.money(1),
+        20_000 - 1_000 + 140 + 60,
+        "each settle kept its own halved rent"
+    );
+}
+
+// 规则书 `R:学生会的检查`: 「若此卡进入弃牌堆时…获得发动此卡消耗的资金」.
+// The refund rides the copy's own `zoneLeft`, not one settle route: a removal
+// by **another** effect is the same 「进入弃牌堆」.
+#[test]
+fn g02_council_external_discard_refunds() {
+    let space = tile("Space");
+    let own = space - 2;
+    let mut t = Table::vanilla(2);
+    t.strip_skills();
+    t.clean();
+    t.own(0, &[own, space]);
+    t.set_money(0, 10_000);
+    t.give(0, &[COUNCIL]);
+    t.set_pos(0, own - 1);
+    t.begin_turn(0);
+    t.dice(&[1]);
+    t.roll(0).unwrap();
+    assert!(t.counteract_offered(COUNCIL), "{}", t.dump_prompt());
+    t.counteract(0, COUNCIL).unwrap();
+    t.answer_one(0).unwrap(); // yes
+    t.answer_tile(0, space).unwrap();
+    drain(&mut t);
+    assert_eq!(t.money(0), 9_750, "half the Space build cost was paid");
+    let uid = t
+        .field(0)
+        .into_iter()
+        .find(|f| f.card == COUNCIL)
+        .expect("placed")
+        .uid;
+    // Another player's effect removes it to the discard before any passer-by.
+    t.begin_turn(1);
+    drain(&mut t);
+    t.give(1, &["TEST:drop"]);
+    t.set_state(1, "TEST.drop.uid", uid);
+    t.set_state(1, "TEST.drop.dest", card_sdk::ctx::Dest::Graveyard as i32);
+    t.give_play(1, "TEST:drop").unwrap();
+    drain(&mut t);
+    assert!(
+        !t.on_field(0, COUNCIL),
+        "the copy left: {:?}",
+        t.field_ids(0)
+    );
+    assert_eq!(t.money(0), 10_000, "the placement cost came back: uid {uid}");
+}
+
 // =====================================================================
 // 18 -- a normal CiRCLE settle and the 6000 (row 18)
 // =====================================================================

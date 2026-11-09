@@ -516,7 +516,6 @@ function botPrompt(view: MatchView, ctx: AutopilotCtx, p: MatchPrompt): Command 
       return auctionCommand(view, p, auctionWorth(view, ctx, params), ctx, "bot", params);
     case "money":
       return { act: "answer", prompt: p.id, value: clampMoney(p, p.fallback) };
-      return auctionCommand(view, p, auctionWorth(view, ctx, params), ctx, "bot", params);
     case "mortgage":
       return { act: "answer", prompt: p.id, cards: autoMortgage(view.state, tiles, p.items, p.bid) };
     case "pick":

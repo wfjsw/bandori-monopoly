@@ -123,14 +123,16 @@ pub fn believe_03_log_ok_mutant(effects: &[Effect], player: i32) -> bool {
 // OPEN-HHW-RESHUFFLE — only multiset conservation of the remainder is set.
 // ===========================================================================
 
-/// Exactly two TakeFromPile(Deck) + AddToHand pairs for `player`.
+/// Exactly two TakeFromPile(Inspection) + AddToHand pairs for `player`.
+/// The body takes from the inspection frame (the deck is turned over as a
+/// whole), so the pile tag is `4`, not `Deck` (`2`).
 pub fn believe_04_log_ok(effects: &[Effect], player: i32) -> bool {
     let mut takes = 0;
     let mut adds = 0;
     for e in effects {
         match e {
             Effect::TakeFromPile {
-                player: p, pile: 0, ..
+                player: p, pile: 4, ..
             } if *p == player => takes += 1,
             Effect::AddToHand { player: p, .. } if *p == player => adds += 1,
             _ => {}

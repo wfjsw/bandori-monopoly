@@ -263,7 +263,7 @@ Filter::PaySplitAdd("card.placed && pay_is_rent && actor != owner && tile.id >= 
 `tile` is the payment's tile. 练习室里的风暴's remote 「收费」 is stamped with
 the owner's tile, so the surcharge folds into a settle on an unowned tile; and
 because the filter requires an owner, a settle on the unowned 梦开始的地方
-(which the clause also names) is missed unless `settle_body` catches it.
+(which the clause also names) is missed unless the `Action::SettleAfter` body catches it.
 
 Root cause **R7** (settle identity absent).
 
@@ -1253,7 +1253,7 @@ Before: `pay_is_rent && tile.id >= 0 && tile.owner == owner`.
 After:
 `actor != owner && (settle.owner == owner || settle.tile == tile_named('梦开始的地方'))`
 (no `pay_is_rent`; the clause is about a settle, and 梦开始的地方 is the
-unowned half of it). `settle_body` keeps its existing fallback.
+unowned half of it). The `Action::SettleAfter` entry keeps its existing fallback.
 
 ### 6.12 `anon_tokyo.rs:222`
 
@@ -1314,6 +1314,16 @@ After:
 `trigger::tile() == tile` copy check stays. G10 later converts the `Settled`
 comparison to its `trig_settle_facts` bits for `body_replaced`; the G02 form is
 already correct for `Cancelled`/`PayerOut`.
+
+STATE-INIT-01: the paid / got / stop / expect record is per **instance**
+(`ctx::prop`, written only when a value takes one; nothing is pre-zeroed), so
+two placed copies no longer overwrite each other's per-player slots and the
+`trigger::tile()` check is only the raise-to-copy pin, not the storage
+disambiguator. The 「弃牌堆」 refund moves from `Discarded` to a `zoneLeft` hook
+(`card.placed && trigger_card == card.id`, destination `Graveyard`, and
+`trigger::instance() == ctx::self_uid()` because the `discarded` raise names the
+card, not the row) -- it runs on the still-live row, so the props are
+readable.
 
 ### 6.20 `vocal_too_hard.rs:22`
 

@@ -655,6 +655,10 @@ pub fn persona_skill(player_id: i32, buf: i32, cap: i32) -> i32 {
     kani_host::call_i32(Op::persona_skill, [player_id, buf, cap, 0, 0, 0])
 }
 
+pub fn persona(player_id: i32, buf: i32, cap: i32) -> i32 {
+    kani_host::call_i32(Op::persona, [player_id, buf, cap, 0, 0, 0])
+}
+
 pub fn group_skills(player_id: i32, buf: i32, cap: i32) -> i32 {
     kani_host::call_i32(Op::group_skills, [player_id, buf, cap, 0, 0, 0])
 }

@@ -328,6 +328,160 @@ fn haruhikage_counteracts_a_rent_payment() {
     assert_eq!(t.money(0), 10_000, "the payee received nothing");
 }
 
+/// 规则书（2）: 「使用一次Crychic角色的技能」 -- the borrower has no soyo row of
+/// its own, so the card runs the borrowed cancel's armed `plan` / `after` bodies
+/// itself: the teleport resolves without the skill being placed or pressed.
+#[test]
+fn haruhikage_borrowed_soyo_arms_the_teleport_without_the_skill() {
+    let mut t = Table::new(&["高松灯（CRYCHIC）", "户山香澄"]);
+    t.give(0, &["CRYCHIC:春日影"]);
+    let blue = tile("江户川公园");
+    t.own(0, &[blue]);
+    t.begin_turn(1);
+    drain(&mut t);
+    t.set_pos(1, (blue + 59) % 60);
+    t.dice(&[1]);
+    t.roll(1).unwrap();
+    assert!(
+        t.counteract_offered("CRYCHIC:春日影"),
+        "{}",
+        t.dump_prompt()
+    );
+    t.counteract(0, "CRYCHIC:春日影").unwrap();
+    drain(&mut t);
+    assert_eq!(t.money(1), 10_000, "the rent was cancelled");
+    assert_eq!(
+        t.state(0, "skill.soyoCrychic.armed"),
+        1,
+        "teleport armed"
+    );
+    assert!(
+        !t.on_field(0, "skill:长崎素世（CRYCHIC）:雨中祈晴"),
+        "no soyo row on the borrower's field: {:?}",
+        t.field_ids(0)
+    );
+    assert_eq!(
+        t.state(0, "skill.soyoCrychic.borrowed"),
+        1,
+        "the loan is opened"
+    );
+    assert!(
+        t.on_field(0, "CRYCHIC:春日影"),
+        "the card stays in play: {:?}",
+        t.field_ids(0)
+    );
+    // 「下回合的主要移动变为传送至触发此技能的那格」
+    t.begin_turn(0);
+    drain(&mut t);
+    t.set_pos(0, 20);
+    // No dice loaded: the armed teleport casts none.
+    t.roll(0).unwrap();
+    drain(&mut t);
+    assert_eq!(
+        t.pos(0),
+        blue,
+        "teleported through the borrowed body: keys={:?}",
+        t.recent_keys(15)
+    );
+    assert_eq!(
+        t.state(0, "skill.soyoCrychic.armed"),
+        0,
+        "the latch is one-shot"
+    );
+    assert_eq!(
+        t.state(0, "skill.soyoCrychic.borrowed"),
+        0,
+        "the loan is cleared"
+    );
+    // The used non-[持续] hand card goes to the discard pile, not into a
+    // lingering field row.
+    assert!(
+        !t.on_field(0, "CRYCHIC:春日影"),
+        "the used card leaves play: {:?}",
+        t.field_ids(0)
+    );
+    assert!(
+        t.discard(0).iter().any(|c| c == "CRYCHIC:春日影"),
+        "the used card is discarded: {:?}",
+        t.discard(0)
+    );
+}
+
+/// The same borrow with the soyo skill actually placed: the owner's own row owns
+/// the arm (`borrowed` stays 0), so the two consumers never both run it.
+#[test]
+fn soyo_crychic_owns_the_arm_while_placed() {
+    let mut t = Table::new(&["长崎素世（CRYCHIC）", "户山香澄"]);
+    t.give(0, &["CRYCHIC:春日影"]);
+    let blue = tile("江户川公园");
+    t.own(0, &[blue]);
+    t.begin_turn(1);
+    drain(&mut t);
+    t.set_pos(1, (blue + 59) % 60);
+    t.dice(&[1]);
+    t.roll(1).unwrap();
+    assert!(
+        t.counteract_offered("CRYCHIC:春日影"),
+        "{}",
+        t.dump_prompt()
+    );
+    t.counteract(0, "CRYCHIC:春日影").unwrap();
+    drain(&mut t);
+    assert_eq!(
+        t.state(0, "skill.soyoCrychic.armed"),
+        1,
+        "teleport armed"
+    );
+    assert!(
+        t.on_field(0, "skill:长崎素世（CRYCHIC）:雨中祈晴"),
+        "the own soyo row is placed: {:?}",
+        t.field_ids(0)
+    );
+    assert_eq!(
+        t.state(0, "skill.soyoCrychic.borrowed"),
+        0,
+        "an own row exists, so no loan"
+    );
+    t.begin_turn(0);
+    drain(&mut t);
+    assert!(t.on_field(0, "skill:长崎素世（CRYCHIC）:雨中祈晴"));
+    t.set_pos(0, 20);
+    t.roll(0).unwrap();
+    drain(&mut t);
+    assert_eq!(
+        t.pos(0),
+        blue,
+        "one teleport through the own row: keys={:?}",
+        t.recent_keys(20)
+    );
+    let moved = t
+        .recent_keys(40)
+        .into_iter()
+        .filter(|k| k.contains("soyo_crychic_moved"))
+        .count();
+    assert_eq!(moved, 1, "exactly one plan consumed the arm");
+    assert_eq!(
+        t.state(0, "skill.soyoCrychic.armed"),
+        0,
+        "the latch is one-shot"
+    );
+    assert_eq!(
+        t.state(0, "skill.soyoCrychic.borrowed"),
+        0,
+        "an own row never opens the loan"
+    );
+    assert!(
+        !t.on_field(0, "CRYCHIC:春日影"),
+        "the counteraction never lingers on the field: {:?}",
+        t.field_ids(0)
+    );
+    assert!(
+        t.discard(0).iter().any(|c| c == "CRYCHIC:春日影"),
+        "the used counteraction is discarded: {:?}",
+        t.discard(0)
+    );
+}
+
 /// 规则书（2）: the DiceRollResult branch is 椎名立希（CRYCHIC）'s reroll -- still offered
 /// and playable on the owner's own move roll.
 #[test]

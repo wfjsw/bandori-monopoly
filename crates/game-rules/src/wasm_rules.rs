@@ -6780,13 +6780,14 @@ impl<M: CardModules> RulesBridge<M> {
             HostRequest::Auction { player_id, tile } => {
                 // The ordinary auction (「竞价」, ABI-09): the bids run on the
                 // seat time pools; the answer is the winner seat (-1 = none).
+                // The requesting seat (`ctx::auction`'s player) opens the bid
+                // order -- not necessarily the turn seat for a nested call.
                 let winner = cx.auction_deed(
                     tile.max(0) as usize,
-                    cx.world().st.turn.max(0) as usize,
+                    player_id.max(0) as usize,
                     true,
                     15.0,
                 )?;
-                let _ = player_id;
                 return Ok(winner);
             }
             // Guest-raised trigger points (`ctx::raise`): the pass-reward trigger from
@@ -10708,12 +10709,7 @@ impl<M: CardModules> RulesBridge<M> {
                 w.hidden[seat].graveyard.push(id.to_string());
                 refilled = w.refill_after_pile_write(seat);
             }
-            Dest::Hand => {
-                if id.starts_with("tile:") {
-                    eprintln!("PUSH hand_play_tail seat={seat} card={id}");
-                }
-                w.hidden[seat].hand.push(id.to_string())
-            }
+            Dest::Hand => w.hidden[seat].hand.push(id.to_string()),
             Dest::Banished => {}
             Dest::Field => {}
         }

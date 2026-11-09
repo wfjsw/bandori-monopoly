@@ -901,7 +901,11 @@ use crate::intern::NameId;
 ///    roster personas sharing the player's base character (`variant_of`),
 ///    for 「更换角色皮肤（技能相同）」. SAVE_VERSION / RECORD_VERSION
 ///    unchanged (the auction request rides the host journal; skins are data).
-pub const ABI_VERSION: i32 = 122;
+/// v123: **character-card pile read.** `bandori_std::persona(player_id) -> String`
+///    (import `ruleset_persona`, op 498) is the character card of a seat, the
+///    same spelling `persona_is` matches; mutsumi 状态2 borrows the last
+///    player's card through it. No id renumbered. SAVE / RECORD unchanged.
+pub const ABI_VERSION: i32 = 123;
 /// v108: **stage folds and rent / settle stages (MONEY-01)**. The amount
 ///    stages no longer apply one responder after the other: every responder of
 ///    an add stage reads the **stage input** and its deltas are summed, every

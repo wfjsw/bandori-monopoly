@@ -182,6 +182,7 @@
   "mutsumi_left": "手牌 ≤1，退出状态2",
   "mutsumi_title": "天生的演员",
   "mutsumi_two": "进入状态2",
+  "mutsumi_cover": "天生的演员：借来 {{card}} 的角色卡",
   "mutsumi_crychic_ask": "指定哪名玩家？",
   "mutsumi_crychic_fixed": "本次移动掷骰固定为 {{n}}",
   "mutsumi_crychic_gain": "精致的人偶：+1 [火罐]",

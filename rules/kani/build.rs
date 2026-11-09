@@ -167,6 +167,7 @@ const ARRAY_OPS: &[&str] = &[
     "add_group_pool",
     "group_skill",
     "persona_skill",
+    "persona",
     "group_skills",
     "add_group_skill",
     "invoke_skill",

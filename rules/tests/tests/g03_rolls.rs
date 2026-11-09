@@ -406,7 +406,7 @@ fn g03_layer_keep_banks_the_unchosen_face() {
     drain(&mut t);
     assert_eq!(t.pos(0), 5, "the old face settles");
     assert_eq!(t.state(0, "layer_keep_0"), 3, "the unchosen face is banked");
-    assert_eq!(t.state(0, "layer_keep_count"), 1, "one die kept");
+    assert_eq!(t.state(0, "layer_keep_count"), 2, "one die kept (stored 1-based)");
 }
 
 // 规则书 (`please_choose` (1)): option (1) exists only while the opponent can

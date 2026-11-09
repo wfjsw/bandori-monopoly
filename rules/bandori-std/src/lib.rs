@@ -373,6 +373,62 @@ pub fn persona_skill(player_id: i32) -> Option<String> {
     }
 }
 
+/// The seat's **character card** (a persona name) -- 「角色卡堆」's read, the
+/// spelling [`ctx::persona_is`] matches. Production keeps the postcard `String`
+/// wire; under `cfg(kani)` the host answers the interned id as two LE bytes
+/// (`buf == 0` is the probe), mirroring [`persona_skill`].
+#[cfg(kani)]
+pub fn persona(player_id: i32) -> Option<String> {
+    match persona_id(player_id) {
+        Some(id) => Some(id.as_str().into()),
+        None => None,
+    }
+}
+
+/// [`persona`] without the `String`: the interned id (the Kani twin).
+#[cfg(kani)]
+pub fn persona_id(player_id: i32) -> Option<card_sdk::ctx::NameId> {
+    if unsafe { raw::sys::persona(player_id, 0, 2) } != 2 {
+        return None;
+    }
+    let (p, scratch) = raw::out_buf(2);
+    if unsafe { raw::sys::persona(player_id, p, 2) } != 2 {
+        return None;
+    }
+    let buf = raw::out_read(p, 2, scratch);
+    let id = card_sdk::ctx::NameId(u16::from_le_bytes([
+        buf.get(0).copied().unwrap_or(0),
+        buf.get(1).copied().unwrap_or(0),
+    ]));
+    if id.is_valid() {
+        Some(id)
+    } else {
+        None
+    }
+}
+
+#[cfg(not(kani))]
+pub fn persona_id(player_id: i32) -> Option<card_sdk::ctx::NameId> {
+    persona(player_id).map(|s| card_sdk::ctx::intern(&s))
+}
+
+#[cfg(not(kani))]
+pub fn persona(player_id: i32) -> Option<String> {
+    let cap = 1024;
+    let (p, scratch) = raw::out_buf(cap as usize);
+    let n = unsafe { raw::sys::persona(player_id, p, cap) };
+    if n <= 0 || n > cap {
+        return None;
+    }
+    let buf = raw::out_read(p, n, scratch);
+    let s: String = postcard::from_bytes(&buf[..n as usize]).unwrap_or_default();
+    if s.is_empty() {
+        None
+    } else {
+        Some(s)
+    }
+}
+
 /// Band-skill attachments: `(uid, rule id, extra)` in placement order.
 ///
 /// The rule id is an interned [`NameId`] (identity, not display) — compare

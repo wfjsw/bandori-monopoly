@@ -100,6 +100,12 @@ pub fn card_slot_of(name: &str) -> u8 {
 /// Zero-loop compare: `while i < e.len()` over a 29-byte CJK id was an
 /// unwind cliff (the host `memcmp` family).
 pub fn card_slot_of_bytes(b: &[u8]) -> u8 {
+    // The Kani `ctx::cards_in` facade: `"c0".."c3"`, one byte naming its own
+    // slot. Worlds that seed a pile with these short ids skip the CJK walks
+    // below entirely (every later copy / UTF-8 validation is 2 bytes).
+    if b.len() == 2 && b[0] == b'c' && b[1] < 4 {
+        return b[1];
+    }
     fn eq(a: &[u8], lit: &str) -> bool {
         let e = lit.as_bytes();
         if a.len() != e.len() || a.len() > 64 {

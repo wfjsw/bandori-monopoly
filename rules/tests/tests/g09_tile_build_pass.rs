@@ -944,6 +944,87 @@ fn g09_ringing_bloom_recomputes_on_raze() {
     );
 }
 
+/// A raze by **another** seat on the owner's tile is still the owner's view
+/// move: the fall re-runs it even though `actor` is the raiser.
+#[test]
+fn g09_ringing_bloom_raze_by_another_effect_clears_the_half() {
+    let mut t = Table::vanilla(2);
+    t.set_character_raw(0, "白金燐子");
+    t.own(0, &[SPACE, BLUE]);
+    t.set_houses(BLUE, 2);
+    t.set_houses(SPACE, 1);
+    t.give_play(0, BLOOM).unwrap();
+    drain(&mut t);
+    assert_eq!(t.tile_prop(SPACE, card_sdk::abi::prop::RENT_FACTOR), 500);
+    // P1 razes the p0-owned max tile down to Space's level.
+    t.begin_turn(1);
+    t.set_pos(1, BLUE);
+    t.give_play(1, "TEST:house_remove").unwrap();
+    drain(&mut t);
+    assert_eq!(t.houses(BLUE), 1, "the raze landed");
+    assert_eq!(
+        t.tile_prop(SPACE, card_sdk::abi::prop::RENT_FACTOR),
+        0,
+        "another seat's raze cleared the stale half: {:?}",
+        t.recent_keys(25)
+    );
+}
+
+/// `set_owner` takes the tile out of 「你的格子」; the half must go with it.
+#[test]
+fn g09_ringing_bloom_owner_change_disarms_the_half() {
+    let mut t = Table::vanilla(2);
+    t.set_character_raw(0, "白金燐子");
+    t.own(0, &[SPACE, BLUE]);
+    t.set_houses(BLUE, 2);
+    t.set_houses(SPACE, 1);
+    t.give_play(0, BLOOM).unwrap();
+    drain(&mut t);
+    assert_eq!(t.tile_prop(SPACE, card_sdk::abi::prop::RENT_FACTOR), 500);
+    // P0 sits on the lifted Space and gifts it away.
+    t.set_pos(0, SPACE);
+    t.give_play(0, "TEST:owner_set").unwrap();
+    drain(&mut t);
+    assert_eq!(t.st().owners[SPACE], 1, "the gift landed");
+    assert_eq!(
+        t.tile_prop(SPACE, card_sdk::abi::prop::RENT_FACTOR),
+        0,
+        "a tile leaving the owner is no longer lifted: {:?}",
+        t.recent_keys(25)
+    );
+}
+
+/// A bounce off the field (not a discard) ends the view and the half too.
+#[test]
+fn g09_ringing_bloom_half_ends_on_a_bounce() {
+    let mut t = Table::vanilla(2);
+    t.set_character_raw(0, "白金燐子");
+    t.own(0, &[SPACE, BLUE]);
+    t.set_houses(BLUE, 2);
+    t.set_houses(SPACE, 1);
+    t.give_play(0, BLOOM).unwrap();
+    drain(&mut t);
+    assert_eq!(t.tile_prop(SPACE, card_sdk::abi::prop::RENT_FACTOR), 500);
+    let uid = t
+        .field(0)
+        .into_iter()
+        .find(|f| f.card == BLOOM)
+        .expect("the bloom is placed")
+        .uid;
+    t.set_state(0, "TEST.drop.uid", uid);
+    t.set_state(0, "TEST.drop.dest", card_sdk::ctx::Dest::Hand as i32);
+    t.give_play(0, "TEST:drop").unwrap();
+    drain(&mut t);
+    assert!(!t.on_field(0, BLOOM), "{:?}", t.field_ids(0));
+    assert_eq!(
+        t.tile_prop(SPACE, card_sdk::abi::prop::RENT_FACTOR),
+        0,
+        "the bounce cleared the half: {:?}",
+        t.recent_keys(25)
+    );
+    assert!(t.hand(0).contains(&BLOOM.to_string()), "{:?}", t.hand(0));
+}
+
 #[test]
 fn g09_ringing_bloom_half_ends_when_the_card_leaves() {
     let mut t = Table::vanilla(2);
@@ -965,6 +1046,147 @@ fn g09_ringing_bloom_half_ends_when_the_card_leaves() {
         t.tile_prop(SPACE, card_sdk::abi::prop::RENT_FACTOR),
         0,
         "the half-charge ended with the card"
+    );
+}
+
+/// 规则书（2）: the counted view is per copy. Every placed copy hears the
+/// `zoneLeft` raise; only the leaving row's own view may end, while a second
+/// copy still in play keeps the same view in force.
+#[test]
+fn g09_ringing_bloom_second_copy_holds_the_view_through_a_bounce() {
+    let mut t = Table::vanilla(2);
+    t.set_character_raw(0, "白金燐子");
+    t.own(0, &[SPACE, BLUE]);
+    t.set_houses(BLUE, 2);
+    t.set_houses(SPACE, 1);
+    let a = t.place_raw(0, BLOOM);
+    let _b = t.place_raw(0, BLOOM);
+    // A build/raze drives both copies' view once.
+    t.set_pos(0, BLUE);
+    t.give_play(0, "TEST:house_remove").unwrap();
+    drain(&mut t);
+    t.set_houses(BLUE, 2);
+    t.set_pos(0, BLUE);
+    t.give_play(0, "TEST:house_add").unwrap();
+    drain(&mut t);
+    assert_eq!(
+        t.tile_prop(SPACE, card_sdk::abi::prop::RENT_FACTOR),
+        500,
+        "both copies lift Space"
+    );
+    // Bounce copy `a` off the field.
+    t.set_state(0, "TEST.drop.uid", a);
+    t.set_state(0, "TEST.drop.dest", card_sdk::ctx::Dest::Hand as i32);
+    t.give_play(0, "TEST:drop").unwrap();
+    drain(&mut t);
+    assert!(t.on_field(0, BLOOM), "the other copy is still placed");
+    assert_eq!(
+        t.tile_prop(SPACE, card_sdk::abi::prop::RENT_FACTOR),
+        500,
+        "the surviving copy's half must stand"
+    );
+    let survivor = t
+        .field(0)
+        .into_iter()
+        .find(|f| f.card == BLOOM)
+        .expect("survivor")
+        .uid;
+    assert_eq!(
+        t.m.world()
+            .prop_at(survivor, card_sdk::abi::prop::RENT_HOUSES),
+        3,
+        "the surviving copy's counted view must stand"
+    );
+}
+
+/// The same question for an effect discard (not a bounce, not the card's own
+/// （3） settle).
+#[test]
+fn g09_ringing_bloom_second_copy_holds_the_view_through_a_discard() {
+    let mut t = Table::vanilla(2);
+    t.set_character_raw(0, "白金燐子");
+    t.own(0, &[SPACE, BLUE]);
+    t.set_houses(BLUE, 2);
+    t.set_houses(SPACE, 1);
+    let a = t.place_raw(0, BLOOM);
+    let _b = t.place_raw(0, BLOOM);
+    t.set_pos(0, BLUE);
+    t.give_play(0, "TEST:house_add").unwrap();
+    drain(&mut t);
+    assert_eq!(
+        t.tile_prop(SPACE, card_sdk::abi::prop::RENT_FACTOR),
+        500
+    );
+    t.set_state(0, "TEST.drop.uid", a);
+    t.set_state(0, "TEST.drop.dest", card_sdk::ctx::Dest::Graveyard as i32);
+    t.give_play(0, "TEST:drop").unwrap();
+    drain(&mut t);
+    assert!(t.on_field(0, BLOOM), "the other copy is still placed");
+    let survivor = t
+        .field(0)
+        .into_iter()
+        .find(|f| f.card == BLOOM)
+        .expect("survivor")
+        .uid;
+    assert_eq!(
+        t.m.world()
+            .prop_at(survivor, card_sdk::abi::prop::RENT_HOUSES),
+        3,
+        "the surviving copy's counted view must stand"
+    );
+    assert_eq!(
+        t.tile_prop(SPACE, card_sdk::abi::prop::RENT_FACTOR),
+        500,
+        "the surviving copy's half must stand"
+    );
+}
+
+/// Opposite seats: P0's copy leaves, P1's surviving copy keeps **its own**
+/// board view untouched.
+#[test]
+fn g09_ringing_bloom_other_seat_keeps_its_view_through_a_bounce() {
+    let mut t = Table::vanilla(2);
+    t.set_character_raw(0, "白金燐子");
+    t.set_character_raw(1, "白金燐子");
+    t.own(0, &[SPACE, BLUE]);
+    t.own(1, &[SPACE - 1, BLUE + 1]);
+    t.set_houses(BLUE, 2);
+    t.set_houses(SPACE, 1);
+    let _a = t.place_raw(0, BLOOM);
+    let b = t.place_raw(1, BLOOM);
+    t.set_pos(0, BLUE);
+    t.give_play(0, "TEST:house_add").unwrap();
+    drain(&mut t);
+    assert_eq!(
+        t.tile_prop(SPACE, card_sdk::abi::prop::RENT_FACTOR),
+        500
+    );
+    // P1 bounces their copy via the fixture drop.
+    t.begin_turn(1);
+    drain(&mut t);
+    t.give(1, &["TEST:drop"]);
+    t.set_state(1, "TEST.drop.uid", b);
+    t.set_state(1, "TEST.drop.dest", card_sdk::ctx::Dest::Hand as i32);
+    t.give_play(1, "TEST:drop").unwrap();
+    drain(&mut t);
+    assert!(t.on_field(0, BLOOM), "P0's copy is still placed");
+    assert!(!t.on_field(1, BLOOM), "P1's copy left");
+    let survivor = t
+        .field(0)
+        .into_iter()
+        .find(|f| f.card == BLOOM)
+        .expect("survivor")
+        .uid;
+    assert_eq!(
+        t.m.world()
+            .prop_at(survivor, card_sdk::abi::prop::RENT_HOUSES),
+        3,
+        "P0's counted view must stand"
+    );
+    assert_eq!(
+        t.tile_prop(SPACE, card_sdk::abi::prop::RENT_FACTOR),
+        500,
+        "P0's half must stand"
     );
 }
 

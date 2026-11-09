@@ -87,7 +87,7 @@ behind the machine-wide 3-slot cap (`~/.kani-slots`). Re-run with:
 | C-PP-no-expect-03 | continuous roll-2 / hand limit -1 | PROTOCOL-LEVEL | — | — | continuous roll modifier + move-floor | — |
 | C-PP-no-expect-04 | pay+100 / receive-100, 2× window | OPEN | — | — | window lifetime of 「生效2次」 unprinted | OPEN-window2 |
 | C-PP-shine-again-00 | immune to other players' effects | PROVEN* | `shine_again_00_immune_iff` | pending | — | — |
-| C-PP-shine-again-01 | [反击] rescue price/5 + 1 fan | PROTOCOL-LEVEL | `shine_again_01_formula` (pure) | pending | [反击] window; regression hint: fan leg missing in engine | — |
+| C-PP-shine-again-01 | [反击] rescue picked-deed price/5 + 1 fan | PROTOCOL-LEVEL | `shine_again_01_formula` (pure) | pending | [反击] window; owner picks the deed when several match; regression hint: fan leg missing in engine | — |
 | C-PP-shine-again-02 | [共鸣] record colour + 1 fan | OPEN | — | — | | OPEN-共鸣 |
 | C-PP-first-accident-01 | place + 重叠的声音→deck + draw 1 | PROVEN* | `first_accident_01_place_deck_draw_iff` | triage3: FAILED was **B** spec rejected 持续 `SetToken`; fixed, re-time pending | — | — |
 | C-PP-first-accident-02 | owner cannot use PP (2) skills | FAILS | `first_accident_02_blocks_pp_skill_2_iff` (skills_pp) | triage3: FAILED 8.9 s was **B** harness cfg'd on skills-personas (pp unit lacks it) → 'Failed to match'. Moved to skills_pp.rs, re-time pending | book: no PP (2); body writes a skillBlock token but 丸山彩 (2) still opens | — |

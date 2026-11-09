@@ -278,6 +278,8 @@ pub trait HostOps {
     fn op_group_skill(&mut self, a: [i32; 6]) -> Result<i64, HostError>;
     /// `ruleset_persona_skill`
     fn op_persona_skill(&mut self, a: [i32; 6]) -> Result<i64, HostError>;
+    /// `ruleset_persona`
+    fn op_persona(&mut self, a: [i32; 6]) -> Result<i64, HostError>;
     /// `ruleset_group_skills`
     fn op_group_skills(&mut self, a: [i32; 6]) -> Result<i64, HostError>;
     /// `ruleset_add_group_skill`
@@ -1395,6 +1397,9 @@ impl<C: crate::host::HostCtx> HostOps for C {
     }
     fn op_persona_skill(&mut self, a: [i32; 6]) -> Result<i64, HostError> {
         Ok(crate::hostfns::persona_skill(self, a[0], a[1], a[2])? as i64)
+    }
+    fn op_persona(&mut self, a: [i32; 6]) -> Result<i64, HostError> {
+        Ok(crate::hostfns::persona(self, a[0], a[1], a[2])? as i64)
     }
     fn op_group_skills(&mut self, a: [i32; 6]) -> Result<i64, HostError> {
         Ok(crate::hostfns::group_skills(self, a[0], a[1], a[2])? as i64)
@@ -3755,6 +3760,14 @@ pub unsafe extern "C-unwind" fn ruleset_persona_skill(player_id: i32, buf: i32, 
             Err(e) => abort_host(e),
         },
     )
+}
+
+#[no_mangle]
+pub unsafe extern "C-unwind" fn ruleset_persona(player_id: i32, buf: i32, cap: i32) -> i32 {
+    with_host(|h| match h.op_persona([player_id, buf, cap, 0, 0, 0]) {
+        Ok(v) => v as i32,
+        Err(e) => abort_host(e),
+    })
 }
 
 #[no_mangle]

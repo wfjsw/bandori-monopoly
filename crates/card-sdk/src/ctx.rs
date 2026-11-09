@@ -5275,6 +5275,18 @@ pub fn field_instances(player_id: i32) -> Vec<(i32, NameId)> {
     decode_uid_name_list(&buf[..n as usize])
 }
 
+/// The `uid` of `player_id`'s attached instance of `card`, `-1` when the seat
+/// has none. The sim analogue of a `ExtraOf<T>` lookup: the next step addresses
+/// the instance, so a *name* scan ([`placed_cards`]) is not enough when the
+/// seat holds two copies (a borrowed skill row is one such instance).
+pub fn extra_of(player_id: i32, card: &str) -> i32 {
+    let id = intern(card);
+    field_instances(player_id)
+        .into_iter()
+        .find(|&(_, nid)| nid == id)
+        .map_or(-1, |(uid, _)| uid)
+}
+
 /// Take the instance at `uid` off play into `destination`; returns the owner
 /// it left (`-1` when it was not in play). `destination` is a `Dest` code;
 /// `Dest::Field` keeps it in play (a no-op move).

@@ -109,9 +109,19 @@ fn ledger_gap(step: &Step<'_>) -> bool {
     for e in step.events {
         match e.r#type.as_str() {
             "bankrupt" | "auction" => return true,
+            // A finished auction marks the win as a `buy`; the bid itself is a
+            // direct delete (ruling 7), so the books cannot close on the log.
+            "buy" => {
+                if e.msg.key() == "log.auction_won" {
+                    return true;
+                }
+            }
             "text" => {
                 let k = e.msg.key();
-                if k.contains("build_refund") || k.contains("purchase_unfunded") {
+                if k.contains("build_refund")
+                    || k.contains("purchase_unfunded")
+                    || k.contains("auction")
+                {
                     return true;
                 }
             }

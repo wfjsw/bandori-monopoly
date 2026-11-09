@@ -58,6 +58,12 @@ HARNESS_FILTER=()
 # Per-harness unwind table (harness = N). Table entry beats the source
 # attribute so a calibration win is what the runner actually uses.
 UNWIND_TABLE="$ROOT/rules/kani/unwind_table.toml"
+# Per-harness timeout table (harness = seconds), same shape. Only consulted
+# when `--timeout` was not passed: an explicit CLI timeout applies to every
+# harness. Entries are for harnesses that are over budget by *symex* volume
+# (long string copies), not by a wrong bound.
+TIMEOUT_TABLE="$ROOT/rules/kani/timeout_table.toml"
+TIMEOUT_SET=0
 
 usage() {
   sed -n '2,16p' "$0" | sed 's/^# \{0,1\}//'
@@ -69,7 +75,7 @@ while [[ $# -gt 0 ]]; do
     --unit)     UNIT_FILTER+=("$2"); shift 2 ;;
     --harness)  HARNESS_FILTER+=("$2"); shift 2 ;;
     --jobs)     JOBS="$2"; shift 2 ;;
-    --timeout)  TIMEOUT="$2"; shift 2 ;;
+    --timeout)  TIMEOUT="$2"; TIMEOUT_SET=1; shift 2 ;;
     --out)      OUT_DIR="$2"; shift 2 ;;
     --no-unwind-checks) NO_UNWIND_CHECKS=1; shift ;;
     --unwind)   UNWIND="$2"; shift 2 ;;
@@ -159,9 +165,17 @@ for path in sorted(proof_dir.glob('*.rs')):
         fm = fn_re.search(window)
         if fm:
             # look back a little for #[kani::unwind(N)] before the proof,
-            # and forward for one sitting between proof and fn.
+            # and forward for one sitting between proof and fn. The look-back
+            # must be *adjacent* (nothing but further attributes between the
+            # attr and `#[kani::proof]`): comment stripping pulls a preceding
+            # harness's body close enough that a plain 120-char reach stole
+            # its `#[kani::unwind]` for an un-annotated proof.
             pre = src_nc[max(0, m.start() - 120): m.start()]
-            um = unwind_re.search(pre) or unwind_re.search(window)
+            um = None
+            for cand in unwind_re.finditer(pre):
+                if re.fullmatch(r'(\s*#\[[^\]]*\]\s*)*', pre[cand.end():]):
+                    um = cand
+            um = um or unwind_re.search(window)
             names.append((fm.group(1), um.group(1) if um else ''))
 
     # 2) clause_proof! / clause_mutant! blocks
@@ -286,6 +300,41 @@ PY
   echo "$DEFAULT_UNWIND"
 }
 
+# Resolve the per-harness timeout: an explicit --timeout wins, then the
+# timeout table, then the default. Same table shape as the unwind table.
+resolve_timeout() {
+  local name="$1"
+  if [[ "$TIMEOUT_SET" == 1 ]]; then
+    echo "$TIMEOUT"
+    return
+  fi
+  local t
+  t="$(python3 - "$TIMEOUT_TABLE" "$name" <<'PY'
+import re, sys
+from pathlib import Path
+table, name = sys.argv[1], sys.argv[2]
+p = Path(table)
+if not p.exists():
+    print("")
+    raise SystemExit(0)
+for line in p.read_text().splitlines():
+    line = line.strip()
+    if not line or line.startswith('#') or line.startswith('['):
+        continue
+    m = re.match(r'^([A-Za-z0-9_:.]+)\s*=\s*(\d+)\s*$', line)
+    if m and m.group(1) == name:
+        print(m.group(2))
+        raise SystemExit(0)
+print("")
+PY
+)"
+  if [[ -n "$t" ]]; then
+    echo "$t"
+  else
+    echo "$TIMEOUT"
+  fi
+}
+
 # Map unit name -> cargo features of rules-kani (one unit's crates only).
 # Shrinks CBMC's address-taken `fn(i32)->Asked` set (874 → tens).
 unit_features() {
@@ -324,8 +373,9 @@ unit_features() {
 run_one() {
   local unit="$1" name="$2" log="$3" attr="$4"
   local start end dt verdict exit_code
-  local unwind
+  local unwind tmo
   unwind="$(resolve_unwind "$name" "$attr")"
+  tmo="$(resolve_timeout "$name")"
   acquire_slot
   start=$(date +%s.%N)
 
@@ -337,7 +387,7 @@ run_one() {
   # (library-cost stubs; semantics-preserving, see rules/kani/src/kani_stubs.rs).
   # KANI_EXTRA_ARGS is an optional exploration hook (default off/empty).
   set +e
-  timeout --signal=TERM --kill-after=30 "${TIMEOUT}s" \
+  timeout --signal=TERM --kill-after=30 "${tmo}s" \
     cargo kani -p rules-kani \
       -Z stubbing \
       --no-default-features \
@@ -410,7 +460,7 @@ run_one() {
 RESULTS_TSV="$OUT_DIR/results.tsv"
 : > "$RESULTS_TSV"
 export RESULTS_TSV TIMEOUT UNWIND NO_UNWIND_CHECKS CARGO_TARGET_DIR CARGO_BUILD_JOBS
-export DEFAULT_UNWIND UNWIND_TABLE
+export DEFAULT_UNWIND UNWIND_TABLE TIMEOUT_TABLE TIMEOUT_SET
 
 # Worker pool: read selected.tsv, run at most JOBS at a time.
 # Uses a temp dir of running PIDs.
@@ -497,7 +547,7 @@ A("")
 A(f"* crate: `rules-kani`")
 A(f"* target: `{target}`")
 A(f"* unwind: `{unwind}` (unwinding assertions on unless --no-unwind-checks; covers must be reachable)")
-A(f"* jobs: `{jobs}`  timeout: `{timeout}s` per harness")
+A(f"* jobs: `{jobs}`  default timeout: `{timeout}s` per harness (per-harness table: `rules/kani/timeout_table.toml`)")
 A(f"* generated: {payload['generated_at']}")
 A(f"* fail-closed: any non-SUCCESSFUL is a failure (no ignores)")
 A("")

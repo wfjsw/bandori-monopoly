@@ -516,6 +516,8 @@ pub enum Op {
     // v122 (ABI-09): ordinary auction, cosmetic skin list.
     auction = 496,
     persona_skins = 497,
+    // v123: the character-card pile read.
+    persona = 498,
 }
 
 /// Six i32 wire slots, matching the ABI's arg convention.

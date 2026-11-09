@@ -176,6 +176,12 @@ before the walk. Expected: window plan writes reach the walk. G04 §4.3 owns the
 plan frame and the window fold; G03 owns only the raise point, the thing the
 fold hangs from. **G03 does not design the fold.**
 
+The same raise point is written from an **invoked Action body** when a card
+borrows the plan rewrite (`CRYCHIC:春日影` runs 雨中祈晴's `plan` entry through
+`invoke_entry_paid`; the skill's `DiceRollPlan` entry is an Action for that
+reason, dual kind 67). That write has to survive to the walk on exactly the
+same terms as a window write.
+
 ### 2.8 `hagumi-per-roll-options-abi` — HHW:（育美）, rows 242, 1187, 249
 
 > 「若选择的投掷结果大于60，获得1000资金并抽一张卡，不放置标记。」
@@ -580,6 +586,13 @@ option. The wrapper's docs say so. Under Kani the list is bounded at 16, the
 same cap as `ask_choice` (`ctx.rs:2198`), because Hagumi's option count is
 `2 + gains this turn`.
 
+The shipped surface today is `ctx::ask_tiles(player_id, title, text, tiles,
+labels, prices, ai)` (`ctx.rs:2773`): the same tile-labelled options plus a
+price column and a bot hint, answered by **tile id** (or `-1` for 「不选」) so a
+commit-pass re-run cannot slide to another tile. `ask_tile_index` remains the
+target shape for prompts that must answer an index; new cards use `ask_tiles`
+(the 再次闪耀 deed pick does).
+
 ### 4.7 The turn-end settle answer
 
 ```rust
@@ -976,6 +989,11 @@ The `roll_after` entry changes from `Action::DiceRollAfter` to
 == 1 && roll_unused_face >= 0`; `counter_fire` records nothing itself, the body
 reads `roll_unused_face` and banks it. `use_die` calls
 `set_fixed_roll(die, roll_source::CHARGE)`.
+
+STATE-INIT-01: the kept-dice count slot is stored **1-based** (`count + 1`), so
+the key carries a written value from the first kept die and never needs a
+pre-zeroed placement write; `0` is exactly "nothing kept yet". Readers decode
+through `kept_count` (`stored - 1`, clamped).
 
 ### 6.15 `please_choose.rs:74-95`
 

@@ -161,6 +161,12 @@ follow the survivor's deed, and 「该方视为拥有」 only changes who is ask
 The same entry needs to know *why* the player is out (bankruptcy, forfeit or
 game removal) to tell the survivor's hook apart (C2).
 
+Landed (`beforeOut` + the card's own `zoneLeft`, §8.2): the deeds are parked
+attachments, the transfer is `ctx::rehome_card`, the card crosses to the
+survivor's `Field` via the leave rewrite, and `trigger::out_cause()` tells a
+bankruptcy from a forfeit. 「两张」 is unconditional -- a designated deed sold
+to a third party is rehomed as well (W3-ONEOFUS-01, C-Q50(b) closed).
+
 ### 2.3 `same-sky-mulligan-order` — AG:朝同一片天空迈进, row 32
 
 Book:
@@ -899,7 +905,8 @@ while the card is down. `WAS_DOWN` is deleted.
 
 ### 8.2 AG:ONE OF US (`one_of_us.rs`)
 
-`before_out`: `ctx::rehome_card(t, survivor)` for each live designated deed and
+`before_out`: `ctx::rehome_card(t, survivor)` for **both** designated deeds
+(whatever owner they currently have -- 「两张」 is unconditional) and
 `ctx::set_instance_owner(instance, survivor)`, with `trigger::out_cause()`
 telling bankruptcy from forfeit; the card itself leaves with the bankrupt seat
 and its own `zoneLeft` (cause `Bankruptcy`) rehomes if `before_out` could not.
@@ -1216,10 +1223,12 @@ Rejected.
     read it) and the query is the authority.
 12. **C-Q50(a): the owner write or a view.** 「视为拥有」 is normally a
     continuous view; design writes the real instance owner because the card
-    itself moves and its `owner` is what the seat tests read. The rest of
-    C-Q50 stays: the two deeds are
-    attachments (not a marker on the tiles), a sold deed leaves the set, and
-    the pair is cleared on the way out.
+    itself moves and its `owner` is what the seat tests read. C-Q50(b) is
+    closed the same way: 「两张」 is unconditional, so a designated deed sold
+    to a third party is rehomed to the survivor too (a real tile-owner write,
+    not only the leaver's own deeds). The rest of C-Q50 stands: the two deeds
+    are attachments (not a marker on the tiles), and the pair is cleared on
+    the way out.
 13. **Attach a card that is already attached.** Design makes it
     `detach` + `attach`: a fresh instance, counters not carried, no
     `cardDetached` suppression. A future card that needs counters to survive

@@ -47,7 +47,7 @@ pub const TOMORROWS_DOOR: CardDef = CardDef::new(
         .tags(&[])
         .text(CardText::items(&[
             it(r#"此卡指定的序列（从前往后）为“流星堂”，“花咲川女子学院”，“Space”，“Live House Galaxy”，“武道馆”，“RiNG 1”，“RiNG 2”，“RiNG 3”，“RiNG 4”，“大阪中之岛公园”"#),
-            it(r#"将此卡放置在“流星堂”上，此卡使用者每次[经过]此卡所在的格子时把此卡放置到此卡（1）效果的序列中的下一个，如果已经所在为“大阪中之岛公园”则将此卡放置在此卡使用者的游玩区域"#),
+            it("将此卡放置在“流星堂”上，此卡使用者每次[经过]此卡所在的格子时把此卡放置到此卡\n（1）效果的序列中的下一个，如果已经所在为“大阪中之岛公园”则将此卡放置在此卡使用者的游玩区域"),
             it(r#"此卡在自身游玩区域时[拥有者]以外的玩家在[拥有者]拥有的格子或梦开始的地方[结算]时额外支付[拥有者]星之鼓动山丘上房子数量×100的资金。"#),
         ]))
         // sheet cell B6
@@ -115,7 +115,7 @@ fn pass_tile(player_id: i32) -> card_sdk::Asked {
     ctx::set_prop(PROP_STEP, next);
     // 「如果已经所在为“大阪中之岛公园”则将此卡放置在此卡使用者的游玩区域」 --
     // the last stop is 大阪中之岛公园; past it the card goes back to the owner
-    // (`tile = -1`), which is when the tax's `settle_body` entry wakes up.
+    // (`tile = -1`), which is when the tax's `Action::SettleAfter` entry wakes up.
     if next >= ROUTE.len() as i32 {
         ctx::set_self_tile(-1);
     } else {

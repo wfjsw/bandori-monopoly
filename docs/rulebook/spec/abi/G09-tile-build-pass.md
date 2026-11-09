@@ -175,15 +175,21 @@ Book (`R:（燐子）Ringing Bloom` (2)):
 
 > 你的所有格子上的房屋数视为与你房屋数最多的格子等同，但受此效果影响获得额外房屋数的格子收费减半
 
-**Current.** The 「视为」 is recomputed on `HouseAdded` and `Bought`
-(`ringing_bloom.rs:30-40,112-144`). A razed max tile leaves `RENT_HOUSES` and
-the half-charge set at the old maximum until the next build; a sale does the
-same (rows 819, 826; `BACKLOG.md` CRYSTAL-08). `add_house` logs a rise only
-(`wasm_rules.rs:2060-2087`) and `set_houses` logs nothing at all; there is no
-fall kind to listen to.
+**Current.** The 「视为」 is recomputed on `HouseAdded` / `HouseRemoved` /
+`Bought` (`ringing_bloom.rs:33-43,143-159`), and the half-charge is disarmed on
+every field departure through a `zoneLeft` hook (`:50,173-199`) and on an
+`ownerSet` (`:52-62,205-261`). The departure hooks are pinned to the leaving
+instance (the card id alone is shared by a second copy), and a copy still on the
+same seat re-runs the view so the seat's board is not left cleared. A **plain sale** still uses
+`assign_deed`→`set_tile_owner` with no effect event, so a sold tile keeps its
+half until the next view (row 826; `BACKLOG.md` CRYSTAL-08). `add_house` logs a
+rise only (`wasm_rules.rs:2060-2087`) and `set_houses` logs nothing at all;
+there is no fall kind to listen to.
 
-**Expected.** A fall re-runs the view exactly like a rise. The kind is the
-symmetric half of `houseAdded` and fires on every downward house write.
+**Expected.** A fall re-runs the view exactly like a rise, and every removal
+route (bounce, banish, deck return, discard) and owner change disarms the
+half. The fall kind is the symmetric half of `houseAdded` and fires on every
+downward house write.
 
 ---
 
@@ -984,8 +990,10 @@ entry, hence no raise, when the clamp leaves the count equal (for example
 `add_house(-1)` at 0).
 
 `ringing_bloom` adds `On::Action(Action::HouseRemoved(...))` beside
-`HouseAdded`/`Bought`, and a `Discarded` entry that clears the tile props the
-card armed.
+`HouseAdded`/`Bought`, a silent `ZoneLeft` entry that clears the tile props the
+card armed on every departure, and a silent `Effect` entry guarded on
+`TriggerKind::OwnerSet` that re-runs the view against the post-write tile set.
+The `Discarded` entry remains as an idempotent clear of the counted view.
 
 ### 5.6 Move tags and path (items 1, 5)
 
@@ -1245,17 +1253,23 @@ free-pool test stays.
 Add:
 
 ```rust
-On::Action(Action::HouseRemoved("card.placed && actor == owner", None, recompute_view)),
-// the raise names the discarded card; `card.placed` is already false here
-On::Action(Action::Discarded("trigger_card == card.id", None, on_discarded)).silent(),
+On::Action(Action::HouseRemoved("card.placed && tile.owner == owner", None, recompute_view)),
+// every field departure disarms the props: `card.placed` answers on the live row
+On::Action(Action::ZoneLeft("card.placed", None, on_zone_left)).silent(),
+// an owner change moves the tile set; the hook runs only on a landed `ownerSet`
+On::Action(Action::Effect("card.placed", Some(owner_set_guard), on_owner_set)).silent(),
 ```
 
 `on_house_added` is renamed `recompute_view` and its existing `HouseAdded` /
-`Bought` entries point at the new name; the two new entries make the view
-symmetric. `on_discarded` clears `RENT_HOUSES` and every `RENT_FACTOR` the card
-armed and recomputes nothing (the card is gone) -- it also closes the existing
-TODO that a removal path other than `pay_after` leaves the tile props armed.
-`apply_view` itself is unchanged — a fall now re-runs it.
+`Bought` entries point at the new name; the fall entry makes the view
+symmetric. The `HouseAdded`/`HouseRemoved` conditions use `tile.owner` rather
+than `actor`: the write's `by` is the raiser, so another seat's raze would
+otherwise not re-run the owner's view. `on_zone_left` clears `RENT_HOUSES` and
+every `RENT_FACTOR` the card armed (all removal routes), `on_discarded` clears
+the counted view idempotently, and `on_owner_set` drops the lost tiles and
+re-runs `apply_view` over the post-write set. `apply_view` itself is unchanged
+— a fall now re-runs it. A plain sale (`assign_deed`, no effect event) is the
+remaining gap and keeps a `TODO(规则书)`.
 
 ---
 
@@ -1372,6 +1386,9 @@ same `HostRequest::Build` shape, so old bundles are unchanged.
 | 6 | `g09_house_removed_on_set_houses_fall` | `set_houses(t, n)` with `n < current` raises |
 | 6 | `g09_house_removed_not_raised_on_equal_clamp` | `add_house(-1)` at 0 raises nothing |
 | 6 | `g09_ringing_bloom_recomputes_on_raze` | razing the max tile lowers `RENT_HOUSES` and clears stale `RENT_FACTOR`s |
+| 6 | `g09_ringing_bloom_raze_by_another_effect_clears_the_half` | another seat's raze on the owner's tile re-runs the view |
+| 6 | `g09_ringing_bloom_owner_change_disarms_the_half` | a `set_owner` gift drops the half on the lost tile |
+| 6 | `g09_ringing_bloom_half_ends_on_a_bounce` | a hand bounce (not a discard) clears the props |
 | 6 | `g09_ringing_bloom_half_ends_when_the_card_leaves` | discard clears the props |
 
 Existing suites that must stay green: the `smile_parade` settle suite,

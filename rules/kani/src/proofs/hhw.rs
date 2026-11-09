@@ -30,12 +30,14 @@
 //!   entries this unit calls reaches them; the bodies that do (`dream_return`,
 //!   `charity_show`, `black_suits`) are outside this unit's harness list.
 //!   If a later harness reaches them the subset will loud-FAIL — correct.
-//! * `arm_cards_in` / `arm_take_card` do not model `CardPile::Deck`
-//!   (`deck_pile` is written by `add_to_dest` but never read). believe-04
-//!   (keep two from the deck) and backstage's flip count are blocked-by this
-//!   host gap: the body sees an empty deck and takes the short-pile path.
-//!   Assertions stay fail-closed; the covers for the unreachable deck branches
-//!   will report the gap when CBMC runs.
+//! * `arm_cards_in` / `arm_take_card` model `CardPile::Deck` and move the
+//!   inspection frame front-first, so believe-04 (keep two from the deck) and
+//!   backstage's flip count run their real pile legs when the harness plants
+//!   `deck_pile`. The earlier version of this note said the pile was never
+//!   read; the arms landed afterwards and the harnesses now cover it.
+//!   `deck_pile` is planted with the pilot ids that map through
+//!   `card_slot_of_id` (short facade / length heuristic), not with the
+//!   generic draw filler.
 //! * `arm_card_move` models the refusal and the `main_moved` latch but not the
 //!   walk itself: it moves no `pos` and logs no Teleport. The misaki harness
 //!   rides that model (`G04-move-plan` §4.10, §8.3 item 11).
@@ -86,7 +88,8 @@ crate::host_subset!(athletic_dispatch {
 
 /// `HHW:因为我一直相信着你` / `On::Play` (`believe_you::play`).
 /// `ask_*` funnel through `Op::ask` after `opt_*` option registration.
-/// Deck leg is blocked-by the unmodeled `CardPile::Deck` (see module docs).
+/// The inspection frame is modelled (`inspection_*`, `take_card` pile 4);
+/// only the extracted `keep_two` half needs it.
 crate::host_subset!(believe_dispatch {
     pay => arm_pay,
     pay_command => arm_pay_command,
@@ -99,10 +102,16 @@ crate::host_subset!(believe_dispatch {
     discard_from_hand => arm_discard_from_hand,
     take_card => arm_take_card,
     add_to_dest => arm_add_to_dest,
+    reveal_pile => arm_reveal_pile,
+    deck_count => arm_deck_count,
+    inspection_begin => arm_inspection_begin,
+    inspection_end => arm_inspection_end,
+    shuffle_into_deck => arm_shuffle_into_deck,
 });
 
 /// `HHW:出发！后台之旅！` / `On::Play` (`backstage_tour::play`).
-/// Deck peek is blocked-by the unmodeled `CardPile::Deck` (see module docs).
+/// The inspection-frame ops are modelled; the flips are the body's own loop
+/// over them.
 crate::host_subset!(backstage_dispatch {
     deck_count => arm_deck_count,
     discard_size => arm_discard_size,
@@ -219,22 +228,79 @@ fn athletic_world_placed(user: i32, crystals: i32) {
     });
 }
 
-/// `believe` play: hand holds this card + two others (activation gate + a
+/// `believe` play: hand holds this card + one other (activation gate + the
 /// discard target); money ≥ 800 so the cost is the full −800. Deck pile is
-/// planted for when `CardPile::Deck` is modeled (currently unread — see
-/// module docs).
+/// planted for the reveal / inspection / keep-two legs.
+///
+/// Answers are **concrete** (every ask picks option 0) and the hand is **one**
+/// card, so the hand ask is a forced pick: a symbolic choice makes the chosen
+/// card id a symbolic-length string and every `Msg::card` / prompt copy walks
+/// UTF-8 over all variants — Class E at unwind 40. The clauses proved here
+/// (full cost, one discard, two transfers) are choice-independent; the picks
+/// only fix *which* card moves.
 fn believe_world(user: i32) {
     host::install_backend(believe_dispatch);
     sparse_base(user, 1_000, 10_000);
     world::with_world_mut(|w| {
+        // `World::new` already seeds `answers = [0; _]`, `next_answer = 0`.
+        w.symbolic_answers = false;
         w.hand = [false; 8];
-        w.hand[2] = true; // CARD_OTHER slot
-        w.hand[3] = true; // EXTRA
+        w.hand[2] = true; // CARD_OTHER slot -- the only other hand card
         w.hand_n = 0;
         w.deck_n = 2;
         w.deck_pile = [u16::MAX; 8];
         w.deck_pile[0] = crate::intern::intern("PP:[标题偶像]").0;
         w.deck_pile[1] = crate::intern::intern("PP:[强韧之花]").0;
+    });
+}
+
+/// Pay-only variant of [`believe_world`]: hand and deck both empty, so the
+/// discard ask and the two keep rounds skipped. The −800 clause and its mutant
+/// need only the pay; the full body at unwind 40 is over 3600 s in symex
+/// (measured 2026-11-08), so each clause gets the thinnest world that reaches
+/// its own leg.
+fn believe_cost_world(user: i32) {
+    believe_world(user);
+    world::with_world_mut(|w| {
+        w.hand = [false; 8];
+        w.hand_n = 0;
+        w.deck_n = 0;
+        w.deck_pile = [u16::MAX; 8];
+    });
+}
+
+/// Discard-only variant: one hand card (a forced pick), empty deck, so only
+/// the discard leg runs. The discard target is the single hand card.
+fn believe_discard_world(user: i32) {
+    believe_world(user);
+    world::with_world_mut(|w| {
+        w.deck_n = 0;
+        w.deck_pile = [u16::MAX; 8];
+    });
+}
+
+/// Keep-two-only variant: the inspection frame is seeded with two revealed
+/// cards (the extracted keep body does not open it), hand empty. Both takes
+/// are forced picks.
+///
+/// The two cards are seeded under the 2-byte facade ids `"c2"` / `"c3"`
+/// (slots 2 / 3) rather than the full CJK names: the body copies each picked
+/// id through several `Msg` frames, and the byte walks made the proof miss a
+/// 10800 s budget in symex.
+fn believe_keep_world(user: i32) {
+    believe_world(user);
+    world::with_world_mut(|w| {
+        w.hand = [false; 8];
+        w.hand_n = 0;
+        w.deck_pile = [u16::MAX; 8];
+        w.deck_n = 0;
+        w.inspection_pile[0] = crate::intern::intern("c2").0;
+        w.inspection_pile[1] = crate::intern::intern("c3").0;
+        w.inspection_n = 2;
+        w.inspection_revealed[0] = true;
+        w.inspection_revealed[1] = true;
+        w.inspection_frame_n = 1;
+        w.inspection_deck_owner = user;
     });
 }
 
@@ -604,12 +670,23 @@ pub fn athletic_empty_discards() {
 // Entry: `HHW:因为我一直相信着你` / `On::Play`
 // Isolation: ≥1 other hand card (the activation gate); ≥2 deck cards; a
 // living rival. OPEN-HHW-BELIEVE-CHOOSER / OPEN-HHW-RESHUFFLE.
-// Deck leg is blocked-by unmodeled `CardPile::Deck` (module docs).
+// The reveal / inspection / reshuffle legs run on the `reveal_pile` /
+// `inspection_*` / `shuffle_into_deck` arms (the body crossed them before the
+// arms were declared; the subset miss is a failed check, not a silent skip).
+//
+// Each clause gets the thinnest world that reaches its own leg: the pay world
+// has no hand and no deck card, the discard world has the one forced hand pick
+// and no deck, the keep world seeds the inspection frame. The whole body at
+// unwind 40 on the full world went over 3600 s in symex (measured 2026-11-08);
+// splitting keeps each proof on its clause instead, and the discard and keep
+// halves are also extracted from `play` (`discard_one_kani` / `keep_two_kani`)
+// so their proofs do not re-run the pay front — the keep body alone still
+// exceeded 5400 s at unwind 16.
 // ===========================================================================
 
 /// Shared cost body at a concrete seat. `user` ∈ {0, 1}.
 fn believe_cost_800_iff_at(user: i32) {
-    believe_world(user);
+    believe_cost_world(user);
     let player = user;
     let condition = world::snapshot();
     let pre_money = condition.money[player as usize];
@@ -633,7 +710,7 @@ fn believe_cost_800_iff_at(user: i32) {
 /// C-HHW-believe-02 iff at seat 0 (`n_players = 2`).
 #[kani::proof]
 #[kani::use_stub_set(crate::kani_stubs::LIB_COST_NOFMT)]
-#[kani::unwind(40)]
+#[kani::unwind(20)]
 pub fn believe_cost_800_iff() {
     believe_cost_800_iff_at(0);
 }
@@ -641,17 +718,19 @@ pub fn believe_cost_800_iff() {
 /// Same iff at seat 1 — seat-symmetric 「消耗800资金」.
 #[kani::proof]
 #[kani::use_stub_set(crate::kani_stubs::LIB_COST_NOFMT)]
-#[kani::unwind(40)]
+#[kani::unwind(20)]
 pub fn believe_cost_800_user1_iff() {
     believe_cost_800_iff_at(1);
 }
 
-/// Shared discard+keep body at a concrete seat. `user` ∈ {0, 1}.
+/// Shared discard body at a concrete seat. `user` ∈ {0, 1}; the chooser is
+/// the rival seat.
 fn believe_discard_one_iff_at(user: i32) {
-    believe_world(user);
+    believe_discard_world(user);
     let player = user;
     let condition = world::snapshot();
-    invoke::unwrap_done(card_hhw::believe_you::play_kani(user));
+    // Direct call: the pay / reveal / chooser front is outside this proof.
+    invoke::unwrap_done(card_hhw::believe_you::discard_one_kani(user, 1 - user));
     let post = world::snapshot();
     let (logbuf, log_n) = log_slice();
     let effects = effects_of(&logbuf, log_n);
@@ -660,20 +739,16 @@ fn believe_discard_one_iff_at(user: i32) {
         spec::hhw::believe_03_log_ok(effects, player),
         "C-HHW-believe-03: exactly one DiscardFromHand"
     );
-    // blocked-by host: `cards_in(Deck)` / `take_card(Deck)` unmodeled, so the
-    // keep-two leg cannot fire. Fail-closed — the book demands two transfers.
-    crate::kassert!(
-        spec::hhw::believe_04_log_ok(effects, player),
-        "C-HHW-believe-04: two deck→hand transfers"
-    );
+    // The single hand card is the played copy's counterpart; it must leave the
+    // hand bitset and not be replaced in this world.
+    crate::kassert!(!post.hand[2], "C-HHW-believe-03: the hand card left the hand");
     crate::kassert!(world::arr4_eq(post.pos, condition.pos), "frame: pos");
-    let _ = condition;
 }
 
-/// C-HHW-believe-03/04 iff at seat 0 (`n_players = 2`).
+/// C-HHW-believe-03 iff at seat 0 (`n_players = 2`).
 #[kani::proof]
 #[kani::use_stub_set(crate::kani_stubs::LIB_COST_NOFMT)]
-#[kani::unwind(40)]
+#[kani::unwind(12)]
 pub fn believe_discard_one_iff() {
     believe_discard_one_iff_at(0);
 }
@@ -682,18 +757,62 @@ pub fn believe_discard_one_iff() {
 /// `n_players = 2` that is the other concrete seat either way).
 #[kani::proof]
 #[kani::use_stub_set(crate::kani_stubs::LIB_COST_NOFMT)]
-#[kani::unwind(40)]
+#[kani::unwind(12)]
 pub fn believe_discard_one_user1_iff() {
     believe_discard_one_iff_at(1);
+}
+
+/// Shared keep-two body at a concrete seat. `user` ∈ {0, 1}.
+fn believe_keep_two_iff_at(user: i32) {
+    believe_keep_world(user);
+    let player = user;
+    let condition = world::snapshot();
+    // Direct call: the front half (pay / reveal / discard) is outside this
+    // proof and covered by the cost and discard harnesses.
+    invoke::unwrap_done(card_hhw::believe_you::keep_two_kani(user));
+    let post = world::snapshot();
+    let (logbuf, log_n) = log_slice();
+    let effects = effects_of(&logbuf, log_n);
+
+    // The inspection frame is seeded with both cards, so each take is a real
+    // `TakeFromPile`; the book demands exactly two transfers.
+    crate::kassert!(
+        spec::hhw::believe_04_log_ok(effects, player),
+        "C-HHW-believe-04: two inspection takes and two hand adds"
+    );
+    // The hand started empty; both taken slots (CARD_OTHER 2, CARD_EXTRA 3)
+    // are the only new members.
+    let hand = world::with_world(|w| w.hand);
+    crate::kassert!(
+        hand[2] && hand[3],
+        "C-HHW-believe-04: both taken cards are in the hand"
+    );
+    crate::kassert!(world::arr4_eq(post.pos, condition.pos), "frame: pos");
+}
+
+/// C-HHW-believe-04 iff at seat 0 (`n_players = 2`).
+#[kani::proof]
+#[kani::use_stub_set(crate::kani_stubs::LIB_COST_NOFMT)]
+#[kani::unwind(12)]
+pub fn believe_keep_two_iff() {
+    believe_keep_two_iff_at(0);
+}
+
+/// Same iff at seat 1 — seat-symmetric 「从你的卡组中选择两张加入你的手牌」.
+#[kani::proof]
+#[kani::use_stub_set(crate::kani_stubs::LIB_COST_NOFMT)]
+#[kani::unwind(12)]
+pub fn believe_keep_two_user1_iff() {
+    believe_keep_two_iff_at(1);
 }
 
 /// MUTANT: cost 80 must disagree with the card's 800.
 #[kani::proof]
 #[kani::use_stub_set(crate::kani_stubs::LIB_COST_NOFMT)]
-#[kani::unwind(24)]
+#[kani::unwind(20)]
 pub fn believe_mutant_is_detected() {
     let user = 0i32;
-    believe_world(user);
+    believe_cost_world(user);
     let player = user;
     let condition = world::snapshot();
     let pre_money = condition.money[player as usize];

@@ -367,8 +367,10 @@ accepted (OPEN-共鸣).
 * **Quote:** 「（1）[反击][拥有者][消耗]或[支付]并当前资金不够时：记录一个此卡未记录且[拥有者]拥有同色地契的颜色，[拥有者][获得]“[拥有者]拥有的1个同色地契的购买价格”÷5的资金和1个正面[P✽P粉丝]。」
 * **Trigger:** [反击] when the owner's [消耗]/[支付] cannot be covered.
 * **Effect:** record an unrecorded colour of a same-colour deed the owner has;
-  owner gains `(that deed's purchase price) / 5` and 1 positive fan.
-* **Executable:** `shine_again_rescue_on_short_pay`.
+  when several deeds share that colour the owner picks which one, and the owner
+  gains `(the picked deed's purchase price) / 5` and 1 positive fan.
+* **Executable:** `shine_again_rescue_on_short_pay`,
+  `shine_again_deed_pick_when_several_match`.
 
 * **ID:** `C-PP-shine-again-02`
 * **Source:** `cards.json#PP:再次闪耀`

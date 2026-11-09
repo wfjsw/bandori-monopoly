@@ -1,0 +1,39 @@
+# Per-harness wall-clock budget (seconds).
+#
+# For harness bodies that are over the 900 s default by **symex volume**, not
+# by a wrong unwind: the message model copies card ids through UTF-8
+# validation loops once per `Msg::card` / option push, so each such loop costs
+# its length in unrolled steps times every path that reaches it. These bodies
+# are already on the slimmest world that still exercises the clause (answers
+# concrete, forced single-option asks); they just need the wall time.
+#
+# Consumed by tools/kani/run.sh: an explicit --timeout wins over the table.
+# Format: `harness_name = seconds` under [timeout]. Key is the bare fn name
+# (the runner's --harness filter), not the module path.
+
+[timeout]
+# HHW believe: reveal hand + deck, one rival discard, two deck→hand transfers,
+# reshuffle. The full body exceeded 3600 s in symex (2026-11-08), so each
+# clause runs on its own thin world, split per legs:
+#   pay    (no hand, no deck)  ~490 s measured, unwind 20
+#   mutant (pay world)         ~470 s measured, unwind 20
+#   discard (one hand card)    5377 / 5649 s measured (both seats), unwind 12
+#   keep   (two deck cards)    two asks + allocator paths; >10800 s, 18000 budget
+believe_cost_800_iff = 1200
+believe_cost_800_user1_iff = 1200
+believe_mutant_is_detected = 1200
+believe_discard_one_iff = 10800
+believe_discard_one_user1_iff = 10800
+believe_keep_two_iff = 18000
+believe_keep_two_user1_iff = 18000
+
+# Mor nanami (3): places the card, burns a crystal, invokes the owner skill's
+# (2) entry. 3787 s (mutant) / 4790 s (binds) measured at unwind 24 on the
+# concrete short-sentinel world (2026-11-08/09); >5400 s on the real skill
+# name / unwind 40. The yes pair runs Kani's two verification passes: 5997 s
+# for the first alone, so 5400 s and then 10800 s both timed out a hair before
+# the second pass / the envelope; 16200 leaves the second pass its ~6000 s.
+nanami_third_yes_iff_mutant = 10800
+nanami_third_yes_iff = 16200
+nanami_third_yes_iff_user1 = 16200
+nanami_third_binds_second_instance = 10800

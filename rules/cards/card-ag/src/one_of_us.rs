@@ -305,10 +305,14 @@ fn share_at_resolved(owner: i32) -> card_sdk::Asked {
 }
 
 /// 规则书: 「当其中一方破产时，将两张被指定地契放置在该卡上并转移到存活方的游戏区，该方视为拥有此地契」 --
-/// on a bankruptcy, each designated deed the leaver still owns is rehomed to
-/// the survivor unchanged (the row keeps its identity, counters and the card
-/// stays attached), and the card itself is deemed the survivor's. A deed sold
-/// to a third party has left the set and is skipped.
+/// on a bankruptcy, **both** designated deeds move to the survivor unchanged
+/// (the row keeps its identity, counters and the card stays attached), and the
+/// card itself is deemed the survivor's. 「两张」 is unconditional: a deed sold
+/// to a third party moves too, not only the leaver's own.
+///
+/// 「视为拥有」 is implemented as a real owner move (`ctx::rehome_card`) -- there
+/// is no tile-level deemed-owner primitive, and a real move carries every
+/// owner-derived view (rent, build, mortgage) with no reader changes. C-Q50.
 fn before_out(owner: i32) -> card_sdk::Asked {
     // [`before_out_applies`] is the actor test; the sheet names 破产 only.
     if trigger::out_cause() != Some(OutCause::Bankrupt) {
@@ -324,13 +328,15 @@ fn before_out(owner: i32) -> card_sdk::Asked {
     // `zoneLeft` (below) lands it in the survivor's field.
     ctx::set_prop(OUT, out + 1);
     ctx::set_instance_owner(ctx::self_uid(), survivor);
+    // 规则书: 「将两张被指定地契…」 -- both, whoever owns them now. A deed the
+    // survivor already holds needs no move.
     for key in [MINE, THEIRS] {
         let uid = ctx::prop(key) - 1;
         if uid < 0 {
             continue;
         }
         let t = ctx::prop_at(uid, DEED_TILE) - 1;
-        if t >= 0 && ctx::tile_owner(t) == out {
+        if t >= 0 && ctx::tile_owner(t) != survivor {
             rehome(t, out, survivor);
         }
     }
@@ -365,13 +371,15 @@ fn on_leave(owner: i32) -> card_sdk::Asked {
         return Ok(());
     }
     bandori_std::zones::set_leave_destination(ctx::Dest::Field);
+    // 规则书: 「将两张被指定地契…」 -- the same unconditional hand-over as
+    // `before_out`, for a deal it did not get to run.
     for key in [MINE, THEIRS] {
         let uid = ctx::prop(key) - 1;
         if uid < 0 {
             continue;
         }
         let t = ctx::prop_at(uid, DEED_TILE) - 1;
-        if t >= 0 && ctx::tile_owner(t) == out {
+        if t >= 0 && ctx::tile_owner(t) != survivor {
             rehome(t, out, survivor);
         }
     }

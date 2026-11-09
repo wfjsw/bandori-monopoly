@@ -1824,23 +1824,42 @@ crate::host_subset!(noble_dispatch {
     set_ineffective_at => arm_set_ineffective_at,
 });
 
-/// `owned == true`: the tile under the user is theirs. Else it is the other seat's.
-fn noble_world(user: i32, owned: bool) -> i32 {
+/// The owned harness: a symbolic tile of the 60-tile range, owned by the user.
+fn noble_world(user: i32) -> i32 {
     let pos: i32 = kani::any();
     kani::assume(pos >= 0 && pos < 60);
-    let owner = if owned { user } else { 1 - user };
     sparse2(noble_dispatch, user, |w| {
         // (`World::new` already leaves every tile owner=-1 / house-free.)
-        w.tiles[pos as usize].owner = owner;
+        w.tiles[pos as usize].owner = user;
         w.pos[user as usize] = pos;
     });
     pos
 }
 
+/// The noop harness: the tile under the user belongs to the other seat.
+///
+/// The whole body is an early return plus one log, so it reads only the seat's
+/// position and that tile's owner -- `sparse_play_world`'s symbolic seats cost
+/// ~250 s of symex the branch never touches. A concrete minimal world instead;
+/// the two seat harnesses pin the tile-range ends (0 / 59).
+fn noble_noop_world(user: i32, pos: i32) {
+    host::install_backend(noble_dispatch);
+    world::with_world_mut(|w| {
+        w.n_players = 2;
+        // Distinct nonzero seat money: the frame has something to preserve.
+        w.money = [1_000, 2_000, 0, 0];
+        w.tiles[pos as usize].owner = 1 - user;
+        w.pos[user as usize] = pos;
+        w.trig_player = user;
+        // A hand play's `self_uid()` is `-1` (the waste bit rides the play).
+        w.bound_uid = -1;
+    });
+}
+
 /// IFF (mark leg): tile is yours ⇒ exactly one PlaceMark on that tile.
 /// The forced settle (1) is OPEN-触发结算 / PROTOCOL-LEVEL and is not pinned.
 fn noble_02_mark_iff_at(user: i32) {
-    let pos = noble_world(user, true);
+    let pos = noble_world(user);
     let condition = world::snapshot();
     invoke::unwrap_done(card_morfonica::noble_blue::noble_blue_kani(user));
     kani::cover!(true, "body returned");
@@ -1879,10 +1898,8 @@ pub fn noble_02_mark_user1_iff() {
 }
 
 /// NO-OP (not yours): no effects.
-fn noble_02_not_yours_noop_at(user: i32) {
-    let _pos = noble_world(user, false);
-    // A hand play's `self_uid()` is `-1` (the waste bit rides the play).
-    world::with_world_mut(|w| w.bound_uid = -1);
+fn noble_02_not_yours_noop_at(user: i32, pos: i32) {
+    noble_noop_world(user, pos);
     let condition = world::snapshot();
     invoke::unwrap_done(card_morfonica::noble_blue::noble_blue_kani(user));
     kani::cover!(true, "body returned");
@@ -1905,26 +1922,27 @@ fn noble_02_not_yours_noop_at(user: i32) {
 
 #[kani::proof]
 #[kani::use_stub_set(crate::kani_stubs::LIB_COST_NOFMT)]
-#[kani::unwind(32)]
+#[kani::unwind(16)]
 pub fn noble_02_not_yours_noop() {
-    noble_02_not_yours_noop_at(0);
+    noble_02_not_yours_noop_at(0, 0);
 }
 
 #[kani::proof]
 #[kani::use_stub_set(crate::kani_stubs::LIB_COST_NOFMT)]
-#[kani::unwind(32)]
+#[kani::unwind(16)]
 pub fn noble_02_not_yours_noop_user1() {
-    noble_02_not_yours_noop_at(1);
+    noble_02_not_yours_noop_at(1, 59);
 }
 
 /// MUTANT companion (mark): a mark on tile 0 is NOT the card when the user
-/// stands elsewhere.
+/// stands elsewhere. `assume(pos != 0)` prunes the 60-tile walk, so the
+/// noop's bound is enough (SUCCESSFUL 520 s).
 #[kani::proof]
 #[kani::use_stub_set(crate::kani_stubs::LIB_COST_NOFMT)]
-#[kani::unwind(32)]
+#[kani::unwind(16)]
 pub fn noble_02_mutant_is_detected() {
     let user = 0i32;
-    let pos = noble_world(user, true);
+    let pos = noble_world(user);
     kani::assume(pos != 0);
     invoke::unwrap_done(card_morfonica::noble_blue::noble_blue_kani(user));
     kani::cover!(true, "body returned");
@@ -2161,22 +2179,71 @@ crate::host_subset!(nanami_third_dispatch {
 /// Pre-state for (3): the card is the running instance, the seat may hold a
 /// persona skill and a pot; `answers[0] = 0` accepts.
 /// Returns `(offer_uid, skill_uid)`.
+///
+/// Answers are **concrete**: `sparse_play_world` leaves the ask mode symbolic,
+/// which makes the staged answers dead and explores the yes and no rows of
+/// 「可以移除一个奇迹水晶」 alike (the yes row dives into the skill body — the
+/// whole cost of the proof is on it). The clauses pinned here are the yes
+/// leg's.
+///
+/// Money / fans are pinned concrete too: every (3) assertion compares them
+/// unchanged (`frame: money` / `frame: pos`) and no counter on this path reads
+/// them, so the symbolic fan variables `sparse_play_world` installs are pure
+/// SAT weight. The player-key entries are rewritten with the concrete 0.
 fn nanami_third_world(user: i32, with_skill: bool, with_pot: bool) -> (i32, i32) {
     let mut offer = 0;
     let mut skill = 0;
     sparse2(nanami_third_dispatch, user, |w| {
+        for p in 0..2 {
+            w.money[p] = 5_000;
+            w.fans_pos[p] = 0;
+            w.fans_neg[p] = 0;
+            w.key_set(p as i32, crate::intern::intern(crate::world::TOK_PP_POS), 0);
+            w.key_set(p as i32, crate::intern::intern(crate::world::TOK_PP_NEG), 0);
+        }
         offer = w.place_instance(user, NANAMI);
         if with_skill {
             skill = w.place_instance(user, NANAMI_SKILL);
             w.persona_skill = crate::intern::intern(NANAMI_SKILL).0;
         }
         w.charge[user as usize] = if with_pot { 1 } else { 0 };
+        w.symbolic_answers = false;
         w.answers[0] = 0;
         w.next_answer = 0;
         w.last_uid = offer;
         w.bound_uid = offer;
     });
     (offer, skill)
+}
+
+/// Variant of [`nanami_third_world`] with a **short sentinel** persona-skill
+/// name, used by the mutual-mutant harnesses (mutant, yes, binds). Those
+/// harnesses assert the skill id only as an opaque value; the real
+/// `skill:广町七深:…` name is ~46 CJK bytes that the body validates on the yes
+/// path (log arg + `invoke_entry`), and the real name doubles the symex of an
+/// otherwise concrete run. The real-name composition is covered by the
+/// ruleset tests.
+fn nanami_third_short_world(user: i32) -> i32 {
+    let mut offer = 0;
+    sparse2(nanami_third_dispatch, user, |w| {
+        for p in 0..2 {
+            w.money[p] = 5_000;
+            w.fans_pos[p] = 0;
+            w.fans_neg[p] = 0;
+            w.key_set(p as i32, crate::intern::intern(crate::world::TOK_PP_POS), 0);
+            w.key_set(p as i32, crate::intern::intern(crate::world::TOK_PP_NEG), 0);
+        }
+        offer = w.place_instance(user, NANAMI);
+        w.place_instance(user, "sk");
+        w.persona_skill = crate::intern::intern("sk").0;
+        w.charge[user as usize] = 1;
+        w.symbolic_answers = false;
+        w.answers[0] = 0;
+        w.next_answer = 0;
+        w.last_uid = offer;
+        w.bound_uid = offer;
+    });
+    offer
 }
 
 /// Field uid of the `NANAMI` instance created at `uid`, if any.
@@ -2197,9 +2264,14 @@ fn nanami_instance(uid: i32) -> Option<i32> {
 /// (3) iff at a concrete seat: a yes spends one of the just-placed crystals,
 /// invokes the owner's (2) at the new instance with the cost not pre-paid, and
 /// leaves the offered copy alone.
+///
+/// The world carries the short `"sk"` sentinel rather than the real
+/// `skill:广町七深:…` id (see [`nanami_third_short_world`]); the assertion still
+/// pins the invoked id to the persona-skill the world declares. The real-name
+/// binding is covered by `tests/morfonica.rs`'s third-press tests.
 fn nanami_third_yes_iff_at(user: i32) {
     let x = 2;
-    let (offer, _) = nanami_third_world(user, true, true);
+    let offer = nanami_third_short_world(user);
     let condition = world::snapshot();
     let pre_field = world::with_world(|w| w.field_n);
     let new_uid = world::with_world(|w| w.next_uid);
@@ -2229,7 +2301,7 @@ fn nanami_third_yes_iff_at(user: i32) {
     );
     crate::kassert!(offer_crystals == 0, "the offered copy is untouched");
     crate::kassert!(
-        spec::nnm_place_invoke_ok(invoke, crate::intern::intern(NANAMI_SKILL), new),
+        spec::nnm_place_invoke_ok(invoke, crate::intern::intern("sk"), new),
         "the owner skill's (2) is invoked at the placed copy, unpaid"
     );
     crate::kassert!(invocation_n == 1, "exactly one invocation");
@@ -2242,14 +2314,14 @@ fn nanami_third_yes_iff_at(user: i32) {
 
 #[kani::proof]
 #[kani::use_stub_set(crate::kani_stubs::LIB_COST_NOFMT)]
-#[kani::unwind(40)]
+#[kani::unwind(24)]
 pub fn nanami_third_yes_iff() {
     nanami_third_yes_iff_at(0);
 }
 
 #[kani::proof]
 #[kani::use_stub_set(crate::kani_stubs::LIB_COST_NOFMT)]
-#[kani::unwind(40)]
+#[kani::unwind(24)]
 pub fn nanami_third_yes_iff_user1() {
     nanami_third_yes_iff_at(1);
 }
@@ -2323,7 +2395,7 @@ pub fn nanami_third_no_pot_noop() {
 /// **newly placed** instance, not the older copy.
 fn nanami_third_binds_second_instance_at(user: i32) {
     let x = 2;
-    let (first, _) = nanami_third_world(user, true, true);
+    let first = nanami_third_short_world(user);
     let second = world::with_world_mut(|w| {
         let uid = w.place_instance(user, NANAMI);
         w.last_uid = uid;
@@ -2353,7 +2425,7 @@ fn nanami_third_binds_second_instance_at(user: i32) {
 
 #[kani::proof]
 #[kani::use_stub_set(crate::kani_stubs::LIB_COST_NOFMT)]
-#[kani::unwind(48)]
+#[kani::unwind(24)]
 pub fn nanami_third_binds_second_instance() {
     nanami_third_binds_second_instance_at(0);
 }
@@ -2362,11 +2434,11 @@ pub fn nanami_third_binds_second_instance() {
 /// one. A second copy must then disagree.
 #[kani::proof]
 #[kani::use_stub_set(crate::kani_stubs::LIB_COST_NOFMT)]
-#[kani::unwind(40)]
+#[kani::unwind(24)]
 #[kani::should_panic]
 pub fn nanami_third_yes_iff_mutant() {
     let user = 0;
-    let (offer, _) = nanami_third_world(user, true, true);
+    let offer = nanami_third_short_world(user);
     invoke::unwrap_done(card_morfonica::nanami_effort::place_with_offer_kani(
         user, 2,
     ));

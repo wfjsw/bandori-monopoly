@@ -31,12 +31,20 @@ pub const COUNCIL_CHECK: CardDef = CardDef::new(
         // that was cancelled (or whose payer went out), and the payload carries
         // the outcome, so the refund no longer hangs on a rent that never ran.
         On::Action(Action::TileResolved("card.placed", None, settle_after)),
-        // 规则书[反击]: 「若此卡进入弃牌堆时」 -- the refund happens on the discard
-        // itself, so a copy removed by another effect while its stop is pending
-        // (未结算) still hands the placement cost back. `trigger_card == card.id`
-        // (not `MINE`): the raise `actor` is whoever's effect discarded the card,
-        // which need not be the owner.
-        On::Action(Action::Discarded("trigger_card == card.id", None, on_discarded)).silent(),
+        // 规则书[反击]: 「若此卡进入弃牌堆时」 -- the refund happens on the leave,
+        // so a copy removed by another effect while its stop is pending
+        // (未结算) still hands the placement cost back. `zoneLeft` runs on the
+        // still-live row, so the instance props are readable here; the body
+        // keeps it to the Graveyard (`Discarded` alone would also fire on a
+        // leave the engine retargets). `trigger_card == card.id` (not `MINE`):
+        // the raise `actor` is whoever's effect discarded the card, which need
+        // not be the owner.
+        // Not silent: the refund posts a visible gain line.
+        On::Action(Action::ZoneLeft(
+            "card.placed && trigger_card == card.id",
+            None,
+            on_zone_left,
+        )),
     ],
 ).meta(&card_sdk::meta::CardMeta::new()
         .name(r#"学生会的检查"#)
@@ -124,23 +132,26 @@ fn counteract(player_id: i32) -> card_sdk::Asked {
             .player_id("who", player_id)
             .tile("tile", tile),
     );
-    // `slot` is **per player**, not a per-card map: two placed copies share these
-    // values (the last placement wins) -- every reader therefore also compares
-    // `trigger::tile()` with the copy's own tile.
     // The refund stores the money actually spent, not the pre-scale figure.
-    ctx::set_slot(player_id, SLOT_PAID, receipt.amount());
-    ctx::set_slot(player_id, SLOT_GOT, 0);
-    ctx::set_slot(player_id, SLOT_STOP, 0);
+    // `set_prop` writes the **instance** (the placement above just bound it as
+    // the running one), so two placed copies no longer share one per-player
+    // record and need no `trigger::tile()` disambiguation. Only the value that
+    // now takes one is written -- the others read their default `0`.
+    ctx::set_prop(PROP_PAID, receipt.amount());
     // 规则书[反击]: 「使下一个经过且移动终点不在此各的你以外的玩家强制停下并触发结算」 /
     // 「因此卡强制停下的玩家的结算地租价格为原价格一半」 / 「若此卡进入弃牌堆时…」 --
     // see `pass_tile` / `pay_after` / `settle_after`.
     Ok(())
 }
 
-const SLOT_PAID: &str = "council_paid";
-const SLOT_GOT: &str = "council_got";
-const SLOT_STOP: &str = "council_stop";
-const SLOT_EXPECT: &str = "council_expect";
+/// Per-**instance** memory (instance props, not player slots): the placement
+/// cost, the rent collected so far, the stop latch and the halved rent the
+/// stop should have paid. Each copy carries its own; a write happens when the
+/// value takes one, and the instance dies with its row.
+const PROP_PAID: &str = "council.paid";
+const PROP_GOT: &str = "council.got";
+const PROP_STOP: &str = "council.stop";
+const PROP_EXPECT: &str = "council.expect";
 
 /// 规则书[反击]: 「本卡原应拿到的资金」 -- the halved rent the forced settle should
 /// have paid.
@@ -166,8 +177,8 @@ fn pass_tile(player_id: i32) -> card_sdk::Asked {
     ctx::plan::set_stop_at(tile);
     ctx::plan::set_settles(true);
     ctx::plan::set_rent_factor(500);
-    ctx::set_slot(player_id, SLOT_STOP, 1);
-    ctx::set_slot(player_id, SLOT_EXPECT, halved_rent(tile));
+    ctx::set_prop(PROP_STOP, 1);
+    ctx::set_prop(PROP_EXPECT, halved_rent(tile));
     ctx::log(
         player_id,
         &Msg::new(key!("council_check_stop"))
@@ -177,17 +188,17 @@ fn pass_tile(player_id: i32) -> card_sdk::Asked {
     Ok(())
 }
 
-fn pay_after(player_id: i32) -> card_sdk::Asked {
+fn pay_after(_player_id: i32) -> card_sdk::Asked {
     // `card.placed && pay_is_rent && target == owner` is the condition.
     let tile = ctx::self_tile().unwrap_or(-1);
     if tile < 0 || trigger::tile() != tile {
         return Ok(());
     }
-    if ctx::slot(player_id, SLOT_STOP) == 0 {
+    if ctx::prop(PROP_STOP) == 0 {
         return Ok(());
     }
-    let got = ctx::slot(player_id, SLOT_GOT).saturating_add(trigger::value());
-    ctx::set_slot(player_id, SLOT_GOT, got);
+    let got = ctx::prop(PROP_GOT).saturating_add(trigger::value());
+    ctx::set_prop(PROP_GOT, got);
     Ok(())
 }
 
@@ -196,20 +207,22 @@ fn pay_after(player_id: i32) -> card_sdk::Asked {
 /// the halved rent fell short of what the tile should have paid.
 fn settle_after(player_id: i32) -> card_sdk::Asked {
     // `card.placed` is the condition.
-    if ctx::slot(player_id, SLOT_STOP) == 0 {
+    if ctx::prop(PROP_STOP) == 0 {
         return Ok(());
     }
+    // The props are the instance's own; `trigger::tile() == tile` still pins
+    // the settle to the tile this copy stands on.
     let tile = ctx::self_tile().unwrap_or(-1);
-    // The slots are per player, shared by copies: only the copy standing on the
-    // settled tile is the one this stop belongs to (same shape as `pass_tile` /
-    // `pay_after`).
     if tile < 0 || trigger::tile() != tile {
         return Ok(());
     }
-    ctx::set_slot(player_id, SLOT_STOP, 0);
-    let paid = ctx::slot(player_id, SLOT_PAID);
-    let got = ctx::slot(player_id, SLOT_GOT);
-    let expect = ctx::slot(player_id, SLOT_EXPECT);
+    let paid = ctx::prop(PROP_PAID);
+    let got = ctx::prop(PROP_GOT);
+    let expect = ctx::prop(PROP_EXPECT);
+    ctx::set_prop(PROP_STOP, 0);
+    // The copy is leaving anyway; zeroing the cost here is what keeps the
+    // `zoneLeft` backstop from refunding a second time.
+    ctx::set_prop(PROP_PAID, 0);
     ctx::set_dest(ctx::Dest::Graveyard, card_sdk::abi::ZoneChangeCause::Effect);
     // 规则书[反击]: 「若此卡进入弃牌堆时结算获得的资金小于本卡原应拿到的资金或未结算则获得发动此卡消耗的资金」
     // -- 「或未结算」 makes the refund independent of `got`; only a settle that
@@ -233,25 +246,30 @@ fn settle_after(player_id: i32) -> card_sdk::Asked {
                 .tile("tile", tile),
         );
     }
-    // Settled: the discard hook has nothing left to refund.
-    ctx::set_slot(player_id, SLOT_PAID, 0);
-    ctx::set_slot(player_id, SLOT_GOT, 0);
+    // Settled: the leave hook has nothing left to refund.
     Ok(())
 }
 
 /// 规则书[反击]: 「若此卡进入弃牌堆时…或未结算则获得发动此卡消耗的资金」 -- a copy
-/// that leaves the field before its forced settle collected anything hands the
-/// placement cost back. A completed settle already cleared `SLOT_PAID`.
-fn on_discarded(player_id: i32) -> card_sdk::Asked {
-    let paid = ctx::slot(player_id, SLOT_PAID);
-    if paid <= 0 {
+/// that leaves the field for the discard pile before its forced settle
+/// collected anything hands the placement cost back. A completed settle already
+/// cleared `PROP_PAID`; any other destination (a bounce to the hand) keeps it.
+fn on_zone_left(player_id: i32) -> card_sdk::Asked {
+    // `card.placed && trigger_card == card.id` is the condition. Every copy of
+    // the card answers a `Discarded` raise (the raise names the card, not the
+    // row); the zone raise names the row, so only the leaving copy runs. A
+    // settle the card itself just ran cleared the cost already.
+    if trigger::instance() != ctx::self_uid() {
         return Ok(());
     }
-    let got = ctx::slot(player_id, SLOT_GOT);
-    let expect = ctx::slot(player_id, SLOT_EXPECT);
-    ctx::set_slot(player_id, SLOT_PAID, 0);
-    ctx::set_slot(player_id, SLOT_GOT, 0);
-    ctx::set_slot(player_id, SLOT_STOP, 0);
+    let to_discard = trigger::zone().is_some_and(|z| z.to == card_sdk::abi::Zone::Graveyard);
+    let paid = ctx::prop(PROP_PAID);
+    if !to_discard || paid <= 0 {
+        return Ok(());
+    }
+    let got = ctx::prop(PROP_GOT);
+    let expect = ctx::prop(PROP_EXPECT);
+    ctx::set_prop(PROP_PAID, 0);
     ctx::gain(
         player_id,
         paid,
@@ -295,6 +313,6 @@ pub fn settle_after_kani(player_id: i32) -> card_sdk::Asked {
 
 #[cfg(kani)]
 #[inline(always)]
-pub fn on_discarded_kani(player_id: i32) -> card_sdk::Asked {
-    on_discarded(player_id)
+pub fn on_zone_left_kani(player_id: i32) -> card_sdk::Asked {
+    on_zone_left(player_id)
 }

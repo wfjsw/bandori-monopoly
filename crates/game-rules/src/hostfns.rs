@@ -888,14 +888,7 @@ pub fn mortgage_value<C: HostCtx>(c: &mut C, tile: i32) -> Result<i32, HostError
 }
 
 pub fn owned_count<C: HostCtx>(c: &mut C, player_id: i32) -> Result<i32, HostError> {
-    let n = c.st().wr().owned_count(player_id);
-    if std::env::var("DBG_H01").is_ok() && player_id == 0 {
-        eprintln!(
-            "H01 owned_count p0 = {n} owner16={:?}",
-            c.st().wr().tile_owner(16)
-        );
-    }
-    Ok(n)
+    Ok(c.st().wr().owned_count(player_id))
 }
 
 pub fn owned_at<C: HostCtx>(c: &mut C, player_id: i32, index: i32) -> Result<i32, HostError> {
@@ -1996,6 +1989,18 @@ pub fn persona_skill<C: HostCtx>(
     let s = c.st().wr().persona_skill_id(player_id).unwrap_or_default();
     let bytes = postcard::to_allocvec(&s)
         .map_err(|e| HostError::trap(format!("persona_skill encode: {e}")))?;
+    if bytes.len() as i32 <= cap {
+        c.write_guest(buf, &bytes)?;
+    }
+    Ok(bytes.len() as i32)
+}
+
+/// The seat's character card (a persona name, postcard `String`), the
+/// character-card pile read.
+pub fn persona<C: HostCtx>(c: &mut C, player_id: i32, buf: i32, cap: i32) -> Result<i32, HostError> {
+    let s = c.st().wr().persona_name(player_id).unwrap_or_default();
+    let bytes = postcard::to_allocvec(&s)
+        .map_err(|e| HostError::trap(format!("persona encode: {e}")))?;
     if bytes.len() as i32 <= cap {
         c.write_guest(buf, &bytes)?;
     }
