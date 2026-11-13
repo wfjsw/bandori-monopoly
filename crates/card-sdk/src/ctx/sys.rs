@@ -1482,6 +1482,11 @@ mod abi {
         pub fn trig_set_spare(seat: i32);
         #[cfg_attr(
             any(not(target_arch = "wasm32"), feature = "native-rules"),
+            link_name = "ruleset_trig_set_abnormal_allowed"
+        )]
+        pub fn trig_set_abnormal_allowed();
+        #[cfg_attr(
+            any(not(target_arch = "wasm32"), feature = "native-rules"),
             link_name = "ruleset_trig_cancelled"
         )]
         pub fn trig_cancelled() -> i32;

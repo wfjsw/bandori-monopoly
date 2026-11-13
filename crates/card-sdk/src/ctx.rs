@@ -4430,6 +4430,14 @@ pub mod trigger {
         unsafe { sys::trig_set_negate_effect() }
     }
 
+    /// Answer an `AbnormalChoice` window with **yes**: the received movement
+    /// abnormal lands after all (「可选择受到的…效果是否生效」, glossary 14).
+    /// Without this write the gate stays refused; the body asks the holder
+    /// with [`super::ask_yes`] and calls this on yes.
+    pub fn allow_abnormal() {
+        unsafe { sys::trig_set_abnormal_allowed() }
+    }
+
     /// Take one recipient out of settlement. The effect still settles for
     /// everyone else -- this is *not* a complete invalidation; use
     /// [`set_cancelled`] for that. Counter cards differ on which they mean.

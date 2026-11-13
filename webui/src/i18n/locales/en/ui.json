@@ -74,6 +74,7 @@
   "anim.chainKind.spendBefore": "Before spend",
   "anim.chainKind.payCalcBefore": "Before pay calculation",
   "anim.chainKind.abnormalRefused": "Abnormal refused",
+  "anim.chainKind.abnormalChoice": "Abnormal choice",
   "anim.chainKind.bankruptBefore": "Before bankruptcy",
   "anim.chainKind.bankruptResolved": "Bankruptcy resolved",
   "anim.chainKind.beforeOut": "Before out",

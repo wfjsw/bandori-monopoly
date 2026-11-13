@@ -74,6 +74,7 @@
   "anim.chainKind.spendBefore": "消耗前",
   "anim.chainKind.payCalcBefore": "支付计算前",
   "anim.chainKind.abnormalRefused": "异常被拒",
+  "anim.chainKind.abnormalChoice": "异常选择",
   "anim.chainKind.bankruptBefore": "破产前",
   "anim.chainKind.bankruptResolved": "破产结算后",
   "anim.chainKind.beforeOut": "出局前",

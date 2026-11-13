@@ -454,6 +454,8 @@ pub trait HostOps {
     fn op_trig_set_pay_shape(&mut self, a: [i32; 6]) -> Result<i64, HostError>;
     /// `ruleset_trig_set_cancelled`
     fn op_trig_set_cancelled(&mut self, a: [i32; 6]) -> Result<i64, HostError>;
+    /// `ruleset_trig_set_abnormal_allowed`
+    fn op_trig_set_abnormal_allowed(&mut self, a: [i32; 6]) -> Result<i64, HostError>;
     /// `ruleset_trig_set_negate_effect`
     fn op_trig_set_negate_effect(&mut self, a: [i32; 6]) -> Result<i64, HostError>;
     /// `ruleset_trig_set_spare`
@@ -1692,6 +1694,10 @@ impl<C: crate::host::HostCtx> HostOps for C {
     }
     fn op_trig_set_cancelled(&mut self, a: [i32; 6]) -> Result<i64, HostError> {
         crate::hostfns::trig_set_cancelled(self)?;
+        Ok(0)
+    }
+    fn op_trig_set_abnormal_allowed(&mut self, a: [i32; 6]) -> Result<i64, HostError> {
+        crate::hostfns::trig_set_abnormal_allowed(self)?;
         Ok(0)
     }
     fn op_trig_set_negate_effect(&mut self, a: [i32; 6]) -> Result<i64, HostError> {
@@ -4544,6 +4550,14 @@ pub unsafe extern "C-unwind" fn ruleset_trig_set_pay_shape(n: i32) -> i32 {
 #[no_mangle]
 pub unsafe extern "C-unwind" fn ruleset_trig_set_cancelled() {
     with_host(|h| match h.op_trig_set_cancelled([0, 0, 0, 0, 0, 0]) {
+        Ok(_) => {}
+        Err(e) => abort_host(e),
+    })
+}
+
+#[no_mangle]
+pub unsafe extern "C-unwind" fn ruleset_trig_set_abnormal_allowed() {
+    with_host(|h| match h.op_trig_set_abnormal_allowed([0, 0, 0, 0, 0, 0]) {
         Ok(_) => {}
         Err(e) => abort_host(e),
     })

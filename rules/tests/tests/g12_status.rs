@@ -74,6 +74,20 @@ fn refused(t: &Table, mark: i32) -> bool {
         .any(|k| k.contains("abnormalRefused"))
 }
 
+/// Answer the open [不可阻挡] choice (STA-02): `yes` = let the received
+/// abnormal land, `no` = keep the refusal. The prompt is the holder's.
+fn choose_abnormal(t: &mut Table, yes: bool) {
+    let p = t.expect_prompt();
+    assert_eq!(
+        p.title.key(),
+        "ask.unstoppable_choice.title",
+        "expected the [不可阻挡] choice: {}",
+        t.dump_prompt()
+    );
+    assert_eq!(t.asked(), vec![0], "the choice is the holder's");
+    t.answer_one(if yes { 0 } else { 1 }).unwrap();
+}
+
 /// Player 0 holds [不可阻挡]; hand the turn to player 1, who will deliver.
 fn unstoppable_victim() -> Table {
     let mut t = Table::vanilla(2);
@@ -281,7 +295,8 @@ fn g12_tsukushi_garden_replays_its_own_move() {
 // =====================================================================
 
 /// C-G12-unstoppable-04: 「处于该状态时可选择受到的[传送]…效果是否生效」 --
-/// a received teleport does not land and the refusal is reported.
+/// the holder is asked (STA-02) and, **answered no**, the received teleport
+/// does not land and the refusal is reported.
 ///
 /// Source: `docs/rulebook/cards.json`, glossary 14 ([不可阻挡]). Design: G12
 /// §5.1, §9.1.
@@ -294,6 +309,7 @@ fn g12_unstoppable_refuses_a_received_teleport() {
         let mark = t.mark();
         t.play(1, "TEST:teleporter")
             .map_err(|e| format!("play rejected: {e}"))?;
+        choose_abnormal(&mut t, false);
         skip_all(&mut t);
         if t.pos(0) != 5 {
             return Err(format!("teleport landed: pos {}", t.pos(0)));
@@ -310,7 +326,8 @@ fn g12_unstoppable_refuses_a_received_teleport() {
     .expect("C-G12-unstoppable-04 (teleport)");
 }
 
-/// C-G12-unstoppable-04: 「可选择受到的…[强制移动]…效果是否生效」.
+/// C-G12-unstoppable-04: 「可选择受到的…[强制移动]…效果是否生效」 -- answered
+/// no, the received forced move does not walk.
 ///
 /// Source: `docs/rulebook/cards.json`, glossary 14 ([不可阻挡]). Design: G12
 /// §5.1, §9.1.
@@ -323,6 +340,7 @@ fn g12_unstoppable_refuses_a_received_forced_move() {
         let mark = t.mark();
         t.play(1, "TEST:forcer")
             .map_err(|e| format!("play rejected: {e}"))?;
+        choose_abnormal(&mut t, false);
         skip_all(&mut t);
         if t.pos(0) != 5 {
             return Err(format!("forced move landed: pos {}", t.pos(0)));
@@ -339,7 +357,8 @@ fn g12_unstoppable_refuses_a_received_forced_move() {
     .expect("C-G12-unstoppable-04 (forced)");
 }
 
-/// C-G12-unstoppable-04: 「可选择受到的…[强制停下]…效果是否生效」.
+/// C-G12-unstoppable-04: 「可选择受到的…[强制停下]…效果是否生效」 -- answered
+/// no, the received stop stays off.
 ///
 /// Source: `docs/rulebook/cards.json`, glossary 14 ([不可阻挡]). Design: G12
 /// §5.1, §9.1.
@@ -352,6 +371,7 @@ fn g12_unstoppable_refuses_a_received_stop() {
         let mark = t.mark();
         t.play(1, "TEST:stopper")
             .map_err(|e| format!("play rejected: {e}"))?;
+        choose_abnormal(&mut t, false);
         skip_all(&mut t);
         if t.state(0, "TEST:stopped") != 0 {
             return Err(format!(
@@ -378,7 +398,7 @@ fn g12_unstoppable_refuses_a_received_stop() {
 }
 
 /// C-G12-unstoppable-04: 「可选择受到的…」 -- the abnormal reverse rides the
-/// same gate.
+/// same gate; answered no it stays off.
 ///
 /// Source: `docs/rulebook/cards.json`, glossary 14 ([不可阻挡]). Design: G12
 /// §5.1, §9.1.
@@ -391,6 +411,7 @@ fn g12_unstoppable_refuses_a_received_reverse() {
         let mark = t.mark();
         t.play(1, "TEST:reverser")
             .map_err(|e| format!("play rejected: {e}"))?;
+        choose_abnormal(&mut t, false);
         skip_all(&mut t);
         if t.state(0, "TEST:reversed") != 0 {
             return Err(format!(

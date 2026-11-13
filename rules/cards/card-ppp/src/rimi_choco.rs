@@ -58,9 +58,11 @@ fn play(player_id: i32) -> card_sdk::Asked {
         &Msg::new(key!("rimi_choco_ask")),
         &tiles,
     )?;
-    // 规则书: 「期间[不可阻挡]」 -- the walk is armed [不可阻挡]. The stay gate
-    // reads the state; `abnormal_gate` does not, so a [停留] met during the
-    // walk still lands (BACKLOG STA-02).
+    // 规则书: 「期间[不可阻挡]」 -- the walk is armed [不可阻挡]. The status's
+    // stay gate and its abnormal-gate exemption both read the state; the walk
+    // is self-caused (`by == player_id`), so `abnormal_gate` treats every
+    // abnormal met on it as chosen, not 「受到的」 -- no STA-02 choice prompt,
+    // and the walk proceeds.
     let held = ctx::state::get(player_id, "unstoppable");
     // `add` stacks a layer rather than clobbering the count (`tsukushi_garden`,
     // `rinko` grant the same status this way).
@@ -91,9 +93,10 @@ fn play(player_id: i32) -> card_sdk::Asked {
             .i("n", len as i64),
     );
     // 规则书: 「立刻进入移动阶段」 -- the card runs the walk now. `ctx::run_planned_move`
-    // goes through `abnormal_gate`, which never consults [不可阻挡] (its
-    // `movement` local is dead, STA-02), so the status only opens the stay gate
-    // and suppresses new [晕眩]/[除外] layers.
+    // goes through `abnormal_gate`; the self-caused walk is chosen there, and
+    // the status's exemption read keeps a landed [停留] from holding it, so
+    // the walk proceeds while the status also suppresses new [晕眩]/[除外]
+    // layers.
     ctx::run_planned_move(player_id);
     Ok(())
 }

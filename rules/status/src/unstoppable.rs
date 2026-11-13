@@ -16,20 +16,35 @@
 //! * **「[停留]，[晕眩]，[除外]在适当时机依旧掉层」** -- wear-off is
 //!   unchanged (the items keep their ticks).
 //! * **「可选择受到的[传送]，[强制移动]，[强制停下]效果是否生效」** -- the
-//!   abnormal gate: a received abnormal of the four movement kinds (teleport,
-//!   forced move, forced stop, reverse) is refused outright, so it never lands;
-//!   a landed layer (stay / stun / exile) is exempted from holding the move.
+//!   gate closes for a receiver's movement abnormal (the four kinds 4–7:
+//!   teleport, forced move, forced stop, reverse) and the engine raises the
+//!   `abnormalChoice` window on the holder. The [`on_abnormal_choice`] body
+//!   asks the holder yes/no: yes lets the effect land (and still holds the
+//!   move); no (and a timeout / the standard AI) keeps the refusal. A landed
+//!   layer (stay / stun / exile) is exempted from holding the move.
 
-use card_sdk::abi::FilterKind;
-use card_sdk::{CardDef, Filter, GateValue, On};
+use card_sdk::abi::{ActionKind, FilterKind};
+use card_sdk::ctx::trigger;
+use card_sdk::{Action, CardDef, Filter, GateValue, On};
 
 /// The board-owned [不可阻挡] rule. One instance on `BOARD_OWNER`, `tile = -1`.
 pub const STATUS_UNSTOPPABLE: CardDef = CardDef::new(
     "status:unstoppable",
     &[
-        // 「可选择受到的…是否生效」 -- a received movement abnormal (kinds 4-7)
-        // is refused: it does not land and opens no `effect` window. A
-        // self-caused move (`by == actor`) is chosen, not 「受到的」, and walks.
+        // 「可选择受到的…是否生效」 -- the engine raises `abnormalChoice` on
+        // the holder when the gate below closed for a received movement
+        // abnormal. This body asks the holder and, on yes, lets it land. A
+        // self-caused move (`by == actor`) is chosen, not 「受到的」, and never
+        // reaches here (the engine does not raise it).
+        On::Action(Action::AbnormalChoice(
+            "state(actor,'unstoppable') > 0 && value >= 4 && by != actor",
+            None,
+            on_abnormal_choice,
+        )),
+        // 「可选择受到的…是否生效」 -- the gate the choice answers: a received
+        // movement abnormal (kinds 4-7) is refused unless the holder opted in,
+        // so it does not land and opens no `effect` window. A self-caused move
+        // (`by == actor`) is chosen, not 「受到的」, and walks.
         On::Filter(Filter::AbnormalGate(
             "step == 0 && state(actor,'unstoppable') > 0 && value >= 4 && by != actor",
             None,
@@ -82,6 +97,22 @@ fn exempt(_owner: i32, mut g: GateValue) -> GateValue {
     g.allowed = Some(true);
     g
 }
+
+/// 「可选择受到的…效果是否生效」 -- the holder's opt-in on the engine's
+/// `abnormalChoice` window. The body runs for the board-owned instance, so the
+/// holder is the raise seat (`trigger::player_id`), not `_owner`. Yes writes
+/// the allow flag the gate reads back; no leaves the refusal (and its
+/// `log.unstoppable_skip` line) unchanged. The ask's fallback is 「否」, so a
+/// timeout and the standard bot both refuse.
+fn on_abnormal_choice(_owner: i32) -> card_sdk::Asked {
+    let p = trigger::player_id();
+    let title = card_sdk::Msg::new("ask.unstoppable_choice.title");
+    let text = card_sdk::Msg::new("ask.unstoppable_choice.text").player_id("who", p);
+    if card_sdk::ctx::ask_yes(p, &title, &text)? {
+        trigger::allow_abnormal();
+    }
+    Ok(())
+}
 // ------------------------------------------------------------- canonical API
 
 /// The state key this host owns.
@@ -112,4 +143,10 @@ pub fn refuse_kani(player_id: i32, v: card_sdk::GateValue) -> card_sdk::GateValu
 #[inline(always)]
 pub fn exempt_kani(player_id: i32, v: card_sdk::GateValue) -> card_sdk::GateValue {
     exempt(player_id, v)
+}
+
+#[cfg(kani)]
+#[inline(always)]
+pub fn on_abnormal_choice_kani(player_id: i32) -> card_sdk::Asked {
+    on_abnormal_choice(player_id)
 }

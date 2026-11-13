@@ -518,6 +518,8 @@ pub enum Op {
     persona_skins = 497,
     // v123: the character-card pile read.
     persona = 498,
+    // STA-02: the [不可阻挡] `abnormalChoice` yes answer.
+    trig_set_abnormal_allowed = 499,
 }
 
 /// Six i32 wire slots, matching the ABI's arg convention.
