@@ -539,10 +539,18 @@ pub fn is_property(t: &TileData) -> bool {
     t.kind == 1
 }
 
-/// `TileData::is_buyable` — Property or Ring (game-core `data.rs`).
-/// Replaced by `tile_in(t, "buyable")` on the host; kept as the static-data half.
+/// `TileData::is_buyable` — `price > 0` (`crates/game-core/src/data.rs:95-102`).
+///
+/// **Ownership-independent** (G15): production's class answer does not read the
+/// owner, so an owned deed is still buyable. The old kind-based half and the
+/// host's `owner < 0` conjunct were both wrong for owned tiles.
 pub fn is_buyable(t: &TileData) -> bool {
-    t.kind == 1 || t.kind == 3
+    t.price > 0
+}
+
+/// Colour group 6 (production `is_color(_, t, 6)` with no colour props).
+fn is_color_6(t: &TileData) -> bool {
+    t.group == 6
 }
 
 /// A 「商店街」 deed: buyable and colour group 10 (wasm_rules `is_shop`).
@@ -597,22 +605,73 @@ pub fn tile_attr(t: &TileData, attr: &str) -> i32 {
     }
 }
 
-/// ABI v56: `tile_in` -- static class definitions (props are not modelled on
-/// this static board). Matching `game-rules::tile_class`.
-pub fn tile_in(t: &TileData, class: &str) -> bool {
-    match class {
-        "buyable" => is_buyable(t),
-        "shop" => is_shop(t),
-        "livehouse" => is_buyable(t) && t.group == 6,
-        _ => {
-            let Some(g) = class.strip_prefix("color:") else {
-                return false;
-            };
-            match g.parse::<i32>() {
-                Ok(g) => t.group == g || t.group == -2,
-                Err(_) => false,
-            }
+/// A classified `tile_in` class.
+///
+/// The host arm classifies the **interned bytes** instead of a `&str`:
+/// `resolve_str`'s UTF-8 validation once per call was the symex cliff on the
+/// board-walking bodies (blue rose walks all 60 tiles three times per play,
+/// ~360 `tile_in` calls).
+#[derive(Clone, Copy, PartialEq, Eq, Debug)]
+pub enum TileClass {
+    Buyable,
+    Shop,
+    Livehouse,
+    /// `color:<g>`; `g` = -2 is production's `ALL_COLORS`.
+    Color(i32),
+    Unknown,
+}
+
+impl TileClass {
+    /// Parse the class name's **bytes** (no UTF-8 validation).
+    pub fn from_bytes(b: &[u8]) -> TileClass {
+        if bytes_eq(b, b"buyable") {
+            return TileClass::Buyable;
         }
+        if bytes_eq(b, b"shop") {
+            return TileClass::Shop;
+        }
+        if bytes_eq(b, b"livehouse") {
+            return TileClass::Livehouse;
+        }
+        let Some(digits) = b.strip_prefix(b"color:") else {
+            return TileClass::Unknown;
+        };
+        // Board groups are 0..=11 (one or two decimal digits); anything else
+        // is a class this static board cannot answer.
+        let g = match digits {
+            [d] if d.is_ascii_digit() => (d - b'0') as i32,
+            [t, d] if t.is_ascii_digit() && d.is_ascii_digit() => {
+                ((t - b'0') * 10 + (d - b'0')) as i32
+            }
+            _ => return TileClass::Unknown,
+        };
+        TileClass::Color(g)
+    }
+
+    pub fn parse(class: &str) -> TileClass {
+        Self::from_bytes(class.as_bytes())
+    }
+}
+
+/// ABI v56: `tile_in` -- static class definitions (props are not modelled on
+/// this static board). Matching `game_rules::tile_class` (G15).
+///
+/// The ruleset's registered classes (`buyable` / `shop` / `livehouse`) come
+/// first, then the generic `color:<g>` class. `player` is accepted for the
+/// future colour-prop layer; the current model reads the tile's own group
+/// (`ALL_COLORS` = -2 still counts for every colour, like production).
+pub fn tile_in(t: &TileData, player: i32, class: &str) -> bool {
+    tile_in_class(t, player, TileClass::parse(class))
+}
+
+pub fn tile_in_class(t: &TileData, player: i32, class: TileClass) -> bool {
+    let _ = player;
+    match class {
+        TileClass::Buyable => is_buyable(t),
+        TileClass::Shop => is_shop(t),
+        TileClass::Livehouse => is_buyable(t) && is_color_6(t),
+        TileClass::Color(g) => t.group == g || t.group == -2,
+        TileClass::Unknown => false,
     }
 }
 

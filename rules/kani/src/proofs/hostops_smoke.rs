@@ -11,6 +11,12 @@
 //! | `trig_move_payload_reads` | `trig_move_*` | payload getters |
 //! | `trig_buy_payload_reads` | `trig_price` / seller / kind / deal | buy snap |
 //! | `trig_roll_source_reads` | `trig_roll_source` | guest codes 0..=3 |
+//! | `tile_in_buyable_is_price_based` | `tile_in` | G15 M1: buyable == price > 0, owner −1/0 |
+//! | `tile_in_livehouse_is_buyable_and_colour_6` | `tile_in` | G15 M2: livehouse == buyable ∧ group 6 |
+//! | `tile_in_colour_class_uses_group` | `tile_in` | G15 M3: `color:<g>` reads the tile group |
+//! | `owned_livehouse_witness` | `tile_in` / `owned_*` | G15 M4: IN-2 owned-tile 50 witness |
+//! | `owned_deed_scan_yields_the_livehouse` | `tile_in` / `owned_*` | G15 M5: the card filter yields exactly [50] |
+//! | `ceil10_equals_exact_20pct_on_board_prices` | spec | G15 M6: 20% rounding pin (IN-4) |
 //!
 //! Conformance against the real engine is `rules/kani/tests/conf_model.rs`;
 //! these proofs only show the model arms are non-vacuous and total.
@@ -19,6 +25,8 @@ use card_sdk::kani_host::{Args, Op};
 
 use crate::board;
 use crate::host;
+use crate::intern;
+use crate::spec::r as spec_r;
 use crate::world::{self, BuySnap, MoveSnap, World, ROLL_CARD, ROLL_CHARGE, ROLL_SKILL};
 
 fn install_empty() {
@@ -455,4 +463,238 @@ pub fn placed_instance_answers_with_its_effective_card_mutant() {
         card_sdk::ctx::effective_card_at(b) == Some(crate::intern::intern(OTHER)),
         "mutant: marker ignored"
     );
+}
+
+// ---------------------------------------------------------------------------
+// G15 — `tile_in` class table (IN-1..IN-4)
+//
+// `Op::tile_in` must answer the production class table: `buyable` = price > 0
+// (ownership-independent), `livehouse` = buyable ∧ group 6, `color:<g>` = the
+// tile's own group. Conformance against the real engine is
+// `tests/conf_hostops2.rs` / `tests/conf_model.rs`; these are the model's own
+// obligations (design G15 §9.1).
+// ---------------------------------------------------------------------------
+
+fn class_handle(class: &str) -> (i32, i32) {
+    let id = intern::intern_or_fail(class);
+    (intern::encode_handle(id), class.len() as i32)
+}
+
+fn call_tile_in(player: i32, tile: i32, class: &str) -> i64 {
+    let (cp, cl) = class_handle(class);
+    call(Op::tile_in, [player, tile, cp, cl, 0, 0])
+}
+
+/// The model proofs need only the class op and the deed scan; anything else
+/// is a loud `outside_subset`.
+fn tile_in_dispatch(op: Op, a: Args) -> i64 {
+    match op {
+        Op::tile_in => host::arm_tile_in(a),
+        Op::owned_count => host::arm_owned_count(a),
+        Op::owned_at => host::arm_owned_at(a),
+        Op::tile_count => host::arm_tile_count(a),
+        other => host::outside_subset(other),
+    }
+}
+
+/// M1 / IN-1: `buyable` is `price > 0` for **every** tile, with the tile
+/// unowned and owned; and `price > 0` ⇔ kind ∈ {property, ring} on this board.
+#[kani::proof]
+#[kani::use_stub_set(crate::kani_stubs::LIB_COST_NOFMT)]
+#[kani::unwind(80)]
+pub fn tile_in_buyable_is_price_based() {
+    install_empty();
+    host::install_backend(tile_in_dispatch);
+    let mut outer = 0usize;
+    while outer < 8 {
+        let mut k = 0usize;
+        while k < 8 {
+            let i = outer * 8 + k;
+            if i < 60 {
+                let t = &board::TILES[i];
+                let price = t.price;
+                crate::kassert!(
+                    (price > 0) == (t.kind == 1 || t.kind == 3),
+                    "M1: buyable data ⇔ property | ring"
+                );
+                let mut o = 0usize;
+                while o < 2 {
+                    let owner = if o == 0 { -1 } else { 0 };
+                    world::with_world_mut(|w| w.tiles[i].owner = owner);
+                    let got = call_tile_in(-1, i as i32, "buyable");
+                    crate::kassert!(
+                        got == (price > 0) as i64,
+                        "M1: buyable is price-based and owner-independent"
+                    );
+                    o += 1;
+                }
+            }
+            k += 1;
+        }
+        outer += 1;
+    }
+    kani::cover!(call_tile_in(-1, 1, "buyable") == 1, "property is buyable");
+    kani::cover!(call_tile_in(-1, 8, "buyable") == 1, "RiNG is buyable");
+    kani::cover!(call_tile_in(-1, 31, "buyable") == 0, "the price-0 agent is not");
+    world::with_world_mut(|w| w.tiles[50].owner = 0);
+    kani::cover!(
+        call_tile_in(-1, 50, "buyable") == 1,
+        "an owned deed stays buyable"
+    );
+}
+
+/// M2 / IN-1: for every tile `livehouse` == `buyable ∧ color:6`, owned or not.
+#[kani::proof]
+#[kani::use_stub_set(crate::kani_stubs::LIB_COST_NOFMT)]
+#[kani::unwind(80)]
+pub fn tile_in_livehouse_is_buyable_and_colour_6() {
+    install_empty();
+    host::install_backend(tile_in_dispatch);
+    let mut outer = 0usize;
+    while outer < 8 {
+        let mut k = 0usize;
+        while k < 8 {
+            let i = outer * 8 + k;
+            if i < 60 {
+                let mut o = 0usize;
+                while o < 2 {
+                    let owner = if o == 0 { -1 } else { 0 };
+                    world::with_world_mut(|w| w.tiles[i].owner = owner);
+                    let buy = call_tile_in(-1, i as i32, "buyable") == 1;
+                    let color = call_tile_in(-1, i as i32, "color:6") == 1;
+                    let live = call_tile_in(-1, i as i32, "livehouse") == 1;
+                    crate::kassert!(
+                        live == (buy && color),
+                        "M2: livehouse == buyable ∧ color:6"
+                    );
+                    o += 1;
+                }
+            }
+            k += 1;
+        }
+        outer += 1;
+    }
+    kani::cover!(call_tile_in(-1, 50, "livehouse") == 1, "Live House Galaxy");
+    kani::cover!(call_tile_in(-1, 31, "livehouse") == 0, "the agent is excluded");
+    kani::cover!(call_tile_in(-1, 8, "livehouse") == 1, "RiNG 1 is a Livehouse");
+}
+
+/// M3 / IN-1: `color:<g>` reads the tile's own group; missing tiles answer 0.
+#[kani::proof]
+#[kani::use_stub_set(crate::kani_stubs::LIB_COST_NOFMT)]
+#[kani::unwind(12)]
+pub fn tile_in_colour_class_uses_group() {
+    install_empty();
+    host::install_backend(tile_in_dispatch);
+    crate::kassert!(
+        call_tile_in(-1, 31, "color:6") == 1,
+        "the Live House agent is group 6"
+    );
+    crate::kassert!(
+        call_tile_in(-1, 50, "color:6") == 1,
+        "Live House Galaxy is group 6"
+    );
+    crate::kassert!(
+        call_tile_in(-1, 47, "color:6") == 0,
+        "羽泽咖啡厅 is group 10"
+    );
+    crate::kassert!(
+        call_tile_in(-1, 47, "color:10") == 1,
+        "羽泽咖啡厅 answers colour 10"
+    );
+    crate::kassert!(call_tile_in(-1, 60, "color:6") == 0, "out of range");
+    crate::kassert!(call_tile_in(-1, -1, "buyable") == 0, "out of range");
+    crate::kassert!(call_tile_in(-1, 1, "nonsense") == 0, "unknown class");
+    kani::cover!(call_tile_in(-1, 47, "color:10") == 1, "group 10");
+}
+
+/// M4 / IN-2: an owned Livehouse witness — tile 50 (group 6, printed 1400)
+/// answers buyable / color:6 / livehouse, and the deed scan sees it.
+#[kani::proof]
+#[kani::use_stub_set(crate::kani_stubs::LIB_COST_NOFMT)]
+#[kani::unwind(24)]
+pub fn owned_livehouse_witness() {
+    install_empty();
+    host::install_backend(tile_in_dispatch);
+    world::with_world_mut(|w| {
+        w.n_players = 2;
+        w.tiles[50].owner = 0;
+    });
+    crate::kassert!(call_tile_in(0, 50, "buyable") == 1, "buyable");
+    crate::kassert!(call_tile_in(0, 50, "color:6") == 1, "color:6");
+    crate::kassert!(call_tile_in(0, 50, "livehouse") == 1, "livehouse");
+    crate::kassert!(
+        call(Op::owned_count, [0, 0, 0, 0, 0, 0]) == 1,
+        "one owned tile"
+    );
+    crate::kassert!(
+        call(Op::owned_at, [0, 0, 0, 0, 0, 0]) == 50,
+        "the owned tile is 50"
+    );
+    kani::cover!(call_tile_in(-1, 50, "livehouse") == 1, "still livehouse unowned");
+}
+
+/// M5 / IN-2 end-to-end: emulating the card's filter (is_buyable(−1) then
+/// `color:6`, intersected with the owned scan) over the world yields exactly
+/// `[50]`.
+#[kani::proof]
+#[kani::use_stub_set(crate::kani_stubs::LIB_COST_NOFMT)]
+#[kani::unwind(80)]
+pub fn owned_deed_scan_yields_the_livehouse() {
+    install_empty();
+    host::install_backend(tile_in_dispatch);
+    world::with_world_mut(|w| {
+        w.n_players = 2;
+        w.tiles[50].owner = 0;
+    });
+    let mut found = -1;
+    let mut n = 0;
+    let mut t = 0;
+    while t < 60 {
+        if call_tile_in(-1, t, "buyable") == 1 && call_tile_in(0, t, "color:6") == 1 {
+            let owned = call(Op::owned_count, [0, 0, 0, 0, 0, 0]);
+            let mut j = 0;
+            while j < owned {
+                if call(Op::owned_at, [0, j as i32, 0, 0, 0, 0]) == t as i64 {
+                    found = t;
+                    n += 1;
+                }
+                j += 1;
+            }
+        }
+        t += 1;
+    }
+    crate::kassert!(n == 1, "exactly one filtered owned deed");
+    crate::kassert!(found == 50, "the filtered deed is Live House Galaxy");
+    kani::cover!(found == 50, "the filter is non-empty");
+}
+
+/// M6 / IN-4: the book's integral 20% and the body's `CeilTo(sum*0.2, 10)`
+/// agree on every Livehouse printed price, and the symbolic lemma
+/// `x > 0 ∧ x % 20 == 0 ⇒ ceil10(x) == x / 5`.
+#[kani::proof]
+#[kani::use_stub_set(crate::kani_stubs::LIB_COST_NOFMT)]
+#[kani::unwind(80)]
+pub fn ceil10_equals_exact_20pct_on_board_prices() {
+    install_empty();
+    let mut t = 0;
+    while t < 60 {
+        let tile = &board::TILES[t];
+        if board::tile_in(tile, -1, "livehouse") {
+            let p = tile.price;
+            crate::kassert!(
+                spec_r::blue_rose_payout(&[p]) == spec_r::blue_rose_payout_ceil10(&[p]),
+                "M6: board prices are integral at 20%"
+            );
+            crate::kassert!(spec_r::blue_rose_payout(&[p]) == p / 5, "M6: 20% of p");
+        }
+        t += 1;
+    }
+    let x = crate::harness::any_in(20, 10_000);
+    kani::assume(x % 20 == 0);
+    crate::kassert!(
+        spec_r::blue_rose_payout_ceil10(&[x]) == x / 5,
+        "M6 lemma: a multiple of 20 needs no rounding"
+    );
+    kani::cover!(x == 20, "the smallest legal price");
 }

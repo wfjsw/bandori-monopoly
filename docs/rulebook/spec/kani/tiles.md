@@ -58,6 +58,42 @@ rows when those arrive.
 
 ---
 
+## fire kernel (`data/rules.txt` 126, MARKERS.md §8–§10) — MARKERS-KANI-01
+
+The kernel bodies `bandori_std::fire::{gain,spend}` were unproven — only
+`mark:cp` had harnesses. The book quote is 126「· 火罐：技能指示物，在任意时刻，您持有的
+火罐数量不能超过持有上限」; MARKERS.md §8 states I2 (value ≤ max **at all times**)
+and I4 (every change passes the owner's policy exactly once: one 效果适用 log,
+one window point), §9 asks for iff proofs over the kernel bodies with the
+exact effect set, §10(2) fixes temp-first inside a spend.
+
+The host now models the two windows the kernel owns (model-only, no ABI
+change): `arm_gain_marker` pushes `markerGain +n` **before** the write,
+`arm_spend_marker` pushes `markerSpend −n` **before** the have-check, and
+`arm_raise` pushes the `ChargePaying` raise over the whole cost at spend entry.
+The gain/spend harnesses use hand-written dispatch subsets (a spy mirrors the
+production `spend_marker` 效果适用 line as `Effect::AddToken{charge, −n}`
+without touching the shared `arm_spend_marker`, which other units rely on to
+stay silent).
+
+`tests/conf_fire_windows.rs` (native, `#[ignore]`d like the other conformance
+suites) pins the same window contract concretely, including the exhaustive
+`fire_gain_iff` grid: a symbolically invisible name/order/time mistake shows
+there in under a second. It also records the `charge_max = 3` struct-default
+trap that the undeclared-seat harness hit.
+
+| ID | book quote / clause | classification | harnesses | verdict | finding |
+|---|---|---|---|---|---|
+| 126 · gain under the cap | 「不能超过持有上限」 — gain lands `min(n, room)`, logs the landed amount | **PROVEN** | `fire_gain_iff` | see run table | one `GainFire(actual)` + one `markerGain` window; no narration, money, pos, or cap move |
+| 126 · gain at the cap | same — over-cap gain refuses | **PROVEN** (no-op) | `fire_gain_at_cap_noop` | see run table | returns 0, no effect, no window, refusal narrated once (「cannot exceed」) |
+| 126 · gain `n ≤ 0` | same | **PROVEN** (no-op) | `fire_gain_zero_request_noop` | see run table | no write, no window, no narration |
+| I1 · undeclared owner | a seat with no live row and no persona skill | **PROVEN** (no-op) | `fire_gain_undeclared_seat_noop` | see run table | lands nothing, no write, no window |
+| I2 | 「在任意时刻…不能超过」 as a total assert | **PROVEN** | `fire_i2_is_preserved_by_gain` | see run table | symbolic pre/cap/request grid: post ∈ 0..=cap, covers both landing at and below the cap |
+| MARKERS §3/§10(2) · spend | all-or-nothing; `ChargePaying` over the whole cost then `markerSpend`, both before the write; temp first | **PROVEN** | `fire_spend_iff` | see run table | exactly one `AddToken(charge, −n)`, exactly those two windows with name + payload, I2 stays, no money/pos trail |
+| MARKERS §3 · short pool | all-or-nothing | **PROVEN** (no-op) | `fire_spend_short_refused` | see run table | `false`; windows still open, no pot moves, no log |
+| MARKERS §3 · spend `n ≤ 0` | same | **PROVEN** (no-op) | `fire_spend_zero_noop` | see run table | trivially paid; no window, no write |
+| mutants | non-vacuity | **PROVEN** (panic as expected) | `fire_gain_mutant_uncapped_is_detected`, `fire_spend_mutant_underspend_is_detected` | see run table | forgetting the clamp / underspending is caught |
+
 ## Summary counts
 
 | classification | count |
@@ -109,6 +145,24 @@ that fix merged.
 | `level_cap_is_rent_len_minus_one` | SUCCESSFUL | 0.31 | cover RiNG cap 0 / 购物中心 cap 3 |
 | `property_leg_unowned_is_buy` | SUCCESSFUL | 0.12 | cover all five property legs |
 | `edogawa_settle_draw_one_iff` | SUCCESSFUL | 90.8 | cover "exactly one effect" **SATISFIED**; every clause assert **SUCCESS** (non-vacuous) |
+
+### fire kernel (MARKERS-KANI-01)
+
+`bash tools/kani/run.sh --unit markers --harness NAME` (default unwind 24,
+`CARGO_TARGET_DIR=/home/monopoly/kani-target-f`).
+
+| harness | verdict | time (s) | notes |
+|---|---|---:|---|
+| `fire_gain_iff` | (running) | | clamp actual + one `GainFire` + one `markerGain` + I2 + frame |
+| `fire_gain_at_cap_noop` | SUCCESSFUL | 1116.2 | refusal, zero effect, one narration |
+| `fire_gain_zero_request_noop` | SUCCESSFUL | 806.1 | n = 0 no-op; also the first green compile of the unit |
+| `fire_gain_undeclared_seat_noop` | FAILED → fixed, rerun pending | 852.4 | I1; first run proved the *premise* wrong: `World::new` ships `charge_max = 3`, so the "undeclared" world was writable. The harness now clears `charge`/`charge_max`, and the native `conf_fire_windows` twin pins the no-row no-op |
+| `fire_spend_iff` | (running) | | one `AddToken(−n)` + `ChargePaying` then `markerSpend` windows + frame |
+| `fire_spend_short_refused` | (running) | | windows open, no write |
+| `fire_spend_zero_noop` | (running) | | trivial pay, nothing opens |
+| `fire_i2_is_preserved_by_gain` | (running) | | total I2 assert |
+| `fire_gain_mutant_uncapped_is_detected` | SUCCESSFUL (panic as expected) | 662.3 | should_panic |
+| `fire_spend_mutant_underspend_is_detected` | (running) | | should_panic |
 
 ### Written, verdict pending (slot queue; run centrally or retry)
 

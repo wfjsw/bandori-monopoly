@@ -490,39 +490,7 @@ pub fn dispatch(op: Op, a: Args) -> i64 {
                 }
             }
         }
-        Op::tile_in => {
-            // ABI: tile_in(player_id, tile, class_ptr, class_len)
-            // This model keeps the historical quirks so proofs stay put:
-            // buyable = unowned property; livehouse = tiles 31/50.
-            let class = name_id(a2, a3);
-            if intern::id_eq_str(class, "buyable") {
-                let s = board::tile_slot(a1);
-                if s < 0 {
-                    0
-                } else {
-                    let t = &board::TILES[s as usize];
-                    let owned = world::with_world(|w| w.tiles[tile_idx(a1)].owner);
-                    (board::is_property(t) && owned < 0) as i64
-                }
-            } else if intern::id_eq_str(class, "shop") {
-                let s = board::tile_slot(a1);
-                if s < 0 {
-                    0
-                } else {
-                    board::is_shop(&board::TILES[s as usize]) as i64
-                }
-            } else if intern::id_eq_str(class, "livehouse") {
-                // Live House is board.json index 32 (agent) / 51 (property
-                // Live House Galaxy) → engine positions 31 / 50.
-                let _ = a0;
-                (a1 == 31 || a1 == 50) as i64
-            } else if intern::id_eq_str(class, "color:6") {
-                // Same live-house set for the colour-6 class (this model's quirk).
-                (a1 == 31 || a1 == 50) as i64
-            } else {
-                0
-            }
-        }
+        Op::tile_in => arm_tile_in(a),
         Op::dist | Op::tile_forward => arm_dist(a),
         Op::neighbor => {
             // hostfns `neighbor`: the **next** present player in turn order,
@@ -2670,6 +2638,13 @@ pub fn arm_gain(a: Args) -> i64 {
 
 pub fn arm_gain_marker(a: Args) -> i64 {
     let [a0, a1, a2, a3, a4, a5] = a;
+    // The `markerGain` window opens **before** the markers move
+    // (`hostfns::gain_marker`), with the name as data and delta `+n`; a
+    // non-positive delta opens no window.
+    if a3 > 0 {
+        let name = name_id(a1, a2);
+        world::with_world_mut(|w| w.push_window(world::WINDOW_GAIN, a0, name, a3));
+    }
     {
         // engine `gain_marker`: uncapped dumb add on the held-token row.
         // Cap / partial-gain policy lives in the rules-layer kernel
@@ -3553,7 +3528,9 @@ pub fn arm_raise(a: Args) -> i64 {
     // payload, install the raise's, run listeners, restore. `arm_trig_value`
     // answers `pay_amount` (the hostfns `trigger().value` twin); `trig_value`
     // is the ir_fill / fixture view of the same number.
-    let kind_sp: &'static str = crate::intern::resolve_str(name_id(kp, kl));
+    let raise_name = name_id(kp, kl);
+    world::with_world_mut(|w| w.push_window(world::WINDOW_RAISE, player_id, raise_name, value));
+    let kind_sp: &'static str = crate::intern::resolve_str(raise_name);
     let saved = world::with_world(|w| {
         (
             w.trig_kind,
@@ -4143,7 +4120,10 @@ pub fn arm_set_owner(a: Args) -> i64 {
     let [a0, a1, a2, a3, a4, a5] = a;
     {
         world::with_world_mut(|w| {
-            w.tiles[tile_idx(a0)].owner = a1;
+            // `World::set_tile_owner` also keeps the acquisition ledger
+            // (`owned_seq` / `next_owned_seq`, G08 I13) and the previous
+            // owner's `firstTile`, like the engine's `write_owner`.
+            w.set_tile_owner(a0, a1);
             w.push(Effect::SetOwner {
                 tile: a0,
                 player: a1,
@@ -4292,6 +4272,13 @@ pub fn arm_shuffle_into_deck(a: Args) -> i64 {
 
 pub fn arm_spend_marker(a: Args) -> i64 {
     let [a0, a1, a2, a3, a4, a5] = a;
+    // `markerSpend` opens before the write (`hostfns::spend_marker`; user
+    // ruling 2026-10-07), delta `-n`. It opens even when the pool cannot
+    // cover the cost -- the window is the owner's policy, the write refuses.
+    if a3 > 0 {
+        let name = name_id(a1, a2);
+        world::with_world_mut(|w| w.push_window(world::WINDOW_SPEND, a0, name, -a3));
+    }
     {
         // All-or-nothing; returns 1 when the player had enough. No cap
         // consultation -- spending is not the capped direction.
@@ -4669,41 +4656,25 @@ pub fn arm_tile_group(a: Args) -> i64 {
     }
 }
 
-pub fn arm_tile_in(a: Args) -> i64 {
-    let [a0, a1, a2, a3, ..] = a;
-    let _ = a0;
-    let class = name_id(a2, a3);
-    if intern::id_eq_str(class, "buyable") {
-        let s = board::tile_slot(a1);
-        if s < 0 {
-            0
-        } else {
-            let t = &board::TILES[s as usize];
-            let owned = world::with_world(|w| w.tiles[tile_idx(a1)].owner);
-            (board::is_property(t) && owned < 0) as i64
-        }
-    } else if intern::id_eq_str(class, "shop") {
-        let s = board::tile_slot(a1);
-        if s < 0 {
-            0
-        } else {
-            board::is_shop(&board::TILES[s as usize]) as i64
-        }
-    } else if intern::id_eq_str(class, "livehouse") {
-        (a1 == 31 || a1 == 50) as i64
-    } else if intern::id_eq_str(class, "color:6") {
-        (a1 == 31 || a1 == 50) as i64
-    } else if let Some(g) = intern::resolve_str(class)
-        .strip_prefix("color:")
-        .and_then(|g| g.parse::<i32>().ok())
-    {
-        // Generic colour class: the tile's own group (`is_color_lazy`'s first
-        // arm; the `anyColor` / `colorFor` props are not modelled).
-        let s = board::tile_slot(a1);
-        (s >= 0 && board::TILES[s as usize].group as i32 == g) as i64
-    } else {
-        0
+/// Production `tile_class::tile_in` over the model world (G15): the static
+/// class table is [`board::tile_in_class`]. Missing tile → false (production
+/// passes `None`). Class-membership props are not modelled (OPEN `toko-color` /
+/// OQ1); `player` is accepted for that future layer and unused today.
+pub fn tile_in_model(_w: &World, player: i32, tile: i32, class: board::TileClass) -> bool {
+    match board::data_at(tile) {
+        Some(t) => board::tile_in_class(t, player, class),
+        None => false,
     }
+}
+
+pub fn arm_tile_in(a: Args) -> i64 {
+    // ABI: tile_in(player_id, tile, class_ptr, class_len)
+    let [a0, a1, a2, a3, ..] = a;
+    let class = name_id(a2, a3);
+    // Classify the interned bytes, not a `&str`: `resolve_str` runs UTF-8
+    // validation per call and the board-walking bodies call this ~360 times.
+    let class = board::TileClass::from_bytes(intern::resolve(class));
+    world::with_world(|w| tile_in_model(w, a0, a1, class) as i64)
 }
 
 pub fn arm_tile_is(a: Args) -> i64 {

@@ -156,5 +156,11 @@ Add to §2 “Modeled vs unmodeled”:
 * stay / stun / exile are three fields; `give_extra_turn` only **records**.
 * `add_counter*` / `gain_fire` honour `max` / `fire_max`.
 * `is_shop` = buyable ∧ `group==10`.
+* (G15) `is_buyable` = printed `price > 0` — **ownership-independent**; an
+  owned Livehouse stays buyable. `board::tile_in` is the model of the
+  production class predicate (`buyable` / `shop` / `livehouse` /
+  `color:<g>`), and `Op::tile_in` is wired to it (`arm_tile_in`), so class
+  predicates are usable from card proofs (M1–M6 in `proofs/hostops_smoke.rs`;
+  `tile_in` takes the seat a colour-prop lookup would need).
 * `shuffle_into_deck` is a multiset pile move (order symbolic).
 * `place_card_on` ABI is `[player, tile, cp, cl, ptr, len]`.

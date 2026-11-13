@@ -462,25 +462,14 @@ impl CardWorld for ConfWorld {
             _ => false,
         }
     }
-    /// ABI v56: class membership. Keeps this model's quirks (is_buyable =
-    /// unowned property; livehouse = the two hard-coded tiles).
+    /// ABI v56: class membership. Delegates to the shared static table
+    /// (`board::tile_in`, G15) so the differential test exercises the same
+    /// answers as the host: `buyable` = `price > 0` (owner-independent),
+    /// `livehouse` = buyable ∧ group 6.
     fn tile_in(&self, player_id: i32, tile: i32, class: &str) -> bool {
-        match class {
-            "buyable" => {
-                let s = rules_kani::board::tile_slot(tile);
-                s >= 0
-                    && rules_kani::board::is_property(&rules_kani::board::TILES[s as usize])
-                    && self.tile_owner(tile) < 0
-            }
-            "shop" => {
-                let s = rules_kani::board::tile_slot(tile);
-                s >= 0 && rules_kani::board::is_shop(&rules_kani::board::TILES[s as usize])
-            }
-            "livehouse" => {
-                let _ = player_id;
-                tile == 32 || tile == 51
-            }
-            _ => false,
+        match rules_kani::board::data_at(tile) {
+            Some(t) => rules_kani::board::tile_in(t, player_id, class),
+            None => false,
         }
     }
     fn tile_group(&self, tile: i32) -> i32 {
@@ -1460,6 +1449,10 @@ impl ConfWorld {
             let first = self.earliest_owned_tile(cur);
             self.first_tile[cur as usize % 4] = first;
         }
+        if owner >= 0 {
+            let first = self.earliest_owned_tile(owner);
+            self.first_tile[owner as usize % 4] = first;
+        }
     }
 
     /// The zone writer minus hooks (`PlayCtx::zone_leave` / `zone_commit`).
@@ -1849,6 +1842,34 @@ impl InlineHost for ConfInline {
                 w.set_tile_owner(tile, owner);
                 w.events.push(format!("set_owner {tile} {owner}"));
                 Some(1)
+            }
+            // Guest tile writes (`set_owner` / `set_houses` / `add_house`) —
+            // the engine applies these as `TileWrite` requests; without an
+            // arm the `_ => Some(1)` catch-all answered the write without
+            // writing (the model diverged on the following read).
+            HostRequest::TileWrite {
+                operation,
+                tile,
+                value,
+            } => {
+                let t = (tile.max(0) as usize).min(59);
+                // `TileWriteOperation` is `#[repr(i32)]`: SetHouses 0,
+                // AddHouses 1, SetOwner 2. The module is private to
+                // `game-rules`, so match the discriminant.
+                match operation as i32 {
+                    1 => {
+                        w.tiles_houses[t] += value;
+                        Some(w.tiles_houses[t])
+                    }
+                    2 => {
+                        w.set_owner(tile, value);
+                        Some(value)
+                    }
+                    _ => {
+                        w.tiles_houses[t] = value;
+                        Some(value)
+                    }
+                }
             }
             HostRequest::PlayHand { player_id, card } => {
                 Some(w.play_hand_card(player_id, &card) as i32)

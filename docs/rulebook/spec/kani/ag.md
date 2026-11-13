@@ -18,7 +18,7 @@ TIMEOUT/OOM.
 |---|---|---|
 | `Op::trig_move_roll` getter is **unmodeled** (loud fail); `Op::trig_set_move_roll` is a no-op stub (no world field) | `rules/kani/src/host.rs` | every roll-rewrite clause (yolo, not-ok, half-speed-03) is **BLOCKED-HOST** |
 | `Op::tile_named` resolves only 「江户川乐器店」; every other name returns −1 | `host.rs` | childhood / detour / tomoe (「商店街」, 「银河拉面馆」, 「CiRCLE」) are **BLOCKED-HOST** |
-| `board::is_shop` is `kind == 5` (江户川乐器店 only); real engine is `is_buyable && group == 10` | `rules/kani/src/board.rs` (shared, not editable) | shop-street predicates (childhood list, band filter, savior, one-of-us partner) are **BLOCKED-HOST** |
+| `board::is_shop` is now `is_buyable && group == 10` (fixed by G15; was `kind == 5`, 江户川乐器店 only) | `rules/kani/src/board.rs` | shop-street predicates (childhood list, band filter, savior, one-of-us partner) are now blocked only by `tile_named("商店街")` / list ops; the predicate itself is no longer a gap |
 | `Op::card_build` / `Op::acquire` / `Op::set_build_discount` are protocol stubs returning 0 | `host.rs` | band free-house and savior acquisition are **PROTOCOL-LEVEL** |
 | `Op::trig_by_card`, `Op::trig_effect_*`, `Op::target` are stubs (by_card ≡ Some(0), effect count ≡ 0, target ≡ Some(0)) | `host.rs` | declaration's counteract payload is **BLOCKED-HOST** |
 | `Op::set_counter_self` writes the key with no `Effect`; `Op::to_discard` / `Op::add_to_deck` likewise silent | `host.rs` | crystal-set / discard-of-played-card appear in post-state, not the effect log (specs pin post-state) |
@@ -193,7 +193,8 @@ then the `*_iff` bodies, then `*_mutant_is_detected`.
   `unmodeled()` and `Op::trig_set_move_roll` stores nothing. No fake zero.
 * `tile_named`: only 「江户川乐器店」 is wired; 「商店街」 / 「银河拉面馆」 /
   「CiRCLE」 return −1 and the bodies early-return. Not faked.
-* `is_shop`: `board.rs` `kind == 5` ≠ the real `is_buyable && group == 10`.
-  Shared file — not edited (brief § Setup).
+* `is_shop`: `board.rs` used to be `kind == 5` ≠ the real
+  `is_buyable && group == 10`; G15 fixed the helper, so the remaining block is
+  only `tile_named("商店街")` (and the list ops), not the predicate.
 * Yes/no decline: `ask_yes` with `opt_n == 0` is stuck on "yes"; harnesses
   pre-seat `w.opt_n = 2` and `w.symbolic_answers = true` to explore both.

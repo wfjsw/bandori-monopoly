@@ -306,6 +306,71 @@ fn is_shop_is_buyable_group_10() {
         );
     });
 }
+/// G15: `tile_in` is ownership-independent and data-derived, exactly like
+/// production `TileClass` (`price > 0`; `livehouse` = buyable ∧ group 6;
+/// `color:<g>` = the tile's group). An owned deed stays buyable, so the
+/// blue_rose filter can see Livehouse deeds at all.
+#[test]
+#[ignore = "opt-in: kani conformance suite; run with `-- --ignored`"]
+fn tile_in_is_ownership_independent_and_data_derived() {
+    big(|| {
+        let _g = model_lock();
+        install(base());
+        let (bp, bl) = card_sdk::native::intern(b"buyable");
+        let (lp, ll) = card_sdk::native::intern(b"livehouse");
+        let (cp, cl) = card_sdk::native::intern(b"color:6");
+        // Own a group-1 property (购物中心, engine 1): still buyable.
+        kworld::with_world_mut(|w| w.tiles[1].owner = 0);
+        assert_eq!(
+            rules_kani::host::dispatch(Op::tile_in, [-1, 1, bp, bl, 0, 0]),
+            1,
+            "an owned property stays buyable (production does not read the owner)"
+        );
+        // Own Live House Galaxy (50, group 6, printed 1400): a Livehouse deed.
+        kworld::with_world_mut(|w| w.tiles[50].owner = 0);
+        assert_eq!(
+            rules_kani::host::dispatch(Op::tile_in, [-1, 50, bp, bl, 0, 0]),
+            1,
+            "owned Live House Galaxy is buyable"
+        );
+        assert_eq!(
+            rules_kani::host::dispatch(Op::tile_in, [0, 50, lp, ll, 0, 0]),
+            1,
+            "owned Live House Galaxy is a Livehouse"
+        );
+        assert_eq!(
+            rules_kani::host::dispatch(Op::tile_in, [0, 50, cp, cl, 0, 0]),
+            1,
+            "Live House Galaxy is colour group 6"
+        );
+        // The 31 「Live House」 agent is colour 6 but not buyable.
+        assert_eq!(
+            rules_kani::host::dispatch(Op::tile_in, [-1, 31, cp, cl, 0, 0]),
+            1,
+            "the Live House agent is colour group 6"
+        );
+        assert_eq!(
+            rules_kani::host::dispatch(Op::tile_in, [-1, 31, lp, ll, 0, 0]),
+            0,
+            "the price-0 agent is not a Livehouse deed"
+        );
+        // RiNG 1 (8) is a group-6 ring deed, owned or not.
+        for owner in [-1, 0] {
+            kworld::with_world_mut(|w| w.tiles[8].owner = owner);
+            assert_eq!(
+                rules_kani::host::dispatch(Op::tile_in, [owner, 8, lp, ll, 0, 0]),
+                1,
+                "RiNG 1 is a Livehouse deed at owner {owner}"
+            );
+        }
+        // 天文馆 (2) is a group-7 property: buyable but not colour 6.
+        assert_eq!(
+            rules_kani::host::dispatch(Op::tile_in, [-1, 2, cp, cl, 0, 0]),
+            0,
+            "天文馆 is not colour 6"
+        );
+    });
+}
 /// `shuffle_into_deck` moves hand/discard into draw (multiset; order irrelevant).
 #[test]
 #[ignore = "opt-in: kani conformance suite; run with `-- --ignored`"]

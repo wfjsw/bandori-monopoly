@@ -12,6 +12,46 @@
 # (the runner's --harness filter), not the module path.
 
 [timeout]
+# Fire kernel (MARKERS-KANI-01): `bandori_std::fire::{gain,spend}` on the
+# symbolic world. The no-op smoke measured 496 s; the body-bearing iff
+# harnesses timed out the 900 s default in symex (643 s symex on the old
+# 7×8×8 grid) before the property checks. The grids are now slimmed; these
+# budgets are the wall time the remaining slices need.
+fire_gain_iff = 1800
+fire_gain_window_debug = 1800
+fire_gain_window_name_debug = 900
+fire_gain_name_concrete_debug = 900
+fire_gain_name_user_debug = 1200
+fire_gain_name_pre_debug = 1200
+fire_gain_name_n_debug = 1200
+fire_gain_at_cap_noop = 1200
+fire_spend_iff = 1800
+fire_spend_short_refused = 1500
+fire_i2_is_preserved_by_gain = 1800
+fire_gain_mutant_uncapped_is_detected = 1200
+fire_spend_mutant_underspend_is_detected = 1200
+
+# G15 蓝玫瑰的骄傲: the body walks all 60 tiles with the ownership store and
+# unwind 80, twice per seat pair. Symex-heavy; the 900 s default is short of
+# the measured class (the first pair timed out in symex). These carry the
+# property checks too.
+blue_rose_payout_equality_iff = 2400
+blue_rose_payout_equality_user1_iff = 2400
+blue_rose_payout_majority_iff = 2400
+blue_rose_payout_majority_user1_iff = 2400
+blue_rose_payout_sum_iff = 2400
+blue_rose_payout_sum_user1_iff = 2400
+blue_rose_zero_deed_iff = 1800
+blue_rose_zero_deed_user1_iff = 1800
+blue_rose_not_rich_noop = 1800
+blue_rose_not_rich_user1_noop = 1800
+blue_rose_payout_below_threshold_noop = 1800
+blue_rose_payout_below_threshold_user1_noop = 1800
+blue_rose_payout_log_ok_is_exact = 1200
+blue_rose_payout_mutant_is_detected = 2400
+blue_rose_rich_strict_mutant_is_detected = 2400
+blue_rose_payout_mutant_350 = 1800
+
 # HHW believe: reveal hand + deck, one rival discard, two deck→hand transfers,
 # reshuffle. The full body exceeded 3600 s in symex (2026-11-08), so each
 # clause runs on its own thin world, split per legs:

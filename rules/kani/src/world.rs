@@ -34,6 +34,9 @@ pub const MAX_PLAYERS: usize = 4;
 /// `let logbuf: [Effect; 24] = …`. Do not change without coordinating.
 pub const MAX_LOG: usize = 24;
 pub const MAX_NARRATION: usize = 8;
+/// Window points a single proof body may open (kernel proof worst case: the
+/// `ChargePaying` raise plus a temp and a pool `markerSpend`, twice over).
+pub const MAX_WINDOWS: usize = 8;
 pub const MAX_ANSWERS: usize = 8;
 /// Bounded pile / field arrays (interned card ids) and the pilot bitsets.
 pub const MAX_CARDS: usize = 8;
@@ -524,6 +527,25 @@ pub struct Narration {
     pub player: i32,
     pub key: u16,
 }
+
+/// One window point (`hostfns::gain_marker`'s `markerGain`,
+/// `hostfns::spend_marker`'s `markerSpend`, or a guest `raise`). The name is
+/// the marker / trigger wire name; `value` is the payload production puts on
+/// the request (`+n` gain, `-n` spend, the raise's value).
+#[derive(Clone, Copy, PartialEq, Eq, Debug)]
+pub struct WindowPoint {
+    pub kind: u8,
+    pub player: i32,
+    pub name: u16,
+    pub value: i32,
+}
+
+/// `markerGain` opened before a marker write.
+pub const WINDOW_GAIN: u8 = 1;
+/// `markerSpend` opened before a marker write.
+pub const WINDOW_SPEND: u8 = 2;
+/// A guest `raise` (`ctx::raise` / `ctx::raise_from`).
+pub const WINDOW_RAISE: u8 = 3;
 
 /// Prompt request kinds (mirrors `card_sdk::abi::PromptKind` discriminants).
 pub const PROMPT_CARD: i32 = 4;
@@ -1296,6 +1318,11 @@ pub struct World {
     pub log_n: usize,
     pub narration: [Narration; MAX_NARRATION],
     pub narration_n: usize,
+    /// Window points opened since the world reset (`markerGain` /
+    /// `markerSpend` / raises), in order. MARKERS.md I4: every change passes
+    /// the owner's policy exactly once -- one window point per change.
+    pub windows: [WindowPoint; MAX_WINDOWS],
+    pub windows_n: usize,
 
     /// Set when the host hits an unmodeled op (see `host::dispatch`).
     pub unmodeled_op: i32,
@@ -1498,6 +1525,13 @@ impl World {
             log_n: 0,
             narration: [Narration { player: 0, key: 0 }; MAX_NARRATION],
             narration_n: 0,
+            windows: [WindowPoint {
+                kind: 0,
+                player: 0,
+                name: 0,
+                value: 0,
+            }; MAX_WINDOWS],
+            windows_n: 0,
             unmodeled_op: -1,
         }
     }
@@ -1513,6 +1547,19 @@ impl World {
         if self.narration_n < MAX_NARRATION {
             self.narration[self.narration_n] = Narration { player, key };
             self.narration_n += 1;
+        }
+    }
+
+    /// Record one window point (see [`WindowPoint`]).
+    pub fn push_window(&mut self, kind: u8, player: i32, name: NameId, value: i32) {
+        if self.windows_n < MAX_WINDOWS {
+            self.windows[self.windows_n] = WindowPoint {
+                kind,
+                player,
+                name: name.0,
+                value,
+            };
+            self.windows_n += 1;
         }
     }
 

@@ -76,8 +76,8 @@ Both resolve harnesses below are `VERIFICATION:- SUCCESSFUL`.
 | C-R-学生会的检查-05/06 | forced stop + half rent | PROTOCOL-LEVEL | — | — | passer force-stop + settle rent factor | OPEN-触发结算 |
 | C-R-学生会的检查-07 | refund on under-collection | OPEN | — | — | 「本卡原应拿到的资金」 undefined | OPEN-STUDENT-REFUND |
 | C-R-必然的联系-01..04 | [反击] after skill teleport | PROTOCOL-LEVEL | — | — | [反击] window + play-area placement; the ignore-limit half is the instance prop match on the modelled `nearest_with_prop` arm | — |
-| C-R-蓝玫瑰的骄傲-01 | 20% of Livehouse deeds | (pending more setup) | (spec in `spec::r`) | — | 「地契价值」 = tile price; rounding OPEN | OPEN-ROUND10 |
-| C-R-蓝玫瑰的骄傲-02/03 | teleport next unbought / RiNG 4 | PROTOCOL-LEVEL | — | — | teleport + main move + no-settle | OPEN-触发结算 |
+| C-R-蓝玫瑰的骄傲-01 | 「[获得]自己拥有的[Livehouse]格子数量×地契价值的20%的资金」 — deed value = printed tile price, rounding 向上取整10 | **PROVEN** (body, both seats + 3 mutants) | `blue_rose_payout_equality_iff`, `blue_rose_payout_equality_user1_iff`, `blue_rose_payout_majority_iff`, `blue_rose_payout_majority_user1_iff`, `blue_rose_payout_sum_iff`, `blue_rose_payout_sum_user1_iff`, `blue_rose_zero_deed_iff`, `blue_rose_zero_deed_user1_iff`, `blue_rose_not_rich_noop`, `blue_rose_not_rich_user1_noop`, `blue_rose_payout_below_threshold_noop`, `blue_rose_payout_below_threshold_user1_noop`, `blue_rose_payout_log_ok_is_exact`, `blue_rose_payout_mutant_is_detected`, `blue_rose_rich_strict_mutant_is_detected`, `blue_rose_payout_mutant_350` | see run table | G15's ownership model (IN-1..IN-4) lets the filter see **owned** Livehouses: `live*2 >= total` is the rich gate; payout CeilTo(sum × 0.2, 10); exactly one `GainMoney`; no-deed / below-threshold no-op; mutant 350 / non-strict rich are caught | — |
+| C-R-蓝玫瑰的骄傲-02/03 | teleport next unbought / RiNG 4 | PROTOCOL-LEVEL | — | — | teleport + main move + no-settle (the payout half of the activation is now PROVEN above) | OPEN-触发结算 |
 | C-R-轨迹-01..03 | bankruptcy reveal / take deed / demolish | PROTOCOL-LEVEL | — | — | bankruptcy window is engine scheduling | — |
 | C-R-选择自己的舞台-01/02 | [反击] vs abnormal move | PROTOCOL-LEVEL | — | — | [反击] window + settle choice | OPEN-触发结算 |
 | C-R-Ringing Bloom-01 | place on own field | (pending) | — | — | — | — |
@@ -136,6 +136,22 @@ Both resolve harnesses below are `VERIFICATION:- SUCCESSFUL`.
 | `student_council_add_resolve_mutant_is_detected` | r | (written) | |
 | `ringing_bloom_place_iff` | r | (written) | |
 | `ringing_bloom_place_mutant_is_detected` | r | (written) | |
+| `blue_rose_payout_equality_iff` | r | (running) | |
+| `blue_rose_payout_equality_user1_iff` | r | (running) | |
+| `blue_rose_payout_majority_iff` | r | (running) | |
+| `blue_rose_payout_majority_user1_iff` | r | (running) | |
+| `blue_rose_payout_sum_iff` | r | (running) | |
+| `blue_rose_payout_sum_user1_iff` | r | (running) | |
+| `blue_rose_zero_deed_iff` | r | (running) | |
+| `blue_rose_zero_deed_user1_iff` | r | (running) | |
+| `blue_rose_not_rich_noop` | r | (running) | |
+| `blue_rose_not_rich_user1_noop` | r | (running) | |
+| `blue_rose_payout_below_threshold_noop` | r | (running) | |
+| `blue_rose_payout_below_threshold_user1_noop` | r | (running) | |
+| `blue_rose_payout_log_ok_is_exact` | r | (running) | |
+| `blue_rose_payout_mutant_is_detected` | r | (running) | |
+| `blue_rose_rich_strict_mutant_is_detected` | r | (running) | |
+| `blue_rose_payout_mutant_350` | r | (running) | |
 | `sayo_fire_pass_iff` | skills_r | (written) | |
 | `sayo_fire_mutant_is_detected` | skills_r | (written) | |
 | `rinko_fire_pass_iff` | skills_r | (written) | |
@@ -154,6 +170,42 @@ rest never acquired one of the machine-wide 3 CBMC slots (the box was
 saturated by sibling units for the whole session); runner invocations were
 killed at session end per orphan hygiene. Specs and harnesses are on the
 branch and compile under `cargo build -p rules-kani` (`CARGO_TARGET_DIR=/home/monopoly/kani-target-r`).
+
+## G15 ownership model (蓝玫瑰的骄傲)
+
+`board::tile_in` is the model of the production class predicate
+`tile_class::tile_in` (class props first, then the ruleset class table):
+`buyable` = printed price > 0 (**ownership-independent**), `livehouse` =
+`buyable && group == 6`, `color:<g>` = group match or colourless (−2), `shop` =
+`buyable && group == 10`. The ownership stores (`owned_count` / `owned_at`,
+8×8 chunk walks) already existed and were previously unreachable from the
+class predicate — that was the G15 bug: an owned Livehouse stopped matching
+`buyable`. `tile_in` gained an explicit `player` parameter (unused for the
+current classes; it is the seat a colour-prop lookup would need).
+
+Model proofs (M1–M6, `proofs/hostops_smoke.rs`) pin the invariants IN-1..IN-4:
+
+* IN-1 `buyable` is exactly `price > 0`, `livehouse` exactly `buyable ∧
+  color:6` (M1/M2), `color:<g>` the group (M3);
+* IN-2 an owned Livehouse is still buyable and reachable through
+  `owned_count`/`owned_at` (M4/M5, end-to-end through the card's filter);
+* IN-3 out-of-range tiles are `false`;
+* IN-4 `ceil10(x) == x/5` for every board livehouse price, so the harnesses
+  can use printed prices without relying on rounding luck (M6).
+
+`tests/conf_hostops2.rs` pins the same model natively (owned property still
+buyable; RiNG is buyable/color:6/livehouse independent of owner; the 商店街
+agent tile is color:6 but not a Livehouse). `tests/conf_model.rs` and
+`tests/conf_fill_diff.rs` mocks delegate to the shared helper so the native
+suites and the proofs cannot drift.
+
+The blue_rose harnesses install a hand-written dispatch subset
+(`tile_in`, `tile_count`, `tile_group`, `tile_price`, `tile_owner`,
+`tile_forward`/`tile_dist`, `tile_named`, `owned_count`, `owned_at`,
+`position_of_tile`, `gain*`, `log|effect`, protocol/teleport stubs) — every
+other op is a loud `outside_subset` FAIL. `deed_setup` clears all owners and
+installs the fixture deeds exactly (asserted), so 「拥有」 is real state, not a
+stub.
 
 ## Host gaps this unit hit
 
