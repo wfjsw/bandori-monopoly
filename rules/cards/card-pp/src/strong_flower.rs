@@ -17,7 +17,7 @@
 use alloc::vec::Vec;
 use bandori_std::ctx;
 use bandori_std::ctx::{plan, trigger};
-use card_sdk::abi::{ActionKind, TriggerKind};
+use card_sdk::abi::{prop, ActionKind, TriggerKind};
 use card_sdk::{key, Action, CardDef, Msg, On};
 use card_sdk::{para, sec, steps, CardText};
 
@@ -30,7 +30,12 @@ pub const STRONG_FLOWER: CardDef = CardDef::new(
         // 规则书[持续]: 「[使用者][经过]此卡所在格子时」
         On::Action(Action::PassTile("actor == owner", None, pass_tile)),
     ],
-).meta(&card_sdk::meta::CardMeta::new()
+)
+// 规则书[手]: 「[指定][使用者]拥有的一个格子」 -- the tile goes through
+// `ctx::target_tile`, so the play has a [指定] target and 网络链接异常 clause 1
+// applies.
+.props(&[(prop::DESIGNATES, 1)])
+.meta(&card_sdk::meta::CardMeta::new()
         .name(r#"可爱又强壮的花朵"#)
         .raw_name(r#"可爱又强壮的花朵"#)
         .tags(&[r#"手"#, r#"持续"#])

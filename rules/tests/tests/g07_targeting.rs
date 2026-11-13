@@ -427,7 +427,19 @@ fn g07_welcome_self_target_can_be_cancelled() {
     let mut t = welcome_table();
     t.give(2, &[TARGET_COUNTER]);
     let mark = t.mark();
-    welcome_self(&mut t);
+    t.play(0, WELCOME).unwrap();
+    // 欢迎来到ave mujica的世界 names one player, so it declares `DESIGNATES`
+    // (LOY-NET-01) and its `Effect` counters also answer the play's own card
+    // raise (CROSS-TESTS C13). That earlier window is not the self window --
+    // decline it and declare on the designating one.
+    for _ in 0..10 {
+        let Some(p) = t.prompt() else { break };
+        if p.title.key() != "ask.counteract.title" {
+            break;
+        }
+        t.decline();
+    }
+    pick(&mut t, 0, 0);
     // The counter is offered inside the self window and names the user.
     let mut cancelled = false;
     for _ in 0..30 {

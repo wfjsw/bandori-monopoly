@@ -3707,6 +3707,27 @@ pub mod plan {
         unsafe { sys::add_extra_dice(count, sides, p, l) }
     }
 
+    /// Roll the plan's **direction** die (`count`d`sides`, the book's
+    /// 「投掷1d2（前后）」) and aim the walk by its face: odd = reverse (C-Q47).
+    /// The host rolls from the world RNG (replay-deterministic), records the
+    /// face in [`direction_roll`] and logs it. The die is its own face, not the
+    /// `recorded_roll` d6 peek.
+    pub fn set_direction_dice(count: i32, sides: i32) {
+        unsafe { sys::set_direction_dice(count, sides) }
+    }
+
+    /// The host-rolled direction face for this raise, `None` when no direction
+    /// die was asked for. (Written by [`set_direction_dice`]; read it on a
+    /// later pass -- the write's own body cannot see it.)
+    pub fn direction_roll() -> Option<i32> {
+        let v = unsafe { sys::direction_roll() };
+        if v == i32::MIN {
+            None
+        } else {
+            Some(v)
+        }
+    }
+
     /// Did the walk stop before its full length? Read-only: the walk loop sets
     /// it. To force a stop, name the tile with [`Self::set_stop_at`].
     pub fn stopped() -> bool {
@@ -3910,6 +3931,29 @@ pub fn designations(player_id: i32) -> Vec<i32> {
     let cap = 4096;
     let (p, scratch) = out_buf(cap as usize);
     let n = unsafe { sys::designations(player_id, p, cap) };
+    if n <= 0 || n > cap {
+        return Vec::new();
+    }
+    let buf = out_read(p, n, scratch);
+    postcard::from_bytes(&buf[..n as usize]).unwrap_or_default()
+}
+
+/// Is card rule `id` **derived** (`CardMeta::derived`, EVENT-04)? A derived
+/// card is a token / generated card, what 「非衍生」 filters exclude. Reads the
+/// manifest metadata the guest cannot see.
+pub fn card_derived(id: &str) -> bool {
+    let (ip, il) = s(id);
+    unsafe { sys::card_derived(ip, il) != 0 }
+}
+
+/// Every **event** card id (from the manifest), in roster order -- the pool a
+/// 「从所有事件中选择…」 body offers (EVENT-04). Pair with [`card_derived`] for
+/// the 「非衍生」 subset. Ids keep the manifest `event:` prefix; the event deck
+/// (`ctx::event_banish`) spells the same card bare, so strip it there.
+pub fn event_card_ids() -> Vec<String> {
+    let cap = 8192;
+    let (p, scratch) = out_buf(cap as usize);
+    let n = unsafe { sys::event_card_ids(p, cap) };
     if n <= 0 || n > cap {
         return Vec::new();
     }

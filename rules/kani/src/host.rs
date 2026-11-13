@@ -1300,6 +1300,8 @@ pub fn dispatch(op: Op, a: Args) -> i64 {
         | Op::set_base_dice
         | Op::add_base_dice
         | Op::add_extra_dice
+        | Op::set_direction_dice
+        | Op::direction_roll
         | Op::set_min_roll
         | Op::set_extra_steps
         | Op::set_more_steps
@@ -1364,6 +1366,7 @@ pub fn dispatch(op: Op, a: Args) -> i64 {
         | Op::declared_arg
         | Op::card_text_mentions
         | Op::card_prop
+        | Op::card_derived
         | Op::buy
         | Op::acquire
         | Op::agent_offer
@@ -1380,6 +1383,11 @@ pub fn dispatch(op: Op, a: Args) -> i64 {
         | Op::flash_card
         | Op::flash_card_keyed
         | Op::flash_tile => arm_protocol_stub(a),
+
+        // A small non-empty roster: the manifest's event table is out of the
+        // model, and a 「从所有事件中选择3个」 loop needs a pool to pick from.
+        // `card_derived` is a zero stub, so every entry counts as non-derived.
+        Op::event_card_ids => arm_event_card_ids(a),
 
         // A protocol stub, but recorded: a clause can still be held to "it
         // settles here, and nowhere when it is on no square".
@@ -3444,6 +3452,26 @@ pub fn arm_placed_cards(a: Args) -> i64 {
         v
     });
     let bytes = postcard::to_allocvec(&names).unwrap_or_default();
+    if buf == 0 {
+        return bytes.len() as i64;
+    }
+    if (bytes.len() as i32) > cap {
+        return -1;
+    }
+    card_sdk::native::write(buf, &bytes);
+    bytes.len() as i64
+}
+
+/// `event_card_ids` -- a fixed four-id roster, postcard `Vec<String>` into the
+/// guest buffer (same shape as `hostfns::event_card_ids`). Used by
+/// 让我来结束一切's 3-pick loop; `card_derived` answers 0 for all of them.
+pub fn arm_event_card_ids(a: Args) -> i64 {
+    let [buf, cap, ..] = a;
+    let ids: Vec<String> = ["event:kani-a", "event:kani-b", "event:kani-c", "event:kani-d"]
+        .iter()
+        .map(|s| (*s).to_string())
+        .collect();
+    let bytes = postcard::to_allocvec(&ids).unwrap_or_default();
     if buf == 0 {
         return bytes.len() as i64;
     }

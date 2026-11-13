@@ -9,7 +9,7 @@ use std::collections::BTreeMap;
 
 use crate::data::GameData;
 use crate::msg::Msg;
-use crate::state::{key, Counter, FieldCard, MarkFilter, StateVar, Tick, TileMark};
+use crate::state::{Counter, FieldCard, MarkFilter, StateVar, Tick, TileMark};
 
 use super::play::PayFactorScope;
 use super::world::World;
@@ -152,6 +152,25 @@ impl World {
     pub fn clear_dice(&mut self) {
         self.plan_mut().dice.clear();
     }
+    /// Roll the plan's **direction** die (`count`d`sides`, the book's
+    /// 「投掷1d2（前后）」) from this world's RNG and aim the walk by its parity:
+    /// odd = reverse (C-Q47). The face is recorded on [`World::direction_roll`]
+    /// so the log line can name it. Returns the face.
+    ///
+    /// A direction die is its own cast: it is neither the walk's distance roll
+    /// (`base` / `dice`) nor the `recorded_roll` d6 peek, and the loaded face
+    /// stays recorded for the rest of the pass.
+    pub fn roll_direction_dice(&mut self, count: i32, sides: i32) -> i32 {
+        let (count, sides) = (count.max(1), sides.max(1));
+        let mut face = 0;
+        for _ in 0..count {
+            face += self.rng.d(sides);
+        }
+        self.direction_roll = Some(face);
+        self.set_reverse(face % 2 == 1);
+        face
+    }
+
     /// Extra dice added to the roll (summed into the face). A flat add
     /// is a `0`-sided term: `add_extra_dice(n, 0, reason)`.
     pub fn add_extra_dice(&mut self, count: i32, sides: i32, reason: &str) {

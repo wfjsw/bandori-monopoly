@@ -536,6 +536,12 @@ pub enum Op {
     owns_tile = 507,
     /// Is this player's own stake of the tile mortgaged?
     mortgaged_for = 508,
+    // v124 (W3-KAORU-02): the plan's direction die (own recorded face).
+    set_direction_dice = 509,
+    direction_roll = 510,
+    // v124 (EVENT-04): manifest metadata reads (derived flag, event roster).
+    card_derived = 511,
+    event_card_ids = 512,
 }
 
 /// Six i32 wire slots, matching the ABI's arg convention.

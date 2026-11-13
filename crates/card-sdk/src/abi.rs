@@ -1527,6 +1527,10 @@ pub mod export {
     /// or [`crate::abi::EXIT_DECLINED`]. Only called when
     /// [`ManifestOn::has_declare`].
     pub const OP_DECLARE: i32 = 2;
+    /// ENG-COST: the entry's activation **cost amount** for the calling
+    /// player (an `i32`; `0` = free). Only called when [`ManifestOn::cost`] is
+    /// set.
+    pub const OP_COST: i32 = 3;
     pub const MEMORY: &str = "memory";
     /// `() -> i64` packed `(ptr << 32) | len` pointing at a postcard
     /// [`crate::meta::MetaDoc`] (ABI v63). Built only when called; absent on
@@ -1783,11 +1787,16 @@ pub mod prop {
     /// a human can still play the card. Read by `CardRules::ai_play`; rides
     /// the existing `ManifestEntry.props`.
     pub const AI_NEVER: &str = "aiNever";
-    /// 「有[指定]目标」: `1` = this play names
-    /// recipients, so 「取消其对目标之一的[指定]」 applies instead of 「抵消其
-    /// 所有的效果」. The named set is the play's **other living players** (the
-    /// 「[指定][使用者]以外的所有玩家」 / 「其他玩家[分摊]」 shape). Default `0`
-    /// (names nobody).
+    /// 「有[指定]目标」: `1` = this play names recipients, so 「取消其对目标之一
+    /// 的[指定]」 applies instead of 「抵消其所有的效果」. Declaring promises the
+    /// play body targets through the [指定] pipeline (`ctx::target`,
+    /// `ctx::target_tile` or `ctx::target_all`). A choice made only through
+    /// `ctx::ask_tile` / `ctx::ask_player` is an option list, not a [指定], and
+    /// does not qualify. Card bodies are not introspectable at runtime, so the
+    /// prop is the static declaration; the host approximates the named set as
+    /// the user's **other living players** (the 「[指定][使用者]以外的所有玩家」
+    /// / 「其他玩家[分摊]」 shape). A single named recipient is still a
+    /// designation: clause 1 cancels that one name. Default `0` (names nobody).
     pub const DESIGNATES: &str = "designates";
     /// 真奈 join (「其反击卡中针对打出玩家自身的效果改为你」): `1` = this
     /// counter opens a join; self-targeted effects of later counters answering
@@ -3906,6 +3915,12 @@ pub struct ManifestEntry {
     /// its name belongs in no card area. Trailing field.
     #[serde(default)]
     pub rule: bool,
+    /// The card is **derived** (`CardMeta::derived`): a token / generated card
+    /// that 「非衍生」 filters exclude (e.g. 让我来结束一切 picks from
+    /// non-derived events only). Read back by the guest as
+    /// `ctx::card_derived`. Trailing field (EVENT-04).
+    #[serde(default)]
+    pub derived: bool,
 }
 
 /// One per-entry **tile text** declaration (`On::texts`, v59): the
@@ -3993,6 +4008,12 @@ pub struct ManifestOn {
     /// stands in for 「场上其他玩家打出的上一张卡」 (v112).
     #[serde(default)]
     pub copies_previous: bool,
+    /// Activation cost of a `Play` entry (`PlayEntry::cost`, ENG-COST): the
+    /// held-token name, or `None` = free. The **amount** is not on the wire --
+    /// it is a guest fn the host runs through [`export::OP_COST`], so a
+    /// per-player cost stays one declaration. Trailing field.
+    #[serde(default)]
+    pub cost: Option<String>,
 }
 
 /// What numeric shape a counteraction entry answers (v112). Offer filter: the

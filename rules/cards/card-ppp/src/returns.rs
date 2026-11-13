@@ -231,8 +231,10 @@ fn deck_at_game_start(player_id: i32) -> card_sdk::Asked {
 // crystals leave with it. 规则书[持续]（3）: 「使用因此卡获得的团卡的主动效果时需要支付1星星贴纸」 -- the copy is
 // the instance `place_card` returned (`returns.borrow_uid`); the owner's own
 // band card sits beside it and its presses are free.
-// `skill_groups::copy_sticker_gate` is the activation cost (0 stickers → the
-// press is refused) and `spend_copy_sticker` charges the 1 when it runs.
+// `skill_groups::copy_sticker_cost` is the declared activation cost: the
+// affected band skills carry it on their Play entry
+// (`.cost("星星贴纸", copy_sticker_cost)`), so the host refuses a short press
+// and charges the 1 before the body.
 
 /// The actor is `condition::MINE`'s job and is not re-checked here (docs/GUARDS.md).
 fn on_played_is_general(_player_id: i32) -> bool {
@@ -423,8 +425,8 @@ fn borrow_band(player_id: i32) -> card_sdk::Asked {
     let borrowed = ctx::place_card(player_id, want, &Msg::new(key!("returns_band")));
     ctx::set_prop(PROP_BAND, idx);
     ctx::set_prop(PROP_FROM, who);
-    // Which instance is 「因此卡获得的团卡」. The tax in `spend_copy_sticker` /
-    // `copy_sticker_gate` keys on this uid, not on "a borrow exists" -- the
+    // Which instance is 「因此卡获得的团卡」. The declared cost
+    // (`copy_sticker_cost`) keys on this uid, not on "a borrow exists" -- the
     // owner's own band card sits beside the copy and its presses are free.
     // (`returns.copied` was the old "any borrow" flag; nothing reads it now.)
     ctx::set_held(player_id, "returns.borrow_uid", borrowed, 0, -1);

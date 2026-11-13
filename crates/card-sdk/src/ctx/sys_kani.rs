@@ -1368,6 +1368,14 @@ pub fn add_extra_dice(count: i32, sides: i32, ptr: i32, len: i32) {
     kani_host::call_unit(Op::add_extra_dice, [count, sides, ptr, len, 0, 0]);
 }
 
+pub fn set_direction_dice(count: i32, sides: i32) {
+    kani_host::call_unit(Op::set_direction_dice, [count, sides, 0, 0, 0, 0]);
+}
+
+pub fn direction_roll() -> i32 {
+    kani_host::call_i32(Op::direction_roll, [0, 0, 0, 0, 0, 0])
+}
+
 pub fn move_stopped() -> i32 {
     kani_host::call_i32(Op::move_stopped, [0, 0, 0, 0, 0, 0])
 }
@@ -1668,6 +1676,10 @@ pub fn card_prop(ip: i32, il: i32, kp: i32, kl: i32) -> i32 {
     kani_host::call_i32(Op::card_prop, [ip, il, kp, kl, 0, 0])
 }
 
+pub fn card_derived(ip: i32, il: i32) -> i32 {
+    kani_host::call_i32(Op::card_derived, [ip, il, 0, 0, 0, 0])
+}
+
 pub fn gain_fixed(player_id: i32, amount: i32, ptr: i32, len: i32) -> i32 {
     kani_host::call_i32(Op::gain_fixed, [player_id, amount, ptr, len, 0, 0])
 }
@@ -1730,6 +1742,10 @@ pub fn nearest_with_prop(by: i32, kind: i32, kp: i32, kl: i32, buf: i32, cap: i3
 
 pub fn designations(player_id: i32, buf: i32, cap: i32) -> i32 {
     kani_host::call_i32(Op::designations, [player_id, buf, cap, 0, 0, 0])
+}
+
+pub fn event_card_ids(buf: i32, cap: i32) -> i32 {
+    kani_host::call_i32(Op::event_card_ids, [buf, cap, 0, 0, 0, 0])
 }
 
 pub fn cancel_designation(seat: i32) {

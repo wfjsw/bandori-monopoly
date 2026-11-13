@@ -3210,8 +3210,10 @@ fn cant_act(cx: &PlayCtx, i: usize, m: &NetMessage, busy: bool) -> Option<Msg> {
             if !cx.w.gate_open(cx.rules, Gate::Act, i) && !cx.rules.card_act_exemption(&m.card) {
                 return Some(cx.rules.gate_refusal_msg(Gate::Act, i));
             }
-            // The rule's own gate (`On::Play`'s), so the cost check remains in the
-            // rule body where the 规则书 clause lives.
+            // The rule's own gate (`On::Play`'s) and its declared **activation
+            // cost** (ENG-COST): `cant_play` refuses a short player and the
+            // run charges the amount before the body, so no rule body has to
+            // carry the pay-and-check algebra itself.
             cx.rules_cant_play(i, &m.card)
         }
         // Retired: buy / build are settle-time offers only. The parse path

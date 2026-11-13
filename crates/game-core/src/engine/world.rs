@@ -1041,6 +1041,12 @@ pub struct World {
     /// DiceRollValue Filter raise so the body can read it without calling `roll`.
     #[serde(default)]
     pub recorded_roll: Option<i32>,
+    /// W3-KAORU-02: the face of the plan's **direction** die (「投掷1d2
+    /// （前后）」), `None` when no direction die was asked for. Its own face, not
+    /// a second read of `recorded_roll` (which is a fixed d6 peek). Rolled from
+    /// this world's RNG in `roll_direction_dice`; C-Q47: odd = reverse.
+    #[serde(default)]
+    pub direction_roll: Option<i32>,
     pub ask_seq: i32,
     /// The open roll transaction stack (a roll can nest: an effect roll inside
     /// a move window, a recast inside a counteraction).
@@ -1403,6 +1409,7 @@ impl World {
             rule_params: Default::default(),
             board: None,
             recorded_roll: None,
+            direction_roll: None,
             ask_seq: 0,
             open_rolls: Vec::new(),
             next_roll_id: 1,

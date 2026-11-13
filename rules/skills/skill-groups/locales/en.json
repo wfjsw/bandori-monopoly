@@ -64,7 +64,6 @@
   "ras_teleport": "You are still on {{tile}}. Teleport to a Live House you own?",
   "ras_title": "UNSTOPPABLE",
   "roselia_first": "The first non-Live-House buy: {{tile}} at half price",
-  "skill_band_no_sticker": "Using a copied band's active costs 1 star sticker.",
   "skill_blocked": "Skills are blocked here.",
   "sumimi_cleared": "No money gained this turn: cleared the band card",
   "sumimi_crystal": "Gained money this turn: +1 [Miracle Crystal]"

@@ -59,7 +59,6 @@
   "kaoru_thief_decayed": "{{who}}'s Thief hello happy ran out of miracle crystals and went to the discard",
   "kaoru_thief_marked": "A [Thief mark] went on {{who}}'s field",
   "kaoru_thief_note": "Thief hello happy in play",
-  "kaoru_thief_rollplan": "Thief hello happy's effect: {{who}} is on Kaoru's tile: this move goes 1d10 steps (direction roll {{dir}})",
   "kaoru_thief_stop_ask": "Passed {{who}}: force-stop here and settle?",
   "kaoru_thief_stop_title": "Thief hello happy",
   "kaoru_thief_tok": "Thief mark",

@@ -6,7 +6,7 @@
 //! Place this card in play and put a thief mark on one other player.
 
 use bandori_std::ctx::{self, trigger};
-use card_sdk::abi::{ActionKind, Dice, FilterKind};
+use card_sdk::abi::{prop, ActionKind, Dice, FilterKind};
 use card_sdk::CardText;
 use card_sdk::{key, Action, CardDef, Filter, Msg, On, PlanValue};
 
@@ -31,8 +31,13 @@ pub const KAORU_THIEF: CardDef = CardDef::new(
         On::Action(Action::CounterChanged("actor == owner && card.placed && counter_is('crystals') && trigger_card == card.id && card.counter('crystals') == 0 && value <= 0", Some(crystals_changed_guard), on_crystals_changed)),
     ],
 )
+// 规则书「向一名玩家场上放置一个怪盗标记」: one named player, so the play has a
+// [指定] target and 网络链接异常 clause 1 applies (`ctx::target` in the body).
 // 规则书「充能3，衰减1」: the `⌛3` marker the client shows.
-.props(&[(bandori_std::marker::TURNS_LEFT, 3)])
+.props(&[
+    (bandori_std::marker::TURNS_LEFT, 3),
+    (prop::DESIGNATES, 1),
+])
 .meta(&card_sdk::meta::CardMeta::new()
         .name(r#"怪盗hello happy"#)
         .raw_name(r#"（薰）怪盗hello happy"#)
@@ -148,27 +153,16 @@ fn on_crystals_changed(player_id: i32) -> card_sdk::Asked {
 }
 
 fn roll_plan(_player_id: i32, v: PlanValue) -> PlanValue {
-    // TODO(规则书) 规则书: 「投掷1d2（前后）」 -- the host pre-rolls the direction face into
-    // `recorded_roll` (`wasm_rules.rs` peeks `d(6)` for every DiceRollPlan /
-    // DiceRollValue drive) so this Filter stays pure. W3-KAORU-02: the printed die
-    // is a **1d2**, but the recorded face is a d6 peek (faces 1-6, logged as the
-    // direction) and the polarity (face 1/2 vs odd/even) is unruled -- see C-Q47.
-    // Closing the die shape needs a true `Dice { sides: 2 }` recorded face or a
-    // card-side `roll(1,2)` feeding `reverse`.
-    let reverse = v.recorded_roll.map(|dir| dir % 2 == 1);
-    if let Some(dir) = v.recorded_roll {
-        // This hook's `player_id` is the card's owner; `who` is the mover.
-        let mover = trigger::player_id();
-        ctx::log(
-            mover,
-            &Msg::new(key!("kaoru_thief_rollplan"))
-                .player_id("who", mover)
-                .i("dir", dir as i64),
-        );
-    }
-    // 规则书: 「和1d10（距离）」 -- the face is *exactly* 1d10 (clear extra dice).
+    // 规则书: 「投掷1d2（前后）」 -- W3-KAORU-02: the direction is its **own**
+    // 1d2, cast by the host from the world RNG and recorded as
+    // `PlanValue::direction_roll` (its own face, not the d6 `recorded_roll`
+    // peek). The host aims the walk from the parity -- odd = reverse (C-Q47) --
+    // and logs the face under the activation header
+    // (`log.outcome.plan_direction`).
+    // 规则书: 「和1d10（距离）」 -- the distance face is *exactly* 1d10 (clear
+    // extra dice).
     PlanValue {
-        reverse,
+        direction: Some(Dice { count: 1, sides: 2 }),
         clear_dice: true,
         base: Some(Dice {
             count: 1,

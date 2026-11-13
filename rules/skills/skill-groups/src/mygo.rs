@@ -45,7 +45,10 @@ pub const MYGO: CardDef = CardDef::new(
         // them and the player presses again for the other. The gate admits
         // whenever either is available; the body lists the available options
         // and skips the prompt when only one is.
-        On::Play("", Some(cant_play), press),
+        // 规则书（`PPP:Returns` [持续]（3））: 「使用因此卡获得的团卡的主动效果时需要
+        // 支付1星星贴纸」 -- declared activation cost (ENG-COST); the host refuses
+        // a short player and charges before the body.
+        On::Play("", Some(cant_play), press).cost("星星贴纸", crate::copy_sticker_cost),
     ],
 )
 .rule();
@@ -124,11 +127,6 @@ fn cant_play(player_id: i32) -> Option<Msg> {
     if bandori_std::ctx::skill_blocked(player_id, "") {
         return Some(Msg::new(key!("skill_blocked")));
     }
-    // 规则书（`PPP:Returns` [持续]（3））: 「使用因此卡获得的团卡的主动效果时需要
-    // 支付1星星贴纸」 -- the sticker is a cost of activation on the borrowed copy.
-    if let Some(reason) = crate::copy_sticker_gate(player_id) {
-        return Some(reason);
-    }
     if !is_my_turn(player_id) {
         return Some(Msg::new(key!("mygo_not_your_turn")));
     }
@@ -173,7 +171,6 @@ fn press(player_id: i32) -> card_sdk::Asked {
 
 /// （2）「你的回合中，可于移动掷骰前选择移动1格以替代移动掷骰并移除一个[奇迹水晶]」.
 fn step_one(player_id: i32) -> card_sdk::Asked {
-    crate::spend_copy_sticker(player_id)?;
     if crate::cover_crystals(player_id) < 1 {
         return Ok(());
     }
@@ -189,7 +186,6 @@ fn step_one(player_id: i32) -> card_sdk::Asked {
 
 /// （3）「你的回合中，可移除此卡的两个[奇迹水晶]以抽一张卡」.
 fn draw_two(player_id: i32) -> card_sdk::Asked {
-    crate::spend_copy_sticker(player_id)?;
     if crate::cover_crystals(player_id) < 2 {
         return Ok(());
     }

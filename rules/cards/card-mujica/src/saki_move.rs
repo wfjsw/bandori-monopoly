@@ -5,11 +5,15 @@
 //!
 //! 3 tiles in a chosen direction, settling at half price.
 
-use card_sdk::abi::PayFactorScope;
+use card_sdk::abi::{prop, PayFactorScope};
 use card_sdk::CardText;
 use card_sdk::{ctx, key, CardDef, Msg, On};
 
-pub const SAKI_MOVE: CardDef = CardDef::new("Mujica:祥，移动", &[On::Play("", None, saki_move)]).meta(&card_sdk::meta::CardMeta::new()
+pub const SAKI_MOVE: CardDef = CardDef::new("Mujica:祥，移动", &[On::Play("", None, saki_move)])
+    // 规则书: 「强制一名玩家」 -- one named player, so the play has a [指定]
+    // target and 网络链接异常 clause 1 applies (`ctx::target` in the body).
+    .props(&[(prop::DESIGNATES, 1)])
+    .meta(&card_sdk::meta::CardMeta::new()
         .name(r#"祥，移动"#)
         .raw_name(r#"祥，移动"#)
         .tags(&[])

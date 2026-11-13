@@ -15,7 +15,7 @@
 use alloc::vec::Vec;
 
 use bandori_std::ctx::{self, trigger};
-use card_sdk::abi::{FilterKind, MarkFilter, TriggerKind};
+use card_sdk::abi::{prop, FilterKind, MarkFilter, TriggerKind};
 use card_sdk::{key, CardDef, Filter, Msg, On, PayAddValue};
 use card_sdk::{para, sec, steps, CardText};
 
@@ -25,7 +25,12 @@ pub const ANON_TOKYO: CardDef = CardDef::new(
         On::Play("", Some(cant_play), anon_tokyo),
         On::Filter(Filter::PaySplitAdd("card.placed && pay_is_rent && target == owner && value > 0", Some(link_guard), link_rent)),
     ],
-).meta(&card_sdk::meta::CardMeta::new()
+)
+// 规则书[手]: 「[指定][使用者]所在当格的任一相邻的[可购买格子]」 -- the
+// adjacency tile goes through `ctx::target_tile`, so the play has a [指定]
+// target and 网络链接异常 clause 1 applies.
+.props(&[(prop::DESIGNATES, 1)])
+.meta(&card_sdk::meta::CardMeta::new()
         .name(r#"Anon Tokyo"#)
         .raw_name(r#"[千早爱音]Anon Tokyo"#)
         .tags(&[r#"手"#, r#"限"#])
