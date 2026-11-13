@@ -819,6 +819,12 @@ impl PlayCtx<'_> {
         if let Some(n) = self.w.targeted.get_mut(i) {
             *n = 0;
         }
+        // 「本回合开始后…失去资金的总额」 (NOW SUMIMI) is per **own** turn: the
+        // running loss total starts fresh at the seat's own turn start and
+        // spans the other seats' turns in between.
+        if let Some(n) = self.w.losses.get_mut(i) {
+            *n = 0;
+        }
         // 「当前回合内你每获得过一次资金」 is per **turn**, not per own-turn:
         // a counteraction read at a turn's end (HHW:（育美）(2), 「你回合外收到资金的回合
         // 结束时」) sees just that turn's credits. Everyone's counter starts
@@ -3540,12 +3546,18 @@ impl PlayCtx<'_> {
             // Direct transfer: 「此次购买的价格不受任何资金变动效果影响，收款方
             // 无论处于何种状态都可正常收款」. The pay pipeline does not see it.
             self.w.st.players[i].money -= price;
+            self.w.bump_loss(i as i32, price);
             self.w.credit(owner as i32, price);
             // The deal: `BuyAssign` rewrites owner / houses / mortgage before
             // the one ownership write (`docs/PURCHASE.md`). The rulebook default
-            // is 「获得的地契仍为抵押状态」; TODO(规则书): `FORCE_STAYS_MORTGAGED`
-            // (`= 0` clears) is not distinguishable from "absent" through
-            // `tile_prop`, so the native default holds unconditionally.
+            // is 「获得的地契仍为抵押状态」; a tile rule that writes
+            // `prop::FORCE_STAYS_MORTGAGED` overrides it -- an explicit `0`
+            // clears the mortgage, a non-zero value keeps it, and an absent
+            // key keeps the rulebook default (the tri-state read).
+            let stays_mortgaged = self
+                .w
+                .tile_prop_state(t as i32, crate::state::prop::FORCE_STAYS_MORTGAGED)
+                != 0;
             let mut deal = purchase::default_deal(
                 self.data,
                 &self.w.st,
@@ -3553,7 +3565,7 @@ impl PlayCtx<'_> {
                 i,
                 purchase::BuyKind::Force,
                 price,
-                true,
+                stays_mortgaged,
             );
             let at = raise!(
                 self,
@@ -4191,6 +4203,7 @@ impl PlayCtx<'_> {
         let cost = self.spend_before(i, t as i32, amount, by_card)?;
         self.w.st.mortgaged[t] = false;
         self.w.st.players[i].money -= cost;
+        self.w.bump_loss(i as i32, cost);
         // 「本回合进行过赎回操作」 -- same record, same timing.
         {
             let s = &mut self.w.st.players[i];
@@ -4348,7 +4361,14 @@ impl PlayCtx<'_> {
     pub fn money(&mut self, p: Pay) -> Flow<Paid> {
         let depth = self.money_depth;
         self.money_depth = depth + 1;
+        // `trigger::pay_split_ran` (NFO-CANCEL-01) is **per payment**: it starts
+        // clear here and is set once the leg reaches `paySplitAt`. The outer
+        // bit is restored afterwards (a nested payment from a later stage's
+        // body must not clear the outer leg's answer for its `payAfter`).
+        let outer_split_ran = self.w.pay_split_ran;
+        self.w.pay_split_ran = false;
         let r = self.money_inner(p, depth);
+        self.w.pay_split_ran = outer_split_ran;
         self.money_depth = depth;
         r
     }
@@ -4763,6 +4783,12 @@ impl PlayCtx<'_> {
                         to = Some(ask.target as usize);
                     }
                 }
+                // The stage **ran** -- NFO-CANCEL-01's bit. Set before the
+                // body so a `PayAfter` guard can tell this payment from one
+                // cancelled at an earlier window (which never reaches here).
+                if kind == "paySplitAt" {
+                    self.w.pay_split_ran = true;
+                }
                 let before = amount;
                 let t = raise!(
                     self,
@@ -5027,6 +5053,9 @@ impl PlayCtx<'_> {
                 }
             }
             self.w.st.players[f].money -= loss;
+            // 「失去资金」 (NOW SUMIMI): the **actual** figure that left the
+            // payer; a cancelled or shaved-to-0 leg passes 0 here.
+            self.w.bump_loss(f as i32, loss);
         }
         // The payee is credited what the payer actually paid.
         let gain = if p.from.is_some() { loss } else { amount };
@@ -5879,6 +5908,7 @@ impl PlayCtx<'_> {
         }
         // Money remains direct until ruling 7 (TODO(规则书) ruling 7).
         self.w.st.players[b].money -= cost;
+        self.w.bump_loss(b as i32, cost);
         // The deal: `BuyAssign` rewrites owner / houses / mortgage before the
         // one ownership write (`docs/PURCHASE.md`).
         let mut deal = purchase::default_deal(

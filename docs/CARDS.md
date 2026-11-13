@@ -265,13 +265,14 @@ immediately before the pure filter stage:
 The engine kind table in `crates/game-kinds` (`ENGINE_KINDS`) is the **single
 declaration source of truth** for ids, spellings, and `is_filter`. The typed
 mirror is `Filter::KINDS` / `Action::KINDS` in `crates/card-sdk/src/kinds.rs`.
-Today (34 filter kinds):
+Today (38 filter kinds):
 
 * payment amount stages -- `PaySplitChoose`, `PaySplitAdd`, `PaySplitMul`, `PaySplitAt`,
   `PayCombinedAdd`, `PayCombinedMul`, `PayCombinedCancel`
 * the rent / settle figures' own stages (v105, hook-only) -- `RentAdd`,
   `RentMul`, `SettleAdd`, `SettleMul` (`docs/ENGINE.md` "the stage folds")
-* buy price / deal stages -- `BuyAdd`, `BuyMul`, `BuySet`, `BuyAssign`
+* buy price / deal stages -- `BuyAdd`, `BuyMul`, `BuySet`, `BuyAssign`, and the
+  强制购买 twins `ForceBuyAdd`, `ForceBuyMul`, `ForceBuySet` (FORCE-WRITE-01)
 * turn clock -- `TurnBonusTime`, `TurnBaseTime`
 * roll / plan shaping -- `DiceRollPlan`, `DiceRollValue` (v75), `DiceRollAdd` (v109)
 * decision gates (v77) -- `ActGate`, `PayGate`, `MoveGate`, `ExclusiveUse`,
@@ -343,7 +344,8 @@ figure it wants, not a delta.
   `settleRentMul`), raised **once** per settle and applied to every leg of it
   (the settle's `TurnCtx::settle_pay_add` / `settle_pay_factor`, restored from
   the stack entry when the settle ends)
-* buy price: `BuyAdd` → `BuyMul` → `BuySet`, each floored at 0
+* buy price: `BuyAdd` → `BuyMul` → `BuySet`, each floored at 0; a Force quote
+  runs `ForceBuyAdd` → `ForceBuyMul` → `ForceBuySet` instead
 * roll: `DiceRollPlan` (once per move) → dice + `diceRollCast` → `diceRollBefore` → `DiceRollAdd` → `DiceRollValue` → `DiceRollAfter` → `diceRollResult` (move rolls only, [反击] reroll window) → `diceRollSettled`.
   `DiceRollAfter`/`diceRollResult` are the only Actions that may still roll and
   write the face (documented exception above); everything else reshapes purely
@@ -1150,7 +1152,7 @@ original names where the pairing is already implied (`settleBefore` →
 | `card` / `cardAfter` | playing a card from hand -- before its `play` body / after its `Dest` handling |
 | `event` / `eventAfter` | drawing an event -- before it resolves / after it is filed away |
 | `buyBefore` / `buyAfter` | buying a deed -- before any guard (fires even on a no-op attempt) / after the deed changes hands |
-| `buyGate` / `buyAdd` / `buyMul` / `buySet` / `buyAssign` | the purchase surface (`docs/PURCHASE.md`). `buyGate` (an `On::Filter(Filter::BuyGate(...))` gate, runs for **every** `BuyKind` -- Force included) refuses a buy with `GateValue { allowed: Some(false), reason }`. `buyAdd` (fixed ±) → `buyMul` (×) → `buySet` (free / fixed) are the quote's price stages, each floored at 0, rewriting the running `trigger::price()`. `buyAssign` runs at commit and rewrites `deal_owner` / `deal_houses` / `deal_mortgaged` before the one ownership write. `bought` / `buyAfter` still do not fire for Force or Auction (rulings 6 / 7, undecided). |
+| `buyGate` / `buyAdd` / `buyMul` / `buySet` / `buyAssign` | the purchase surface (`docs/PURCHASE.md`). `buyGate` (an `On::Filter(Filter::BuyGate(...))` gate, runs for **every** `BuyKind` -- Force included) refuses a buy with `GateValue { allowed: Some(false), reason }`. `buyAdd` (fixed ±) → `buyMul` (×) → `buySet` (free / fixed) are the quote's price stages, each floored at 0, rewriting the running `trigger::price()`. `buyAssign` runs at commit and rewrites `deal_owner` / `deal_houses` / `deal_mortgaged` before the one ownership write. A 强制购买 quote instead runs the twins `forceBuyAdd` / `forceBuyMul` / `forceBuySet` (same payloads; the generic stages skip Force -- rulebook 其他规则 6, FORCE-WRITE-01). `bought` / `buyAfter` still do not fire for Force or Auction (rulings 6 / 7, undecided). |
 | `buildBefore` / `buildAfter` | building a house -- before payment / after the house commits (not on the refund path) |
 | `discardBefore` / `discardAfter` | discarding from hand -- before the card leaves / after it is in the pile |
 | `endTurnBefore` / `endTurnAfter` | ending a turn -- the player's command / any turn end, including stun & exile auto-skips |

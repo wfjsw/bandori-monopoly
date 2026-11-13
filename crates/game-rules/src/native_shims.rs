@@ -260,6 +260,8 @@ pub trait HostOps {
     fn op_tile_prop(&mut self, a: [i32; 6]) -> Result<i64, HostError>;
     /// `ruleset_set_tile_prop`
     fn op_set_tile_prop(&mut self, a: [i32; 6]) -> Result<i64, HostError>;
+    /// `ruleset_tile_prop_state`
+    fn op_tile_prop_state(&mut self, a: [i32; 6]) -> Result<i64, HostError>;
     /// `ruleset_prop_at`
     fn op_prop_at(&mut self, a: [i32; 6]) -> Result<i64, HostError>;
     /// `ruleset_set_prop_at`
@@ -604,6 +606,8 @@ pub trait HostOps {
     fn op_targeted_count(&mut self, a: [i32; 6]) -> Result<i64, HostError>;
     /// `ruleset_gains_this_turn`
     fn op_gains_this_turn(&mut self, a: [i32; 6]) -> Result<i64, HostError>;
+    /// `ruleset_lost_this_turn`
+    fn op_lost_this_turn(&mut self, a: [i32; 6]) -> Result<i64, HostError>;
     /// `ruleset_placed_tile`
     fn op_placed_tile(&mut self, a: [i32; 6]) -> Result<i64, HostError>;
     /// `ruleset_play_doubled`
@@ -981,6 +985,8 @@ pub trait HostOps {
     fn op_join_designation(&mut self, a: [i32; 6]) -> Result<i64, HostError>;
     /// `ruleset_trigger_pending_negation`
     fn op_trigger_pending_negation(&mut self, a: [i32; 6]) -> Result<i64, HostError>;
+    /// `ruleset_trigger_pay_split_ran`
+    fn op_trigger_pay_split_ran(&mut self, a: [i32; 6]) -> Result<i64, HostError>;
     /// `ruleset_trigger_activation_ordinal`
     fn op_trigger_activation_ordinal(&mut self, a: [i32; 6]) -> Result<i64, HostError>;
     /// `ruleset_trigger_abnormal_blocked`
@@ -1370,6 +1376,9 @@ impl<C: crate::host::HostCtx> HostOps for C {
     }
     fn op_set_tile_prop(&mut self, a: [i32; 6]) -> Result<i64, HostError> {
         Ok(crate::hostfns::set_tile_prop(self, a[0], a[1], a[2], a[3])? as i64)
+    }
+    fn op_tile_prop_state(&mut self, a: [i32; 6]) -> Result<i64, HostError> {
+        Ok(crate::hostfns::tile_prop_state(self, a[0], a[1], a[2])? as i64)
     }
     fn op_prop_at(&mut self, a: [i32; 6]) -> Result<i64, HostError> {
         Ok(crate::hostfns::prop_at(self, a[0], a[1], a[2])? as i64)
@@ -1953,6 +1962,9 @@ impl<C: crate::host::HostCtx> HostOps for C {
     fn op_gains_this_turn(&mut self, a: [i32; 6]) -> Result<i64, HostError> {
         Ok(crate::hostfns::gains_this_turn(self, a[0])? as i64)
     }
+    fn op_lost_this_turn(&mut self, a: [i32; 6]) -> Result<i64, HostError> {
+        Ok(crate::hostfns::lost_this_turn(self, a[0])? as i64)
+    }
     fn op_placed_tile(&mut self, a: [i32; 6]) -> Result<i64, HostError> {
         Ok(crate::hostfns::placed_tile(self, a[0], a[1], a[2])? as i64)
     }
@@ -2524,6 +2536,9 @@ impl<C: crate::host::HostCtx> HostOps for C {
     }
     fn op_trigger_pending_negation(&mut self, a: [i32; 6]) -> Result<i64, HostError> {
         Ok(crate::hostfns::trigger_pending_negation(self)? as i64)
+    }
+    fn op_trigger_pay_split_ran(&mut self, a: [i32; 6]) -> Result<i64, HostError> {
+        Ok(crate::hostfns::trigger_pay_split_ran(self)? as i64)
     }
     fn op_trigger_activation_ordinal(&mut self, a: [i32; 6]) -> Result<i64, HostError> {
         Ok(crate::hostfns::trigger_activation_ordinal(self)? as i64)
@@ -3653,6 +3668,14 @@ pub unsafe extern "C-unwind" fn ruleset_tile_prop(tile: i32, kp: i32, kl: i32) -
 #[no_mangle]
 pub unsafe extern "C-unwind" fn ruleset_set_tile_prop(tile: i32, kp: i32, kl: i32, v: i32) -> i32 {
     with_host(|h| match h.op_set_tile_prop([tile, kp, kl, v, 0, 0]) {
+        Ok(v) => v as i32,
+        Err(e) => abort_host(e),
+    })
+}
+
+#[no_mangle]
+pub unsafe extern "C-unwind" fn ruleset_tile_prop_state(tile: i32, kp: i32, kl: i32) -> i32 {
+    with_host(|h| match h.op_tile_prop_state([tile, kp, kl, 0, 0, 0]) {
         Ok(v) => v as i32,
         Err(e) => abort_host(e),
     })
@@ -5184,6 +5207,14 @@ pub unsafe extern "C-unwind" fn ruleset_gains_this_turn(player_id: i32) -> i32 {
 }
 
 #[no_mangle]
+pub unsafe extern "C-unwind" fn ruleset_lost_this_turn(player_id: i32) -> i32 {
+    with_host(|h| match h.op_lost_this_turn([player_id, 0, 0, 0, 0, 0]) {
+        Ok(v) => v as i32,
+        Err(e) => abort_host(e),
+    })
+}
+
+#[no_mangle]
 pub unsafe extern "C-unwind" fn ruleset_placed_tile(player_id: i32, ptr: i32, len: i32) -> i32 {
     with_host(|h| match h.op_placed_tile([player_id, ptr, len, 0, 0, 0]) {
         Ok(v) => v as i32,
@@ -6698,6 +6729,16 @@ pub unsafe extern "C-unwind" fn ruleset_join_designation(i: i32) -> i32 {
 pub unsafe extern "C-unwind" fn ruleset_trigger_pending_negation() -> i32 {
     with_host(
         |h| match h.op_trigger_pending_negation([0, 0, 0, 0, 0, 0]) {
+            Ok(v) => v as i32,
+            Err(e) => abort_host(e),
+        },
+    )
+}
+
+#[no_mangle]
+pub unsafe extern "C-unwind" fn ruleset_trigger_pay_split_ran() -> i32 {
+    with_host(
+        |h| match h.op_trigger_pay_split_ran([0, 0, 0, 0, 0, 0]) {
             Ok(v) => v as i32,
             Err(e) => abort_host(e),
         },

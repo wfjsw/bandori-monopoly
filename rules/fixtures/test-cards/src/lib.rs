@@ -1506,6 +1506,54 @@ fn lose_1000(player_id: i32) -> card_sdk::Asked {
     Ok(())
 }
 
+/// A bank payment of the player state var `TEST.pay.amount` (ABI-11's window
+/// tests need many different figures). Unset / `0` pays nothing.
+const PAY_AMOUNT: CardDef = CardDef::new("TEST:payAmount", &[On::Play("", None, pay_amount)]);
+
+fn pay_amount(player_id: i32) -> card_sdk::Asked {
+    let n = ctx::state::get(player_id, "TEST.pay.amount");
+    ctx::log(
+        player_id,
+        &Msg::new(key!("pay_amount_reason")).n("n", n as i64),
+    );
+    ctx::pay(player_id, n, &Msg::new(key!("pay_amount_reason")))?;
+    Ok(())
+}
+
+/// FORCE-WRITE-01: a placed generic `BuyMul` hook (halves every non-Force buy
+/// price) -- the control that must NOT retune a 强制购买 quote.
+const BUY_MUL_HALF: CardDef = CardDef::new(
+    "TEST:buyMulHalf",
+    &[On::Filter(Filter::BuyMul(
+        "actor == owner && card.placed",
+        None,
+        buy_mul_half,
+    ))],
+);
+
+fn buy_mul_half(_player_id: i32, value: i32) -> i32 {
+    value / 2
+}
+
+/// FORCE-WRITE-01: a placed 强制购买 price hook (`ForceBuyAdd` +1500) -- the
+/// spelling that opts an entry into retuning a Force quote.
+const FORCE_BUY_ADD: CardDef = CardDef::new(
+    "TEST:forceBuyAdd",
+    &[On::Filter(Filter::ForceBuyAdd(
+        "actor == owner && card.placed",
+        None,
+        force_buy_add,
+    ))],
+);
+
+fn force_buy_add(_player_id: i32, value: i32) -> i32 {
+    ctx::log(
+        _player_id,
+        &Msg::new(key!("force_buy_add_reason")).n("from", value as i64),
+    );
+    value + 1500
+}
+
 /// Marker window (user ruling 2026-10-07): a [反击] that answers `markerSpend`
 /// and cancels the spend -- nothing moves. No shipped card listens to the
 /// window yet; this fixture pins the shape.
@@ -4493,6 +4541,9 @@ card_sdk::ruleset!(&[
     XFER_1000,
     GAIN_1000,
     LOSE_1000,
+    PAY_AMOUNT,
+    BUY_MUL_HALF,
+    FORCE_BUY_ADD,
     PAY_CALC_PROBE,
     PAID_PROBE,
     MARKER_DENY,

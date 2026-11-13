@@ -147,7 +147,10 @@ pub fn trigger_reason(t: &Trigger) -> Msg {
         | TriggerKind::BuyAdd
         | TriggerKind::BuyMul
         | TriggerKind::BuySet
-        | TriggerKind::BuyAssign => Msg::new("log.reason.bought")
+        | TriggerKind::BuyAssign
+        | TriggerKind::ForceBuyAdd
+        | TriggerKind::ForceBuyMul
+        | TriggerKind::ForceBuySet => Msg::new("log.reason.bought")
             .player_id("who", who)
             .tile("tile", tile),
         TriggerKind::BuildBefore | TriggerKind::BuildAfter => Msg::new("log.reason.build")

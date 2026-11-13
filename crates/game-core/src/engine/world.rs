@@ -1061,6 +1061,13 @@ pub struct World {
     /// field stand-in (HHW:（育美）(2)).
     #[serde(default)]
     pub gains: Vec<i32>,
+    /// 「本回合开始后…失去资金的总额」 (NOW SUMIMI) -- per player, money actually
+    /// lost since that player's **own** turn last started. Covers every loss
+    /// (a settled payment, a spend, a buy, a build, a redeem, a forced buy);
+    /// a cancelled or zeroed payment adds nothing. Zeroed for the starting
+    /// player at their own turn start (「本回合开始后…到下回合开始前」).
+    #[serde(default)]
+    pub losses: Vec<i32>,
     /// [反击] declarations made this turn, in declaration order. Cleared at
     /// each turn start (design G06 §6.5).
     #[serde(default)]
@@ -1098,6 +1105,14 @@ pub struct World {
     /// live run and the action replays from its pre-action state.
     #[serde(skip)]
     pub mark_log: Vec<MarkLog>,
+    /// The in-flight payment reached its `PaySplitAt` stage (NFO-CANCEL-01).
+    /// Cleared at each payment start, set when the stage runs, read by a
+    /// `PayAfter` hook through `trigger::pay_split_ran()`: a cancelled /
+    /// negated payment never got there, a shave-to-0 did. A per-payment
+    /// save/restore bracket keeps a nested payment from eating the outer
+    /// payment's bit.
+    #[serde(default)]
+    pub pay_split_ran: bool,
     /// When set, `log` does not push an event (the caller posts write-through).
     #[serde(skip)]
     pub skip_log: bool,
@@ -1391,12 +1406,14 @@ impl World {
             scheduled: vec![],
             targeted: vec![],
             gains: vec![],
+            losses: vec![],
             countered_this_turn: vec![],
             played_cards: vec![],
             marker_owner: std::collections::BTreeMap::new(),
             rule_ids: Default::default(),
             walk_flush: WalkFlush::default(),
             mark_log: Vec::new(),
+            pay_split_ran: false,
             skip_log: false,
             stub: MatchEvent::default(),
             flash: SharedFlash::default(),
@@ -1427,6 +1444,30 @@ impl World {
         usize::try_from(player_id)
             .ok()
             .and_then(|s| self.gains.get(s).copied())
+            .unwrap_or(0)
+    }
+
+    /// 「本回合开始后…失去资金的总额」 -- count an actual money loss for
+    /// `player_id` (only positive figures; a cancelled payment adds 0).
+    /// Every real debit funnels through here.
+    pub fn bump_loss(&mut self, player_id: i32, amount: i32) {
+        let Ok(s) = usize::try_from(player_id) else {
+            return;
+        };
+        if amount <= 0 {
+            return;
+        }
+        if self.losses.len() <= s {
+            self.losses.resize(s + 1, 0);
+        }
+        self.losses[s] = self.losses[s].saturating_add(amount);
+    }
+
+    /// The money `player_id` has lost since their own turn started.
+    pub fn losses_this_turn(&self, player_id: i32) -> i32 {
+        usize::try_from(player_id)
+            .ok()
+            .and_then(|s| self.losses.get(s).copied())
             .unwrap_or(0)
     }
 

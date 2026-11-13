@@ -67,10 +67,14 @@ fn can_counteract(player_id: i32) -> bool {
         return false;
     }
     let tag = price_tag(player_id);
-    // TODO(规则书)[judgement] The guard here is `amount > Tag` alone: it drops both the
-    // running total and the 「即将超过」 window, so it also fires once the total has
-    // already crossed the tag.
-    trigger::value() > tag
+    // 规则书[反击]: 「失去资金的总额**即将超过**你所在格子的[收费标价]时」
+    // -- the whole total lost since this player's own turn start plus the
+    // payment being declared must cross the tag, and the total alone must not
+    // already be past it. That 「即将超过」 window is why the card fires at the
+    // crossing payment only, not on every later one (ABI-11 `lost_this_turn`;
+    // the running total before this payment).
+    let lost = ctx::lost_this_turn(player_id);
+    lost.saturating_add(trigger::value()) > tag && lost <= tag
 }
 
 fn counteract(player_id: i32) -> card_sdk::Asked {

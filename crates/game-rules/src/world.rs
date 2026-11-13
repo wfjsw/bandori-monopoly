@@ -1070,6 +1070,12 @@ pub trait CardWorld: Clone + 'static {
     fn tile_prop(&self, _tile: i32, _key: &str) -> i32 {
         0
     }
+    /// Tri-state [`Self::tile_prop`] (ABI-12): `-1` absent, `0` present and
+    /// clear, `1` present and non-zero. Lets a ternary prop tell an explicit
+    /// `0` from "nobody wrote it".
+    fn tile_prop_state(&self, _tile: i32, _key: &str) -> i32 {
+        -1
+    }
     /// Write a [`Self::tile_prop`] on every rule instance governing `tile`.
     /// Returns the stored value. The **source** owns the arming and the
     /// disarming; the reader is the tile instance.
@@ -1719,6 +1725,11 @@ pub trait CardWorld: Clone + 'static {
     fn turn_move_abnormal(&self) -> bool {
         false
     }
+    /// Did the in-flight payment reach its `PaySplitAt` stage
+    /// (`trigger::pay_split_ran`, NFO-CANCEL-01)?
+    fn pay_split_ran(&self) -> bool {
+        false
+    }
     /// 「打出此卡的回合…」: the turn's dice-immunity flag.
     fn turn_dice_immune(&self) -> bool {
         false
@@ -1770,6 +1781,11 @@ pub trait CardWorld: Clone + 'static {
     }
     /// 「当前回合内你每获得过一次资金」 -- money-ins for `player_id` this turn.
     fn gains_this_turn(&self, _player: i32) -> i32 {
+        0
+    }
+    /// 「本回合开始后…失去资金的总额」 -- money `player_id` actually lost since
+    /// their own turn started (ABI-11; zeroed at that turn start).
+    fn losses_this_turn(&self, _player: i32) -> i32 {
         0
     }
     /// The **static targeting query**: which players the play being resolved

@@ -1267,6 +1267,9 @@ pub struct World {
     // ---- turn trackers (ir_fill `Gains` / `Targeted` / `Between`) ----
     /// Money gained this turn per seat (`hostfns::gains_this_turn`).
     pub gains_this_turn: [i32; MAX_PLAYERS],
+    /// Money actually lost since the seat's own turn start
+    /// (`hostfns::lost_this_turn`, ABI-11).
+    pub losses_this_turn: [i32; MAX_PLAYERS],
     /// How many times this seat was targeted this turn (`targeted_count`).
     pub targeted_count: [i32; MAX_PLAYERS],
     /// `between(p, a, b)` seat-exclusion helper used by some guards; the
@@ -1475,6 +1478,7 @@ impl World {
             msg_sender_uid: 0,
             msg_sender_seat: 0,
             gains_this_turn: [0; MAX_PLAYERS],
+            losses_this_turn: [0; MAX_PLAYERS],
             targeted_count: [0; MAX_PLAYERS],
             between_seat: [-1; MAX_PLAYERS],
             opt_n: 0,

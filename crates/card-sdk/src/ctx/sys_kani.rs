@@ -435,6 +435,10 @@ pub fn set_tile_prop(tile: i32, kp: i32, kl: i32, v: i32) -> i32 {
     kani_host::call_i32(Op::set_tile_prop, [tile, kp, kl, v, 0, 0])
 }
 
+pub fn tile_prop_state(tile: i32, kp: i32, kl: i32) -> i32 {
+    kani_host::call_i32(Op::tile_prop_state, [tile, kp, kl, 0, 0, 0])
+}
+
 pub fn prop_at(uid: i32, kp: i32, kl: i32) -> i32 {
     kani_host::call_i32(Op::prop_at, [uid, kp, kl, 0, 0, 0])
 }
@@ -1141,6 +1145,10 @@ pub fn trigger_pending_negation() -> i32 {
     kani_host::call_i32(Op::trigger_pending_negation, [0, 0, 0, 0, 0, 0])
 }
 
+pub fn trigger_pay_split_ran() -> i32 {
+    kani_host::call_i32(Op::trigger_pay_split_ran, [0, 0, 0, 0, 0, 0])
+}
+
 pub fn trigger_extreme_armed() -> i32 {
     kani_host::call_i32(Op::trigger_extreme_armed, [0, 0, 0, 0, 0, 0])
 }
@@ -1494,6 +1502,10 @@ pub fn targeted_count(player_id: i32) -> i32 {
 
 pub fn gains_this_turn(player_id: i32) -> i32 {
     kani_host::call_i32(Op::gains_this_turn, [player_id, 0, 0, 0, 0, 0])
+}
+
+pub fn lost_this_turn(player_id: i32) -> i32 {
+    kani_host::call_i32(Op::lost_this_turn, [player_id, 0, 0, 0, 0, 0])
 }
 
 pub fn placed_tile(player_id: i32, ptr: i32, len: i32) -> i32 {

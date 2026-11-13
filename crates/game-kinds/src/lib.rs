@@ -833,6 +833,27 @@ pub const ENGINE_KINDS: &[EngineKind] = &[
         is_filter: false,
         hook_only: true,
     },
+    // FORCE-WRITE-01: the 强制购买 price stages. A Force quote runs these
+    // instead of the generic `buyAdd` / `buyMul` / `buySet` (rulebook 其他规则
+    // 6 -- 强制购买 is immune unless the effect writes 「强制购买」).
+    EngineKind {
+        id: 143,
+        wire: "forceBuyAdd",
+        is_filter: true,
+        hook_only: true,
+    },
+    EngineKind {
+        id: 144,
+        wire: "forceBuyMul",
+        is_filter: true,
+        hook_only: true,
+    },
+    EngineKind {
+        id: 145,
+        wire: "forceBuySet",
+        is_filter: true,
+        hook_only: true,
+    },
 ];
 
 /// The table row for `id`, or `None` when the id is retired / unknown.
@@ -993,6 +1014,9 @@ pub fn from_wire(s: &str) -> Option<i32> {
         "ownerSet" => Some(139),
         "eventResolved" => Some(141),
         "payCalcBefore" => Some(142),
+        "forceBuyAdd" => Some(143),
+        "forceBuyMul" => Some(144),
+        "forceBuySet" => Some(145),
         _ => None,
     };
     #[cfg(not(kani))]
@@ -1046,13 +1070,13 @@ mod tests {
     fn filter_and_hook_sets() {
         const FILTERS: &[i32] = &[
             52, 55, 56, 57, 67, 68, 69, 70, 71, 79, 80, 81, 82, 83, 84, 85, 86, 95, 96, 97, 98, 99,
-            100, 101, 102, 108, 109, 125, 126, 127, 128, 129, 130, 131, 134,
+            100, 101, 102, 108, 109, 125, 126, 127, 128, 129, 130, 131, 134, 143, 144, 145,
         ];
         const HOOKS: &[i32] = &[
             45, 46, 48, 49, 50, 51, 52, 54, 55, 56, 57, 58, 59, 60, 61, 62, 63, 65, 66, 67, 68, 69,
             70, 71, 76, 77, 79, 80, 81, 82, 83, 95, 96, 97, 98, 99, 100, 102, 103, 105, 106, 110,
             111, 112, 114, 115, 117, 119, 121, 123, 124, 125, 126, 127, 128, 129, 130, 131, 132,
-            133, 134, 140, 141, 142,
+            133, 134, 140, 141, 142, 143, 144, 145,
         ];
         for r in ENGINE_KINDS {
             assert_eq!(
@@ -1063,7 +1087,7 @@ mod tests {
             );
             assert_eq!(r.hook_only, HOOKS.contains(&r.id), "hook_only id {}", r.id);
         }
-        assert_eq!(FILTERS.len(), 35);
-        assert_eq!(HOOKS.len(), 64);
+        assert_eq!(FILTERS.len(), 38);
+        assert_eq!(HOOKS.len(), 67);
     }
 }

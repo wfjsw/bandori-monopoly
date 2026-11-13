@@ -1610,6 +1610,17 @@ pub fn tile_prop(tile: i32, key: &str) -> i32 {
     unsafe { sys::tile_prop(tile, p, l) }
 }
 
+/// Tri-state [`tile_prop`] (ABI-12): `-1` = no governing rule instance
+/// carries `key`, `0` = present and clear, `1` = present and non-zero.
+/// [`tile_prop`] folds absent onto `0`, which cannot tell an explicit clear
+/// from "nobody wrote it" for a ternary prop such as
+/// `prop::FORCE_STAYS_MORTGAGED` (`= 0` clears).
+#[cfg_attr(kani, inline(always))]
+pub fn tile_prop_state(tile: i32, key: &str) -> i32 {
+    let (p, l) = s(key);
+    unsafe { sys::tile_prop_state(tile, p, l) }
+}
+
 /// Write [`tile_prop`] on the rule instance(s) governing `tile`; returns the
 /// stored value. 「无法获取[CiRCLE奖励]」 arms `prop::NO_REWARD` on CiRCLE's
 /// `tile:circle` instance this way, and the reward step reads it back.
@@ -3854,6 +3865,17 @@ pub fn gains_this_turn(player_id: i32) -> i32 {
     unsafe { sys::gains_this_turn(player_id) }
 }
 
+/// 「当你在你的本回合开始后到下回合开始前之间失去资金的总额」 -- what
+/// `player_id` has **actually** lost since their own turn started (ABI-11).
+/// Every real debit counts (a settled payment, a spend, a buy, a build, a
+/// redeem, a forced buy); a cancelled or shaved-to-0 payment adds 0. Zeroed at
+/// that player's own turn start. Reads the running total *before* the payment
+/// being offered, so a 「即将超过」 guard is
+/// `lost + trigger::value() > tag && lost <= tag`.
+pub fn lost_this_turn(player_id: i32) -> i32 {
+    unsafe { sys::lost_this_turn(player_id) }
+}
+
 /// The **static targeting query**: which players the play being resolved (by
 /// `player_id`) designates. Empty
 /// when the play names nobody. This is what 「有[指定]目标」 /
@@ -4461,6 +4483,15 @@ pub mod trigger {
     /// [`crate::abi::AnswerEffect::NEGATES`] (design G06 §6.2).
     pub fn pending_negation() -> i32 {
         unsafe { sys::trigger_pending_negation() }
+    }
+
+    /// Did the payment this `PayAfter` / `Paid` link is about reach its
+    /// `PaySplitAt` stage (NFO-CANCEL-01)? `false` on a payment cancelled or
+    /// negated at an earlier window, `true` once the stage ran -- including a
+    /// body that shaved the figure to 0. Per payment; only meaningful on a
+    /// payment link.
+    pub fn pay_split_ran() -> bool {
+        unsafe { sys::trigger_pay_split_ran() != 0 }
     }
 
     /// An extreme is armed on this play, or a declared answer on this link

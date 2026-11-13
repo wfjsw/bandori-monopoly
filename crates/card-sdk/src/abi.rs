@@ -1929,7 +1929,9 @@ pub mod prop {
     pub const FORCE_FIXED: &str = "forceFixed";
     /// 「获得的地契仍为抵押状态」 (`data/rules.txt` line 106) -- `1` = a
     /// force-buy leaves the deed mortgaged. Default `1` for Force (the
-    /// rulebook's own words); `0` clears it.
+    /// rulebook's own words); an explicitly stamped `0` clears it. Absence
+    /// keeps the default, so a reader must tell it from `0` -- see
+    /// `ctx::tile_prop_state` (ABI-12).
     pub const FORCE_STAYS_MORTGAGED: &str = "forceStaysMortgaged";
     /// 「该格获得所有颜色」 / soyo 「所有颜色」 -- this tile counts as every
     /// colour group for agent-set membership. Mirrors [`ALL_COLORS`] as a
@@ -3062,6 +3064,24 @@ impl FilterKind {
     /// deal fields; the host applies only the fields the body changed.
     pub const BuyAssign: Self = Self(TriggerKind::BuyAssign);
 
+    /// Filter, FORCE-WRITE-01. The **强制购买** price's first modifier stage
+    /// (fixed plus/minus). Same payload as [`Self::BuyAdd`], but only a Force
+    /// quote runs it: 强制购买 is immune to the generic `BuyAdd` / `BuyMul` /
+    /// `BuySet` stages (rulebook 其他规则 6) unless the effect writes
+    /// 「强制购买」, which is what this spelling is for. Body returns the new
+    /// figure; the host folds it into the price.
+    pub const ForceBuyAdd: Self = Self(TriggerKind::ForceBuyAdd);
+
+    /// Filter, FORCE-WRITE-01. The 强制购买 price's multiply stage, after
+    /// [`Self::ForceBuyAdd`]. Same payload and fold as [`Self::BuyMul`], Force
+    /// quotes only.
+    pub const ForceBuyMul: Self = Self(TriggerKind::ForceBuyMul);
+
+    /// Filter, FORCE-WRITE-01. The 强制购买 price's free / fixed stage, after
+    /// [`Self::ForceBuyMul`]. Same payload as [`Self::BuySet`]; Force quotes
+    /// only. Each stage floors the price at zero.
+    pub const ForceBuySet: Self = Self(TriggerKind::ForceBuySet);
+
     /// Filter. The payment command's Combined fixed plus/minus stage on the
     /// whole figure, before any split divide (支付阶段 2 on the command total).
     /// Payload: player_id = payer, target = payee, value = the command total,
@@ -3504,6 +3524,15 @@ impl TriggerKind {
     /// `buyAssign`
     pub const BuyAssign: Self = Self::engine(83);
 
+    /// `forceBuyAdd` (FORCE-WRITE-01) -- the 强制购买 price's fixed ± stage.
+    pub const ForceBuyAdd: Self = Self::engine(143);
+
+    /// `forceBuyMul` -- the 强制购买 price's multiply stage.
+    pub const ForceBuyMul: Self = Self::engine(144);
+
+    /// `forceBuySet` -- the 强制购买 price's free / fixed stage.
+    pub const ForceBuySet: Self = Self::engine(145);
+
     /// `payCombinedAdd`
     pub const PayCombinedAdd: Self = Self::engine(84);
 
@@ -3606,8 +3635,9 @@ impl TriggerKind {
     pub const AbnormalRefused: Self = Self::engine(121);
 
     // Ids 104 and 107 stay retired (104 was "flipAfter", 107 is
-    // ruleset-declared "fansFlip"); the next free **engine** id was 121, and
-    // the highest engine id is now 134 (abnormalGate).
+    // ruleset-declared "fansFlip"); the next free **engine** id was 121. G09
+    // took 135-139, G10 141, `payCalcBefore` 142 and the force-buy filter
+    // stages (FORCE-WRITE-01) 143-145.
 
     /// `cardFired` -- a card's body entered its resolution frame: every
     /// body, a play, a hook or a counteraction alike. Hook-only: no

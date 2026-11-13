@@ -1907,14 +1907,18 @@ fn compile_pre(
 }
 
 /// The buy-quote hook kinds (`docs/PURCHASE.md`): the gate that may cancel a
-/// buy, plus the three price stages (`BuyAdd` → `BuyMul` → `BuySet`).
-/// [`Ruleset::declares_buy`] ORs these against the manifest's declared-kind
-/// bitmask (fix C).
-pub const BUY_HOOK_KINDS: [crate::TriggerKind; 4] = [
+/// buy, plus the three price stages (`BuyAdd` → `BuyMul` → `BuySet`) and their
+/// 强制购买 twins (`ForceBuyAdd` → `ForceBuyMul` → `ForceBuySet`,
+/// FORCE-WRITE-01). [`Ruleset::declares_buy`] ORs these against the manifest's
+/// declared-kind bitmask (fix C).
+pub const BUY_HOOK_KINDS: [crate::TriggerKind; 7] = [
     crate::TriggerKind::BuyGate,
     crate::TriggerKind::BuyAdd,
     crate::TriggerKind::BuyMul,
     crate::TriggerKind::BuySet,
+    crate::TriggerKind::ForceBuyAdd,
+    crate::TriggerKind::ForceBuyMul,
+    crate::TriggerKind::ForceBuySet,
 ];
 
 /// The pure half of [`Ruleset::contract_admits`]: may an entry with this
@@ -5903,6 +5907,13 @@ fn build_linker<W: CardWorld>(engine: &Engine) -> Result<Linker<HostState<W>>, E
     )?;
     l.func_wrap(
         m,
+        "tile_prop_state",
+        |mut c: C<W>, tile: i32, kp: i32, kl: i32| -> Result<i32, Error> {
+            hostfns::tile_prop_state(&mut c, tile, kp, kl).map_err(HostError::into_err)
+        },
+    )?;
+    l.func_wrap(
+        m,
         "prop_at",
         |mut c: C<W>, uid: i32, kp: i32, kl: i32| -> Result<i32, Error> {
             hostfns::prop_at(&mut c, uid, kp, kl).map_err(HostError::into_err)
@@ -6380,6 +6391,13 @@ fn build_linker<W: CardWorld>(engine: &Engine) -> Result<Linker<HostState<W>>, E
         "gains_this_turn",
         |mut c: C<W>, player_id: i32| -> Result<i32, Error> {
             hostfns::gains_this_turn(&mut c, player_id).map_err(HostError::into_err)
+        },
+    )?;
+    l.func_wrap(
+        m,
+        "lost_this_turn",
+        |mut c: C<W>, player_id: i32| -> Result<i32, Error> {
+            hostfns::lost_this_turn(&mut c, player_id).map_err(HostError::into_err)
         },
     )?;
     l.func_wrap(
@@ -7297,6 +7315,13 @@ fn build_linker<W: CardWorld>(engine: &Engine) -> Result<Linker<HostState<W>>, E
         "trigger_pending_negation",
         |mut c: C<W>| -> Result<i32, Error> {
             hostfns::trigger_pending_negation(&mut c).map_err(HostError::into_err)
+        },
+    )?;
+    l.func_wrap(
+        m,
+        "trigger_pay_split_ran",
+        |mut c: C<W>| -> Result<i32, Error> {
+            hostfns::trigger_pay_split_ran(&mut c).map_err(HostError::into_err)
         },
     )?;
     l.func_wrap(

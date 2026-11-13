@@ -518,6 +518,11 @@ pub enum Op {
     persona_skins = 497,
     // v123: the character-card pile read.
     persona = 498,
+    // AB payment pipeline: ABI-11 lost-this-turn, NFO-CANCEL-01 split-ran,
+    // ABI-12 the tri-state tile prop.
+    lost_this_turn = 499,
+    trigger_pay_split_ran = 500,
+    tile_prop_state = 501,
 }
 
 /// Six i32 wire slots, matching the ABI's arg convention.
