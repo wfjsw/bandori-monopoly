@@ -60,6 +60,7 @@
   "anim.chainKind.r:bandori:107": "Fans flip",
   "anim.chainKind.state": "State change",
   "anim.chainKind.markerSpent": "After fire spend",
+  "anim.chainKind.markerChanged": "Held token changed",
   "anim.chainKind.cardUsed": "Own skill used",
   "anim.chainKind.houseAdded": "After house added",
   "anim.chainKind.r:bandori:78": "Before charge spend",

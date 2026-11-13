@@ -198,6 +198,7 @@ fn typed_engine_consts_have_table_rows() {
         (142, "PayCalcBefore"),
         (143, "TurnStartAfter"),
         (144, "ManageAfter"),
+        (145, "MarkerChanged"),
     ];
     for (id, name) in named {
         let row =
@@ -218,11 +219,12 @@ fn typed_engine_consts_have_table_rows() {
 /// highest id in the table is the ceiling; the next group takes `ceiling + 1`.
 /// G08 took the free band 113–119, `openingHandDealt` = 140 and
 /// `eventResolved` = 141; HOST-03's 支付阶段 1 took 142 (`payCalcBefore`,
-/// design G02 §4.1) and its 行动阶段 3 / 6 markers took 143 / 144.
+/// design G02 §4.1) and its 行动阶段 3 / 6 markers took 143 / 144; HAG-01's
+/// held-token change took 145 (`markerChanged`, `ab-held-tokens`).
 #[test]
-fn kind_id_ceiling_is_144() {
+fn kind_id_ceiling_is_145() {
     let max = ENGINE_KINDS.iter().map(|r| r.id).max().unwrap_or(0);
-    assert_eq!(max, 144, "highest engine kind id");
+    assert_eq!(max, 145, "highest engine kind id");
 }
 
 /// Payload-shape mapping: every engine filter kind's `FilterShape` (from the

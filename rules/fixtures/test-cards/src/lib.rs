@@ -3080,6 +3080,112 @@ fn trap_declare_body(player_id: i32) -> card_sdk::Asked {
     Ok(())
 }
 
+/// A placed card whose **residual guard** traps under the `trapGuard` fixture
+/// prop. A trapping guard declines the entry (docs/ACTIVATION.md §2 "Every
+/// 'the entry did not fire' trap logs") and must log one `log.card_trap` line;
+/// the card stays untouched. `TEST:trap_guard_ok` is the same card with the
+/// switch off, proving the line is the trap's and not the entry's.
+const TRAP_GUARD: CardDef = CardDef::new(
+    "TEST:trap_guard",
+    &[
+        On::Play("", None, trap_guard_play),
+        On::Action(Action::TurnEnd(
+            "card.placed",
+            Some(trap_guard_guard),
+            trap_guard_body,
+        )),
+    ],
+)
+.props(&[("trapGuard", 1)]);
+
+const TRAP_GUARD_OK: CardDef = CardDef::new(
+    "TEST:trap_guard_ok",
+    &[
+        On::Play("", None, trap_guard_ok_play),
+        On::Action(Action::TurnEnd(
+            "card.placed",
+            Some(trap_guard_guard),
+            trap_guard_body,
+        )),
+    ],
+)
+.props(&[("trapGuard", 0)]);
+
+fn trap_guard_play(player_id: i32) -> card_sdk::Asked {
+    ctx::set_dest(ctx::Dest::Field, card_sdk::abi::ZoneChangeCause::Play);
+    ctx::place_card(
+        player_id,
+        "TEST:trap_guard",
+        &Msg::new(key!("trap_guard_note")),
+    );
+    Ok(())
+}
+
+fn trap_guard_ok_play(player_id: i32) -> card_sdk::Asked {
+    ctx::set_dest(ctx::Dest::Field, card_sdk::abi::ZoneChangeCause::Play);
+    ctx::place_card(
+        player_id,
+        "TEST:trap_guard_ok",
+        &Msg::new(key!("trap_guard_note")),
+    );
+    Ok(())
+}
+
+/// The fixture switch: `trapGuard` off admits, on panics into a wasm trap.
+fn trap_guard_guard(_player_id: i32) -> bool {
+    if ctx::prop("trapGuard") == 0 {
+        return true;
+    }
+    panic!("TEST:trap_guard guard trapped");
+}
+
+fn trap_guard_body(player_id: i32) -> card_sdk::Asked {
+    ctx::log(player_id, &Msg::new(key!("trap_guard_body")));
+    Ok(())
+}
+
+/// A **hand** card whose `On::Play` declare traps. The collector runs before
+/// the point of no return (docs/ACTIVATION.md §2): the play declines, the card
+/// stays in hand, and one `log.card_trap` line lands.
+const TRAP_PLAY_DECLARE: CardDef = CardDef::new(
+    "TEST:trap_play_declare",
+    &[On::Play("", None, trap_play_body).declare(trap_play_collect)],
+);
+
+fn trap_play_collect(_player_id: i32) -> card_sdk::Declared {
+    panic!("TEST:trap_play_declare collector trapped");
+}
+
+fn trap_play_body(player_id: i32) -> card_sdk::Asked {
+    ctx::log(player_id, &Msg::new(key!("trap_play_body")));
+    Ok(())
+}
+
+/// Transfers the user's whole 可乐饼 holding to the other seat -- the
+/// `markerChanged` write `hagumi`'s overflow handler listens for.
+const HAGUMI_GIVE: CardDef = CardDef::new("TEST:hagumiGive", &[On::Play("", None, hagumi_give)]);
+
+fn hagumi_give(player_id: i32) -> card_sdk::Asked {
+    let other = if player_id == 0 { 1 } else { 0 };
+    let n = ctx::held_count(player_id, "可乐饼");
+    ctx::add_held_by_name(player_id, "可乐饼", -n, 10)?;
+    ctx::add_held_by_name(other, "可乐饼", n, 10)?;
+    ctx::log(
+        player_id,
+        &Msg::new(key!("hagumi_give_done")).n("n", n as i64),
+    );
+    Ok(())
+}
+
+/// Gains 4 可乐饼 on the playing seat -- the owner's own write, which must
+/// not trip `hagumi`'s overflow handler.
+const HAGUMI_GAIN: CardDef = CardDef::new("TEST:hagumiGain", &[On::Play("", None, hagumi_gain)]);
+
+fn hagumi_gain(player_id: i32) -> card_sdk::Asked {
+    ctx::add_held_by_name(player_id, "可乐饼", 4, 10)?;
+    Ok(())
+}
+
 // ---------------------------------------------------------------------------
 // Rev-2: a card-authored struct arg, and named entry ids for `query_guard`.
 // ---------------------------------------------------------------------------
@@ -4646,6 +4752,11 @@ card_sdk::ruleset!(&[
     PICK_COUNTER,
     TRIGGER_SEEN,
     TRAP_DECLARE,
+    TRAP_GUARD,
+    TRAP_GUARD_OK,
+    TRAP_PLAY_DECLARE,
+    HAGUMI_GIVE,
+    HAGUMI_GAIN,
     STRUCT_ARG,
     NAMED_OPEN,
     NAMED_SHUT,

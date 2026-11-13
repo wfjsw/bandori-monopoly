@@ -545,6 +545,13 @@ pub struct Run {
     /// kind 73 (`fireSpent`, wire-stable) once the run commits. The name is
     /// payload; `charge` is one caller.
     marker_spent_log: Vec<(i32, i32, String)>,
+    /// Bound held-token writes this run made, `(holder, delta, name,
+    /// instance)` -- the engine raises `markerChanged` for each once the run
+    /// commits (HAG-01). `delta` is the signed change the write actually
+    /// applied; every player-token write (`bind_held` / `add_held` /
+    /// `set_held` / `spend_marker`, and a transfer's two player legs) is in
+    /// here, so a standing 「has N」 count has a post-commit event to hang on.
+    marker_changed_log: Vec<(i32, i32, String, i32)>,
     /// Houses added during the run, raised as kind 75 once it commits.
     /// House writes this run applied: `(owner, tile, now, delta)` -- the
     /// owner at write time (design 5.5). `commit_after` raises `houseAdded`
@@ -2880,8 +2887,14 @@ impl CardWorld for Run {
         // Marker ownership: the rule that creates a marker owns it.
         let who = self.current_card.clone();
         self.world.note_marker_owner(name, &who);
-        self.world
-            .bind_held(self.current_uid, name, player_id, n, max)
+        let got = self
+            .world
+            .bind_held(self.current_uid, name, player_id, n, max);
+        // Post-commit `markerChanged` (HAG-01): the holder is the raise seat.
+        // `instance` is the running card -- the rule that owns the token.
+        self.marker_changed_log
+            .push((player_id, got, name.to_string(), self.current_uid));
+        got
     }
     fn count_held_name(&self, name: &str, player_id: i32) -> i32 {
         // Name-keyed (any owner / instance): the legacy `held` lookup.
@@ -2898,7 +2911,13 @@ impl CardWorld for Run {
         } else {
             self.current_uid
         };
+        let was = self.world.held_count(player_id, name);
         self.world.set_held(player_id, name, v, inst, max);
+        // Post-commit `markerChanged` (HAG-01), even at delta 0: a raw set is
+        // a write the holder's count hears about (the fire kernel re-declares
+        // its row this way).
+        self.marker_changed_log
+            .push((player_id, v - was, name.to_string(), inst));
     }
     fn held_max(&self, player_id: i32, name: &str) -> i32 {
         self.world.held_max(player_id, name)
@@ -2912,7 +2931,7 @@ impl CardWorld for Run {
         to_player: i32,
         n: i32,
     ) -> i32 {
-        self.world.move_units(
+        let got = self.world.move_units(
             self.current_uid,
             name,
             from_tile,
@@ -2920,7 +2939,18 @@ impl CardWorld for Run {
             to_tile,
             to_player,
             n,
-        )
+        );
+        // The player-side legs are bound held writes: raise `markerChanged`
+        // (HAG-01) after the run commits, one per leg the move actually made.
+        if got > 0 && from_player >= 0 {
+            self.marker_changed_log
+                .push((from_player, -got, name.to_string(), self.current_uid));
+        }
+        if got > 0 && to_player >= 0 {
+            self.marker_changed_log
+                .push((to_player, got, name.to_string(), self.current_uid));
+        }
+        got
     }
     fn mark_rule_instances(&self) -> Vec<(i32, String)> {
         self.world.mark_rule_instances()
@@ -3538,6 +3568,15 @@ impl CardWorld for Run {
         }
         // A consumer of the counter: all-or-nothing, and it logs the spend. It
         // does not consult any cap -- spending is not the capped direction.
+        // The row's creating instance, for the `markerChanged` payload.
+        let instance = self
+            .world
+            .st
+            .players
+            .get(player_id.max(0) as usize)
+            .and_then(|s| s.tokens.iter().find(|t| t.name == name))
+            .and_then(|t| t.instance)
+            .unwrap_or(-1);
         if self.world.spend_marker(player_id, name, n) == 0 {
             return 0;
         }
@@ -3546,6 +3585,10 @@ impl CardWorld for Run {
             self.world.log(name, player_id, reason).value = -n;
         }
         self.marker_spent_log.push((player_id, n, name.to_string()));
+        // Post-commit `markerChanged` (HAG-01): a spend is a held write too,
+        // with the negative delta. `markerSpent` stays spend-only.
+        self.marker_changed_log
+            .push((player_id, -n, name.to_string(), instance));
         1
     }
     fn turn_player(&self) -> i32 {
@@ -5232,6 +5275,7 @@ impl<M: CardModules> RulesBridge<M> {
                 hand_log: vec![],
                 reshuffle_log: vec![],
                 marker_spent_log: vec![],
+                marker_changed_log: vec![],
                 house_log: vec![],
                 counter_log: vec![],
                 named_raise_log: vec![],
@@ -5381,6 +5425,19 @@ impl<M: CardModules> RulesBridge<M> {
                 }
             };
             cx.guest_log = std::mem::take(&mut log);
+            // A trapping guard / declare declines its entry. That must not be
+            // silent (DECLARE-TRAP-LOG): one `log.card_trap` line naming the
+            // card and the failure, posted into the world `run_hook` returns.
+            // The guard / declare store world is a throwaway clone, so the
+            // line goes here, never into the store.
+            let mut on_trap = |w: &mut crate::Run, _entry: i32, detail: &str| {
+                w.log(
+                    call.player_id(),
+                    Msg::new("log.card_trap")
+                        .card("card", card_id)
+                        .text("detail", detail),
+                );
+            };
             let mut guest = || -> Result<Option<Result<Outcome<Run>, RuleError>>, RuleError> {
                 if guarded {
                     match self.ruleset.run_hook(
@@ -5389,6 +5446,7 @@ impl<M: CardModules> RulesBridge<M> {
                         &cx.guest_log,
                         &already_admitted,
                         Some(&mut announce),
+                        Some(&mut on_trap),
                     ) {
                         Err(e) => Ok(Some(Err(e))),
                         // Not activated -- the guard refused. Nothing ran, and
@@ -6073,7 +6131,7 @@ impl<M: CardModules> RulesBridge<M> {
                 }
                 Err(e) => {
                     // A trapping module must not take the match down with it.
-                    let detail = declare_err_detail(&e);
+                    let detail = crate::host::trap_detail(&e);
                     let player_id = call.player_id();
                     cx.log(
                         player_id,
@@ -7611,6 +7669,18 @@ impl<M: CardModules> RulesBridge<M> {
             Some("house")
         } else if !after.marker_spent_log.is_empty() {
             Some("marker-spend")
+        } else if after.trigger.kind != TriggerKind::DeckAtGameStart
+            && after
+                .marker_changed_log
+                .iter()
+                .any(|(_, delta, _, _)| *delta != 0)
+        {
+            // Only a real count move is visible. A `set_held` re-stamp at
+            // delta 0 (`fire::declare`'s per-turn cap restatement) raises the
+            // event but is bookkeeping -- that is what the silent mark hides.
+            // The game-start pot declaration establishes the initial count;
+            // setup is not a clause event either.
+            Some("marker-change")
         } else if after.logged > 0 {
             Some("log line")
         } else {
@@ -7757,6 +7827,7 @@ impl<M: CardModules> RulesBridge<M> {
                 && after.house_log.len() == borrowed_house
                 && after.state_log.is_empty()
                 && after.marker_spent_log.is_empty()
+                && after.marker_changed_log.is_empty()
                 && after.counter_log.is_empty()
                 && after.named_raise_log.is_empty();
             if quiet_when_empty && body_empty && !after.prompted && !flash_cued {
@@ -8123,6 +8194,36 @@ impl<M: CardModules> RulesBridge<M> {
                 t.value = n;
                 t.name = Some(name.clone());
             })?;
+        }
+        // `markerChanged` (HAG-01) -- one raise per bound held write, after
+        // it committed. `player_id` is the token **holder**, `value` the
+        // signed delta, `name` the counter name, `instance` the creating
+        // instance. A standing 「has N」 clause hangs here instead of at each
+        // write site. A handler's own held write commits in a nested drive
+        // whose `commit_after` sees the depth -- it re-raises nothing
+        // (`PlayCtx::marker_raise_depth`), so an unconditional writer cannot
+        // chain forever. The turn-end backstop in hagumi covers writes made
+        // under the guard.
+        for (holder, delta, name, instance) in after.marker_changed_log {
+            if std::env::var("DBG_MC").is_ok() {
+                eprintln!(
+                    "MC raise holder={holder} delta={delta} name={name} declares={} depth={}",
+                    self.ruleset.declares(TriggerKind::MarkerChanged),
+                    cx.marker_raise_depth
+                );
+            }
+            if cx.marker_raise_depth > 0 {
+                continue;
+            }
+            cx.marker_raise_depth += 1;
+            let raised = self.raise_core(cx, "markerChanged", holder, |t| {
+                t.name = Some(name.clone());
+                t.value = delta;
+                t.instance = instance;
+                t.by_card = by_player;
+            });
+            cx.marker_raise_depth = cx.marker_raise_depth.saturating_sub(1);
+            raised?;
         }
         for (player_id, tile, now, delta) in after.house_log {
             let kind = if delta > 0 {
@@ -10966,6 +11067,7 @@ impl<M: CardModules> RulesBridge<M> {
             hand_log: vec![],
             reshuffle_log: vec![],
             marker_spent_log: vec![],
+            marker_changed_log: vec![],
             house_log: vec![],
             counter_log: vec![],
             named_raise_log: vec![],
@@ -11300,6 +11402,7 @@ impl<M: CardModules> RulesBridge<M> {
                 hand_log: vec![],
                 reshuffle_log: vec![],
                 marker_spent_log: vec![],
+                marker_changed_log: vec![],
                 house_log: vec![],
                 counter_log: vec![],
                 named_raise_log: vec![],
@@ -11670,7 +11773,7 @@ impl<M: CardModules> RulesBridge<M> {
                         s as i32,
                         Msg::new("log.card_trap")
                             .card("card", id)
-                            .text("detail", declare_err_detail(&e)),
+                            .text("detail", crate::host::trap_detail(&e)),
                     );
                     return Ok(None);
                 }
@@ -11723,6 +11826,7 @@ impl<M: CardModules> RulesBridge<M> {
             hand_log: vec![],
             reshuffle_log: vec![],
             marker_spent_log: vec![],
+            marker_changed_log: vec![],
             house_log: vec![],
             counter_log: vec![],
             named_raise_log: vec![],
@@ -11747,24 +11851,6 @@ impl<M: CardModules> RulesBridge<M> {
             flash_cued: false,
             flash_ordinal: 0,
         }
-    }
-}
-
-/// The module's view of an engine trigger (the bridge `Trigger`). One-line detail
-/// for a [`RuleError`], for `log.card_trap`. Shared by the body trap path and the
-/// `OP_DECLARE` collector path -- a trapping module is reported the same way
-/// wherever it traps.
-fn declare_err_detail(e: &RuleError) -> String {
-    match e {
-        RuleError::Trap(m) | RuleError::Load(m) | RuleError::DuplicateCard(m) => m.clone(),
-        RuleError::NoSuchCard(i) => format!("no such card {i}"),
-        RuleError::GuardPrompted => "guard prompted".into(),
-        RuleError::BadCondition {
-            card,
-            entry,
-            source,
-            err,
-        } => format!("bad guard condition on {card}/{entry}: {err} ({source})"),
     }
 }
 
@@ -13875,6 +13961,9 @@ impl<M: CardModules> RulesBridge<M> {
             &Default::default(),
             &[],
             None,
+            // A quote's world is dropped, so a trap line has no home here;
+            // the commit's re-quote runs the real (logging) drive.
+            None,
         ) {
             if let Outcome::Done(after, _) = hr.outcome {
                 *trig = after.trigger;
@@ -14327,6 +14416,7 @@ impl<M: CardModules> CardRules for RulesBridge<M> {
             hand_log: vec![],
             reshuffle_log: vec![],
             marker_spent_log: vec![],
+            marker_changed_log: vec![],
             house_log: vec![],
             counter_log: vec![],
             named_raise_log: vec![],
@@ -14409,6 +14499,7 @@ impl<M: CardModules> CardRules for RulesBridge<M> {
                 hand_log: vec![],
                 reshuffle_log: vec![],
                 marker_spent_log: vec![],
+                marker_changed_log: vec![],
                 house_log: vec![],
                 counter_log: vec![],
                 named_raise_log: vec![],
@@ -14464,7 +14555,7 @@ impl<M: CardModules> CardRules for RulesBridge<M> {
                         player_id as i32,
                         Msg::new("log.card_trap")
                             .card("card", card)
-                            .text("detail", declare_err_detail(&e)),
+                            .text("detail", crate::host::trap_detail(&e)),
                     );
                     return Ok(None);
                 }
@@ -14551,6 +14642,7 @@ impl<M: CardModules> CardRules for RulesBridge<M> {
             hand_log: vec![],
             reshuffle_log: vec![],
             marker_spent_log: vec![],
+            marker_changed_log: vec![],
             house_log: vec![],
             counter_log: vec![],
             named_raise_log: vec![],
@@ -15490,6 +15582,8 @@ mod tests {
             // v50: named counter writes
             "counterChanged",
             "r:bandori:78",
+            // held-token write (HAG-01)
+            "markerChanged",
             // v42: the command-wide pre-split payment stage + terminals
             "payCombinedAdd",
             "payCombinedMul",

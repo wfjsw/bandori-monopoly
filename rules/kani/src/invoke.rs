@@ -766,6 +766,7 @@ fn hook_kind_parse(name: &str) -> Option<card_sdk::abi::TriggerKind> {
     const BUY_SET: (u8, u64, u64) = tag_key_const("BuySet");
     const HOUSE_ADDED: (u8, u64, u64) = tag_key_const("HouseAdded");
     const MARKER_SPENT: (u8, u64, u64) = tag_key_const("MarkerSpent");
+    const MARKER_CHANGED: (u8, u64, u64) = tag_key_const("MarkerChanged");
     const CARD_USED: (u8, u64, u64) = tag_key_const("CardUsed");
     const COUNTER_CHANGED: (u8, u64, u64) = tag_key_const("CounterChanged");
     const FANS_FLIP: (u8, u64, u64) = tag_key_const("FansFlip");
@@ -803,6 +804,7 @@ fn hook_kind_parse(name: &str) -> Option<card_sdk::abi::TriggerKind> {
         BUY_SET => Some(T::BuySet),
         HOUSE_ADDED => Some(T::HouseAdded),
         MARKER_SPENT => Some(T::MarkerSpent),
+        MARKER_CHANGED => Some(T::MarkerChanged),
         CARD_USED => Some(T::CardUsed),
         COUNTER_CHANGED => Some(T::CounterChanged),
         FANS_FLIP => Some(bandori_std::kind::FansFlip.as_trigger()),
@@ -823,6 +825,9 @@ fn hook_kind_name(k: card_sdk::abi::TriggerKind) -> &'static str {
     }
     if k == T::MarkerSpent {
         return "MarkerSpent";
+    }
+    if k == T::MarkerChanged {
+        return "MarkerChanged";
     }
     if k == T::CardUsed {
         return "CardUsed";

@@ -87,6 +87,9 @@ pub mod trig {
     pub const TurnStartAfter: &str = "turnStartAfter";
     /// 行动阶段 6 「经营/出牌阶段后」 -- 运营 ends, before the main move.
     pub const ManageAfter: &str = "manageAfter";
+    /// Engine namespace (`ActionKind::MarkerChanged`). A held counter (a
+    /// player token of a creating instance) is written.
+    pub const MarkerChanged: &str = "markerChanged";
 }
 
 /// MoveKind values. `Walk` / `Teleport` are what `move.kind ==` compares.
@@ -150,6 +153,7 @@ pub fn engine_str_constants() -> &'static [(&'static str, &'static str)] {
         ("MoveAfter", trig::MoveAfter),
         ("TurnStartAfter", trig::TurnStartAfter),
         ("ManageAfter", trig::ManageAfter),
+        ("MarkerChanged", trig::MarkerChanged),
     ]
 }
 

@@ -504,6 +504,7 @@
   "log.reason.generic": "{{who}}：{{kind}}",
   "log.reason.manage_end": "{{who}} 的经营/出牌阶段结束",
   "log.reason.marker": "{{who}} 的标记变化 {{value}}",
+  "log.reason.marker_changed": "{{who}} 的 {{name}} 变化 {{value}}",
   "log.reason.mortgage": "{{who}} 抵押 {{tile}}",
   "log.reason.out": "{{who}} 退出游戏",
   "log.reason.pass": "{{who}} 经过 {{tile}}",

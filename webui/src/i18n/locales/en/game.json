@@ -504,6 +504,7 @@
   "log.reason.generic": "{{who}}: {{kind}}",
   "log.reason.manage_end": "{{who}}'s manage phase ends",
   "log.reason.marker": "{{who}}'s markers change by {{value}}",
+  "log.reason.marker_changed": "{{who}}'s {{name}} changes by {{value}}",
   "log.reason.mortgage": "{{who}} mortgages {{tile}}",
   "log.reason.out": "{{who}} leaves the game",
   "log.reason.pass": "{{who}} passes {{tile}}",

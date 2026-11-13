@@ -194,6 +194,10 @@ pub fn trigger_reason(t: &Trigger) -> Msg {
         TriggerKind::MarkerSpend | TriggerKind::MarkerGain => Msg::new("log.reason.marker")
             .player_id("who", who)
             .i("value", value),
+        TriggerKind::MarkerChanged => Msg::new("log.reason.marker_changed")
+            .player_id("who", who)
+            .msg("name", counter_name(t.name.as_deref().unwrap_or("")))
+            .i("value", value),
 
         // ---- misc ---------------------------------------------------------
         TriggerKind::Counteracted => Msg::new("log.reason.counteracted")
