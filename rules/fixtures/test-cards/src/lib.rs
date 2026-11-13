@@ -1181,6 +1181,47 @@ fn pay_calc_w5(player_id: i32) -> card_sdk::Asked {
     Ok(())
 }
 
+/// COND-01 probe: the first `rollPlan` entry writes a slot, the second is
+/// gated on `slot('cond.live') >= 1` and logs. Both fire on the same roll, so
+/// the second only runs when the condition sees the first body's write.
+const COND_LIVE_PROBE: CardDef = CardDef::new(
+    "TEST:condLiveProbe",
+    &[
+        On::Play("", None, cond_live_place),
+        On::Filter(Filter::DiceRollPlan(
+            "actor == owner && card.placed",
+            None,
+            cond_live_bump,
+        )),
+        On::Filter(Filter::DiceRollPlan(
+            "actor == owner && card.placed && slot('cond.live') >= 1",
+            None,
+            cond_live_see,
+        )),
+    ],
+);
+
+fn cond_live_place(player_id: i32) -> card_sdk::Asked {
+    ctx::set_dest(ctx::Dest::Field, card_sdk::abi::ZoneChangeCause::Play);
+    ctx::place_card(
+        player_id,
+        "TEST:condLiveProbe",
+        &Msg::new(key!("cond_live_note")),
+    );
+    Ok(())
+}
+
+fn cond_live_bump(player_id: i32, v: PlanValue) -> PlanValue {
+    ctx::set_slot(player_id, "cond.live", 1);
+    ctx::log(player_id, &Msg::new(key!("cond_live_bump")));
+    v
+}
+
+fn cond_live_see(player_id: i32, v: PlanValue) -> PlanValue {
+    ctx::log(player_id, &Msg::new(key!("cond_live_see")));
+    v
+}
+
 /// HOST-03 window 7 probe: logs the settled `paid` figure with the payer's
 /// seat (-1 for a print), so a test can pin that a receipt fires it too.
 const PAID_PROBE: CardDef = CardDef::new(
@@ -4494,6 +4535,7 @@ card_sdk::ruleset!(&[
     GAIN_1000,
     LOSE_1000,
     PAY_CALC_PROBE,
+    COND_LIVE_PROBE,
     PAID_PROBE,
     MARKER_DENY,
     MARKER_SPEND,

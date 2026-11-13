@@ -2617,17 +2617,11 @@ impl Ruleset {
         // Built only if some entry actually declares a condition: the window
         // snapshot + CEL root are large, and an unconditioned hook must not
         // pay for them (STACK-01's small-thread settle chain has no room).
+        // Later entries see the writes of earlier bodies (`cur`), so the scope
+        // is rebuilt after each executed body (COND-01): a `slot()` condition
+        // must read the same world its body would, not the pre-window snapshot.
         let mut scope: Option<rules_cond::WindowScope> = None;
-        // `card.placed` must answer for the **running instance** (the guest's
-        // `ctx::is_placed()`): a game-start hook also runs for the same id
-        // while it sits in a pile / hand (`uid = -1`).
-        let cand = crate::condition::fill_candidate_uid(
-            world,
-            player_id,
-            &info.id,
-            world.self_uid(),
-            world.is_placed() != 0,
-        );
+        let mut scope_stale = false;
         let mut cur: W = world.clone();
         // One `next_answer` cursor threads the whole call: every guard, every
         // `OP_DECLARE` and every body reads the shared answer log in order, so
@@ -2648,13 +2642,25 @@ impl Ruleset {
                 .get(card as usize)
                 .and_then(|r| r.get(entry as usize))
                 .and_then(|p| p.as_ref());
-            if condition.is_some() && scope.is_none() {
+            if condition.is_some() && (scope.is_none() || scope_stale) {
                 scope = Some(crate::condition::window_scope_owned(
-                    crate::condition::fill_window(world),
+                    crate::condition::fill_window(&cur),
                 ));
+                scope_stale = false;
             }
+            // `card.placed` must answer for the **running instance** (the
+            // guest's `ctx::is_placed()`): a game-start hook also runs for the
+            // same id while it sits in a pile / hand (`uid = -1`). Recomputed
+            // per entry for the same reason as the scope.
+            let cand = crate::condition::fill_candidate_uid(
+                &cur,
+                player_id,
+                &info.id,
+                cur.self_uid(),
+                cur.is_placed() != 0,
+            );
             let admitted = self.entry_admitted(
-                world,
+                &cur,
                 card,
                 entry,
                 player_id,
@@ -2709,6 +2715,7 @@ impl Ruleset {
                 Outcome::Done(w, _) => {
                     // Later entries see earlier writes and earlier answers.
                     cur = w;
+                    scope_stale = true;
                     next_answer = after_body;
                 }
                 paused => {
