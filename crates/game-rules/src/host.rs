@@ -4925,6 +4925,34 @@ fn build_linker<W: CardWorld>(engine: &Engine) -> Result<Linker<HostState<W>>, E
     )?;
     l.func_wrap(
         m,
+        "add_co_owner",
+        |mut c: C<W>, tile: i32, player_id: i32| -> Result<i32, Error> {
+            hostfns::add_co_owner(&mut c, tile, player_id).map_err(HostError::into_err)
+        },
+    )?;
+    l.func_wrap(
+        m,
+        "is_co_owner",
+        |mut c: C<W>, tile: i32, player_id: i32| -> Result<i32, Error> {
+            hostfns::is_co_owner(&mut c, tile, player_id).map_err(HostError::into_err)
+        },
+    )?;
+    l.func_wrap(
+        m,
+        "owns_tile",
+        |mut c: C<W>, tile: i32, player_id: i32| -> Result<i32, Error> {
+            hostfns::owns_tile(&mut c, tile, player_id).map_err(HostError::into_err)
+        },
+    )?;
+    l.func_wrap(
+        m,
+        "mortgaged_for",
+        |mut c: C<W>, tile: i32, player_id: i32| -> Result<i32, Error> {
+            hostfns::mortgaged_for(&mut c, tile, player_id).map_err(HostError::into_err)
+        },
+    )?;
+    l.func_wrap(
+        m,
         "player_pos",
         |mut c: C<W>, player_id: i32| -> Result<i32, Error> {
             hostfns::player_pos(&mut c, player_id).map_err(HostError::into_err)
@@ -5952,6 +5980,14 @@ fn build_linker<W: CardWorld>(engine: &Engine) -> Result<Linker<HostState<W>>, E
     )?;
     l.func_wrap(
         m,
+        "add_group_pool_shuffled",
+        |mut c: C<W>, player_id: i32, np: i32, nl: i32, n: i32, max: i32| -> Result<i32, Error> {
+            hostfns::add_group_pool_shuffled(&mut c, player_id, np, nl, n, max)
+                .map_err(HostError::into_err)
+        },
+    )?;
+    l.func_wrap(
+        m,
         "group_skill",
         |mut c: C<W>, player_id: i32, buf: i32, cap: i32| -> Result<i32, Error> {
             hostfns::group_skill(&mut c, player_id, buf, cap).map_err(HostError::into_err)
@@ -6565,6 +6601,13 @@ fn build_linker<W: CardWorld>(engine: &Engine) -> Result<Linker<HostState<W>>, E
         "trig_cards",
         |mut c: C<W>, buf: i32, cap: i32| -> Result<i32, Error> {
             hostfns::trig_cards(&mut c, buf, cap).map_err(HostError::into_err)
+        },
+    )?;
+    l.func_wrap(
+        m,
+        "trig_card_tags",
+        |mut c: C<W>, buf: i32, cap: i32| -> Result<i32, Error> {
+            hostfns::trig_card_tags(&mut c, buf, cap).map_err(HostError::into_err)
         },
     )?;
     l.func_wrap(m, "opt_int", |mut c: C<W>, v: i32| -> Result<(), Error> {

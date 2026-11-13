@@ -14,9 +14,15 @@
 //! carries once the other bends have run.
 //!
 //! The first paragraph is the copy-detection half: 「如果你的（2）技能或角色卡
-//! 被复制，当复制者使x重置为0时，对方失去该技能（2）」. That needs the engine to
-//! say *whose* skill a running body belongs to when the body was copied, which
-//! is the same provenance question as the temporary-pot cost. See the TODO.
+//! 被复制，当复制者使x重置为0时，对方失去该技能（2）」. A copy is an
+//! `invoke` of this body from another seat (`ctx::invoke`): X belongs to the
+//! *source* (the copied player), so the copy reads and writes it there, and a
+//! copier's reset takes the skill away from the source.
+//!
+//! 「（抵押或赎回以外）」 needs no tag: mortgage and redemption money never
+//! enter the pay pipeline (`基础规则` 5–6; the engine moves it directly), so
+//! their payments raise no `Pay` and can never be the reset that costs the
+//! skill.
 
 use bandori_std::ctx::{self, state};
 use bandori_std::state_key;
@@ -25,9 +31,13 @@ use card_sdk::{key, Action, CardDef, Msg, On};
 
 /// The counter X. 「X初始为0」.
 const X: &str = "skill.yuriCrit.x";
+/// 「对方失去该技能（2）」 -- the source's loss latch.
+const LOST: &str = "skill.yuriCrit.lost";
+/// This skill's rule id, for the copy check.
+const ID: &str = "skill:八潮瑠唯:正论暴击";
 
 pub const RUI: CardDef = CardDef::new(
-    "skill:八潮瑠唯:正论暴击",
+    ID,
     &[
         On::Action(Action::TurnStartBefore("", None, declare)).silent(),
         // 「当你即将获得或失去资金（在所有其他资金量改动效果生效后并结果不等于0）时」
@@ -45,17 +55,33 @@ pub const RUI: CardDef = CardDef::new(
 .rule();
 
 fn mine(player_id: i32) -> bool {
+    // 「对方失去该技能（2）」 -- the source's own body is off once a copier has
+    // reset. A copier's seat keeps its copy (the latch is on the source).
+    if state::get(player_id, LOST) != 0 {
+        return false;
+    }
     // 「获得或失去资金」 -- the skill fires on either side of a money move:
     // a delete (player -> game) carries `player_id = me`, a print (game ->
     // player) carries `target = me`, a pay-player carries both.
     ctx::trigger::player_id() == player_id || ctx::trigger::target() == player_id
 }
 
+/// The seat holding X: this one when it owns the skill, else the copied-from
+/// seat (a copy shares the source's counter).
+fn holder(player_id: i32) -> i32 {
+    if bandori_std::persona_skill(player_id).as_deref() == Some(ID) {
+        return player_id;
+    }
+    (0..ctx::player_count())
+        .find(|&p| p != player_id && bandori_std::persona_skill(p).as_deref() == Some(ID))
+        .unwrap_or(player_id)
+}
+
 /// 「X初始为0」 -- restated so a fresh match starts from zero.
 /// This skill prints no fire pots: it never touches `charge` (MARKERS.md §6
 /// purge -- rui stops writing CHARGE entirely; its own X key stays).
 fn declare(player_id: i32) -> card_sdk::Asked {
-    state::set(player_id, X, 0);
+    state::set(holder(player_id), X, 0);
     Ok(())
 }
 
@@ -69,12 +95,21 @@ fn on_pay(player_id: i32) -> card_sdk::Asked {
     if amount == 0 {
         return Ok(());
     }
-    let x = state::get(player_id, X);
+    // A copy runs this body for the copier; X is the source's. The reset
+    // below is 「复制者使x重置为0」 exactly when the two seats differ.
+    let owner = holder(player_id);
+    let copied = owner != player_id;
+    let x = state::get(owner, X);
     let n = ctx::roll(player_id, 1, 20, RollPurpose::Effect, roll_source::SKILL)?;
     if n <= x {
         // 「若结果小于等于X，将X重置为0，此次获得资金翻倍或无需失去资金
         // （收款或付款方同样受到影响）」
-        state::set(player_id, X, 0);
+        state::set(owner, X, 0);
+        if copied {
+            // 「当复制者使x重置为0时，对方失去该技能（2）」
+            state::set(owner, LOST, 1);
+            ctx::log(owner, &Msg::new(key!("rui_lost")));
+        }
         let after = if amount > 0 { amount * 2 } else { 0 };
         ctx::trigger::set_pay_amount(after);
         ctx::effect(
@@ -87,7 +122,7 @@ fn on_pay(player_id: i32) -> card_sdk::Asked {
         );
     } else {
         // 「若结果大于X，X+1」
-        state::set(player_id, X, x + 1);
+        state::set(owner, X, x + 1);
         ctx::effect(
             player_id,
             &Msg::new(key!("rui_miss"))
@@ -104,12 +139,10 @@ fn on_pay(player_id: i32) -> card_sdk::Asked {
     Ok(())
 }
 
-// TODO(规则书)[judgement]: （1）「如果你的（2）技能或角色卡被复制，当复制者使x
-//   重置为0时，对方失去该技能（2）（抵押或赎回以外）」 -- the clause under-specifies
-//   -- the engine does not say whose skill a running body belongs to when the
-//   body was copied, so 「复制者」 has no reading that is both faithful and
-//   checkable. 「（抵押或赎回以外）」 carves out a class of resets the engine
-//   does not tag either.
+// （1）'s copy identity: the invoked frame is a copy, the frame's `card` is this
+// skill, and the holder is found from the roster's persona binding. A reset by
+// a copier therefore writes the loss on the source. The parenthetical
+// 「（抵押或赎回以外）」 is structural: neither move raises `Pay`.
 
 //
 

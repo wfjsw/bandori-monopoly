@@ -16,6 +16,12 @@
 //! body. Each step is an engine primitive -- `ctx::offer_buy` / `offer_build` /
 //! `pay_rent` / `offer_force_buy` -- so the body is citations and calls.
 //!
+//! "Own" is `ctx::owns_tile`, not a primary-owner comparison: a co-held deed
+//! (「视为同时拥有」, Poppin' Party's 星之鼓动山丘) belongs to every holder. A
+//! co-held deed also mortgages **per holder** -- [`mortgage`] / [`redeem`]
+//! read the player's own stake (`ctx::mortgaged_for`), while the tile-wide
+//! `ctx::mortgaged_of` stays the any-stake aggregate.
+//!
 //! Two of the quoted clauses are enforced elsewhere; cite the live site rather
 //! than restating them here:
 //!
@@ -57,25 +63,35 @@ pub(crate) fn settle(player_id: i32) -> card_sdk::Asked {
     if at < 0 {
         return Ok(());
     }
+    // 「视为…地产商格子」 (soyo 通透的颜色): the landing carries the per-player
+    // `dealer` class, so the dealer body settles it instead of this one (the
+    // skill calls `settle_tile_at` on the agent tile).
+    if ctx::tile_in(player_id, at, "dealer") {
+        return Ok(());
+    }
     // The settle IS the optional buy / build (规则书 「无主的[可购买格子]的[结算]
     // 是：可选择[消耗]…获得格子地契和拥有权」) -- offered as part of the settle,
     // not deferred to the end phase.
     let owner = ctx::tile_owner(at);
-    if owner < 0 {
-        ctx::offer_buy(player_id, at)?;
-    } else if owner != player_id {
-        if ctx::mortgaged_of(at) {
-            // 「此次购买的价格不受任何 资金变动效果影响，收款方无论处于何种状态都可正常收款」 is that routine's (it moves money
-            // directly, outside the pay pipeline).
-            ctx::offer_force_buy(player_id, at)?;
-        } else {
-            ctx::pay_rent(player_id, at, false)?;
-        }
-    } else {
+    // A co-holder (「视为同时拥有」) lands as an owner.
+    if ctx::owns_tile(at, player_id) {
         // 「如果格子地契已抵押则无效果」 is the build gate's. 「每块地有标注的等级上限」 is checked in that same
         // gate (see the module doc); this body only offers.
         let _ = ctx::prop(prop::BUILD_MAX);
         ctx::offer_build(player_id, at)?;
+    } else if (0..ctx::player_count()).any(|p| ctx::is_co_owner(at, p)) {
+        // 「视为同时拥有」: a co-held deed's rent is the holders' split
+        // (`skill:Poppin' Party:星之鼓动` (3), paid at `settleBefore`), so the
+        // single primary-owner charge stands down. All stakes mortgaged pays
+        // nobody, which is the same result.
+    } else if owner < 0 {
+        ctx::offer_buy(player_id, at)?;
+    } else if ctx::mortgaged_of(at) {
+        // 「此次购买的价格不受任何 资金变动效果影响，收款方无论处于何种状态都可正常收款」 is that routine's (it moves money
+        // directly, outside the pay pipeline).
+        ctx::offer_force_buy(player_id, at)?;
+    } else {
+        ctx::pay_rent(player_id, at, false)?;
     }
     Ok(())
 }
@@ -172,8 +188,9 @@ pub(crate) fn build(player_id: i32) -> card_sdk::Asked {
     if at < 0 {
         return Ok(());
     }
-    // Re-run-safe: not ours, or already mortgaged (「如果格子地契已抵押则无效果」).
-    if ctx::tile_owner(at) != player_id || ctx::mortgaged_of(at) {
+    // Re-run-safe: not ours, or our own stake already mortgaged
+    // (「如果格子地契已抵押则无效果」).
+    if !ctx::owns_tile(at, player_id) || ctx::mortgaged_for(at, player_id) {
         return Ok(());
     }
     // `buildBefore` -- a real pre-hook.
@@ -225,8 +242,9 @@ pub(crate) fn mortgage(player_id: i32) -> card_sdk::Asked {
     if at < 0 {
         return Ok(());
     }
-    // Ownership / standing.
-    if ctx::tile_owner(at) != player_id || ctx::mortgaged_of(at) {
+    // Ownership / standing. A co-held deed mortgages per holder: only this
+    // holder's own stake must be unmortgaged.
+    if !ctx::owns_tile(at, player_id) || ctx::mortgaged_for(at, player_id) {
         return Ok(());
     }
     // 「不可被抵押」 tile prop (e.g. RiNG) -- tile-wide, so `tile_prop`.
@@ -259,7 +277,7 @@ pub(crate) fn redeem(player_id: i32) -> card_sdk::Asked {
     if at < 0 {
         return Ok(());
     }
-    if ctx::tile_owner(at) != player_id || !ctx::mortgaged_of(at) {
+    if !ctx::owns_tile(at, player_id) || !ctx::mortgaged_for(at, player_id) {
         return Ok(());
     }
     // 「运营阶段」 only.

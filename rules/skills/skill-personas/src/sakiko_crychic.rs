@@ -13,8 +13,14 @@
 //! someone is within five tiles, the landing may be nudged one tile toward
 //! them. 「沿最短路径」 is whichever direction shortens `dist`. The move-end
 //! moment is `settleBefore` -- the settle has not run yet.
+//!
+//! （4） is the Ave Mujica two-state axis: the same five-tile geometry sets
+//! `skillState`, and 「但只有洗牌时可以…添加奇迹水晶」 moves the band skill's
+//! crystal add to reshuffles (a shuffle-tagged write, with the band skill's
+//! own third-turn add standing down).
 
-use bandori_std::ctx;
+use bandori_std::ctx::{self, state};
+use bandori_std::state_key;
 use card_sdk::abi::ActionKind;
 use card_sdk::{key, Action, CardDef, Msg, On};
 
@@ -41,6 +47,16 @@ pub const SAKIKO_CRYCHIC: CardDef = CardDef::new(
             Some(within5),
             before_settle_other,
         )),
+        // （4）「你距离其他玩家5格以内时处于状态2」 -- any resolve (either side
+        // of the distance may have moved) plus the turn-start backstop; the
+        // band check and the geometry are the residual.
+        On::Action(Action::MoveResolved("", Some(mujica), sync_state)),
+        // The state edge narrates `log.sakiko_crychic_state`, so not `silent`.
+        On::Action(Action::TurnStartBefore("", Some(mujica), sync_state)),
+        // 「但只有洗牌时可以为你的乐队技能卡上添加奇迹水晶」 -- the carve-out:
+        // the add rides `Reshuffled` and writes through the shuffle-tagged
+        // host op, so it is distinguishable from every other crystal gain.
+        On::Action(Action::Reshuffled("", Some(mujica_in_two), add_crystal)),
     ],
 )
 .rule()
@@ -139,12 +155,51 @@ fn nudge(who: i32, goal: i32) {
     );
 }
 
-// （4）「若你的乐队技能为"Ave Mujica"，你距离其他玩家5格以内时处于状态2，但只有
-// 洗牌时可以为你的乐队技能卡上添加奇迹水晶」 -- the two-state mechanic the band
-// skill owns, and a carve-out on crystal gains the engine does not tag.
-// TODO(规则书)[judgement]: （4） -- the clause under-specifies -- the state axis is
-//   shared with the Ave Mujica band skill, and 「只有洗牌时可以…添加奇迹水晶」
-//   carves a class of gains the engine does not tag.
+/// The band skill that owns the 状态1 / 状态2 axis (（4）'s gate).
+const MUJICA: &str = "skill:Ave Mujica:假面之下的真实";
+
+/// 「若你的乐队技能为"Ave Mujica"」 -- an id check, outside the CEL vocabulary.
+fn mujica(player_id: i32) -> bool {
+    bandori_std::group_skill(player_id).as_deref() == Some(MUJICA)
+}
+
+/// `mujica` + 状态2, for the shuffle carve-out.
+fn mujica_in_two(player_id: i32) -> bool {
+    mujica(player_id) && state::get(player_id, state_key::SKILL_STATE) == 2
+}
+
+/// （4）「你距离其他玩家5格以内时处于状态2」.
+///
+/// （4） states no 「否则进入状态1」 arm, but 「时」 is a standing condition and
+/// the state has to end somewhere, so the same geometry that grants 状态2
+/// takes it away once nobody is within five. The axis is the band skill's
+/// (`skillState`); outside an Ave Mujica band it is untouched.
+fn sync_state(player_id: i32) -> card_sdk::Asked {
+    if !mujica(player_id) {
+        return Ok(());
+    }
+    let at = ctx::player_pos(player_id);
+    let near = at >= 0
+        && (0..ctx::player_count()).any(|p| {
+            p != player_id && !ctx::player_out(p) && ctx::dist(at, ctx::player_pos(p)) <= 5
+        });
+    let want = if near { 2 } else { 1 };
+    if state::get(player_id, state_key::SKILL_STATE) != want {
+        state::set(player_id, state_key::SKILL_STATE, want);
+        ctx::log(
+            player_id,
+            &Msg::new(key!("sakiko_crychic_state")).i("n", want as i64),
+        );
+    }
+    Ok(())
+}
+
+/// 「只有洗牌时可以为你的乐队技能卡上添加奇迹水晶」 -- one per reshuffle, on
+/// the band-skill instance (the same pool `group_crystals` reads).
+fn add_crystal(player_id: i32) -> card_sdk::Asked {
+    bandori_std::add_group_crystals_shuffled(player_id, 1, i32::MAX);
+    Ok(())
+}
 
 //
 

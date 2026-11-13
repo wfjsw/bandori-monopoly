@@ -406,6 +406,10 @@ pub fn dispatch(op: Op, a: Args) -> i64 {
         Op::tile_count => arm_tile_count(a),
         Op::tile_named => arm_tile_named(a),
         Op::tile_owner => arm_tile_owner(a),
+        Op::add_co_owner => arm_add_co_owner(a),
+        Op::is_co_owner => arm_is_co_owner(a),
+        Op::owns_tile => arm_owns_tile(a),
+        Op::mortgaged_for => arm_mortgaged_for(a),
         Op::tile_group => arm_tile_group(a),
         Op::tile_price => arm_tile_price(a),
         Op::buy_price => arm_buy_price(a),
@@ -995,6 +999,8 @@ pub fn dispatch(op: Op, a: Args) -> i64 {
         // ---- band / skills ----
         Op::group_pool => arm_band_crystals(a),
         Op::add_group_pool => arm_add_band_crystals(a),
+        // Same write; the reshuffle tag is log-only.
+        Op::add_group_pool_shuffled => arm_add_band_crystals(a),
         Op::group_skill => arm_band_skill(a),
         Op::persona_skill => arm_persona_skill(a),
         Op::persona => arm_persona(a),
@@ -1262,6 +1268,7 @@ pub fn dispatch(op: Op, a: Args) -> i64 {
         Op::declare_effect => 0,
         Op::trig_card_is => arm_trig_card_is(a),
         Op::trig_cards => arm_trig_cards(a),
+        Op::trig_card_tags => arm_trig_card_tags(a),
 
         // ---- move plan / settle (structure only; engine scheduling is
         //      PROTOCOL-LEVEL and out of Kani scope) ----
@@ -4703,6 +4710,60 @@ pub fn arm_tile_owner(a: Args) -> i64 {
     world::with_world(|w| w.tiles[tile_idx(a0)].owner) as i64
 }
 
+pub fn arm_add_co_owner(a: Args) -> i64 {
+    let [a0, a1, _, _, _, _] = a;
+    world::with_world_mut(|w| {
+        let s = tile_idx(a0);
+        let p = a1;
+        // The row is independent of the primary: the grant lists every holder,
+        // the primary included (World::add_co_owner), so a primary re-add is a
+        // plain idempotent no-op rather than a refusal.
+        if p < 0 || p as usize >= MAX_PLAYERS || w.co_owner[s][p as usize] {
+            0
+        } else {
+            w.co_owner[s][p as usize] = true;
+            1
+        }
+    }) as i64
+}
+
+pub fn arm_is_co_owner(a: Args) -> i64 {
+    let [a0, a1, _, _, _, _] = a;
+    world::with_world(|w| {
+        let p = a1;
+        (p >= 0 && (p as usize) < MAX_PLAYERS && w.co_owner[tile_idx(a0)][p as usize]) as i64
+    })
+}
+
+pub fn arm_owns_tile(a: Args) -> i64 {
+    let [a0, a1, _, _, _, _] = a;
+    world::with_world(|w| {
+        let s = tile_idx(a0);
+        let p = a1;
+        (w.tiles[s].owner == p
+            || (p >= 0 && (p as usize) < MAX_PLAYERS && w.co_owner[s][p as usize])) as i64
+    })
+}
+
+pub fn arm_mortgaged_for(a: Args) -> i64 {
+    let [a0, a1, _, _, _, _] = a;
+    world::with_world(|w| {
+        let s = tile_idx(a0);
+        let p = a1;
+        if p < 0 || p as usize >= MAX_PLAYERS {
+            return 0;
+        }
+        let co = w.co_owner[s];
+        if co.iter().any(|&b| b) {
+            w.co_mortgaged[s][p as usize] as i64
+        } else {
+            // An ordinary deed has one stake: its owner's, and only while the
+            // tile flag is up (World::stake_mortgaged).
+            (w.tiles[s].owner == p && w.tiles[s].mortgaged) as i64
+        }
+    })
+}
+
 pub fn arm_tile_price(a: Args) -> i64 {
     let [a0, a1, a2, a3, a4, a5] = a;
     {
@@ -5164,6 +5225,14 @@ pub fn arm_trig_cards(a: Args) -> i64 {
     let bytes = (id as i32).to_le_bytes();
     card_sdk::native::write(buf, &bytes);
     1
+}
+
+/// `trigger::card_tags(buf, cap)` — tags of the trigger card. The model does
+/// not carry sheet tags, so an empty list (a caller treating "no tags" as no
+/// match is the safe side).
+pub fn arm_trig_card_tags(a: Args) -> i64 {
+    let _ = a;
+    0
 }
 
 pub fn arm_trig_set_cancelled(a: Args) -> i64 {

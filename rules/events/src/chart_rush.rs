@@ -25,10 +25,11 @@ fn play(player_id: i32) -> card_sdk::Asked {
     let players = all_players();
     let mut faces: Vec<(i32, i32)> = Vec::new();
     for &p in &players {
-        // 「所有人失去所有[火罐]」
-        let lost = bandori_std::fire::get(p);
+        // 「所有人失去所有[火罐]」 -- temp pots are 火罐 too, and this is the
+        // 「被动消耗」 of lisa （3）: the loss pays no provider 600.
+        let lost = bandori_std::fire::total(p);
         if lost > 0 {
-            bandori_std::fire::spend(p, lost, &Msg::new("log.event.chart_lose"))?;
+            bandori_std::fire::spend_passive(p, lost, &Msg::new("log.event.chart_lose"))?;
         }
         // 「并且投掷Xd20，X为失去的指示物数量加一」
         let face = roll(p, lost + 1, 20)?;

@@ -183,6 +183,10 @@ pub struct GroupData {
     /// starting deck. Deck-legal only -- the in-match play gate is the
     /// group-skill card's `ExclusiveUse` entry (or the generic own/base rule).
     pub shares_exclusives: bool,
+    /// Group-skill trait: a starting deck may hold **only** `通用` cards
+    /// (CiRCLE 「只能在卡组中加入"通用"卡」). Deck-legal only; the in-match play
+    /// gate is unaffected.
+    pub general_only: bool,
     /// Printed skill body. Searched by `card_text_mentions`.
     pub text: String,
 }
@@ -497,6 +501,12 @@ impl GameData {
     /// in a starting deck (deck-building only; see [`crate::deck`]).
     pub fn group_shares_exclusives(&self, c: &PersonaData) -> bool {
         self.group(&c.group).is_some_and(|b| b.shares_exclusives)
+    }
+
+    /// Whether `c`'s group may carry **only** `通用` cards in a starting deck
+    /// (CiRCLE 「只能在卡组中加入"通用"卡」; see [`crate::deck`]).
+    pub fn group_general_only(&self, c: &PersonaData) -> bool {
+        self.group(&c.group).is_some_and(|b| b.general_only)
     }
 
     /// Group by `name`, first match.

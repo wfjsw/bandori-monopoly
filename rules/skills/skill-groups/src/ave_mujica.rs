@@ -95,11 +95,25 @@ fn at_turn_start(player_id: i32) -> card_sdk::Asked {
     state::set(player_id, IN_TWO, n);
     // 「处于状态2的第三回合开始时为此卡添加一个奇迹水晶」 -- a *band-card*
     // crystal: this rule's own instance, the same pool `group_crystals` reads.
-    if n == 3 {
+    // The two CRYCHIC faces with 「只有洗牌时可以…添加奇迹水晶」 move this add
+    // to reshuffles, so it stands down for them.
+    if n == 3 && !shuffle_only(player_id) {
         ctx::add_crystals(1, i32::MAX)?;
         ctx::log(player_id, &Msg::new(key!("ave_mujica_crystal")));
     }
     Ok(())
+}
+
+/// Character faces whose own clause moves the crystal add to shuffles
+/// (「但只有洗牌时可以为你的乐队技能卡上添加奇迹水晶」, 若叶睦（CRYCHIC）(3) /
+/// 丰川祥子（CRYCHIC）(4)). Their rule ids are stable; the add itself lives in
+/// those skills.
+fn shuffle_only(player_id: i32) -> bool {
+    matches!(
+        bandori_std::persona_skill(player_id).as_deref(),
+        Some("skill:若叶睦（CRYCHIC）:精致的人偶")
+            | Some("skill:丰川祥子（CRYCHIC）:你愿意和我组建乐队吗？")
+    )
 }
 
 /// 「进入状态2时将火罐补充至上限」 -- the character skills drive the entry, so

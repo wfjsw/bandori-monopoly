@@ -80,6 +80,7 @@ fn group_from_row(r: &MetaRow) -> GroupData {
         name: r.name.clone(),
         skill: r.field("skill").to_string(),
         shares_exclusives: r.flag("sharesExclusives"),
+        general_only: r.flag("generalOnly"),
         text: r.text.clone(),
     }
 }

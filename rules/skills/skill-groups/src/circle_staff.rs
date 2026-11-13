@@ -77,19 +77,20 @@ fn on_played(player_id: i32) -> card_sdk::Asked {
     Ok(())
 }
 
-// （1）「只能在卡组中加入"通用"卡」 -- a deck-building restriction. There is no
-// deck list to edit and no per-card 「通用」 flag to filter on, so nothing here
-// can enforce it.
-// TODO(规则书)（1）: 「只能在卡组中加入"通用"卡」 -- a deck-construction rule with
-//   no vocabulary: the engine has no deck list and no 「通用」 tag on a card to
-//   filter a build step on.
+// （1）「只能在卡组中加入"通用"卡」 is the roster band trait `generalOnly`
+// (this row, below) read by `game_core::deck::cant_play`: a deck may hold only
+// `通用`-group cards, the character's own exclusives included.
 //
-// TODO(规则书)（2）: 「（除将牌加入卡组的效果以外）」 -- a per-number carve-out the
-//   cards do not tag, so the player can name a number the clause excludes.
+// （2）'s 「（除将牌加入卡组的效果以外）」 -- a deck-insert number is still a
+// legal answer to the doubling offer but stays undoubled. The card's own insert
+// site tags it with `ctx::n_deck` (see `通用:GREAT`), which consumes the armed
+// slot without doubling.
 
 /// Roster band row for this band skill (ABI v63).
 pub const BAND: bandori_std::roster::GroupDef =
 bandori_std::roster::GroupDef::new(r#"CiRCLE"#)
+    // 「（1）只能在卡组中加入"通用"卡」
+    .general_only(true)
     .short_name(r#"CiRCLE"#)
     .color(r#"#E6004E"#)
     .skill(r#"后勤人员的努力"#)

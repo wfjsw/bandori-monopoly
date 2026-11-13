@@ -922,6 +922,14 @@ mod abi {
             link_name = "ruleset_add_group_pool"
         )]
         pub fn add_group_pool(player_id: i32, np: i32, nl: i32, n: i32, max: i32) -> i32;
+        // The same write tagged as a reshuffle-time add
+        // (「只有洗牌时可以…添加奇迹水晶」): the count write is identical, the
+        // outcome line carries the reshuffle source.
+        #[cfg_attr(
+            any(not(target_arch = "wasm32"), feature = "native-rules"),
+            link_name = "ruleset_add_group_pool_shuffled"
+        )]
+        pub fn add_group_pool_shuffled(player_id: i32, np: i32, nl: i32, n: i32, max: i32) -> i32;
         #[cfg_attr(
             any(not(target_arch = "wasm32"), feature = "native-rules"),
             link_name = "ruleset_group_skill"
@@ -1372,6 +1380,14 @@ mod abi {
             link_name = "ruleset_trig_cards"
         )]
         pub fn trig_cards(buf: i32, cap: i32) -> i32;
+        // Card tags of the trigger cards (the sheet's [主] / [手] / [特] / …
+        // marks), so a listener can tell a [手] effect from any other hand
+        // play without string-matching the id.
+        #[cfg_attr(
+            any(not(target_arch = "wasm32"), feature = "native-rules"),
+            link_name = "ruleset_trig_card_tags"
+        )]
+        pub fn trig_card_tags(buf: i32, cap: i32) -> i32;
         #[cfg_attr(
             any(not(target_arch = "wasm32"), feature = "native-rules"),
             link_name = "ruleset_trig_move_roll"
@@ -2424,6 +2440,29 @@ mod abi {
             link_name = "ruleset_set_dest_unwatched"
         )]
         pub fn set_dest_unwatched(dest: i32);
+        // Co-held deeds (「视为同时拥有」): a further holder on the tile's
+        // deed; the read-only predicates are the eligibility / rent-split
+        // surface.
+        #[cfg_attr(
+            any(not(target_arch = "wasm32"), feature = "native-rules"),
+            link_name = "ruleset_add_co_owner"
+        )]
+        pub fn add_co_owner(tile: i32, player_id: i32) -> i32;
+        #[cfg_attr(
+            any(not(target_arch = "wasm32"), feature = "native-rules"),
+            link_name = "ruleset_is_co_owner"
+        )]
+        pub fn is_co_owner(tile: i32, player_id: i32) -> i32;
+        #[cfg_attr(
+            any(not(target_arch = "wasm32"), feature = "native-rules"),
+            link_name = "ruleset_owns_tile"
+        )]
+        pub fn owns_tile(tile: i32, player_id: i32) -> i32;
+        #[cfg_attr(
+            any(not(target_arch = "wasm32"), feature = "native-rules"),
+            link_name = "ruleset_mortgaged_for"
+        )]
+        pub fn mortgaged_for(tile: i32, player_id: i32) -> i32;
     }
 } // mod abi
 

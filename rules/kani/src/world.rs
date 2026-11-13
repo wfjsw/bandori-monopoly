@@ -1047,6 +1047,9 @@ pub struct World {
 
     // ---- tiles ----
     pub tiles: [TileState; 60],
+    /// Per tile: co-holders (「视为同时拥有」) and their own mortgage stakes.
+    pub co_owner: [[bool; MAX_PLAYERS]; 60],
+    pub co_mortgaged: [[bool; MAX_PLAYERS]; 60],
     /// Per tile: the acquisition sequence of its current owner (`-1` = nobody
     /// / already released) and the next one to hand out (G08 I13).
     pub owned_seq: [i32; 60],
@@ -1365,6 +1368,8 @@ impl World {
             last_invoke: (NameId::INVALID, NameId::INVALID, false, -1),
             self_crystals: 0,
             tiles: [TileState::new(); 60],
+            co_owner: [[false; MAX_PLAYERS]; 60],
+            co_mortgaged: [[false; MAX_PLAYERS]; 60],
             owned_seq: [-1; 60],
             next_owned_seq: 0,
             first_tile: [-1; MAX_PLAYERS],

@@ -167,7 +167,7 @@ impl PlayCtx<'_> {
             u == t
                 || self.tile(u).group != group
                 || !self.tile(u).is_buyable()
-                || self.w.st.owners[u] == i as i32
+                || self.w.owns(u as i32, i as i32)
         })
     }
 
@@ -238,7 +238,7 @@ impl PlayCtx<'_> {
                 .enumerate()
                 .filter(|&(_, t)| {
                     (self.w.st.owners[t] < 0 && self.ai_wants_buy(p, t))
-                        || (self.w.st.owners[t] == p as i32 && self.ai_wants_build(p, t))
+                        || (self.w.owns(t as i32, p as i32) && self.ai_wants_build(p, t))
                 })
                 .map(|(k, _)| k)
                 .collect();
@@ -266,7 +266,7 @@ impl PlayCtx<'_> {
             return k as i32;
         }
         if let Some(k) = options.iter().position(|&t| {
-            self.w.st.owners[t] == p as i32
+            self.w.owns(t as i32, p as i32)
                 && params.wants_build_tile(
                     self.w.st.players[p].money,
                     self.build_cost(t),

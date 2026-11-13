@@ -647,6 +647,10 @@ pub fn add_group_pool(player_id: i32, np: i32, nl: i32, n: i32, max: i32) -> i32
     kani_host::call_i32(Op::add_group_pool, [player_id, np, nl, n, max, 0])
 }
 
+pub fn add_group_pool_shuffled(player_id: i32, np: i32, nl: i32, n: i32, max: i32) -> i32 {
+    kani_host::call_i32(Op::add_group_pool_shuffled, [player_id, np, nl, n, max, 0])
+}
+
 pub fn group_skill(player_id: i32, buf: i32, cap: i32) -> i32 {
     kani_host::call_i32(Op::group_skill, [player_id, buf, cap, 0, 0, 0])
 }
@@ -1019,6 +1023,10 @@ pub fn trig_move_total() -> i32 {
 
 pub fn trig_cards(buf: i32, cap: i32) -> i32 {
     kani_host::call_i32(Op::trig_cards, [buf, cap, 0, 0, 0, 0])
+}
+
+pub fn trig_card_tags(buf: i32, cap: i32) -> i32 {
+    kani_host::call_i32(Op::trig_card_tags, [buf, cap, 0, 0, 0, 0])
 }
 
 pub fn trig_move_roll() -> i32 {
@@ -1896,4 +1904,20 @@ pub fn rehome_card(tile: i32, owner: i32) -> i32 {
 
 pub fn play_hand_card(player_id: i32, ptr: i32, len: i32) -> i32 {
     kani_host::call_i32(Op::play_hand_card, [player_id, ptr, len, 0, 0, 0])
+}
+
+pub fn add_co_owner(tile: i32, player_id: i32) -> i32 {
+    kani_host::call_i32(Op::add_co_owner, [tile, player_id, 0, 0, 0, 0])
+}
+
+pub fn is_co_owner(tile: i32, player_id: i32) -> i32 {
+    kani_host::call_i32(Op::is_co_owner, [tile, player_id, 0, 0, 0, 0])
+}
+
+pub fn owns_tile(tile: i32, player_id: i32) -> i32 {
+    kani_host::call_i32(Op::owns_tile, [tile, player_id, 0, 0, 0, 0])
+}
+
+pub fn mortgaged_for(tile: i32, player_id: i32) -> i32 {
+    kani_host::call_i32(Op::mortgaged_for, [tile, player_id, 0, 0, 0, 0])
 }

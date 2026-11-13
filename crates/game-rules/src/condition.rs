@@ -1885,6 +1885,11 @@ pub const SLOT_NAMES: &[&str] = &[
     "skill.kanonLost.silent",
     "skill.soyoClear.armed",
     "skill.soyoClear.penalty",
+    // The landing the re-colour wrote (`tile + 1`) and the saved-amount
+    // baseline `skill:长崎素世:通透的颜色`'s `settleAfter` gate reads
+    // (「若以此法单次免除了至少1500资金的[支付]」).
+    "skill.soyoClear.coloured",
+    "skill.soyoClear.waived",
     "skill.chuchu.builtLast",
     "skill.nyamuStream.state",
     "skill.mutsumiActor.state",

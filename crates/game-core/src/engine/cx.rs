@@ -1045,6 +1045,12 @@ fn merge_active(
 pub struct BoardDelta {
     /// `(tile, base, wrote)` deed owners.
     pub owners: Vec<(usize, i32, i32)>,
+    /// `(tile, base, wrote)` deed co-holders (the whole row).
+    #[serde(default)]
+    pub co_owners: Vec<(usize, Vec<i32>, Vec<i32>)>,
+    /// `(tile, base, wrote)` co-holder mortgage stakes (the whole row).
+    #[serde(default)]
+    pub co_mortgaged: Vec<(usize, Vec<i32>, Vec<i32>)>,
     /// `(tile, base, wrote)` house counts.
     pub houses: Vec<(usize, i32, i32)>,
     /// `(tile, base, wrote)` mortgage flags.
@@ -1074,8 +1080,44 @@ impl BoardDelta {
         }
     }
 
+    /// A whole-list row (the co-holder rows). Live still at the base takes
+    /// the guest's row; a row the host moved takes the guest's members as a
+    /// delta so neither write is lost.
+    fn apply_rows(rows: &[(usize, Vec<i32>, Vec<i32>)], live: &mut [Vec<i32>]) {
+        for (i, b, w) in rows {
+            let Some(v) = live.get_mut(*i) else {
+                continue;
+            };
+            if v == b {
+                *v = w.clone();
+            } else if v != w {
+                let mut merged = v.clone();
+                merged.retain(|x| w.contains(x));
+                for x in w {
+                    if !merged.contains(x) {
+                        merged.push(*x);
+                    }
+                }
+                *v = merged;
+            }
+        }
+    }
+
+    /// Undo one whole-list row where the guest's value is still in place.
+    fn restore_rows(rows: &[(usize, Vec<i32>, Vec<i32>)], live: &mut [Vec<i32>]) {
+        for (i, b, w) in rows {
+            if let Some(v) = live.get_mut(*i) {
+                if v == w {
+                    *v = b.clone();
+                }
+            }
+        }
+    }
+
     fn apply(&self, w: &mut World) {
         Self::apply_scalar(&self.owners, &mut w.st.owners);
+        Self::apply_rows(&self.co_owners, &mut w.st.co_owners);
+        Self::apply_rows(&self.co_mortgaged, &mut w.st.co_mortgaged);
         Self::apply_scalar(&self.houses, &mut w.st.houses);
         Self::apply_scalar(&self.embers, &mut w.st.embers);
         for (i, b, wrote) in &self.mortgaged {
@@ -1083,6 +1125,14 @@ impl BoardDelta {
                 if *v == *b {
                     *v = *wrote;
                 }
+            }
+        }
+        // A co-held row owns the aggregate: keep the display / force-buy flag
+        // in step with its stakes.
+        for (i, _, _) in &self.co_mortgaged {
+            let any = w.st.co_mortgaged.get(*i).is_some_and(|r| !r.is_empty());
+            if let Some(v) = w.st.mortgaged.get_mut(*i) {
+                *v = any;
             }
         }
         if let Some((base, wrote)) = &self.marks {
@@ -1126,6 +1176,8 @@ impl BoardDelta {
                 }
             }
         }
+        Self::restore_rows(&self.co_owners, &mut w.st.co_owners);
+        Self::restore_rows(&self.co_mortgaged, &mut w.st.co_mortgaged);
         for (i, b, wrote) in &self.houses {
             if let Some(v) = w.st.houses.get_mut(*i) {
                 if *v == *wrote {
@@ -1145,6 +1197,12 @@ impl BoardDelta {
                 if *v == *wrote {
                     *v = *b;
                 }
+            }
+        }
+        for (i, _, _) in &self.co_mortgaged {
+            let any = w.st.co_mortgaged.get(*i).is_some_and(|r| !r.is_empty());
+            if let Some(v) = w.st.mortgaged.get_mut(*i) {
+                *v = any;
             }
         }
         if let Some((base, wrote)) = &self.marks {
@@ -1462,6 +1520,8 @@ pub struct PassBase {
     pub board_owners: Vec<i32>,
     pub board_houses: Vec<i32>,
     pub board_mortgaged: Vec<bool>,
+    pub board_co_owners: Vec<Vec<i32>>,
+    pub board_co_mortgaged: Vec<Vec<i32>>,
     pub board_embers: Vec<i32>,
     /// The tile mark list.
     pub marks: Vec<crate::state::TileMark>,
@@ -1595,6 +1655,14 @@ impl PassBase {
                 }
             }
         }
+        for (i, base_v, wrote_v) in &own.board.co_owners {
+            if let (Some(v), Some(b)) = (live.st.co_owners.get(*i), self.board_co_owners.get_mut(*i))
+            {
+                if v == wrote_v {
+                    *b = base_v.clone();
+                }
+            }
+        }
         for (i, base_v, wrote_v) in &own.board.houses {
             if let (Some(v), Some(b)) = (live.st.houses.get(*i), self.board_houses.get_mut(*i)) {
                 if *v == *wrote_v {
@@ -1722,6 +1790,12 @@ fn retain_unseen_overlay_rows(seen: &mut SeenRows, o: &mut GuestOverlay) {
     o.board
         .owners
         .retain(|(t, _, _)| seen.insert((6, *t, String::new(), 0)));
+    o.board
+        .co_owners
+        .retain(|(t, _, _)| seen.insert((17, *t, String::new(), 0)));
+    o.board
+        .co_mortgaged
+        .retain(|(t, _, _)| seen.insert((18, *t, String::new(), 0)));
     o.board
         .houses
         .retain(|(t, _, _)| seen.insert((7, *t, String::new(), 0)));
@@ -2758,6 +2832,8 @@ impl<'a> PlayCtx<'a> {
             event_removed: w.event_removed.clone(),
             event_active: w.st.event_active.clone(),
             board_owners: w.st.owners.clone(),
+            board_co_owners: w.st.co_owners.clone(),
+            board_co_mortgaged: w.st.co_mortgaged.clone(),
             board_houses: w.st.houses.clone(),
             board_mortgaged: w.st.mortgaged.clone(),
             board_embers: w.st.embers.clone(),
@@ -2788,6 +2864,26 @@ impl<'a> PlayCtx<'a> {
             }
             if base.board_embers[i] != from.st.embers[i] {
                 d.embers.push((i, base.board_embers[i], from.st.embers[i]));
+            }
+        }
+        // The co-holder rows are whole lists; a guest write may also have
+        // resized them past the scalar rows, so walk their own length.
+        let cn = base
+            .board_co_owners
+            .len()
+            .max(from.st.co_owners.len())
+            .max(base.board_co_mortgaged.len())
+            .max(from.st.co_mortgaged.len());
+        for i in 0..cn {
+            let bc = base.board_co_owners.get(i).cloned().unwrap_or_default();
+            let fc = from.st.co_owners.get(i).cloned().unwrap_or_default();
+            if bc != fc {
+                d.co_owners.push((i, bc, fc));
+            }
+            let bc = base.board_co_mortgaged.get(i).cloned().unwrap_or_default();
+            let fc = from.st.co_mortgaged.get(i).cloned().unwrap_or_default();
+            if bc != fc {
+                d.co_mortgaged.push((i, bc, fc));
             }
         }
         if base.marks != from.st.marks {

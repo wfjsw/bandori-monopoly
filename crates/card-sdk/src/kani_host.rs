@@ -518,6 +518,17 @@ pub enum Op {
     persona_skins = 497,
     // v123: the character-card pile read.
     persona = 498,
+    /// [`Self::add_group_pool`] tagged as a reshuffle-time add (the
+    /// 「只有洗牌时可以…添加奇迹水晶」 carve-out).
+    add_group_pool_shuffled = 499,
+    /// Card tags of the trigger cards ([主] / [手] / …).
+    trig_card_tags = 500,
+    /// Add a co-holder to a tile's deed (「视为同时拥有」).
+    add_co_owner = 501,
+    is_co_owner = 502,
+    owns_tile = 503,
+    /// Is this player's own stake of the tile mortgaged?
+    mortgaged_for = 504,
 }
 
 /// Six i32 wire slots, matching the ABI's arg convention.

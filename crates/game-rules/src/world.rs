@@ -604,6 +604,21 @@ pub trait CardWorld: Clone + 'static {
         String::new()
     }
     fn tile_owner(&self, tile: i32) -> i32;
+    /// Add a co-holder to the tile's deed (「视为同时拥有」).
+    fn add_co_owner(&mut self, _tile: i32, _player_id: i32) -> bool {
+        false
+    }
+    fn is_co_owner(&self, _tile: i32, _player_id: i32) -> bool {
+        false
+    }
+    /// Does the player hold the deed (primary or co-holder)?
+    fn owns_tile(&self, tile: i32, player_id: i32) -> bool {
+        self.tile_owner(tile) == player_id
+    }
+    /// Is the player's own stake of the tile mortgaged?
+    fn mortgaged_for(&self, tile: i32, player_id: i32) -> bool {
+        self.owns_tile(tile, player_id) && self.mortgaged_of(tile) != 0
+    }
     fn player_pos(&self, player_id: i32) -> i32;
     /// Tile `steps` around the board loop from a player (-1 when the player is out).
     fn tile_steps_ahead(&self, player_id: i32, steps: i32) -> i32;
@@ -1015,6 +1030,10 @@ pub trait CardWorld: Clone + 'static {
     /// Does this card's rule text mention `needle`? 「every card whose effects mention a named counter」.
     fn card_text_mentions(&self, _card: &str, _needle: &str) -> bool {
         false
+    }
+    /// Sheet tags of `card` ([主] / [手] / [特] / …). Default none.
+    fn card_tags(&self, _card: &str) -> Vec<String> {
+        Vec::new()
     }
     /// A named on-card pool on a placed card (generic; ruleset names the key).
     fn card_pool(&self, _player_id: i32, _card: &str, _name: &str) -> i32 {
@@ -1478,6 +1497,12 @@ pub trait CardWorld: Clone + 'static {
         } else {
             self.add_pool_at(uid, name, n, max)
         }
+    }
+    /// [`Self::add_group_pool`] tagged as a reshuffle-time add
+    /// (「只有洗牌时可以…添加奇迹水晶」): the write is the same; a real host
+    /// also tags the visible outcome with the reshuffle source.
+    fn add_group_pool_shuffled(&mut self, player_id: i32, name: &str, n: i32, max: i32) -> i32 {
+        self.add_group_pool(player_id, name, n, max)
     }
     // -------------------------------------------- skill / group attachments
     // Group attachments on a placed card, and the bound group skill

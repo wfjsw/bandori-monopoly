@@ -50,6 +50,14 @@ pub trait HostOps {
     fn op_tile_named(&mut self, a: [i32; 6]) -> Result<i64, HostError>;
     /// `ruleset_tile_owner`
     fn op_tile_owner(&mut self, a: [i32; 6]) -> Result<i64, HostError>;
+    /// `ruleset_add_co_owner`
+    fn op_add_co_owner(&mut self, a: [i32; 6]) -> Result<i64, HostError>;
+    /// `ruleset_is_co_owner`
+    fn op_is_co_owner(&mut self, a: [i32; 6]) -> Result<i64, HostError>;
+    /// `ruleset_owns_tile`
+    fn op_owns_tile(&mut self, a: [i32; 6]) -> Result<i64, HostError>;
+    /// `ruleset_mortgaged_for`
+    fn op_mortgaged_for(&mut self, a: [i32; 6]) -> Result<i64, HostError>;
     /// `ruleset_tile_of`
     fn op_tile_of(&mut self, a: [i32; 6]) -> Result<i64, HostError>;
     /// `ruleset_tile_at`
@@ -274,6 +282,8 @@ pub trait HostOps {
     fn op_group_pool(&mut self, a: [i32; 6]) -> Result<i64, HostError>;
     /// `ruleset_add_group_pool`
     fn op_add_group_pool(&mut self, a: [i32; 6]) -> Result<i64, HostError>;
+    /// `ruleset_add_group_pool_shuffled`
+    fn op_add_group_pool_shuffled(&mut self, a: [i32; 6]) -> Result<i64, HostError>;
     /// `ruleset_group_skill`
     fn op_group_skill(&mut self, a: [i32; 6]) -> Result<i64, HostError>;
     /// `ruleset_persona_skill`
@@ -416,6 +426,8 @@ pub trait HostOps {
     fn op_trig_move_total(&mut self, a: [i32; 6]) -> Result<i64, HostError>;
     /// `ruleset_trig_cards`
     fn op_trig_cards(&mut self, a: [i32; 6]) -> Result<i64, HostError>;
+    /// `ruleset_trig_card_tags`
+    fn op_trig_card_tags(&mut self, a: [i32; 6]) -> Result<i64, HostError>;
     /// `ruleset_trig_move_roll`
     fn op_trig_move_roll(&mut self, a: [i32; 6]) -> Result<i64, HostError>;
     /// `ruleset_trig_roll_source`
@@ -1045,6 +1057,18 @@ impl<C: crate::host::HostCtx> HostOps for C {
     fn op_tile_owner(&mut self, a: [i32; 6]) -> Result<i64, HostError> {
         Ok(crate::hostfns::tile_owner(self, a[0])? as i64)
     }
+    fn op_add_co_owner(&mut self, a: [i32; 6]) -> Result<i64, HostError> {
+        Ok(crate::hostfns::add_co_owner(self, a[0], a[1])? as i64)
+    }
+    fn op_is_co_owner(&mut self, a: [i32; 6]) -> Result<i64, HostError> {
+        Ok(crate::hostfns::is_co_owner(self, a[0], a[1])? as i64)
+    }
+    fn op_owns_tile(&mut self, a: [i32; 6]) -> Result<i64, HostError> {
+        Ok(crate::hostfns::owns_tile(self, a[0], a[1])? as i64)
+    }
+    fn op_mortgaged_for(&mut self, a: [i32; 6]) -> Result<i64, HostError> {
+        Ok(crate::hostfns::mortgaged_for(self, a[0], a[1])? as i64)
+    }
     fn op_tile_at(&mut self, a: [i32; 6]) -> Result<i64, HostError> {
         Ok(crate::hostfns::tile_at(self, a[0])? as i64)
     }
@@ -1392,6 +1416,9 @@ impl<C: crate::host::HostCtx> HostOps for C {
     fn op_add_group_pool(&mut self, a: [i32; 6]) -> Result<i64, HostError> {
         Ok(crate::hostfns::add_group_pool(self, a[0], a[1], a[2], a[3], a[4])? as i64)
     }
+    fn op_add_group_pool_shuffled(&mut self, a: [i32; 6]) -> Result<i64, HostError> {
+        Ok(crate::hostfns::add_group_pool_shuffled(self, a[0], a[1], a[2], a[3], a[4])? as i64)
+    }
     fn op_group_skill(&mut self, a: [i32; 6]) -> Result<i64, HostError> {
         Ok(crate::hostfns::group_skill(self, a[0], a[1], a[2])? as i64)
     }
@@ -1626,6 +1653,9 @@ impl<C: crate::host::HostCtx> HostOps for C {
     }
     fn op_trig_cards(&mut self, a: [i32; 6]) -> Result<i64, HostError> {
         Ok(crate::hostfns::trig_cards(self, a[0], a[1])? as i64)
+    }
+    fn op_trig_card_tags(&mut self, a: [i32; 6]) -> Result<i64, HostError> {
+        Ok(crate::hostfns::trig_card_tags(self, a[0], a[1])? as i64)
     }
     fn op_trig_move_roll(&mut self, a: [i32; 6]) -> Result<i64, HostError> {
         Ok(crate::hostfns::trig_move_roll(self)? as i64)
@@ -2663,6 +2693,38 @@ pub unsafe extern "C-unwind" fn ruleset_tile_named(ptr: i32, len: i32) -> i32 {
 #[no_mangle]
 pub unsafe extern "C-unwind" fn ruleset_tile_owner(tile: i32) -> i32 {
     with_host(|h| match h.op_tile_owner([tile, 0, 0, 0, 0, 0]) {
+        Ok(v) => v as i32,
+        Err(e) => abort_host(e),
+    })
+}
+
+#[no_mangle]
+pub unsafe extern "C-unwind" fn ruleset_add_co_owner(tile: i32, player_id: i32) -> i32 {
+    with_host(|h| match h.op_add_co_owner([tile, player_id, 0, 0, 0, 0]) {
+        Ok(v) => v as i32,
+        Err(e) => abort_host(e),
+    })
+}
+
+#[no_mangle]
+pub unsafe extern "C-unwind" fn ruleset_is_co_owner(tile: i32, player_id: i32) -> i32 {
+    with_host(|h| match h.op_is_co_owner([tile, player_id, 0, 0, 0, 0]) {
+        Ok(v) => v as i32,
+        Err(e) => abort_host(e),
+    })
+}
+
+#[no_mangle]
+pub unsafe extern "C-unwind" fn ruleset_owns_tile(tile: i32, player_id: i32) -> i32 {
+    with_host(|h| match h.op_owns_tile([tile, player_id, 0, 0, 0, 0]) {
+        Ok(v) => v as i32,
+        Err(e) => abort_host(e),
+    })
+}
+
+#[no_mangle]
+pub unsafe extern "C-unwind" fn ruleset_mortgaged_for(tile: i32, player_id: i32) -> i32 {
+    with_host(|h| match h.op_mortgaged_for([tile, player_id, 0, 0, 0, 0]) {
         Ok(v) => v as i32,
         Err(e) => abort_host(e),
     })
@@ -3745,6 +3807,22 @@ pub unsafe extern "C-unwind" fn ruleset_add_group_pool(
 }
 
 #[no_mangle]
+pub unsafe extern "C-unwind" fn ruleset_add_group_pool_shuffled(
+    player_id: i32,
+    np: i32,
+    nl: i32,
+    n: i32,
+    max: i32,
+) -> i32 {
+    with_host(
+        |h| match h.op_add_group_pool_shuffled([player_id, np, nl, n, max, 0]) {
+            Ok(v) => v as i32,
+            Err(e) => abort_host(e),
+        },
+    )
+}
+
+#[no_mangle]
 pub unsafe extern "C-unwind" fn ruleset_group_skill(player_id: i32, buf: i32, cap: i32) -> i32 {
     with_host(|h| match h.op_group_skill([player_id, buf, cap, 0, 0, 0]) {
         Ok(v) => v as i32,
@@ -4392,6 +4470,14 @@ pub unsafe extern "C-unwind" fn ruleset_trig_move_total() -> i32 {
 #[no_mangle]
 pub unsafe extern "C-unwind" fn ruleset_trig_cards(buf: i32, cap: i32) -> i32 {
     with_host(|h| match h.op_trig_cards([buf, cap, 0, 0, 0, 0]) {
+        Ok(v) => v as i32,
+        Err(e) => abort_host(e),
+    })
+}
+
+#[no_mangle]
+pub unsafe extern "C-unwind" fn ruleset_trig_card_tags(buf: i32, cap: i32) -> i32 {
+    with_host(|h| match h.op_trig_card_tags([buf, cap, 0, 0, 0, 0]) {
         Ok(v) => v as i32,
         Err(e) => abort_host(e),
     })
