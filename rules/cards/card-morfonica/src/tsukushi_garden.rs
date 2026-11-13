@@ -118,7 +118,8 @@ fn tsukushi_garden(player_id: i32) -> card_sdk::Asked {
     // is the 「直到下个你的回合开始时」 half (it wears off at the top of the next
     // turn); the clause is granted as [不可阻挡], whose other halves ([停留]
     // bypass, no new [晕眩]/[除外] layers) come with the status, and whose
-    // refusal of received movement abnormals the engine's abnormal gate enforces.
+    // received movement abnormals the holder may allow one by one (the
+    // engine's `abnormalChoice` window; refused by default).
     ctx::state::add(player_id, bandori_std::state_key::UNSTOPPABLE, 1);
     bandori_std::status::declare_companion(player_id, bandori_std::state_key::UNSTOPPABLE);
     ctx::state::set_expires(

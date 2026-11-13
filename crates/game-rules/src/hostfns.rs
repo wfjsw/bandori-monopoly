@@ -3733,6 +3733,11 @@ pub fn trig_set_cancelled<C: HostCtx>(c: &mut C) -> Result<(), HostError> {
     Ok(())
 }
 
+pub fn trig_set_abnormal_allowed<C: HostCtx>(c: &mut C) -> Result<(), HostError> {
+    c.st_mut().w().set_trigger_abnormal_allowed();
+    Ok(())
+}
+
 pub fn trig_set_negate_effect<C: HostCtx>(c: &mut C) -> Result<(), HostError> {
     c.st_mut().w().set_trigger_negate_effect();
     Ok(())

@@ -1177,6 +1177,10 @@ pub fn trig_set_spare(seat: i32) {
     kani_host::call_unit(Op::trig_set_spare, [seat, 0, 0, 0, 0, 0]);
 }
 
+pub fn trig_set_abnormal_allowed() {
+    kani_host::call_unit(Op::trig_set_abnormal_allowed, [0, 0, 0, 0, 0, 0]);
+}
+
 pub fn trig_cancelled() -> i32 {
     kani_host::call_i32(Op::trig_cancelled, [0, 0, 0, 0, 0, 0])
 }

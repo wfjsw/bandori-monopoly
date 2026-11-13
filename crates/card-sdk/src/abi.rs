@@ -2492,6 +2492,15 @@ impl ActionKind {
     /// are AbnormalGuard and the Effect counteraction.
     pub const Abnormal: Self = Self(TriggerKind::Abnormal);
 
+    /// Action, hook-only. The `abnormalGate` closed for a received movement
+    /// abnormal (kinds 4–7): the holder may let the effect apply after all
+    /// (「处于该状态时可选择受到的[传送]，[强制移动]，[强制停下]效果是否生效」,
+    /// glossary 14). Payload: the holder on `player_id` (raise seat),
+    /// `value` = the abnormal kind, `by_card` = the causer. The holder's body
+    /// asks yes/no and answers yes with `ctx::trigger::allow_abnormal`; the
+    /// host then skips its gate refusal. No answer = today's refusal path.
+    pub const AbnormalChoice: Self = Self(TriggerKind::AbnormalChoice);
+
     /// Action. A single-target effect settled on the target. Payload: player_id =
     /// the causer, target, tile, card, by_card. Settlement hook only; the
     /// counteraction key for being hit by an effect is Effect. Declaration-side
@@ -3649,6 +3658,12 @@ impl TriggerKind {
     /// (`PlayCtx::marker_raise_depth`).
     pub const MarkerChanged: Self = Self::engine(145);
 
+    /// `abnormalChoice` — the `abnormalGate` closed for a received movement
+    /// abnormal (kinds 4–7): the holder's per-effect opt-in
+    /// (「可选择受到的…效果是否生效」). Action, hook-only. Payload: the holder
+    /// on `player_id`, `value` = the abnormal kind, `by_card` = the causer.
+    pub const AbnormalChoice: Self = Self::engine(146);
+
     /// `onBoardGate`
     pub const OnBoardGate: Self = Self::engine(108);
 
@@ -3663,7 +3678,7 @@ impl TriggerKind {
 
     // Ids 104 and 107 stay retired (104 was "flipAfter", 107 is
     // ruleset-declared "fansFlip"); the next free **engine** id was 121, and
-    // the highest engine id is now 134 (abnormalGate).
+    // the highest engine id is now 146 (abnormalChoice).
 
     /// `cardFired` -- a card's body entered its resolution frame: every
     /// body, a play, a hook or a counteraction alike. Hook-only: no

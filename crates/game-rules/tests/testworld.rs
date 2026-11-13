@@ -338,6 +338,9 @@ impl CardWorld for TestWorld {
     fn set_trigger_negate_effect(&mut self) {
         self.trigger.negate_effect();
     }
+    fn set_trigger_abnormal_allowed(&mut self) {
+        self.trigger.abnormal_allowed = true;
+    }
     fn set_trigger_spare(&mut self, seat: i32) {
         self.trigger.spare(seat);
     }

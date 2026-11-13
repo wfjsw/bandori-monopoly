@@ -430,6 +430,9 @@ pub struct Trigger {
     /// Did the abnormal this trigger announces hold the move? Meaningful only on
     /// the `effect` and `abnormal` raises of an abnormal; false elsewhere.
     pub abnormal_blocked: bool,
+    /// The `abnormalChoice` holder let the received movement abnormal land
+    /// (「可选择…效果是否生效」). Meaningful only on that raise; false elsewhere.
+    pub abnormal_allowed: bool,
     /// The move that caused this trigger, when one did. `None` = no move.
     pub mv: Option<TriggerMove>,
     /// The payment a `pay` / `paid` trigger is about. `None` on every other kind.
@@ -607,6 +610,7 @@ impl Trigger {
             is_main_move: false,
             activation_ordinal: 0,
             abnormal_blocked: false,
+            abnormal_allowed: false,
             mv: None,
             pay: None,
             buy: None,

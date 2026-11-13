@@ -6950,6 +6950,13 @@ fn build_linker<W: CardWorld>(engine: &Engine) -> Result<Linker<HostState<W>>, E
     )?;
     l.func_wrap(
         m,
+        "trig_set_abnormal_allowed",
+        |mut c: C<W>| -> Result<(), Error> {
+            hostfns::trig_set_abnormal_allowed(&mut c).map_err(HostError::into_err)
+        },
+    )?;
+    l.func_wrap(
+        m,
         "trig_set_negate_effect",
         |mut c: C<W>| -> Result<(), Error> {
             hostfns::trig_set_negate_effect(&mut c).map_err(HostError::into_err)
@@ -7788,6 +7795,7 @@ impl CardWorld for NullWorld {
     fn set_trigger_value(&mut self, _: i32) {}
     fn set_trigger_target(&mut self, _: i32) {}
     fn set_trigger_cancelled(&mut self) {}
+    fn set_trigger_abnormal_allowed(&mut self) {}
     fn set_trigger_negate_effect(&mut self) {}
     fn set_trigger_spare(&mut self, _: i32) {}
     fn declare_trigger_effect(&mut self, _: &str, _: i32, _: i32, _: i32, _: i32) {}

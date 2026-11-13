@@ -232,6 +232,10 @@ The item slugs, severities and sheet rows are listed under each group in
 `docs/rulebook/BACKLOG.md` section B. Each document's header repeats its own
 slug/row table.
 
+Follow-on items written after their group landed live beside it:
+[`ab-unstoppable-choice.md`](ab-unstoppable-choice.md) (STA-02, on G12's
+`abnormalGate`).
+
 ## Conventions every design follows
 
 - Generic mechanism only; card and band vocabulary stays in `bandori-std` and

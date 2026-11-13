@@ -1062,3 +1062,33 @@ test. The six gaps found by this pass — 13.1 clause 2, 13.2 clauses 2 and 4,
 13.3 clause 2, 13.4 clause 1 and both 13.5 rows — are closed by §5 and pinned
 in §9.1. The two ruling-dependent tests (13.2 clause 4's offer and 13.3
 clause 2's branch) are named as such in §11.1.
+
+## 14. Landed (STA-02) — the holder's per-effect choice
+
+§5.1 landed the gate as an unconditional refusal. Glossary 14's last sentence
+(「处于该状态时可选择受到的[传送]，[强制移动]，[强制停下]效果是否生效」)
+makes it a choice, and STA-02 landed that choice on top:
+
+* **Kind `abnormalChoice` (143, `hook_only`).** Raised by `abnormal_gate`
+  after the gate returned closed and before `refuse_abnormal`, only when the
+  abnormal is a received movement one (`by_player != player_id` and kind 4–7).
+  The raise targets the holder and carries the same payload closure the
+  adjacent refusal hooks use; the window pauses and replays like any action.
+* **The answer.** `rules/status/src/unstoppable.rs` gains
+  `On::Action(Action::AbnormalChoice(…))` whose body asks the holder yes/no
+  (`ctx::ask_yes`, fallback 「否」) and answers yes with
+  `ctx::trigger::allow_abnormal`. The engine reads `Trigger.abnormal_allowed`
+  back through the guest mirror and skips the refusal when set; no keeps
+  §5.1's refusal, `abnormalRefused` and `log.unstoppable_skip`.
+* **Defaults.** A timeout and the standard bot take the fallback and refuse.
+  It is a plain in-memory bool, so SAVE / RECORD stay unchanged; the answer is
+  journaled with the prompt and re-read on replay.
+* **Scope.** Self-caused moves stay unprompted, and the raise sits after out /
+  untargetable / `abnormalGuard` / `immuneAll` — a refused-before effect never
+  asks a question that could not change it.
+
+Full design: [`ab-unstoppable-choice.md`](ab-unstoppable-choice.md). Tests:
+`rules/tests/tests/ab_unstoppable_choice.rs` (yes and no for teleport / forced
+move / stop, reverse, both self-caused non-prompts); the four
+`g12_unstoppable_refuses_a_*` tests now answer the prompt with no. §9.1's
+rows stand with that amendment.

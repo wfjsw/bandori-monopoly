@@ -1110,6 +1110,7 @@ impl CardWorld for ConfWorld {
     fn set_trigger_cancelled(&mut self) {
         self.trig_cancelled = true;
     }
+    fn set_trigger_abnormal_allowed(&mut self) {}
     fn set_trigger_negate_effect(&mut self) {}
     fn set_trigger_spare(&mut self, _seat: i32) {}
     fn declare_trigger_effect(

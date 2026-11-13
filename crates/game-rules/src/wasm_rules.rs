@@ -3722,6 +3722,9 @@ impl CardWorld for Run {
     fn set_trigger_cancelled(&mut self) {
         self.trigger.negate_activation();
     }
+    fn set_trigger_abnormal_allowed(&mut self) {
+        self.trigger.abnormal_allowed = true;
+    }
     fn set_trigger_negate_effect(&mut self) {
         self.trigger.negate_effect();
     }
@@ -8888,6 +8891,9 @@ impl<M: CardModules> RulesBridge<M> {
         if trigger.negation != Default::default() {
             t.negation = trigger.negation;
         }
+        // The `abnormalChoice` holder's yes (`trigger::allow_abnormal`); the
+        // gate reads it back and skips its refusal.
+        t.abnormal_allowed = trigger.abnormal_allowed;
         for s in trigger.spared {
             t.spare(s);
         }
@@ -9351,14 +9357,29 @@ impl<M: CardModules> RulesBridge<M> {
             exemption: false,
         };
         if !cx.world().gate_open(self, ask, s) {
-            self.refuse_abnormal(cx, player_id, by_player, kind, on)?;
-            // The refusing rule supplies the skip line as data
-            // (`gate_skip_msgs`), same as every other gate.
-            cx.log(
-                player_id,
-                self.gate_skip_msg(ask, s).player_id("who", player_id),
-            );
-            return Ok(false);
+            // 「处于该状态时可选择受到的[传送]，[强制移动]，[强制停下]效果
+            // 是否生效」 (glossary 14): a *received* movement abnormal (kinds
+            // 4–7) gets the holder's per-effect choice window before the
+            // refusal. A self-caused move (`by == player_id`) is chosen, not
+            // 「受到的」, and stays unprompted. The `abnormalChoice` body
+            // answers yes with `trigger::allow_abnormal`, which rides the
+            // trigger back; the refusal below is then skipped.
+            let chosen = if by_player != player_id && (4..=7).contains(&kind.as_i32()) {
+                let t = self.raise_core(cx, "abnormalChoice", player_id, on)?;
+                t.abnormal_allowed
+            } else {
+                false
+            };
+            if !chosen {
+                self.refuse_abnormal(cx, player_id, by_player, kind, on)?;
+                // The refusing rule supplies the skip line as data
+                // (`gate_skip_msgs`), same as every other gate.
+                cx.log(
+                    player_id,
+                    self.gate_skip_msg(ask, s).player_id("who", player_id),
+                );
+                return Ok(false);
+            }
         }
         // Blocked-ness: did this landing hold the mover's move? The engine
         // half is the mover's `MOVE_EXEMPT` (the same expression the clamp
@@ -11972,6 +11993,7 @@ fn bridge_trigger(t: &CoreTrigger) -> Trigger {
         extreme_armed: t.extreme_armed,
         activation_ordinal: t.activation_ordinal,
         abnormal_blocked: t.abnormal_blocked,
+        abnormal_allowed: t.abnormal_allowed,
         answered_kinds: t.answered_kinds.iter().map(|k| trigger_kind(k)).collect(),
     }
 }
@@ -15137,6 +15159,9 @@ impl<M: CardModules> CardRules for RulesBridge<M> {
         if trigger.negation != Default::default() {
             t.negation = trigger.negation;
         }
+        // The `abnormalChoice` holder's yes (`trigger::allow_abnormal`); the
+        // gate reads it back and skips its refusal.
+        t.abnormal_allowed = trigger.abnormal_allowed;
         for s in trigger.spared {
             t.spare(s);
         }

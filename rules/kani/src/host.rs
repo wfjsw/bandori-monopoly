@@ -1249,6 +1249,7 @@ pub fn dispatch(op: Op, a: Args) -> i64 {
         | Op::trigger_extreme_armed
         | Op::trigger_chain_depth => 0,
         Op::trig_set_cancelled => arm_trig_set_cancelled(a),
+        Op::trig_set_abnormal_allowed => arm_trig_set_abnormal_allowed(a),
         Op::trig_set_negate_effect => arm_trig_set_negate_effect(a),
         Op::trig_set_reason | Op::trig_set_spare => arm_stub_zero(a),
         Op::trig_seq => 0,
@@ -5170,6 +5171,14 @@ pub fn arm_trig_set_cancelled(a: Args) -> i64 {
     let _ = a;
     world::with_world_mut(|w| {
         w.trig_cancelled = true;
+    });
+    0
+}
+
+pub fn arm_trig_set_abnormal_allowed(a: Args) -> i64 {
+    let _ = a;
+    world::with_world_mut(|w| {
+        w.trig_abnormal_allowed = true;
     });
     0
 }

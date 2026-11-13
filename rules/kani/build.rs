@@ -235,6 +235,7 @@ const ARRAY_OPS: &[&str] = &[
     "trig_set_pay_amount",
     "trig_set_pay_target",
     "trig_set_cancelled",
+    "trig_set_abnormal_allowed",
     "trig_set_negate_effect",
     "trig_set_spare",
     "trig_cancelled",

@@ -156,6 +156,10 @@ pub struct Trigger {
     /// on the `effect` / `abnormal` raises of an abnormal
     /// (`trigger::abnormal_blocked`).
     pub abnormal_blocked: bool,
+    /// Did the `abnormalChoice` holder let a received movement abnormal land?
+    /// Written by `trigger::allow_abnormal`; read by the gate after the
+    /// window. Meaningful only on that raise.
+    pub abnormal_allowed: bool,
     /// The kind of every link from the root to this one, root first
     /// (`trigger::answered_kind`).
     pub answered_kinds: Vec<crate::TriggerKind>,
@@ -335,6 +339,7 @@ impl Default for Trigger {
             extreme_armed: false,
             activation_ordinal: 0,
             abnormal_blocked: false,
+            abnormal_allowed: false,
             answered_kinds: Vec::new(),
         }
     }
@@ -416,6 +421,7 @@ impl Trigger {
             extreme_armed: false,
             activation_ordinal: 0,
             abnormal_blocked: false,
+            abnormal_allowed: false,
             answered_kinds: Vec::new(),
         }
     }
@@ -1633,6 +1639,8 @@ pub trait CardWorld: Clone + 'static {
     }
     /// Negate the trigger's effect (`trigger.Cancelled = true`).
     fn set_trigger_cancelled(&mut self);
+    /// The `abnormalChoice` holder's yes: let the received abnormal land.
+    fn set_trigger_abnormal_allowed(&mut self);
     /// Yu-Gi-Oh's *negate the effect*: the link happened, but settles to nothing.
     fn set_trigger_negate_effect(&mut self);
     /// Take one recipient out of settlement; the effect still settles for the rest.

@@ -1118,6 +1118,9 @@ pub struct World {
     /// The `event` draw's ordinal (copies of the card still in the deck).
     pub trig_ordinal: i32,
     pub trig_cancelled: bool,
+    /// `Trigger.abnormal_allowed` -- the `abnormalChoice` holder's yes
+    /// (`trigger::allow_abnormal`).
+    pub trig_abnormal_allowed: bool,
     pub trig_negate: bool,
     /// `Trigger.abnormal_blocked` — did the announced abnormal hold the move
     /// (`trigger::abnormal_blocked`)?
@@ -1403,6 +1406,7 @@ impl World {
             trig_tile: -1,
             trig_ordinal: 0,
             trig_cancelled: false,
+            trig_abnormal_allowed: false,
             trig_negate: false,
             trig_abnormal_blocked: false,
             trig_join_redirect: -1,

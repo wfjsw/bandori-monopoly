@@ -752,6 +752,7 @@ action_kinds! {
     ManageAfter;
     DiceRollPlan @ dual;
     MarkerChanged;
+    AbnormalChoice;
 }
 
 #[cfg(test)]
@@ -810,8 +811,8 @@ mod tests {
         // = 89, plus G10's `eventResolved` (ABI v119) = 90, plus HOST-03's
         // `payCalcBefore` (ABI v120) = 91, plus HOST-03's `turnStartAfter` /
         // `manageAfter` (ABI v120) = 93, plus HAG-01's `markerChanged` (ABI
-        // v124) = 94.
-        assert_eq!(Action::KINDS.len(), 94);
+        // v124) = 94, plus STA-02's `abnormalChoice` (ABI v124) = 95.
+        assert_eq!(Action::KINDS.len(), 95);
         // A dual kind is filter-shaped but still an action entry.
         assert!(Action::KINDS
             .iter()
