@@ -2775,8 +2775,7 @@ impl Match {
                     // `raise_funds` on the winner and only voids if they go out.)
                     let raiseable: i32 = (0..self.data.tiles.len())
                         .filter(|&t| {
-                            self.world.st.owners.get(t).copied().unwrap_or(-1) == i as i32
-                                && !self.world.st.mortgaged.get(t).copied().unwrap_or(false)
+                            self.world.stake_can_mortgage(t as i32, i as i32)
                         })
                         .map(|t| self.data.tiles[t].price / 2)
                         .sum();

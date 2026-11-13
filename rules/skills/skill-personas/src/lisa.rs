@@ -16,11 +16,13 @@
 //! Both halves are one press; the second is offered while the move is still
 //! being planned.
 //!
-//! （3） is the temporary pot: a counter on another player that expires and whose
-//! *use* pays this player 600. That is an attachment with a cost attached to its
-//! use, which is a shape the keyed state can hold (a value plus an expiry) but
-//! whose 「使用…需要支付你600资金」 needs the spend path to know the pot's
-//! provenance. See the TODO below.
+//! （3） is the temporary pot: a counter on another player that expires after
+//! two of this seat's turns and whose *use* pays this seat 600. The kernel
+//! carries the provenance with the counter (`fire::temp`): the grant stamps
+//! this seat and an expiry, [`declare_cap`] drops the pot at the stamp, and
+//! `fire::spend` charges 600 per temp pot to the stamp's provider -- except
+//! on a passive spend (「被冲榜类效果被动消耗无需支付」), which is
+//! `fire::spend_passive`.
 
 use bandori_std::ctx::{self, plan, state};
 use bandori_std::state_key;
@@ -31,7 +33,9 @@ pub const LISA: CardDef = CardDef::new(
     "skill:今井莉莎:慈爱女神",
     &[
         On::Play("", Some(can_use), use_skill),
-        On::Action(Action::TurnStartBefore("", None, declare_cap)).silent(),
+        // The expiry narrates `log.fire_temp_expired`, so the turn-start entry
+        // is a visible body; the game-start one has nothing to expire.
+        On::Action(Action::TurnStartBefore("", None, declare_cap)),
         On::Action(Action::DeckAtGameStart("", None, declare_cap)).silent(),
         On::Action(Action::Pass(bandori_std::guards::OWN_START, None, on_pass)),
     ],
@@ -43,9 +47,11 @@ pub const LISA: CardDef = CardDef::new(
     (bandori_std::fire::FIRE_CAP, 2),
 ]);
 
-/// 「初始2，上限2」.
+/// 「初始2，上限2」, and （3）'s 「两回合后失去」 -- the provider's turn start
+/// is where the temp pots it handed out expire.
 fn declare_cap(player_id: i32) -> card_sdk::Asked {
     crate::fire_pot(player_id);
+    bandori_std::fire::temp::expire_owned_by(player_id);
     Ok(())
 }
 
@@ -119,15 +125,10 @@ fn use_skill(player_id: i32) -> card_sdk::Asked {
     plan::set_settles(false);
     // 「使与你在同一个格子上的另一个角色获得一个可超过上限的临时火罐」
     // The temp pot is the kernel's second declared counter (`fire::temp`),
-    // not a free key (MARKERS.md §7).
+    // not a free key (MARKERS.md §7); `grant_from` stamps this seat as its
+    // provider so （3）'s 600-on-use and two-turn loss apply.
     let who = here[0];
-    let got = bandori_std::fire::temp::grant(who, 1);
-    // TODO(规则书)[judgement]: （3）「你提供的临时火罐将会在两回合后失去，使用你提供的临时火罐
-    //   需要支付你600资金」 -- the clause under-specifies -- the spend path has to
-    //   know a pot's *provenance* to charge the provider, and 「被冲榜类效果被动
-    //   消耗无需支付」 carves out a class of spends the engine does not tag.
-    //   (The counter is real and spendable via `fire::spend` temp-first; the
-    //   600-cost and two-turn expiry stay open.)
+    let got = bandori_std::fire::temp::grant_from(player_id, who, 1);
     // 效果适用 narrates the outcome: a grant that landed on the floor must not
     // read as one that took.
     if got > 0 {

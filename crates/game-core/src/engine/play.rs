@@ -523,6 +523,8 @@ impl PlayCtx<'_> {
         let st = &mut self.w.st;
         st.phase = "play".into();
         st.owners = vec![-1; n];
+        st.co_owners = vec![Vec::new(); n];
+        st.co_mortgaged = vec![Vec::new(); n];
         st.houses = vec![0; n];
         st.mortgaged = vec![false; n];
         st.embers = vec![0; n];
@@ -889,6 +891,8 @@ impl PlayCtx<'_> {
                 state: p.state.iter().map(|(k, v)| (k.clone(), v.value)).collect(),
                 money: p.money,
                 owners: self.w.st.owners.clone(),
+                co_owners: self.w.st.co_owners.clone(),
+                co_mortgaged: self.w.st.co_mortgaged.clone(),
                 houses: self.w.st.houses.clone(),
                 mortgaged: self.w.st.mortgaged.clone(),
             })
@@ -1866,7 +1870,7 @@ impl PlayCtx<'_> {
         if self.out(player_id) || !self.playing() {
             return Ok(false);
         }
-        if self.w.st.owners.get(tile).copied().unwrap_or(-1) != from as i32 {
+        if !self.w.owns(tile as i32, from as i32) {
             return Ok(false);
         }
         // `BuyGate` -- the same gate every other buy kind runs.
@@ -3204,14 +3208,15 @@ impl PlayCtx<'_> {
         let t = tile.max(0) as usize;
         if self.tile(t).is_buyable() {
             let owner = self.w.st.owners.get(t).copied().unwrap_or(-1);
-            if owner < 0 {
+            // A co-holder lands as an owner (「视为同时拥有」).
+            if self.w.owns(t as i32, i as i32) {
+                self.offer_build(i, t)?;
+            } else if owner < 0 {
                 // The settle of an unowned buyable IS the optional buy
                 // (规则书 「可选择[消耗]…获得格子地契和拥有权」).
                 self.offer_buy(i, t)?;
-            } else if owner as usize != i {
-                self.pay_rent(i, t, false)?;
             } else {
-                self.offer_build(i, t)?;
+                self.pay_rent(i, t, false)?;
             }
             return Ok(());
         }
@@ -3269,7 +3274,7 @@ impl PlayCtx<'_> {
         by_card: Option<i32>,
     ) -> Flow<i32> {
         let owner = self.w.st.owners[t];
-        if owner < 0 || owner as usize == i || self.out(i) || self.out(owner as usize) {
+        if owner < 0 || self.w.owns(t as i32, i as i32) || self.out(i) || self.out(owner as usize) {
             return Ok(0);
         }
         let owner = owner as usize;
@@ -3342,7 +3347,7 @@ impl PlayCtx<'_> {
 
     fn pay_rent(&mut self, i: usize, t: usize, half: bool) -> Flow<()> {
         let owner = self.w.st.owners[t];
-        if owner < 0 || owner as usize == i || self.out(i) || self.out(owner as usize) {
+        if owner < 0 || self.w.owns(t as i32, i as i32) || self.out(i) || self.out(owner as usize) {
             return Ok(());
         }
         let owner = owner as usize;
@@ -3578,7 +3583,7 @@ impl PlayCtx<'_> {
         let mut ask = ask;
         ask.view.price = price;
         if self.ask(ask)?.of(i) == 0
-            && self.w.st.owners[t] == owner as i32
+            && self.w.owns(t as i32, owner as i32)
             && !self.out(owner)
             && !self.out(i)
             && self.w.st.players[i].money >= price
@@ -3764,10 +3769,9 @@ impl PlayCtx<'_> {
     pub(crate) fn mortgageable(&self, player_id: usize) -> Vec<usize> {
         (0..self.data.tiles.len())
             .filter(|&t| {
-                self.w.st.owners[t] == player_id as i32
-                    && self.tile(t).is_buyable()
+                self.tile(t).is_buyable()
                     && self.w.tile_prop(t as i32, crate::state::prop::NO_MORTGAGE) == 0
-                    && !self.w.st.mortgaged[t]
+                    && self.w.stake_can_mortgage(t as i32, player_id as i32)
             })
             .collect()
     }
@@ -4066,10 +4070,10 @@ impl PlayCtx<'_> {
             cost = paid.loss;
         }
         let full = self.tile(t).rent.len().saturating_sub(1) as i32;
-        if (owner_required && self.w.st.owners[t] != i as i32) || self.w.st.houses[t] >= full {
+        if (owner_required && !self.w.owns(t as i32, i as i32)) || self.w.st.houses[t] >= full {
             if cost > 0 && !self.out(i) {
                 self.w.credit(i as i32, cost);
-                let key = if self.w.st.owners[t] != i as i32 {
+                let key = if !self.w.owns(t as i32, i as i32) {
                     "log.build_refund_not_owned"
                 } else {
                     "log.build_refund_full"
@@ -4146,13 +4150,13 @@ impl PlayCtx<'_> {
             return Some(Msg::new("err.not_your_deed"));
         };
         let t = t as usize;
-        if !tile.is_buyable() || st.owners[t] != i as i32 {
+        if !tile.is_buyable() || !self.w.owns(t as i32, i as i32) {
             return Some(Msg::new("err.not_your_deed"));
         }
         if self.w.tile_prop(t as i32, crate::state::prop::NO_MORTGAGE) > 0 {
             return Some(Msg::new("err.no_mortgage"));
         }
-        if st.mortgaged[t] {
+        if !self.w.stake_can_mortgage(t as i32, i as i32) {
             return Some(Msg::new("err.already_mortgaged"));
         }
         if st.turn != i as i32 {
@@ -4182,10 +4186,10 @@ impl PlayCtx<'_> {
             return Some(Msg::new("err.not_your_deed"));
         };
         let t = t as usize;
-        if !tile.is_buyable() || st.owners[t] != i as i32 {
+        if !tile.is_buyable() || !self.w.owns(t as i32, i as i32) {
             return Some(Msg::new("err.not_your_deed"));
         }
-        if !st.mortgaged[t] {
+        if !self.w.stake_mortgaged(t as i32, i as i32) {
             return Some(Msg::new("err.not_mortgaged"));
         }
         if st.turn != i as i32 || st.step != stage::OPS {
@@ -4205,10 +4209,12 @@ impl PlayCtx<'_> {
     /// and the amount (`ctx::commit_mortgage`). Raises the mortgage hooks so
     /// 「当你抵押…时」 listeners (and their counteractions) still fire.
     pub fn commit_mortgage(&mut self, i: usize, t: usize, amount: i32) -> Flow<i32> {
-        if t >= self.w.st.mortgaged.len() || self.w.st.mortgaged[t] {
+        if t >= self.w.st.mortgaged.len() {
             return Ok(0);
         }
-        if self.w.st.owners.get(t).copied().unwrap_or(-1) != i as i32 {
+        // A co-held deed mortgages per holder; an ordinary one is a single
+        // (tile-flag) stake.
+        if !self.w.stake_can_mortgage(t as i32, i as i32) {
             return Ok(0);
         }
         let v = amount.max(0);
@@ -4234,14 +4240,14 @@ impl PlayCtx<'_> {
         amount: i32,
         by_card: Option<i32>,
     ) -> Flow<i32> {
-        if t >= self.w.st.mortgaged.len() || !self.w.st.mortgaged[t] {
+        if t >= self.w.st.mortgaged.len() {
             return Ok(0);
         }
-        if self.w.st.owners.get(t).copied().unwrap_or(-1) != i as i32 {
+        if !self.w.stake_mortgaged(t as i32, i as i32) {
             return Ok(0);
         }
         let cost = self.spend_before(i, t as i32, amount, by_card)?;
-        self.w.st.mortgaged[t] = false;
+        self.w.set_co_mortgaged(t as i32, i as i32, false);
         self.w.st.players[i].money -= cost;
         self.w.bump_loss(i as i32, cost);
         // 「本回合进行过赎回操作」 -- same record, same timing.
@@ -4267,7 +4273,7 @@ impl PlayCtx<'_> {
         let s = &mut self.w.st.players[i];
         s.state_set(key::MORTGAGED, 1);
         s.state_set_expires(key::MORTGAGED, Some(Tick::TurnEnd));
-        self.w.st.mortgaged[t] = true;
+        self.w.set_co_mortgaged(t as i32, i as i32, true);
         self.w.credit(i as i32, v);
         let text = Msg::new("log.mortgage")
             .player_id("who", i)
@@ -4323,7 +4329,7 @@ impl PlayCtx<'_> {
         if self.out(i) || !self.playing() {
             return Ok(false);
         }
-        if self.w.st.owners[t] == i as i32 && !self.w.st.mortgaged[t] {
+        if self.w.stake_can_mortgage(t as i32, i as i32) {
             let v = self.mortgage_value(t);
             self.do_mortgage(i, t, v, reason);
             raise!(self, "mortgage", i, tile = t as i32)?;
@@ -5484,8 +5490,7 @@ impl PlayCtx<'_> {
         }
         for id in &reply.answered.picked {
             if let Ok(t) = id.parse::<usize>() {
-                if deeds.contains(&t) && self.w.st.owners[t] == i as i32 && !self.w.st.mortgaged[t]
-                {
+                if deeds.contains(&t) && self.w.stake_can_mortgage(t as i32, i as i32) {
                     self.deed_mortgage(i, t, 2)?;
                 }
             }
@@ -5522,10 +5527,7 @@ impl PlayCtx<'_> {
         let reply = self.ask(Ask::mortgage(i, need, text, &deeds, ai))?;
         for id in &reply.answered.picked {
             if let Ok(t) = id.parse::<usize>() {
-                if t < self.data.tiles.len()
-                    && self.w.st.owners[t] == i as i32
-                    && !self.w.st.mortgaged[t]
-                {
+                if t < self.data.tiles.len() && self.w.stake_can_mortgage(t as i32, i as i32) {
                     self.deed_mortgage(i, t, 1)?;
                 }
             }
@@ -5731,14 +5733,14 @@ impl PlayCtx<'_> {
         self.w.extra_turns.retain(|&x| x != i);
         self.purge_markers_owned_by(&owned_rules);
         let deeds: Vec<usize> = (0..self.data.tiles.len())
-            .filter(|&t| self.w.st.owners[t] == i as i32)
+            .filter(|&t| self.w.owns(t as i32, i as i32))
             .collect();
         for &t in &deeds {
-            // The one ownership write: it clears the tile's acquisition
-            // sequence too, so a later re-buy cannot inherit this seat's stale
-            // ordering (design G08 §7.7).
-            self.w.set_tile_owner(t as i32, -1);
-            self.w.st.mortgaged[t] = false;
+            // Drop this seat's stake. A co-held deed survives while a living
+            // co-holder remains (「只有全部Poppin' Party角色破产后才可被正常
+            // 购买」); the last stake clears the tile and its acquisition
+            // sequence (design G08 §7.7).
+            self.w.release_deed(t as i32, i as i32);
         }
         if !deeds.is_empty() {
             let houses = deeds.iter().any(|&t| self.w.st.houses[t] > 0);
@@ -6860,6 +6862,8 @@ impl PlayCtx<'_> {
                 })
                 .collect(),
             owners: self.w.st.owners.clone(),
+            co_owners: self.w.st.co_owners.clone(),
+            co_mortgaged: self.w.st.co_mortgaged.clone(),
             houses: self.w.st.houses.clone(),
             mortgaged: self.w.st.mortgaged.clone(),
         };
@@ -6917,6 +6921,8 @@ impl PlayCtx<'_> {
             self.w.bind_skills(self.data, self.rules, i as i32);
         }
         self.w.st.owners = snap.owners;
+        self.w.st.co_owners = snap.co_owners;
+        self.w.st.co_mortgaged = snap.co_mortgaged;
         self.w.st.houses = snap.houses;
         self.w.st.mortgaged = snap.mortgaged;
         true
@@ -7033,7 +7039,9 @@ impl PlayCtx<'_> {
         for i in 0..n {
             let (mut land, mut houses) = (0, 0);
             for (t, tile) in self.data.tiles.iter().enumerate() {
-                if st.owners[t] == i as i32 {
+                let co = st.co_owners.get(t).is_some_and(|r| r.contains(&(i as i32)));
+                if st.owners[t] == i as i32 || co {
+                    // 「视为同时拥有」 -- a co-held deed scores as a holding.
                     land += if st.mortgaged[t] {
                         tile.price / 2
                     } else {

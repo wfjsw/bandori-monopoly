@@ -34,13 +34,18 @@ pub const GREAT: CardDef = CardDef::new("通用:GREAT", &[On::Play("", None, gre
 fn great(player_id: i32) -> card_sdk::Asked {
     // 规则书[手]: 「1. [移除]此卡」
     ctx::set_dest(ctx::Dest::Banished, card_sdk::abi::ZoneChangeCause::Effect);
-    // 规则书[手]: 「2. 将一张“PERFECT“加入抽卡区并洗切」
-    ctx::add_to_dest(
-        player_id,
-        "通用:[衍生]PERFECT",
-        ctx::Dest::DeckRandom,
-        false,
-    );
+    // 规则书[手]: 「2. 将一张“PERFECT“加入抽卡区并洗切」. The count is tagged
+    // with `ctx::n_deck` (slot 2): 「后勤人员的努力」 may name it, but 「（除将牌
+    // 加入卡组的效果以外）」 keeps it undoubled. `add_to_dest` inserts one copy,
+    // so the value is the printed 一张 rather than a loop count.
+    for _ in 0..ctx::n_deck(2, 1) {
+        ctx::add_to_dest(
+            player_id,
+            "通用:[衍生]PERFECT",
+            ctx::Dest::DeckRandom,
+            false,
+        );
+    }
     ctx::log(
         player_id,
         &Msg::new(key!("great_added")).player_id("who", player_id),

@@ -237,6 +237,10 @@ pub struct TurnSnapshot {
     pub state: std::collections::BTreeMap<String, i32>,
     pub money: i32,
     pub owners: Vec<i32>,
+    #[serde(default)]
+    pub co_owners: Vec<Vec<i32>>,
+    #[serde(default)]
+    pub co_mortgaged: Vec<Vec<i32>>,
     pub houses: Vec<i32>,
     pub mortgaged: Vec<bool>,
 }

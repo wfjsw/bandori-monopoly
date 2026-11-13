@@ -432,6 +432,13 @@ const ARRAY_OPS: &[&str] = &[
     "build_cost_percent",
     "build_discount",
     "tile_buildable",
+    // v124: reshuffle-tagged crystal adds, trigger card tags, co-held deeds.
+    "add_group_pool_shuffled",
+    "trig_card_tags",
+    "add_co_owner",
+    "is_co_owner",
+    "owns_tile",
+    "mortgaged_for",
 ];
 
 fn main() {

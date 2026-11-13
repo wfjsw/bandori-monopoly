@@ -435,9 +435,154 @@ impl World {
             .unwrap_or(-1)
     }
 
+    /// The holders sharing `tile`'s deed, primary owner included
+    /// (「视为同时拥有」, Poppin' Party's 星之鼓动山丘). Empty for an ordinary
+    /// deed.
+    pub fn co_owners(&self, tile: i32) -> &[i32] {
+        usize::try_from(tile)
+            .ok()
+            .and_then(|i| self.st.co_owners.get(i))
+            .map_or(&[], |v| v.as_slice())
+    }
+
+    /// Is `player` a co-holder of `tile`?
+    pub fn is_co_owner(&self, tile: i32, player: i32) -> bool {
+        self.co_owners(tile).contains(&player)
+    }
+
+    /// Does `player` hold the deed (primary owner or co-owner)? The **single
+    /// owner read** for eligibility; [`Self::tile_owner`] stays the primary
+    /// holder (deed display / rent recipient of the ordinary path).
+    pub fn owns(&self, tile: i32, player: i32) -> bool {
+        self.tile_owner(tile) == player || self.is_co_owner(tile, player)
+    }
+
+    /// Is `player`'s **own stake** of `tile` mortgaged?
+    pub fn co_mortgaged_by(&self, tile: i32, player: i32) -> bool {
+        usize::try_from(tile)
+            .ok()
+            .and_then(|i| self.st.co_mortgaged.get(i))
+            .is_some_and(|v| v.contains(&player))
+    }
+
+    /// Is any stake of `tile` mortgaged (the `mortgaged` aggregate)?
+    pub fn any_mortgaged(&self, tile: i32) -> bool {
+        usize::try_from(tile)
+            .ok()
+            .is_some_and(|i| self.st.mortgaged.get(i).copied().unwrap_or(false))
+    }
+
+    /// Can `player` mortgage their own stake of `tile`? Ordinary deeds have
+    /// one stake (the tile flag); a co-owned deed has one per holder.
+    pub fn stake_can_mortgage(&self, tile: i32, player: i32) -> bool {
+        if !self.owns(tile, player) {
+            return false;
+        }
+        if self.co_owners(tile).is_empty() {
+            !self.any_mortgaged(tile)
+        } else {
+            !self.co_mortgaged_by(tile, player)
+        }
+    }
+
+    /// Can `player` redeem their own stake of `tile`? Mirror of
+    /// [`Self::stake_can_mortgage`].
+    pub fn stake_mortgaged(&self, tile: i32, player: i32) -> bool {
+        if self.co_owners(tile).is_empty() {
+            self.owns(tile, player) && self.any_mortgaged(tile)
+        } else {
+            self.co_mortgaged_by(tile, player)
+        }
+    }
+
+    /// Make `player` a co-holder of `tile` (idempotent). Returns whether the
+    /// row was added. The caller sets the primary with [`Self::set_tile_owner`]
+    /// first; the grant adds every holder, primary included, so the mortgage
+    /// row always has the full holder list.
+    pub fn add_co_owner(&mut self, tile: i32, player: i32) -> bool {
+        let Ok(t) = usize::try_from(tile) else {
+            return false;
+        };
+        if player < 0 || self.is_co_owner(tile, player) {
+            return false;
+        }
+        if self.st.co_owners.len() <= t {
+            self.st.co_owners.resize(t + 1, Vec::new());
+        }
+        self.st.co_owners[t].push(player);
+        true
+    }
+
+    /// Write (or clear) `player`'s own mortgage stake of `tile` and keep the
+    /// tile-wide aggregate in step. An ordinary deed has one stake: the flag
+    /// itself.
+    pub fn set_co_mortgaged(&mut self, tile: i32, player: i32, on: bool) {
+        let Ok(t) = usize::try_from(tile) else {
+            return;
+        };
+        if self.co_owners(tile).is_empty() {
+            if let Some(v) = self.st.mortgaged.get_mut(t) {
+                *v = on;
+            }
+            return;
+        }
+        if !self.is_co_owner(tile, player) {
+            return;
+        }
+        if self.st.co_mortgaged.len() <= t {
+            self.st.co_mortgaged.resize(t + 1, Vec::new());
+        }
+        let row = &mut self.st.co_mortgaged[t];
+        if on && !row.contains(&player) {
+            row.push(player);
+        } else if !on {
+            row.retain(|&p| p != player);
+        }
+        let any = !row.is_empty();
+        if let Some(v) = self.st.mortgaged.get_mut(t) {
+            *v = any;
+        }
+    }
+
+    /// A holder leaves `tile` (going out). A co-owned deed stays with any
+    /// living co-holder -- the primary row hands over; the last stake clears
+    /// the deed.
+    pub fn release_deed(&mut self, tile: i32, player: i32) {
+        let Ok(t) = usize::try_from(tile) else {
+            return;
+        };
+        self.set_co_mortgaged(tile, player, false);
+        let living: Vec<i32> = self
+            .co_owners(tile)
+            .iter()
+            .copied()
+            .filter(|&p| p != player && !self.player_out(p))
+            .collect();
+        if let Some(row) = self.st.co_owners.get_mut(t) {
+            row.retain(|&p| p != player);
+        }
+        if let Some(&next) = living.first() {
+            if self.tile_owner(tile) == player {
+                self.st.owners[t] = next;
+                for p in [player, next] {
+                    let first = self.earliest_owned_tile(p);
+                    if let Some(s) = self.player_mut(p) {
+                        s.state_set(crate::state::key::FIRST_TILE, first + 1);
+                    }
+                }
+            }
+            return;
+        }
+        self.set_tile_owner(tile, -1);
+        if let Some(v) = self.st.mortgaged.get_mut(t) {
+            *v = false;
+        }
+    }
+
+    /// Every tile `player` holds, co-owned deeds included.
     pub fn owned_tiles(&self, player_id: i32) -> Vec<i32> {
         (0..self.st.owners.len() as i32)
-            .filter(|&t| self.tile_owner(t) == player_id)
+            .filter(|&t| self.owns(t, player_id))
             .collect()
     }
 
@@ -543,8 +688,7 @@ impl World {
                     Some(t) != exclude
                         && tile.is_buyable()
                         && self.tile_prop(t as i32, crate::state::prop::NO_MORTGAGE) == 0
-                        && self.st.owners[t] == player as i32
-                        && !self.st.mortgaged[t]
+                        && self.stake_can_mortgage(t as i32, player as i32)
                 })
                 .map(|(_, tile)| tile.price / 2)
                 .sum::<i32>()
@@ -1480,10 +1624,7 @@ impl World {
         let Some(t) = usize::try_from(tile).ok().and_then(|t| data.tiles.get(t)) else {
             return Some(Msg::new("err.build_not_own"));
         };
-        if !t.is_buyable()
-            || self.st.owners.get(tile as usize).copied().unwrap_or(-1) != player_id
-            || self.player_id(player_id).is_none()
-        {
+        if !t.is_buyable() || !self.owns(tile, player_id) || self.player_id(player_id).is_none() {
             return Some(Msg::new("err.build_not_own"));
         }
         self.guard_buildable(data, player_id, tile)
@@ -2625,6 +2766,15 @@ impl World {
             return;
         }
         self.st.owners[t] = owner;
+        // A changed holder clears the previous row's co-holders and their
+        // mortgage stakes; the primary grant then re-adds the new holder set
+        // through [`Self::add_co_owner`].
+        if let Some(row) = self.st.co_owners.get_mut(t) {
+            row.clear();
+        }
+        if let Some(row) = self.st.co_mortgaged.get_mut(t) {
+            row.clear();
+        }
         if self.st.owned_seq.len() <= t {
             self.st.owned_seq.resize(t + 1, -1);
         }
@@ -2655,8 +2805,8 @@ impl World {
     /// none.
     pub fn earliest_owned_tile(&self, player_id: i32) -> i32 {
         let mut best: Option<(i32, i32)> = None;
-        for (tile, &owner) in self.st.owners.iter().enumerate() {
-            if owner != player_id {
+        for tile in 0..self.st.owners.len() {
+            if !self.owns(tile as i32, player_id) {
                 continue;
             }
             let Some(&seq) = self.st.owned_seq.get(tile) else {

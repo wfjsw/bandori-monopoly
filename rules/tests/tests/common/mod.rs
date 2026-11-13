@@ -792,6 +792,8 @@ impl Table {
         }
         let n = w.st.owners.len();
         w.st.owners = vec![-1; n];
+        w.st.co_owners = vec![Vec::new(); n];
+        w.st.co_mortgaged = vec![Vec::new(); n];
         w.st.houses = vec![0; n];
         w.st.mortgaged = vec![false; n];
         w.st.embers = vec![0; n];

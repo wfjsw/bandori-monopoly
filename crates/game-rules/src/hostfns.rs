@@ -830,6 +830,24 @@ pub fn tile_owner<C: HostCtx>(c: &mut C, tile: i32) -> Result<i32, HostError> {
     Ok({ c.st().wr().tile_owner(tile) })
 }
 
+/// Add a co-holder to `tile`'s deed (「视为同时拥有」); answers whether it was
+/// added.
+pub fn add_co_owner<C: HostCtx>(c: &mut C, tile: i32, player_id: i32) -> Result<i32, HostError> {
+    Ok(c.st_mut().w().add_co_owner(tile, player_id) as i32)
+}
+
+pub fn is_co_owner<C: HostCtx>(c: &mut C, tile: i32, player_id: i32) -> Result<i32, HostError> {
+    Ok({ c.st().wr().is_co_owner(tile, player_id) as i32 })
+}
+
+pub fn owns_tile<C: HostCtx>(c: &mut C, tile: i32, player_id: i32) -> Result<i32, HostError> {
+    Ok({ c.st().wr().owns_tile(tile, player_id) as i32 })
+}
+
+pub fn mortgaged_for<C: HostCtx>(c: &mut C, tile: i32, player_id: i32) -> Result<i32, HostError> {
+    Ok({ c.st().wr().mortgaged_for(tile, player_id) as i32 })
+}
+
 pub fn player_pos<C: HostCtx>(c: &mut C, player_id: i32) -> Result<i32, HostError> {
     Ok({ c.st().wr().player_pos(player_id) })
 }
@@ -1974,6 +1992,23 @@ pub fn add_group_pool<C: HostCtx>(
 ) -> Result<i32, HostError> {
     let name = guest_str(c, np, nl)?;
     Ok(c.st_mut().w().add_group_pool(player_id, &name, n, max))
+}
+
+/// [`add_group_pool`] for a write made on a reshuffle: same count write, and
+/// the visible outcome names the reshuffle as its source (「只有洗牌时可以…
+/// 添加奇迹水晶」).
+pub fn add_group_pool_shuffled<C: HostCtx>(
+    c: &mut C,
+    player_id: i32,
+    np: i32,
+    nl: i32,
+    n: i32,
+    max: i32,
+) -> Result<i32, HostError> {
+    let name = guest_str(c, np, nl)?;
+    Ok(c.st_mut()
+        .w()
+        .add_group_pool_shuffled(player_id, &name, n, max))
 }
 
 pub fn group_skill<C: HostCtx>(
@@ -3303,6 +3338,27 @@ pub fn trig_cards<C: HostCtx>(c: &mut C, buf: i32, cap: i32) -> Result<i32, Host
     let list = c.st().wr().trigger().cards;
     let bytes = postcard::to_allocvec(&list)
         .map_err(|e| HostError::trap(format!("trig_cards encode: {e}")))?;
+    if bytes.len() as i32 <= cap {
+        c.write_guest(buf, &bytes)?;
+    }
+    Ok(bytes.len() as i32)
+}
+
+/// The tags of every card named on the trigger, deduped, as an interned name
+/// list (`postcard`). A trigger with no cards, or cards the roster does not
+/// know, yields an empty list.
+pub fn trig_card_tags<C: HostCtx>(c: &mut C, buf: i32, cap: i32) -> Result<i32, HostError> {
+    let cards = c.st().wr().trigger().cards.clone();
+    let mut tags: Vec<String> = Vec::new();
+    for card in &cards {
+        for tag in c.st().wr().card_tags(card) {
+            if !tags.contains(&tag) {
+                tags.push(tag);
+            }
+        }
+    }
+    let bytes = postcard::to_allocvec(&tags)
+        .map_err(|e| HostError::trap(format!("trig_card_tags encode: {e}")))?;
     if bytes.len() as i32 <= cap {
         c.write_guest(buf, &bytes)?;
     }

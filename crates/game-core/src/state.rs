@@ -222,6 +222,18 @@ pub struct MatchState {
     pub board_field: Vec<FieldCard>,
     pub bans: Vec<String>,
     pub owners: Vec<i32>,
+    /// Per tile: further holders of the deed besides [`owners`] ("视为同时拥有",
+    /// Poppin' Party's 星之鼓动山丘). Every entry of the primary owner and this
+    /// set is an **owner** for deed reads ([`crate::engine::ops::World::owns`]);
+    /// assignment of a new owner clears the row. `#[serde(default)]` so saves
+    /// and clients from before the field load (every deed ordinary).
+    #[serde(default)]
+    pub co_owners: Vec<Vec<i32>>,
+    /// Per tile: the co-owners whose **own stake** is mortgaged. The tile-wide
+    /// `mortgaged` flag stays the aggregate (any stake) for display and the
+    /// force-buy path; cleared with the row.
+    #[serde(default)]
+    pub co_mortgaged: Vec<Vec<i32>>,
     /// Per tile: when the current owner took it (the acquisition order,
     /// `-1` = nobody holds it). Written only by `World::set_tile_owner`.
     #[serde(default)]
@@ -307,6 +319,8 @@ impl Default for MatchState {
             board_field: vec![],
             bans: vec![],
             owners: vec![],
+            co_owners: vec![],
+            co_mortgaged: vec![],
             owned_seq: vec![],
             next_owned_seq: 0,
             houses: vec![],

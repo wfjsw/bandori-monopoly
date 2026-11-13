@@ -133,8 +133,9 @@ pub mod ctx {
 
     pub use crate::marker::{dec_turns_left, set_turns_left, turns_left};
     pub use crate::{
-        add_card_crystals, add_crystals, add_crystals_at, add_group_crystals, add_group_skill,
-        add_rent_unit_bonus, add_ring_bonus, card_crystals, crystals, crystals_at, group_crystals,
+        add_card_crystals, add_crystals, add_crystals_at, add_group_crystals,
+        add_group_crystals_shuffled, add_group_skill, add_rent_unit_bonus, add_ring_bonus,
+        card_crystals, crystals, crystals_at, group_crystals,
         group_skill, group_skills, in_group, invoke_skill, is_agent, is_buyable, is_color, is_deed,
         is_live_house_for, is_shop, is_start, is_venue, offer_build, offer_buy, offer_force_buy,
         pay_rent, persona_is, persona_skill, remove_crystal, rent_unit_mult, ring_multiplier,
@@ -289,6 +290,18 @@ pub fn group_pool(player_id: i32, name: &str) -> i32 {
 
 pub fn add_group_crystals(player_id: i32, n: i32, max: i32) -> i32 {
     add_group_pool(player_id, counter::CRYSTALS, n, max)
+}
+
+/// [`add_group_crystals`] tagged as a reshuffle-time add: the write is the
+/// same, and the host's outcome line names the reshuffle as its source
+/// (「只有洗牌时可以…添加奇迹水晶」).
+pub fn add_group_crystals_shuffled(player_id: i32, n: i32, max: i32) -> i32 {
+    add_group_pool_shuffled(player_id, counter::CRYSTALS, n, max)
+}
+
+pub fn add_group_pool_shuffled(player_id: i32, name: &str, n: i32, max: i32) -> i32 {
+    let (p, l) = raw::s(name);
+    unsafe { raw::sys::add_group_pool_shuffled(player_id, p, l, n, max) }
 }
 
 pub fn add_group_pool(player_id: i32, name: &str, n: i32, max: i32) -> i32 {

@@ -41,6 +41,8 @@ pub mod meta_key {
     pub const PRESET: &str = "preset";
     /// Band flag: members may carry each other's exclusives (`sharesExclusives`).
     pub const SHARES_EXCLUSIVES: &str = "sharesExclusives";
+    /// Band flag: a starting deck may hold only 「通用」 cards (`generalOnly`).
+    pub const GENERAL_ONLY: &str = "generalOnly";
 }
 
 /// One playable character from `the roster`, beside its skill rule
@@ -191,6 +193,9 @@ pub struct GroupDef {
     pub text: &'static str,
     pub logo: &'static str,
     pub shares_exclusives: bool,
+    /// 「只能在卡组中加入"通用"卡」 -- the starting deck may hold only
+    /// `通用`-group cards (`game_core::deck::cant_play`).
+    pub general_only: bool,
 }
 
 impl GroupDef {
@@ -203,6 +208,7 @@ impl GroupDef {
             text: "",
             logo: "",
             shares_exclusives: false,
+            general_only: false,
         }
     }
 
@@ -230,6 +236,10 @@ impl GroupDef {
         self.shares_exclusives = shares;
         self
     }
+    pub const fn general_only(mut self, only: bool) -> Self {
+        self.general_only = only;
+        self
+    }
 }
 
 impl ToMetaRow for GroupDef {
@@ -248,10 +258,13 @@ impl ToMetaRow for GroupDef {
             derived: false,
             fields: Vec::from([(alloc_string(meta_key::SKILL), alloc_string(self.skill))]),
             lists: Vec::new(),
-            flags: Vec::from([(
-                alloc_string(meta_key::SHARES_EXCLUSIVES),
-                self.shares_exclusives,
-            )]),
+            flags: Vec::from([
+                (
+                    alloc_string(meta_key::SHARES_EXCLUSIVES),
+                    self.shares_exclusives,
+                ),
+                (alloc_string(meta_key::GENERAL_ONLY), self.general_only),
+            ]),
         }
     }
 }

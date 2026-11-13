@@ -31,7 +31,9 @@
 //!   successful spend the engine raises `fireSpent` (「每当你消耗火罐时」).
 //! * **`fire.temp`** (lisa's 「可超过上限的临时火罐」) is a **second declared
 //!   counter** of the same instance, kernel-managed. Spend draws temp first
-//!   (MARKERS.md §10(2): it is the over-cap allowance).
+//!   (MARKERS.md §10(2): it is the over-cap allowance). The provider rides
+//!   the grant: an active use pays it 600 per pot, a passive one does not,
+//!   and the pot is lost at the provider's second turn start (「两回合后失去」).
 //!
 //! 火罐 does not set any player gate -- it is a resource, not a status
 //! marker. The cap is the only bound.
@@ -330,7 +332,13 @@ pub fn gain(player_id: i32, n: i32, reason: &Msg) -> Result<i32, Prompt> {
 /// verb. A pre-check on the pool would skip the window and break
 /// 「以代替此次技能的火罐消耗」.
 pub fn spend(player_id: i32, n: i32, reason: &Msg) -> Result<bool, Prompt> {
-    spend_from(player_id, n, reason, card_sdk::abi::ChargeSource::Other)
+    spend_from(
+        player_id,
+        n,
+        reason,
+        card_sdk::abi::ChargeSource::Other,
+        SpendKind::Active,
+    )
 }
 
 /// [`spend`] for a **skill cost**: the same pots and window, with
@@ -338,7 +346,37 @@ pub fn spend(player_id: i32, n: i32, reason: &Msg) -> Result<bool, Prompt> {
 /// `charge_is_skill` (I12). The skill bodies use this verb; a card's own
 /// counter cost keeps [`spend`].
 pub fn spend_skill(player_id: i32, n: i32, reason: &Msg) -> Result<bool, Prompt> {
-    spend_from(player_id, n, reason, card_sdk::abi::ChargeSource::Skill)
+    spend_from(
+        player_id,
+        n,
+        reason,
+        card_sdk::abi::ChargeSource::Skill,
+        SpendKind::Active,
+    )
+}
+
+/// A **passive** spend: a use of the seat's own pots that is not its choice
+/// but another effect's (「被冲榜类效果被动消耗」). Same pots and windows as
+/// [`spend`], but a temp pot taken this way pays its provider nothing --
+/// lisa's 「使用你提供的临时火罐需要支付你600资金（被冲榜类效果被动消耗无需
+/// 支付）」. The 冲榜 event is the standing caller.
+pub fn spend_passive(player_id: i32, n: i32, reason: &Msg) -> Result<bool, Prompt> {
+    spend_from(
+        player_id,
+        n,
+        reason,
+        card_sdk::abi::ChargeSource::Other,
+        SpendKind::Passive,
+    )
+}
+
+/// Who chose the spend. 「使用」 (active) is the player spending a pot;
+/// 「被动消耗」 (passive) is an effect taking it. Only the temp-pot 600
+/// (lisa （3）) distinguishes the two.
+#[derive(Clone, Copy, PartialEq, Eq)]
+pub enum SpendKind {
+    Active,
+    Passive,
 }
 
 fn spend_from(
@@ -346,6 +384,7 @@ fn spend_from(
     n: i32,
     reason: &Msg,
     source: card_sdk::abi::ChargeSource,
+    kind: SpendKind,
 ) -> Result<bool, Prompt> {
     if n <= 0 {
         return Ok(true);
@@ -365,6 +404,12 @@ fn spend_from(
     // then cover the whole cost.
     if from_temp > 0 && !temp::spend(player_id, from_temp, reason)? {
         return spend_pool(player_id, n, reason);
+    }
+    // lisa （3）: 「使用你提供的临时火罐需要支付你600资金（被冲榜类效果被动
+    // 消耗无需支付）」 -- only an active use pays the provider, and only for
+    // the temp pots that actually left.
+    if from_temp > 0 && kind == SpendKind::Active {
+        temp::pay_provider(player_id, from_temp)?;
     }
     if from_pool > 0 {
         return spend_pool(player_id, from_pool, reason);
@@ -457,14 +502,32 @@ pub mod regime {
 /// lisa's 「可超过上限的临时火罐」 -- a second declared counter of the same
 /// instance (MARKERS.md §7). Kernel-managed, not a free key.
 ///
-/// TODO(规则书)[judgement]: （3）「你提供的临时火罐将会在两回合后失去，使用你
-///   提供的临时火罐需要支付你600资金」 -- the spend path has to know a pot's
-///   *provenance* to charge the provider, and 「被冲榜类效果被动消耗无需支付」
-///   carves out a class of spends the engine does not tag. The counter itself
-///   is real; the 600-cost and the two-turn expiry stay open.
+/// lisa （3）: 「你提供的临时火罐将会在两回合后失去，使用你提供的临时火罐需要
+/// 支付你600资金（被冲榜类效果被动消耗无需支付）」. The kernel keeps the
+/// **provenance** with the counter -- who provided the live temp pots and the
+/// `turn_key` at which they expire (the provider's second turn start after
+/// the grant) -- so [`super::spend_from`] can charge the provider
+/// ([`pay_provider`], active spends only) and [`expire_owned_by`] can drop
+/// them from the provider's `TurnStartBefore`.
+///
+/// The provenance is one stamp per holder rather than one per pot: only
+/// lisa provides temp pots, and a later grant extends the stamp's expiry
+/// (`max`), so a batch from the same provider never expires early.
 pub mod temp {
     use super::*;
+    use crate::ctx::state;
     use card_sdk::Msg;
+
+    /// Who provided the live temp pots, stored as `provider + 1` (0 = none).
+    const PROVIDER: &str = "fire.tempProvider";
+    /// The provider's `turn_key` at which the live temp pots expire.
+    const EXPIRY: &str = "fire.tempExpiry";
+    /// 「使用你提供的临时火罐需要支付你600资金」 -- per pot.
+    pub const COST: i32 = 600;
+
+    /// 「两回合后失去」 -- the expiry is two of the **provider's** turn
+    /// starts after the grant.
+    const TURNS: i32 = 2;
 
     /// Temp pots held.
     pub fn get(player_id: i32) -> i32 {
@@ -504,6 +567,75 @@ pub mod temp {
             set_row(player_id, TEMP_KEY, get(player_id) + got, -1);
         }
         got
+    }
+
+    /// Who provided the live temp pots (`-1` = none / providerless).
+    pub fn provider_of(player_id: i32) -> i32 {
+        state::get(player_id, PROVIDER) - 1
+    }
+
+    /// [`grant`] with provenance: `provider_id` provided the pots, so their
+    /// use pays it (lisa （3）) and they expire 「两回合后」. The stamp's
+    /// expiry only ever moves later, so a second grant does not shorten the
+    /// first batch's remaining life.
+    pub fn grant_from(provider_id: i32, player_id: i32, n: i32) -> i32 {
+        let got = grant(player_id, n);
+        if got > 0 {
+            state::set(player_id, PROVIDER, provider_id + 1);
+            let expiry = state::get(player_id, EXPIRY).max(ctx::turn_key() + TURNS);
+            state::set(player_id, EXPIRY, expiry);
+        }
+        got
+    }
+
+    /// 「使用你提供的临时火罐需要支付你600资金」 -- the holder pays the
+    /// provider `COST` per temp pot taken. The caller (a spend) has already
+    /// ruled out the passive carve-out; a providerless row charges nobody.
+    pub fn pay_provider(player_id: i32, pots: i32) -> Result<(), Prompt> {
+        let provider = provider_of(player_id);
+        if pots <= 0 || provider < 0 || provider == player_id {
+            return Ok(());
+        }
+        ctx::transfer(
+            player_id,
+            provider,
+            COST * pots,
+            &Msg::new("log.fire_temp_pay")
+                .player_id("who", player_id)
+                .player_id("to", provider)
+                .i("n", (COST * pots) as i64),
+        )?;
+        Ok(())
+    }
+
+    /// 「你提供的临时火罐将会在两回合后失去」 -- the provider's
+    /// `TurnStartBefore` drops every stamp it owns whose expiry has come. The
+    /// pots are lost, not spent (no `markerSpend` window). Returns how many
+    /// holders were cleared.
+    pub fn expire_owned_by(provider_id: i32) -> i32 {
+        let mut cleared = 0;
+        for p in 0..ctx::player_count() {
+            if p == provider_id || provider_of(p) != provider_id {
+                continue;
+            }
+            if ctx::turn_key() < state::get(p, EXPIRY) {
+                continue;
+            }
+            let had = get(p);
+            if had > 0 {
+                set_row(p, TEMP_KEY, 0, -1);
+            }
+            state::set(p, PROVIDER, 0);
+            state::set(p, EXPIRY, 0);
+            ctx::log(
+                p,
+                &Msg::new("log.fire_temp_expired")
+                    .player_id("who", p)
+                    .player_id("by", provider_id),
+            );
+            cleared += 1;
+        }
+        cleared
     }
 
     /// Spend `n` temp pots. Returns whether the full amount left. A temp pot is

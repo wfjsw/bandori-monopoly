@@ -223,7 +223,7 @@ pub fn count_owned_kind(data: &GameData, w: &World, player: usize, kind: &str) -
     (0..data.tiles.len())
         .filter(|&t| {
             data.tiles[t].kind.as_str() == kind
-                && w.st.owners.get(t).copied().unwrap_or(-1) == player as i32
+                && w.owns(t as i32, player as i32)
         })
         .count() as i32
 }
@@ -420,10 +420,10 @@ pub fn tile_quotes(
             continue;
         }
         let owner = st.owners.get(t).copied().unwrap_or(-1);
-        let mortgaged = st.mortgaged.get(t).copied().unwrap_or(false);
+        let mortgaged = w.any_mortgaged(t as i32);
         match viewer {
-            Some(me) if owner == me as i32 => {
-                if mortgaged {
+            Some(me) if w.owns(t as i32, me as i32) => {
+                if w.stake_mortgaged(t as i32, me as i32) {
                     // Mortgaged-mine: redeem (see the doc comment above).
                     out[t] = Some(TileQuote {
                         kind: TileQuoteKind::Redeem,

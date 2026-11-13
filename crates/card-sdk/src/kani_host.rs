@@ -525,6 +525,17 @@ pub enum Op {
     lost_this_turn = 500,
     trigger_pay_split_ran = 501,
     tile_prop_state = 502,
+    /// [`Self::add_group_pool`] tagged as a reshuffle-time add (the
+    /// 「只有洗牌时可以…添加奇迹水晶」 carve-out).
+    add_group_pool_shuffled = 503,
+    /// Card tags of the trigger cards ([主] / [手] / …).
+    trig_card_tags = 504,
+    /// Add a co-holder to a tile's deed (「视为同时拥有」).
+    add_co_owner = 505,
+    is_co_owner = 506,
+    owns_tile = 507,
+    /// Is this player's own stake of the tile mortgaged?
+    mortgaged_for = 508,
 }
 
 /// Six i32 wire slots, matching the ABI's arg convention.

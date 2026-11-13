@@ -99,16 +99,13 @@ fn at_turn_end(player_id: i32) -> card_sdk::Asked {
 
 // （3）「你可携带两个角色的专属卡牌，但仅有在你的角色卡为对应角色时才可打出」 --
 // a deck-composition rule (two characters' exclusive cards may be carried) plus
-// the generic in-match play gate. The carry half is **data** (the roster band row
-// `sharesExclusives`, `deck::shares_exclusives`) -- deck building has no rules
-// handle (docs/GUARDS.md §ExclusiveUse). The play half is the engine's generic
-// own/base exclusive rule (「角色卡为对应角色」, with a variant counted as its
-// base); this card needs no `ExclusiveUse` entry of its own.
-// TODO(规则书)（3）: 「你可携带两个角色的专属卡牌」 -- carrying two characters'
-//   exclusive cards is a deck/hand building rule. The deck half is data
-//   (`sharesExclusives`); a hand-composition filter (holding a second
-//   character's exclusive without it being in the starting deck) still has no
-//   form.
+// the generic in-match play gate. The carry half **is** enforced, on the deck
+// list: this card's row sets `sharesExclusives`, which
+// `game_core::deck::shares_exclusives` reads from `cant_play` and widens an
+// exclusive card's legal owner to every persona of the same group. The play
+// half is the engine's generic own/base exclusive rule (「角色卡为对应角色」,
+// with a variant counted as its base); this card needs no `ExclusiveUse` entry
+// of its own.
 
 /// Roster band row for this band skill (ABI v63).
 pub const BAND: bandori_std::roster::GroupDef =

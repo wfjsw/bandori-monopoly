@@ -1921,6 +1921,18 @@ impl CardWorld for Run {
     fn tile_owner(&self, tile: i32) -> i32 {
         self.world.tile_owner(tile)
     }
+    fn add_co_owner(&mut self, tile: i32, player_id: i32) -> bool {
+        self.world.add_co_owner(tile, player_id)
+    }
+    fn is_co_owner(&self, tile: i32, player_id: i32) -> bool {
+        self.world.is_co_owner(tile, player_id)
+    }
+    fn owns_tile(&self, tile: i32, player_id: i32) -> bool {
+        self.world.owns(tile, player_id)
+    }
+    fn mortgaged_for(&self, tile: i32, player_id: i32) -> bool {
+        self.world.stake_mortgaged(tile, player_id)
+    }
     fn player_pos(&self, player_id: i32) -> i32 {
         self.world.player_pos(player_id)
     }
@@ -2477,6 +2489,9 @@ impl CardWorld for Run {
     fn placed_cards(&self, player_id: i32) -> Vec<String> {
         self.world.placed_cards(player_id)
     }
+    fn card_tags(&self, card: &str) -> Vec<String> {
+        self.data.card(card).map(|c| c.tags.clone()).unwrap_or_default()
+    }
     fn card_text_mentions(&self, card: &str, needle: &str) -> bool {
         if let Some(c) = self.data.card(card) {
             return c.text.contains(needle);
@@ -2608,6 +2623,35 @@ impl CardWorld for Run {
     }
     fn pool_at(&self, uid: i32, name: &str) -> i32 {
         self.world.pool_at(uid, name)
+    }
+    /// [`CardWorld::add_group_pool`] for a reshuffle-time add. The count write
+    /// is the same as `add_group_pool`; the line also says *why* (「只有洗牌时
+    /// 可以…添加奇迹水晶」), so a shuffle-sourced crystal is distinguishable
+    /// from every other add in the log.
+    fn add_group_pool_shuffled(&mut self, player_id: i32, name: &str, n: i32, max: i32) -> i32 {
+        let uid = self.group_skill_uid(player_id);
+        if uid < 0 {
+            return 0;
+        }
+        let was = self.world.counter_at(uid, name);
+        let now = self.add_group_pool(player_id, name, n, max);
+        if now != was && !self.silent_body {
+            let holder = self.world.holder_of(uid);
+            let card = self.group_skill_id(player_id).unwrap_or_default();
+            let shuffler = self.trigger.player_id;
+            self.outcome(
+                holder,
+                Msg::new("log.outcome.counter_reshuffled")
+                    .card("card", card)
+                    .msg(
+                        "source",
+                        Msg::new("log.reason.reshuffled").player_id("who", shuffler),
+                    )
+                    .msg("name", crate::trigger_reason::counter_name(name))
+                    .i("value", (now - was) as i64),
+            );
+        }
+        now
     }
     fn self_uid(&self) -> i32 {
         self.current_uid

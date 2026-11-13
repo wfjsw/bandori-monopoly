@@ -305,6 +305,32 @@ pub fn tile_owner(tile: i32) -> i32 {
     unsafe { sys::tile_owner(tile) }
 }
 
+/// Make `player_id` a further holder of `tile`'s deed (「视为同时拥有」). The
+/// tile keeps its primary owner ([`tile_owner`]); every holder reads as an
+/// owner through [`owns_tile`]. Answers whether the holder was added.
+#[cfg_attr(kani, inline(always))]
+pub fn add_co_owner(tile: i32, player_id: i32) -> i32 {
+    unsafe { sys::add_co_owner(tile, player_id) }
+}
+
+/// Is `player_id` a co-holder of `tile`'s deed (primary excluded)?
+pub fn is_co_owner(tile: i32, player_id: i32) -> bool {
+    unsafe { sys::is_co_owner(tile, player_id) != 0 }
+}
+
+/// Does `player_id` hold `tile`'s deed -- primary owner or co-holder? The
+/// owner read for eligibility.
+pub fn owns_tile(tile: i32, player_id: i32) -> bool {
+    unsafe { sys::owns_tile(tile, player_id) != 0 }
+}
+
+/// Is `player_id`'s **own stake** of `tile` mortgaged? Ordinary deeds have
+/// one stake (same answer as [`mortgaged_of`]); a co-held deed has one per
+/// holder.
+pub fn mortgaged_for(tile: i32, player_id: i32) -> bool {
+    unsafe { sys::mortgaged_for(tile, player_id) != 0 }
+}
+
 /// The tile standing at board position `position` (`position` itself when
 /// nothing is bound there).
 pub fn tile_at(position: i32) -> i32 {
@@ -3959,6 +3985,21 @@ pub fn n(k: i32, value: i32) -> i32 {
     }
 }
 
+/// A number from this card's text that a doubling effect may **name** but must
+/// not double -- 「（除将牌加入卡组的效果以外）」.
+///
+/// The `k`-th number is still a legal answer to 「将…一个数字变为两倍」; naming
+/// it consumes the one-shot flag here without changing the figure. Use it for
+/// the count in a 「将N张…加入卡组」 effect (the played card's own deck insert),
+/// e.g. `ctx::add_to_dest(…, ctx::n_deck(2, 1), …)` when the printed count is
+/// one copy.
+pub fn n_deck(k: i32, value: i32) -> i32 {
+    if unsafe { sys::play_doubled() } == k {
+        unsafe { sys::set_play_doubled(-1) };
+    }
+    value
+}
+
 // ------------------------------------------------- turn plan & scheduling
 
 /// Run this card's `On::Schedule(id)` entry (for `player_id`) when the
@@ -4238,6 +4279,23 @@ pub mod trigger {
         }
         let (p, scratch) = out_buf(need as usize);
         if unsafe { sys::trig_cards(p, need) } != need {
+            return Vec::new();
+        }
+        let buf = out_read(p, need, scratch);
+        decode_name_list(&buf)
+    }
+
+    /// The sheet tags of the card(s) on the trigger ([主] / [手] / [特] / …),
+    /// deduped. Lets a listener say 「[手]效果」 without string-matching ids;
+    /// the names are interned like [`cards`], so compare with
+    /// [`NameId::as_str`].
+    pub fn card_tags() -> Vec<NameId> {
+        let need = unsafe { sys::trig_card_tags(0, 0) };
+        if need <= 0 {
+            return Vec::new();
+        }
+        let (p, scratch) = out_buf(need as usize);
+        if unsafe { sys::trig_card_tags(p, need) } != need {
             return Vec::new();
         }
         let buf = out_read(p, need, scratch);
@@ -5124,6 +5182,8 @@ pub struct TurnSnapshot {
     pub state: alloc::collections::BTreeMap<String, i32>,
     pub money: i32,
     pub owners: Vec<i32>,
+    pub co_owners: Vec<Vec<i32>>,
+    pub co_mortgaged: Vec<Vec<i32>>,
     pub houses: Vec<i32>,
     pub mortgaged: Vec<bool>,
 }
