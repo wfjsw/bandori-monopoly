@@ -198,7 +198,11 @@ fn pay_choose(player_id: i32) -> card_sdk::Asked {
     //   body is not re-entered past it -- everything after `ctx::gain`
     //   (the recorded colour and the fan here) is dropped, so the gain must
     //   stay raw until the pay-choose drive resumes its body.
-    let money = if tile >= 0 { ctx::tile_price(tile) / 5 } else { 0 };
+    let money = if tile >= 0 {
+        ctx::tile_price(tile) / 5
+    } else {
+        0
+    };
     if money > 0 {
         ctx::gain_raw(
             player_id,

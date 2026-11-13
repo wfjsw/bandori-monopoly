@@ -1282,7 +1282,12 @@ fn g02_council_two_copies_keep_their_own_record() {
     );
     // Nothing was pre-zeroed onto the player: the records live only on the
     // instances.
-    for k in ["council.paid", "council.got", "council.stop", "council.expect"] {
+    for k in [
+        "council.paid",
+        "council.got",
+        "council.stop",
+        "council.expect",
+    ] {
         assert!(
             !t.m.world().st.players[1].state.contains_key(k),
             "no player-state key {k}"
@@ -1300,8 +1305,7 @@ fn g02_council_two_copies_keep_their_own_record() {
     assert_eq!(t.money(0), 10_000 - 140, "the halved 四叶 rent");
     assert_eq!(t.money(1), 20_000 - 1_000 + 140, "paid out, collected 140");
     assert!(
-        !t.m
-            .world()
+        !t.m.world()
             .st
             .players
             .iter()
@@ -1326,8 +1330,7 @@ fn g02_council_two_copies_keep_their_own_record() {
     assert_eq!(t.pos(0), space, "the Space copy still stops the walker");
     assert_eq!(t.money(0), 10_000 - 140 - 60, "the halved Space rent");
     assert!(
-        !t.m
-            .world()
+        !t.m.world()
             .st
             .players
             .iter()
@@ -1385,7 +1388,11 @@ fn g02_council_external_discard_refunds() {
         "the copy left: {:?}",
         t.field_ids(0)
     );
-    assert_eq!(t.money(0), 10_000, "the placement cost came back: uid {uid}");
+    assert_eq!(
+        t.money(0),
+        10_000,
+        "the placement cost came back: uid {uid}"
+    );
 }
 
 // =====================================================================

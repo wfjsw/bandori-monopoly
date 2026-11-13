@@ -4028,6 +4028,78 @@ fn swap_probe(player_id: i32) -> card_sdk::Asked {
     Ok(())
 }
 
+/// Plays itself onto the caller's current tile and binds a **rule** swap
+/// between that square and CiRCLE (`ctx::tile_swap_rules`, ABI-13): CiRCLE's
+/// rule instances govern this square and this square's rule instances govern
+/// CiRCLE until this instance leaves play. The squares keep their identity.
+const RULE_SWAP: CardDef = CardDef::new("TEST:rule_swap", &[On::Play("", None, rule_swap)]);
+
+fn rule_swap(player_id: i32) -> card_sdk::Asked {
+    let here = ctx::tile_at(ctx::player_pos(player_id));
+    let circle = ctx::tile_named("CiRCLE");
+    if here < 0 || circle < 0 {
+        return Ok(());
+    }
+    ctx::set_dest(ctx::Dest::Field, card_sdk::abi::ZoneChangeCause::Play);
+    ctx::place_card_on(
+        player_id,
+        here,
+        "TEST:rule_swap",
+        &Msg::new(key!("rule_swap_note")),
+    );
+    ctx::tile_swap_rules(here, circle);
+    Ok(())
+}
+
+/// Takes the `TEST:rule_swap` instance off the field -- the binding rides it
+/// and must die with it.
+const RULE_SWAP_OFF: CardDef =
+    CardDef::new("TEST:rule_swap_off", &[On::Play("", None, rule_swap_off)]);
+
+fn rule_swap_off(player_id: i32) -> card_sdk::Asked {
+    ctx::unplace_card_named(player_id, "TEST:rule_swap");
+    Ok(())
+}
+
+/// Logs each settle's trigger tile and what the **static board** says about it
+/// (`ctx::tile_is` / `ctx::is_start`): under a rule swap the body follows the
+/// partner, the identity must not.
+const RULE_IDENTITY_PROBE: CardDef = CardDef::new(
+    "TEST:rule_identity_probe",
+    &[
+        On::Play("", None, rule_identity_probe_play),
+        On::Action(Action::Settle("", None, rule_identity_probe)),
+    ],
+);
+
+fn rule_identity_probe_play(player_id: i32) -> card_sdk::Asked {
+    let here = ctx::tile_at(ctx::player_pos(player_id));
+    if here < 0 {
+        return Ok(());
+    }
+    ctx::set_dest(ctx::Dest::Field, card_sdk::abi::ZoneChangeCause::Play);
+    ctx::place_card_on(
+        player_id,
+        here,
+        "TEST:rule_identity_probe",
+        &Msg::new(key!("rule_identity_probe_note")),
+    );
+    Ok(())
+}
+
+fn rule_identity_probe(player_id: i32) -> card_sdk::Asked {
+    let t = trigger::tile();
+    ctx::log(
+        player_id,
+        &Msg::new(key!("rule_identity_seen"))
+            .tile("tile", t)
+            .i("is_circle", ctx::tile_is(t, "circle") as i64)
+            .i("is_start", ctx::is_start(t) as i64)
+            .i("position", trigger::position() as i64),
+    );
+    Ok(())
+}
+
 /// Logs the settle's governing tile and physical slot (dispatch check).
 const TILE_ID_PROBE: CardDef = CardDef::new(
     "TEST:tile_id_probe",
@@ -4846,6 +4918,9 @@ card_sdk::ruleset!(&[
     TILE_SWAP_COUNTER,
     SETTLE_HERE,
     SWAP_PROBE,
+    RULE_SWAP,
+    RULE_SWAP_OFF,
+    RULE_IDENTITY_PROBE,
     TILE_ID_PROBE,
     PATH_PROBE,
     HOUSE_SET,

@@ -113,7 +113,10 @@ fn field_hears(
     }
     // `tileResolved` is answered by **slot**: after smile_parade (2) moved
     // itself, the card's governing tile is the swapped-in one, so its own
-    // settle no longer matches on the tile.
+    // settle no longer matches on the tile. A live rule-swap binding hears the
+    // raise at **either** end regardless of anchoring: a one-shot binder
+    // (smile_parade (1), sitting on 弦卷集团) is dropped at this terminal
+    // (`docs/rulebook/spec/abi/ab-tile-swap.md`).
     if kind == TriggerKind::TileResolved {
         return position < 0
             || w.field_by_uid(uid).is_some_and(|f| {
@@ -123,6 +126,7 @@ fn field_hears(
                     } else {
                         f.position() == position
                     }
+                    || w.bears_rule_swap_for(uid, tile)
             });
     }
     if !tile_local_kind(kind) {
@@ -134,8 +138,10 @@ fn field_hears(
 
 /// Is field instance `f` **on** `tile`? A board instance is anchored to the
 /// tile identity it was put on (it keeps `position = -1`, so `f.position()`
-/// is `f.tile` and would resolve through the wrong slot after a swap); a
-/// player instance answers through the tile standing at its slot.
+/// is `f.tile` and would resolve through the wrong slot after a swap); it
+/// answers through the square its rule *governs*, so a rule swap moves it
+/// with the effects. A player instance answers through the tile standing at
+/// its slot.
 ///
 /// A `tile = -1` instance (owner-held / board-wide) is on no tile: callers
 /// that want it to reach every tile test `f.tile < 0` themselves.
@@ -144,7 +150,7 @@ fn on_tile(w: &game_core::engine::World, f: &game_core::state::FieldCard, tile: 
         return false;
     }
     if f.owner == game_core::state::BOARD_OWNER {
-        return f.tile == tile;
+        return w.governing_square(f.tile) == tile;
     }
     w.tile_standing_at(f.position()) == tile
 }
@@ -6019,13 +6025,6 @@ impl<M: CardModules> RulesBridge<M> {
                         drive_header_ids = run.header_ids.clone();
                     }
                     let live_before = cx.live_event_count();
-                    if std::env::var("DBG_HOOK").is_ok() {
-                        eprintln!(
-                            "APPLY_REQ card={card_id} draining={} answers={} req={req:?}",
-                            cx.is_draining_work(),
-                            log.answers.len()
-                        );
-                    }
                     let linger = run.linger_props.clone();
                     // A zone request takes its row off live; the copy is
                     // reloaded from live below, so the re-run's reads would no
@@ -6915,12 +6914,8 @@ impl<M: CardModules> RulesBridge<M> {
                 // seat time pools; the answer is the winner seat (-1 = none).
                 // The requesting seat (`ctx::auction`'s player) opens the bid
                 // order -- not necessarily the turn seat for a nested call.
-                let winner = cx.auction_deed(
-                    tile.max(0) as usize,
-                    player_id.max(0) as usize,
-                    true,
-                    15.0,
-                )?;
+                let winner =
+                    cx.auction_deed(tile.max(0) as usize, player_id.max(0) as usize, true, 15.0)?;
                 return Ok(winner);
             }
             // Guest-raised trigger points (`ctx::raise`): the pass-reward trigger from
@@ -8859,6 +8854,14 @@ impl<M: CardModules> RulesBridge<M> {
                         // walks above, and a body that raises must not hear its
                         // own raise twice (a self-driving tile would pay its
                         // reward once per pass).
+                        //
+                        // A **board rule instance** among them answers the same
+                        // tile narrowing the board walk applies: it hears only
+                        // the squares its rule governs (`on_tile`, which reads
+                        // through a rule swap). Without this, a resumed walk
+                        // replays its earlier `passTile` steps and drives the
+                        // mid-prompt tile body at every one of them -- the
+                        // start square's reward paid once per stepped tile.
                         let resolving = resolving_snapshot();
                         for (card, uid, seat) in resolving {
                             if drove.contains(&uid) {
@@ -8871,6 +8874,15 @@ impl<M: CardModules> RulesBridge<M> {
                                 continue;
                             };
                             if !self.ruleset.cards()[idx as usize].hooks(kind) {
+                                continue;
+                            }
+                            if trigger.tile >= 0
+                                && world.field_by_uid(uid).is_some_and(|f| {
+                                    f.owner == game_core::state::BOARD_OWNER
+                                        && f.tile >= 0
+                                        && !on_tile(&world, f, trigger.tile)
+                                })
+                            {
                                 continue;
                             }
                             self.drive_hook(
@@ -9020,9 +9032,6 @@ impl<M: CardModules> RulesBridge<M> {
             }
             for (uid, raw) in world.field_instances(player_id as i32) {
                 if is_money_hook_kind(kind) && cx.reentrant_hooks.contains(&uid) {
-                    if std::env::var("DBG_HOOK").is_ok() {
-                        eprintln!("SKIP uid={uid} kind={kind:?} reentrant");
-                    }
                     continue;
                 }
                 if !field_hears(&world, t.tile, t.position, uid, kind)
@@ -9203,7 +9212,21 @@ impl<M: CardModules> RulesBridge<M> {
         // owner -- a frame at `-1` (a hand card being played) has no row. Last,
         // like the inline walk: a card also on the field or the board already
         // has its job and must not hear its own raise a second time.
+        //
+        // A **board rule instance** keeps the inline walk's tile narrowing: it
+        // hears only the squares its rule governs (`on_tile`, through a rule
+        // swap), so a resumed walk does not drive a mid-prompt tile body at
+        // every earlier stepped tile.
         for (card, uid, seat) in resolving_snapshot() {
+            if t.tile >= 0
+                && world.field_by_uid(uid).is_some_and(|f| {
+                    f.owner == game_core::state::BOARD_OWNER
+                        && f.tile >= 0
+                        && !on_tile(&world, f, t.tile)
+                })
+            {
+                continue;
+            }
             push_job(&mut jobs, &card, uid, seat);
         }
         jobs
@@ -14093,7 +14116,11 @@ impl<M: CardModules> RulesBridge<M> {
         snap: impl Fn(&game_core::state::MatchState) -> T,
         ok: impl FnOnce(T, T) -> bool,
     ) -> Flow<bool> {
-        let instances = cx.world().tile_rule_instances(tile as i32);
+        // The deed ops (buy / build / mortgage / redeem) are keyed to the
+        // **deed**, not to the square's displayed effects: they keep asking
+        // the tile's own (homed) rule even when a rule swap sent its effects
+        // elsewhere (`docs/rulebook/spec/abi/ab-tile-swap.md`).
+        let instances = cx.world().tile_rule_instances_homed(tile as i32);
         if instances.is_empty() {
             return standalone(cx, player_id, tile);
         }

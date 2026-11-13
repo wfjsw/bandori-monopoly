@@ -12,10 +12,15 @@
 //! ownership / rent) and a settle on 弦卷集团 runs as `e`. Field cards on the
 //! position are untouched (「what the tile *is*, not what is on it」). After any
 //! settle on the card's tile the card goes to the discard. The swap is one
-//! level deep — the redirected settle must not swap back: the card arms
-//! `TAG_REDIRECT` before its own `settle_tile_at` and the nested move carries
-//! it, so neither hook re-enters (STACK-01 / SETTLE-01). Only the card's own
-//! redirects are marked; another card's settle is a real settle and swaps.
+//! level deep.
+//!
+//! （1）「当次移动的移动终点视为"弦卷集团"地产商」 is the same exchange for one
+//! settle: the move's endpoint is not the card's slot (the card is on
+//! 弦卷集团 at that moment), so the slot binding alone cannot carry it. The
+//! settle's own hook binds a one-shot **rule swap** between the endpoint and
+//! 弦卷集团 (`ctx::tile_swap_rules`), the same settle then runs the agent body,
+//! and the binding is dropped at its `tileResolved`. No nested settle and no
+//! `settle_tile_at` (ABI-13).
 
 use bandori_std::ctx::{self, trigger};
 use card_sdk::abi::{ActionKind, ChainKind};
@@ -24,22 +29,15 @@ use card_sdk::{key, Action, CardDef, Msg, On};
 
 const ID: &str = "HHW:笑容大游行";
 /// One-shot move tag armed by the (1) counteract: this move's endpoint settles
-/// as the 弦卷集团 agent (「当次移动的移动终点视为"弦卷集团"地产商」). Still
-/// needed -- `TAG_REDIRECT` marks only the *nested* redirect, not the outer
-/// (1) placement move whose endpoint must become the agent.
+/// as the 弦卷集团 agent (「当次移动的移动终点视为"弦卷集团"地产商」). Read by
+/// [`settle_body_guard`] to install the one-shot rule swap and by
+/// [`on_resolved`] to drop it again; dies with the move.
 const TAG_AS_AGENT: &str = "smile_as_agent";
 /// Card-instance latch set by (2) 「[触发结算]后可将…放置于[移动终点]」 when it
 /// drops the card onto the endpoint, so that same settle's `tileResolved` does
 /// not read as (3)'s 「在此卡放置的格子上[触发结算]后」. One-shot, same-settle
 /// only (no nested settle between set and read). Dies with the instance.
 const PROP_ARRIVED: &str = "smile_arrived";
-/// One-shot move tag armed right before this card's own `settle_tile_at`, so
-/// the nested settle does not swap back. `plan::set_tag` writes the plan (the
-/// `SettleAt` pause carries plan tags across, and `card_settle_move` clones it
-/// onto that one settle's move); the body's replay pass clears it again, so
-/// only the nested settle carries it. `trigger::is_settle_redirect()` is too
-/// broad here: it marks every card-initiated settle, not just our own.
-const TAG_REDIRECT: &str = "smile_redirect";
 
 pub const SMILE_PARADE: CardDef = CardDef::new(
     "HHW:笑容大游行",
@@ -49,22 +47,22 @@ pub const SMILE_PARADE: CardDef = CardDef::new(
         // return early: the dispatcher runs every admitted entry of a kind, so
         // a separate (3) entry would swap a second time.
         On::Action(Action::SettleBody("tile.id >= 0", Some(settle_body_guard), settle_body)),
-        // Consume an in-flight redirect / (2) arrival at its `tileResolved`,
-        // and (3）「任何玩家在此卡放置的格子上[触发结算]后此卡放入弃牌堆」.
+        // Drop (1)'s one-shot rule swap, consume (2)'s arrival latch, and
+        // (3）「任何玩家在此卡放置的格子上[触发结算]后此卡放入弃牌堆」.
         // `tileResolved` is the settle's terminal (SETTLE-STAGES §4 M5), after
-        // the body and after (2)'s `settleAfter` move. This card's own
-        // redirect's `tileResolved` (`TAG_REDIRECT`) is never (3)'s discard;
-        // (2) parks `PROP_ARRIVED` when it drops the card onto the endpoint so
-        // this same settle does not read as (3)'s discard; every real settle
-        // does, owner and other players alike.
+        // the body and after (2)'s `settleAfter` move. (2) parks
+        // `PROP_ARRIVED` when it drops the card onto the endpoint so this same
+        // settle does not read as (3)'s discard; every real settle on the
+        // card's slot does, owner and other players alike.
         On::Action(Action::TileResolved("card.placed", Some(resolve_guard), on_resolved)),
         // 规则书（2）: 「[触发结算]后可将“弦卷集团”格子上的此卡放置于[移动终点]格子上」
         // -- the offer exists only while this card sits on 弦卷集团 and the
         // settle is a real move's endpoint, a teleport's endpoint included. A
         // card-initiated settle (`settle_tile_at`) is not a move and has no
-        // [移动终点] at all, so [`settle_after_guard`] keeps those out -- the
-        // (1)/(3) redirects among them (they would offer 移动终点 = 弦卷集团
-        // and clear the crystals while the card is still there).
+        // [移动终点] at all, so [`settle_after_guard`] keeps those out. The
+        // (1) endpoint **is** a move's endpoint -- with no nested redirect any
+        // more it is this very settle, and 移动终点 is read off its tile, so
+        // (2) is offered on it exactly as the book reads.
         On::Action(Action::SettleAfter("card.placed && tile.id >= 0", Some(settle_after_guard), move_after)),
         // 规则书（1）[反击]: 「经过“弦卷集团”（#29格）时可将此卡放置在其上」
         On::Counteract(
@@ -120,9 +118,9 @@ fn counteract(player_id: i32) -> card_sdk::Asked {
     );
     // 规则书（1）: 「当次移动的移动终点视为“弦卷集团”地产商」 -- arm a one-shot move tag that
     // [`settle_body_guard`] reads so **that move's** endpoint settle (and not every
-    // later settle the owner makes) runs as the agent.
+    // later settle the owner makes) runs as the agent. The endpoint itself is
+    // bound at that settle (the card is on 弦卷集团 until (2) moves it).
     ctx::plan::set_tag(TAG_AS_AGENT, 1);
-    ctx::plan::set_settle_as_agent(true);
     Ok(())
 }
 
@@ -168,58 +166,45 @@ fn on_crystals_changed(player_id: i32) -> card_sdk::Asked {
     Ok(())
 }
 
-/// (1)'s residual: the one-shot `smile_as_agent` tag must be armed. Bail once
-/// another field card claimed the body (`trigger::cancelled()` -- Parking
-/// Space's (1)) or the settle is this card's own redirect (`TAG_REDIRECT` --
-/// the nested settle of (1), which must not re-enter). (3) needs no branch:
-/// the swap already resolved the settle to the partner at dispatch.
+/// (1)'s residual: the one-shot `smile_as_agent` tag must be armed, and
+/// another field card must not have claimed the body already
+/// (`trigger::cancelled()` -- Parking Space's (1)). (3) needs no branch: its
+/// slot binding already resolved the settle to the partner at dispatch.
 fn settle_body_guard(_owner: i32) -> bool {
-    !trigger::cancelled()
-        && trigger::move_tag(TAG_REDIRECT) == 0
-        && trigger::move_tag(TAG_AS_AGENT) != 0
+    !trigger::cancelled() && trigger::move_tag(TAG_AS_AGENT) != 0
 }
 
-/// （1）「当次移动的移动终点视为"弦卷集团"地产商」 then （3）「那格视为与
-/// "弦卷集团"格子交换位置」. One entry so (1) can return early and (3) does
-/// not run a second swap.
+/// （1）「当次移动的移动终点视为"弦卷集团"地产商」 -- bind the settle's **tile**
+/// to 弦卷集团 for this one settle (`ctx::tile_swap_rules`), so the tile stage
+/// that follows this hook runs the agent body (its ownership / rent / offers)
+/// while the square keeps its identity. [`on_resolved`] drops the binding.
+///
+/// The bind is taken on this card instance, so it dies with the card as well.
+/// `trigger::tile()` (not the slot) is used: the endpoint is what the settle
+/// governs, and it may itself stand elsewhere through another card's slot
+/// binding.
 fn settle_body(player_id: i32) -> card_sdk::Asked {
     let group = ctx::tile_named("弦卷集团");
-    if group < 0 {
+    let at = trigger::tile();
+    if group < 0 || at < 0 {
         return Ok(());
     }
-    // （1）: the placement move's endpoint settles as the agent. The nested
-    // `settle_tile_at` carries `TAG_REDIRECT`, so its `tileResolved` does not
-    // read as (3)'s 「在此卡放置的格子上[触发结算]」 (the card is on 弦卷集团
-    // right now).
-    if trigger::move_tag(TAG_AS_AGENT) != 0 {
-        ctx::trigger::set_cancelled();
-        ctx::plan::set_settle_as_agent(true);
-        ctx::plan::set_tag(TAG_REDIRECT, 1);
-        ctx::settle_tile_at(player_id, group, true);
-        ctx::plan::set_tag(TAG_REDIRECT, 0);
-        ctx::plan::set_tag(TAG_AS_AGENT, 0);
-        ctx::log(
-            player_id,
-            &Msg::new(key!("smile_parade_agent")).tile("tile", group),
-        );
-        return Ok(());
-    }
+    ctx::tile_swap_rules(at, group);
+    ctx::log(
+        player_id,
+        &Msg::new(key!("smile_parade_agent")).tile("tile", group),
+    );
     Ok(())
 }
 
-/// Consume (2)'s arrival latch at its `tileResolved`, and discard on a settle
-/// of the card's own tile. Residual: this card's own redirect's terminal is
-/// never (3)'s discard; (2)'s arrival needs a one-shot clear; otherwise a
-/// settle on the card's tile discards.
+/// Consume (1)'s one-shot binding and (2)'s arrival latch at `tileResolved`,
+/// and discard on a settle of the card's own tile.
 /// 规则书（3）: 「任何玩家在此卡放置的格子上[触发结算]后此卡放入弃牌堆」 --
-/// 「任何玩家」 includes the owner. This card's own redirect (（1） or （3）
-/// itself) is keyed off `TAG_REDIRECT`, not off "the actor is the owner".
+/// 「任何玩家」 includes the owner.
 fn resolve_guard(_owner: i32) -> bool {
-    // This card's own redirect's `tileResolved` is the nested settle (1)/(3)
-    // just caused -- never (3)'s 「在此卡放置的格子上[触发结算]后」. Another
-    // card's redirect onto the tile is a real settle and does discard.
-    if trigger::move_tag(TAG_REDIRECT) != 0 {
-        return false;
+    // (1)'s settle terminal must run the body to drop the binding.
+    if trigger::move_tag(TAG_AS_AGENT) != 0 {
+        return true;
     }
     // (2) 「[触发结算]后可将…放置于[移动终点]」 arrived during this settle's
     // `settleAfter`. Enter `on_resolved` so the latch is cleared; do not
@@ -235,11 +220,11 @@ fn resolve_guard(_owner: i32) -> bool {
 }
 
 fn on_resolved(owner: i32) -> card_sdk::Asked {
-    // This card's own redirect's terminal is not (3)'s discard (（1） or （3）'s
-    // own nested settle). Keyed off `TAG_REDIRECT`, never off "the actor is
-    // the owner"; another card's redirect is a real settle and discards.
-    if trigger::move_tag(TAG_REDIRECT) != 0 {
-        return Ok(());
+    // (1)'s one-shot rule swap ends with its settle: the card keeps only the
+    // persistent (3) slot binding. The tag is one-shot; clear it too.
+    if trigger::move_tag(TAG_AS_AGENT) != 0 {
+        ctx::tile_clear_rule_swap();
+        ctx::plan::set_tag(TAG_AS_AGENT, 0);
     }
     // (2)'s arrival latch: clear it and leave the card in play. Later settles
     // discard as (3) says, owner included.

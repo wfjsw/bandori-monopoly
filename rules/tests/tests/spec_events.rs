@@ -912,20 +912,22 @@ fn circle_rebuild_swaps_tile_texts_on_play() -> Result<(), String> {
     }
 
     // The cafe inherits CiRCLE's originals (draw a hand card + the [经过]
-    // reward), covering its own base text.
+    // reward), covering its own base text. The **rule swap** re-homes
+    // `tile:circle`'s own declarations onto the cafe, so they arrive as that
+    // rule's texts, not as event replacements.
     let settle = tile_text_winner(cafe, "settle")
         .ok_or("E-circle-rebuild-06: cafe has no settle speaker")?;
-    if settle.from != "event:协助CiRCLE重建" || settle.key != "deed.note.draw" {
+    if settle.from != "tile:circle" || settle.key != "deed.note.circleSettle" {
         return Err(format!(
-            "E-circle-rebuild-06: cafe settle {}/{} , expected event:协助CiRCLE重建/deed.note.draw",
+            "E-circle-rebuild-06: cafe settle {}/{} , expected tile:circle/deed.note.circleSettle",
             settle.from, settle.key
         ));
     }
     let pass =
         tile_text_winner(cafe, "pass").ok_or("E-circle-rebuild-06: cafe has no pass speaker")?;
-    if pass.from != "event:协助CiRCLE重建" || pass.key != "deed.note.circlePass" {
+    if pass.from != "tile:circle" || pass.key != "deed.note.circlePass" {
         return Err(format!(
-            "E-circle-rebuild-06: cafe pass {}/{} , expected event:协助CiRCLE重建/deed.note.circlePass",
+            "E-circle-rebuild-06: cafe pass {}/{} , expected tile:circle/deed.note.circlePass",
             pass.from, pass.key
         ));
     }
@@ -1072,7 +1074,9 @@ fn circle_rebuild_tile_text_precedence() -> Result<(), String> {
         }
     }
 
-    // --- with the event: replacements first, base still listed after ---
+    // --- with the event: the event's replacement sorts before the base of the
+    //     square it names; the rule swap makes the swapped-in rule the other
+    //     square's base ---
     let mut t = Table::vanilla(2);
     t.set_draw(0, &["通用:GREAT"]);
     draw_event_quiet(&mut t, 0, "协助CiRCLE重建", &[]);
@@ -1095,30 +1099,8 @@ fn circle_rebuild_tile_text_precedence() -> Result<(), String> {
             settles[0].from, settles[0].key
         ));
     }
-    if !settles
-        .iter()
-        .skip(1)
-        .any(|e| e.from == "tile:circle" && e.key == "deed.note.circleSettle")
-    {
-        return Err(format!(
-            "E-circle-rebuild-08: tile:circle base not listed after the event: {:?}",
-            settles
-        ));
-    }
-    let cafe = &st.tile_texts[tile("CiRCLE 咖啡厅")];
-    let settles: Vec<&TileTextEntry> = cafe.iter().filter(|e| e.slot == "settle").collect();
-    if settles.len() < 2 {
-        return Err(format!(
-            "E-circle-rebuild-08: cafe settle speakers {:?}, expected event then base",
-            settles
-        ));
-    }
-    if settles[0].from != "event:协助CiRCLE重建" || settles[0].key != "deed.note.draw" {
-        return Err(format!(
-            "E-circle-rebuild-08: first cafe settle {}/{} , expected event:协助CiRCLE重建/deed.note.draw",
-            settles[0].from, settles[0].key
-        ));
-    }
+    // The base of a square is the rule that *governs* it: the cafe's
+    // `tile:event` instance, swapped onto CiRCLE.
     if !settles
         .iter()
         .skip(1)
@@ -1127,6 +1109,22 @@ fn circle_rebuild_tile_text_precedence() -> Result<(), String> {
         return Err(format!(
             "E-circle-rebuild-08: tile:event base not listed after the event: {:?}",
             settles
+        ));
+    }
+    // The cafe's base (and only speaker) is the swapped-in `tile:circle`; the
+    // event names no text for it.
+    let cafe = &st.tile_texts[tile("CiRCLE 咖啡厅")];
+    let settles: Vec<&TileTextEntry> = cafe.iter().filter(|e| e.slot == "settle").collect();
+    if settles.len() != 1 {
+        return Err(format!(
+            "E-circle-rebuild-08: cafe settle speakers {:?}, expected the swapped-in base alone",
+            settles
+        ));
+    }
+    if settles[0].from != "tile:circle" || settles[0].key != "deed.note.circleSettle" {
+        return Err(format!(
+            "E-circle-rebuild-08: cafe settle {}/{} , expected tile:circle/deed.note.circleSettle",
+            settles[0].from, settles[0].key
         ));
     }
     Ok(())
@@ -1430,6 +1428,21 @@ fn school_time_fallback_to_surrounding_district() {
 // 泪水的含义 (one-shot money)
 // =====================================================================
 
+/// [`Table::vanilla`]'s cast is all Poppin' Party, whose group skill (3)
+/// 「所有Poppin' Party角色视为同时拥有"星之鼓动山丘"」 gives every seat a
+/// co-holder row there. That one shared deed is a colour every pairing has in
+/// common, so 「同色地契」 would be true for all of them and the arrangement
+/// below could never show a mismatch. Clear the rows: the deeds set up per
+/// test are then the whole colour picture.
+fn separate_hill(t: &mut Table) {
+    let hill = tile("星之鼓动山丘");
+    let w = t.m.world_mut();
+    w.st.owners[hill] = -1;
+    if let Some(row) = w.st.co_owners.get_mut(hill) {
+        row.clear();
+    }
+}
+
 // data/events.json#泪水的含义:
 // 「所有玩家依次和行动序列里的下一位玩家进行比较：当前玩家和下一位玩家拥有同色地契则下一位玩家
 // [支付]当前玩家700资金，否则当前玩家[支付]下一位玩家300资金。」
@@ -1439,6 +1452,7 @@ fn school_time_fallback_to_surrounding_district() {
 fn tears_same_colour_next_pays_700() {
     forall(3, 0xE_0D01, |_rng, _i| {
         let mut t = Table::vanilla(3);
+        separate_hill(&mut t);
         // P0 and P1 share group 1 (购物中心 / 偶像经纪公司); P2 holds group 5.
         t.own(0, &[1]);
         t.own(1, &[5]);
@@ -1465,6 +1479,7 @@ fn tears_same_colour_next_pays_700() {
 fn tears_different_colour_current_pays_300() {
     forall(3, 0xE_0D02, |_rng, _i| {
         let mut t = Table::vanilla(3);
+        separate_hill(&mut t);
         // Three distinct colours (groups 1 / 5 / 10), so every pairing is a
         // mismatch: each current pays the next 300.
         t.own(0, &[1]);

@@ -1113,10 +1113,7 @@ fn g09_ringing_bloom_second_copy_holds_the_view_through_a_discard() {
     t.set_pos(0, BLUE);
     t.give_play(0, "TEST:house_add").unwrap();
     drain(&mut t);
-    assert_eq!(
-        t.tile_prop(SPACE, card_sdk::abi::prop::RENT_FACTOR),
-        500
-    );
+    assert_eq!(t.tile_prop(SPACE, card_sdk::abi::prop::RENT_FACTOR), 500);
     t.set_state(0, "TEST.drop.uid", a);
     t.set_state(0, "TEST.drop.dest", card_sdk::ctx::Dest::Graveyard as i32);
     t.give_play(0, "TEST:drop").unwrap();
@@ -1157,10 +1154,7 @@ fn g09_ringing_bloom_other_seat_keeps_its_view_through_a_bounce() {
     t.set_pos(0, BLUE);
     t.give_play(0, "TEST:house_add").unwrap();
     drain(&mut t);
-    assert_eq!(
-        t.tile_prop(SPACE, card_sdk::abi::prop::RENT_FACTOR),
-        500
-    );
+    assert_eq!(t.tile_prop(SPACE, card_sdk::abi::prop::RENT_FACTOR), 500);
     // P1 bounces their copy via the fixture drop.
     t.begin_turn(1);
     drain(&mut t);

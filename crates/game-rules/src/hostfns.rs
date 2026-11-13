@@ -2082,10 +2082,15 @@ pub fn persona_skill<C: HostCtx>(
 
 /// The seat's character card (a persona name, postcard `String`), the
 /// character-card pile read.
-pub fn persona<C: HostCtx>(c: &mut C, player_id: i32, buf: i32, cap: i32) -> Result<i32, HostError> {
+pub fn persona<C: HostCtx>(
+    c: &mut C,
+    player_id: i32,
+    buf: i32,
+    cap: i32,
+) -> Result<i32, HostError> {
     let s = c.st().wr().persona_name(player_id).unwrap_or_default();
-    let bytes = postcard::to_allocvec(&s)
-        .map_err(|e| HostError::trap(format!("persona encode: {e}")))?;
+    let bytes =
+        postcard::to_allocvec(&s).map_err(|e| HostError::trap(format!("persona encode: {e}")))?;
     if bytes.len() as i32 <= cap {
         c.write_guest(buf, &bytes)?;
     }

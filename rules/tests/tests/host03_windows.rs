@@ -82,7 +82,11 @@ fn pay_window_follows_the_calculation_windows() {
     let paid = (10_000 - t.money(0)) as i64;
     assert!(paid > 0, "the rent was paid");
     assert_eq!(seen, vec![paid], "window 5 read the figure that moved");
-    assert_eq!(t.money(1) as i64, 10_000 + paid, "the payee got the same figure");
+    assert_eq!(
+        t.money(1) as i64,
+        10_000 + paid,
+        "the payee got the same figure"
+    );
 }
 
 /// `paid` (支付阶段 7) carries the settled figure on a receipt and on a loss.

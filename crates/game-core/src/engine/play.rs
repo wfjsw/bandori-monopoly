@@ -2353,7 +2353,15 @@ impl PlayCtx<'_> {
                 seg.value += m.dir();
                 seg.ahead = remaining as i32;
             }
-            if last || self.w.tile_prop(step_tile, crate::state::prop::START) != 0 {
+            // `prop::START` is stamped on the start square's own rule instance
+            // and is a square fact; a rule swap moves the reward off the square
+            // without rewriting the prop, so the governing square is read too
+            // -- the prompt must be flushed wherever it can appear.
+            let starts_here = |w: &crate::engine::World, t: i32| {
+                w.tile_prop(t, crate::state::prop::START) != 0
+                    || w.tile_prop(w.governing_square(t), crate::state::prop::START) != 0
+            };
+            if last || starts_here(&self.w, step_tile) {
                 // Publish the approach before `passTile` on the start square
                 // (the pass-reward prompt) or the walk's last step. The client
                 // must walk to the tile before showing that choice, then

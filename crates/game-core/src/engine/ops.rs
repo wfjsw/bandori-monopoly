@@ -2018,11 +2018,25 @@ impl World {
             + marks) as i32
     }
 
-    /// The rule instances on board tile `tile`, in placement order -- what the
-    /// settle body runs. Board-owned only; a player's card *placed on* the tile
+    /// The rule instances **governing** board tile `tile`, in placement order
+    /// -- what the settle body and a tile-carrying hook run. A rule swap
+    /// (`World::governing_square`) makes the other square's instances the
+    /// answer, while the instances stay anchored at their home
+    /// (`docs/rulebook/spec/abi/ab-tile-swap.md`).
+    ///
+    /// Board-owned only; a player's card *placed on* the tile
     /// (`place_card_on(player, tile, …)`) is on that player's field and hears
     /// the settle point through the normal field-hook dispatch.
     pub fn tile_rule_instances(&self, tile: i32) -> Vec<(i32, String)> {
+        self.tile_rule_instances_homed(self.governing_square(tile))
+    }
+
+    /// The rule instances **homed** on board tile `tile`, placement order --
+    /// the tile's own effects wherever a rule swap sends them. Deed operations
+    /// (buy / build / mortgage / redeem) are keyed to the **deed**, so they
+    /// keep asking their own tile's rule even when its effects are swapped
+    /// onto another square.
+    pub fn tile_rule_instances_homed(&self, tile: i32) -> Vec<(i32, String)> {
         self.st
             .board_field
             .iter()
@@ -2102,10 +2116,11 @@ impl World {
     /// Reads the first board-owned instance on `tile` that carries `key`; a tile
     /// with no rule instance reads as `0`.
     pub fn tile_prop(&self, tile: i32, key: &str) -> i32 {
+        let at = self.governing_square(tile);
         self.st
             .board_field
             .iter()
-            .find(|f| f.tile == tile)
+            .find(|f| f.tile == at)
             .and_then(|f| f.props.get(key).copied())
             .unwrap_or(0)
     }
@@ -2127,10 +2142,11 @@ impl World {
     /// Every prop key set on a board-owned rule instance governing `tile`
     /// (the keys [`Self::tile_prop`] can answer non-zero for).
     pub fn tile_prop_keys(&self, tile: i32) -> impl Iterator<Item = &str> {
+        let at = self.governing_square(tile);
         self.st
             .board_field
             .iter()
-            .filter(move |f| f.tile == tile)
+            .filter(move |f| f.tile == at)
             .flat_map(|f| f.props.keys().map(String::as_str))
     }
 
@@ -2138,8 +2154,9 @@ impl World {
     /// `tile`; returns the stored value. The source owns the arming and the
     /// disarming; the reader is the tile instance.
     pub fn set_tile_prop(&mut self, tile: i32, key: &str, value: i32) -> i32 {
+        let at = self.governing_square(tile);
         let mut any = false;
-        for f in self.st.board_field.iter_mut().filter(|f| f.tile == tile) {
+        for f in self.st.board_field.iter_mut().filter(|f| f.tile == at) {
             f.props.insert(key.to_string(), value);
             any = true;
         }
@@ -2174,6 +2191,109 @@ impl World {
     }
 
     // ------------------------------------------------- tile / position
+
+    /// Every **rule-swap** binding currently in the world: a live instance
+    /// carrying both `prop::RULE_SWAP_A` and `prop::RULE_SWAP_B`, as the pair
+    /// of squares it names (`docs/rulebook/spec/abi/ab-tile-swap.md`). The
+    /// binding rides the instance, so it dies with it.
+    pub(crate) fn rule_swap_records(&self) -> impl Iterator<Item = (i32, i32)> + '_ {
+        let pair = |f: &FieldCard| {
+            let first = f
+                .props
+                .get(crate::state::prop::RULE_SWAP_A)
+                .copied()
+                .filter(|&v| v >= 0)?;
+            let second = f
+                .props
+                .get(crate::state::prop::RULE_SWAP_B)
+                .copied()
+                .filter(|&v| v >= 0)?;
+            Some((first, second))
+        };
+        self.st
+            .board_field
+            .iter()
+            .chain(self.st.players.iter().flat_map(|p| p.field.iter()))
+            .filter_map(pair)
+    }
+
+    /// The square on the other end of the first rule-swap binding naming
+    /// `tile` (`None` = unbound). Two bindings naming the same square: the
+    /// first in row order (`board_field` then seats) wins.
+    fn rule_swap_partner(&self, tile: i32) -> Option<i32> {
+        if tile < 0 {
+            return None;
+        }
+        self.rule_swap_records()
+            .find_map(|(first, second)| match tile {
+                _ if first == tile => Some(second),
+                _ if second == tile => Some(first),
+                _ => None,
+            })
+    }
+
+    /// The square whose **rule instances** govern `tile`: the tile itself
+    /// unless a rule swap binds it to another square, followed across
+    /// overlapping bindings (`docs/rulebook/spec/abi/ab-tile-swap.md`). A
+    /// visited list stops a cyclic pair at the first repeat, so the answer is
+    /// deterministic for any binding graph.
+    ///
+    /// The square's **identity** does not follow -- kind, `is_start`,
+    /// owners, houses and `prop::START` stay on `tile`. Only the settle /
+    /// hook dispatch, the deed-op dispatch's fallbacks and the tile text
+    /// resolve through here.
+    pub fn governing_square(&self, tile: i32) -> i32 {
+        if tile < 0 {
+            return tile;
+        }
+        let mut at = tile;
+        let mut seen = vec![tile];
+        for _ in 0..=self.st.owners.len() {
+            match self.rule_swap_partner(at) {
+                Some(next) if !seen.contains(&next) => {
+                    seen.push(next);
+                    at = next;
+                }
+                _ => break,
+            }
+        }
+        at
+    }
+
+    /// Is any rule-swap binding in the world? The flush / text walks skip
+    /// their per-slot resolution without one.
+    pub fn has_rule_swaps(&self) -> bool {
+        self.rule_swap_records().next().is_some()
+    }
+
+    /// Does the live instance `uid` carry a rule-swap binding naming `tile`,
+    /// either end? A **one-shot** binder must hear the governed square's
+    /// `tileResolved` to drop itself even while it is anchored on the other
+    /// square (smile_parade (1) sits on 弦卷集团 while the endpoint settles).
+    pub fn bears_rule_swap_for(&self, uid: i32, tile: i32) -> bool {
+        if tile < 0 {
+            return false;
+        }
+        self.field_by_uid(uid).is_some_and(|f| {
+            let names = |key: &str| f.props.get(key).copied() == Some(tile);
+            names(crate::state::prop::RULE_SWAP_A) || names(crate::state::prop::RULE_SWAP_B)
+        })
+    }
+
+    /// The square the instance at `uid`'s rule instances govern. A
+    /// board-owned rule instance is anchored at its home (`FieldCard::tile`,
+    /// which a rule swap never rewrites) and runs wherever that home is
+    /// swapped to; a player instance's display is the tile standing at its
+    /// slot. `-1` when the uid is gone.
+    pub fn governing_square_of(&self, uid: i32) -> i32 {
+        self.field_by_uid(uid).map_or(-1, |f| {
+            if f.owner == crate::state::BOARD_OWNER {
+                self.governing_square(f.tile)
+            } else {
+                self.tile_standing_at(f.position())
+            }
+        })
+    }
 
     /// Every instance that can carry a swap binding: the board field and every
     /// seat's field.

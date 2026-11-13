@@ -1679,6 +1679,29 @@ pub fn set_swapped_tile(partner: i32) -> i32 {
     set_prop(crate::abi::prop::SWAPPED_TILE, partner)
 }
 
+/// 「…原本的所有效果迁移至…」 / 「…视为与…交换位置」 -- while **this
+/// instance** is in play, the rule instances governing `first` govern
+/// `second` and the other way round (`docs/rulebook/spec/abi/ab-tile-swap.md`).
+///
+/// This moves the *effects* only: the squares keep their board identity
+/// (kind, `is_start` / `tile_is`, owners, houses, `prop::START`), so cards
+/// keyed *on* a square do not ride it. The binding is a pair of props on the
+/// calling instance ([`crate::abi::prop::RULE_SWAP_A`] / `_B`), applied
+/// immediately and reversed the moment the instance leaves play
+/// (`destroy_instance_units`). Sugar over two [`set_prop`] writes -- no import
+/// of its own.
+pub fn tile_swap_rules(first: i32, second: i32) -> i32 {
+    set_prop(crate::abi::prop::RULE_SWAP_A, first);
+    set_prop(crate::abi::prop::RULE_SWAP_B, second)
+}
+
+/// Drop [`tile_swap_rules`]' binding from this instance; both squares' own
+/// rule instances govern them again. `-1` on both halves = no binding.
+pub fn tile_clear_rule_swap() -> i32 {
+    set_prop(crate::abi::prop::RULE_SWAP_A, -1);
+    set_prop(crate::abi::prop::RULE_SWAP_B, -1)
+}
+
 // ------------------------------------------------------ counters & marks
 // Named counters on a card instance, and their units bound to a tile (a tile
 // mark) or a holder (a player token). One API; see `bandori_std::counter` /
