@@ -76,7 +76,7 @@ fn turn_end(player_id: i32) -> card_sdk::Asked {
 /// Residual guard -- `card_is(ID)` stays here (the condition already filters
 /// the counter name with `counter_is('crystals')`).
 fn crystals_changed_guard(_player_id: i32) -> bool {
-    trigger::card_is(ID) && trigger::name() == bandori_std::counter::CRYSTALS
+    bandori_std::crystals_changed_of(ID)
 }
 
 fn on_crystals_changed(player_id: i32) -> card_sdk::Asked {

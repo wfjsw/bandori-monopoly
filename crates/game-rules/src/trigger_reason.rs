@@ -97,9 +97,11 @@ pub fn trigger_reason(t: &Trigger) -> Msg {
         }
 
         // ---- turn flow ---------------------------------------------------
-        TriggerKind::TurnStart | TriggerKind::TurnStartBefore | TriggerKind::DeckAtGameStart => {
-            Msg::new("log.reason.turn_start").player_id("who", who)
-        }
+        TriggerKind::TurnStart
+        | TriggerKind::TurnStartBefore
+        | TriggerKind::TurnStartAfter
+        | TriggerKind::DeckAtGameStart => Msg::new("log.reason.turn_start").player_id("who", who),
+        TriggerKind::ManageAfter => Msg::new("log.reason.manage_end").player_id("who", who),
         TriggerKind::TurnEnd
         | TriggerKind::TurnEndBefore
         | TriggerKind::TurnEndAfter

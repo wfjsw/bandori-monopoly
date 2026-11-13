@@ -18,15 +18,16 @@
 
 use alloc::vec::Vec;
 
-use bandori_std::counter;
 use bandori_std::ctx::{self, trigger};
 use card_sdk::abi::{prop, ActionKind, CardPile, ChainKind, TriggerKind};
 use card_sdk::{it, items, para, sec, CardText};
 use card_sdk::{key, Action, CardDef, Msg, On};
 use skill_groups::fans;
 
+const ID: &str = "PP:梦在前方，结彩当下";
+
 pub const DREAM_AHEAD: CardDef = CardDef::new(
-    "PP:梦在前方，结彩当下",
+    ID,
     &[
         // 规则书[持续]（4）: 「[共鸣][反击][拥有者]回合结束时且在[拥有者]所在格子前后3格以内有无主的[可购买格子]」 --
         // a [持续] clause with a [反击] rider: `[反击]X：Y` = Y resolves before
@@ -155,7 +156,7 @@ fn overflow(player_id: i32) -> card_sdk::Asked {
 /// Residual guard for [`overflow`] -- scopes the listener to this card's own
 /// instance and the `crystals` counter.
 fn crystals_changed_guard(_player_id: i32) -> bool {
-    trigger::card_is("PP:梦在前方，结彩当下") && trigger::name() == bandori_std::counter::CRYSTALS
+    bandori_std::crystals_changed_of(ID)
 }
 
 /// 规则书[持续]（2）: 「[拥有者]不可盖房且手卡上限数量减1」 -- both halves are

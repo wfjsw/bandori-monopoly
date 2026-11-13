@@ -899,6 +899,16 @@ impl PlayCtx<'_> {
             self.wait(1.0);
             return self.end_turn(i);
         }
+        // 行动阶段 3 「回合开始后」 -- the turn-start handling (status tick, the
+        // two start windows, the deferred-event release) is complete. Hook-only
+        // stage marker; 「此阶段之后的阶段也视为回合开始后」, so an effect
+        // keyed to it may also fire at any later phase.
+        raise!(
+            self,
+            "turnStartAfter",
+            i,
+            position = self.w.st.players[i].pos
+        )?;
         // The turn clock is a modifier point: hooks rewrite the 免费时间
         // refill and the 恢复时间 (seconds) before the host applies them.
         // `turnBaseTime`'s default is the match's per-turn base refill
@@ -963,6 +973,18 @@ impl PlayCtx<'_> {
         Ok(())
     }
 
+    /// 行动阶段 6 「经营/出牌阶段后」: raised once at the moment 运营 ends --
+    /// entering the main move, or ending the turn from 运营. A 眩晕-skipped
+    /// turn never reaches 运营 (stage 4 skips 5 and 6 together), so the raise
+    /// is gated on the stage still being 运营.
+    fn manage_after(&mut self, i: usize) -> Flow<()> {
+        if self.w.st.step != stage::OPS {
+            return Ok(());
+        }
+        raise!(self, "manageAfter", i)?;
+        Ok(())
+    }
+
     /// The player's "end turn" command.
     pub(crate) fn end_turn_cmd(&mut self, i: usize) -> Flow<()> {
         // The turn end is a phase, not an edge: once it is up (结束 after
@@ -975,6 +997,12 @@ impl PlayCtx<'_> {
         // so a replay must fold them here too. `do_act` already folds at the
         // gate; this catches a routine that was in flight.
         if self.w.end_already_queued() {
+            return Ok(());
+        }
+        // Ending from 运营 closes the manage phase first: 行动阶段 6
+        // (「经营/出牌阶段后」) precedes the end phase.
+        self.manage_after(i)?;
+        if self.out(i) || !self.playing() {
             return Ok(());
         }
         // `endTurnBefore` -- the player chose to end the turn. (Auto-skips --
@@ -1213,6 +1241,13 @@ impl PlayCtx<'_> {
         self.stamp_move_identity(&mut m, i, roller, is_main_move);
         // Only the turn player's *main* move drives the stage machine.
         if is_main_move {
+            // A card-forced main move during 运营 closes the manage phase too
+            // (the ordinary path already raised it in `main_move`; the stage
+            // check keeps it once per turn).
+            self.manage_after(i)?;
+            if self.out(i) || !self.playing() {
+                return Ok(false);
+            }
             self.w.st.step = stage::MOVE;
             // A stored step count (`next_steps`) is consumed here, before any
             // window, so the windows see the length the walk will take
@@ -2023,6 +2058,11 @@ impl PlayCtx<'_> {
     /// The turn's main roll-and-move. Opens a Main frame on the staging plan
     /// and runs the shared body; a spent slot leaves staging untouched.
     pub(crate) fn main_move(&mut self, i: usize, roller: usize) -> Flow<()> {
+        // 行动阶段 6 「经营/出牌阶段后」 precedes 7 「主要移动阶段前」.
+        self.manage_after(i)?;
+        if self.out(i) || !self.playing() {
+            return Ok(());
+        }
         self.w.st.step = stage::MOVE;
         if self.w.turn.main_moved {
             self.w.log(

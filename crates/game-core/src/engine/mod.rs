@@ -385,15 +385,17 @@ struct Saved {
     clock_hold: Option<ClockHold>,
 }
 
-/// Bumped whenever [`Saved`] changes shape; older saves are rejected.
+/// Bumped whenever [`Saved`] changes shape (or needs a fold); anything older
+/// than one version is rejected, and the one immediately preceding version
+/// loads as a migration source.
 /// v2: `FieldCard::hand_limit_delta` became the generic `FieldCard::props` map.
 /// v5: `World::marker_owner` (marker ownership, user ruling 2026-10-07).
 /// Public so a match record's [`crate::record::EngineStamp`] can name the save
 /// format it was written against (see `docs/REPLAY.md`).
 /// v6: every tile mark / player token carries its owning card instance
 /// (`TileMark::instance` / `Counter::instance`), stamped **at creation time**.
-/// `restore_saved` is exact (`version != SAVE_VERSION` is refused) and runs no
-/// re-attach -- rewriting live state would break save → restore identity.
+/// `restore_saved` runs no re-attach -- rewriting live state would break
+/// save → restore identity.
 /// v7: `TurnCtx::plan` (the live `MoveCtx`) is serialized. It carries the roll
 /// tables a card shaped for the pending move; skipping it made save/restore
 /// lose those tables and the next roll diverged.
@@ -446,7 +448,39 @@ struct Saved {
 /// All are `serde(default)`; older saves are refused (replays ride archived
 /// engine bundles).
 /// v22: ABI-08's per-seat one-shot `discard_next` flag.
-pub const SAVE_VERSION: u32 = 22;
+/// v23: the pre-v22 fire counters (`state["charge"]` / `state["tempFire"]`,
+/// carried with their `StateVar.max`) fold into the seat's held-token rows,
+/// bound to the persona-skill instance. A v22 save is accepted as a one-step
+/// migration source; every other older version is refused. No shape change.
+pub const SAVE_VERSION: u32 = 23;
+
+/// FIRE-TOKENS-1: fold a v22 save's dead fire state into the held-token store.
+/// The pre-re-home model kept 火罐 / temp pots as keyed state
+/// (`state["charge"]` / `state["tempFire"]`, wire names frozen); `fire::get` /
+/// `fire::max` read token rows and see 0 otherwise. Each legacy value and its
+/// advertised `StateVar.max` become a row of the seat's persona-skill instance
+/// (`-1` when the seat has none), and the state key is dropped. A row that
+/// already exists wins -- only a missing one is created.
+fn fold_legacy_fire(world: &mut World) {
+    for i in 0..world.st.players.len() {
+        let uid = world.persona_skill_uid(i as i32);
+        let p = &mut world.st.players[i];
+        for name in ["charge", "tempFire"] {
+            let Some(var) = p.state.remove(name) else {
+                continue;
+            };
+            if p.tokens.iter().any(|c| c.name == name) {
+                continue;
+            }
+            p.tokens.push(crate::state::Counter {
+                name: name.to_string(),
+                value: var.value,
+                instance: (uid >= 0).then_some(uid),
+                max: var.max,
+            });
+        }
+    }
+}
 
 /// Is the money-pipeline stage tracing on? `STAGE_DBG` is an environment
 /// variable, which wasm32 always answers `None` for: the browser build turns
@@ -576,14 +610,20 @@ impl Match {
         rules: Arc<dyn CardRules>,
         s: Saved,
     ) -> Result<Self, Msg> {
-        if s.version != SAVE_VERSION {
+        // The current version, plus exactly the one before it as a one-step
+        // migration source (FIRE-TOKENS-1). Anything older is refused -- the
+        // archived engine bundle is what replays it.
+        if s.version != SAVE_VERSION && s.version != SAVE_VERSION - 1 {
             return Err(Msg::new("err.save_version"));
         }
-        // `SAVE_VERSION` is exact (older saves are refused above), so every
+        // `SAVE_VERSION` is current (or the one-step source above), so every
         // mark / token row is already stamped with its owning `instance` at
         // creation time. No re-attach runs here: rewriting live v6 state
         // would break save → restore identity (fuzz_save_restore).
         let mut world = s.world;
+        if s.version < SAVE_VERSION {
+            fold_legacy_fire(&mut world);
+        }
         // Serde-skipped: re-derive the rule-entity ids from the ruleset.
         world.rule_ids = std::sync::Arc::new(rules.rule_ids().into_iter().collect());
         // Same-version saves could predate the field (a hand-built v13 blob);

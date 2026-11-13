@@ -33,17 +33,12 @@ pub const THANKS_PARTY: CardDef =
 fn thanks_party(player_id: i32) -> card_sdk::Asked {
     let reason = Msg::new(key!("thanks_party_reason"));
     // 规则书[手]: 「所有其他玩家可选择[消耗]500资金」 -- **every** other player may choose. There is no
-    // printed cash gate: a player under 500 still gets the offer, and accepting runs
-    // the shortfall path (same reading as LOY-SOUL-01's un-capped 「1到5次」).
+    // printed cash gate or payability filter: a player under 500, or one whose
+    // PayGate is closed ([晕眩] / [除外]), still gets the offer; `ctx::pay`
+    // decides whether the spend counts (only a return above 0 counts them).
     let mut payers: Vec<i32> = Vec::new();
     for p in ctx::others(player_id) {
-        // `ctx::others` already drops out-of-the-game seats; `can_pay` adds the
-        // unprinted PayGate narrowing below.
-        // TODO(规则书)（所有其他玩家可选择[消耗]500资金）: 书说所有其他玩家都可选择
-        //   -- 晕眩/除外（PayGate）的座位不给出选项.
-        if !rules_status::can_pay(p) {
-            continue;
-        }
+        // `ctx::others` already drops out-of-the-game seats.
         let title = Msg::new(key!("thanks_party_join_title"));
         let text = Msg::new(key!("thanks_party_join_text"))
             .card("card", "通用:CiRCLE THANKS PARTY!")

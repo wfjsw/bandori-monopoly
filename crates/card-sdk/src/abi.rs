@@ -884,6 +884,12 @@ use crate::intern::NameId;
 ///    the one command-total window of a 「[分摊]」 command so a responder can
 ///    answer the share instead. `ManifestOn` unchanged (an engine id).
 ///    SAVE_VERSION / RECORD_VERSION unchanged.
+/// v120 (HOST-03 行动阶段 half, pending the integration bump): new
+///    hook-only stage-marker kinds `TurnStartAfter = engine(143)` (行动阶段 3
+///    「回合开始后」, after the `turnStart` handling) and `ManageAfter =
+///    engine(144)` (行动阶段 6 「经营/出牌阶段后」, at the end of 运营 before
+///    the main move). No payload beyond the position / raise seat; no
+///    import, no SAVE_VERSION / RECORD_VERSION change.
 /// v121: **one-shot `DiscardNextFx` (ABI-08)**. New host request / import
 ///    `discard_next_fx = 495` (`ctx::discard_next_fx(player_id)`): 「若无手牌
 ///    则弃掉下一张抽到的牌」. It arms a per-seat flag; the draw loop discards
@@ -2883,6 +2889,20 @@ impl ActionKind {
     /// actions first (`host::CardInfo::hook_entries`).
     pub const DiceRollPlan: Self = Self(TriggerKind::DiceRollPlan);
 
+    /// Action hook (hook-only, no counteraction window). 行动阶段 3
+    /// 「回合开始后」: the turn-start handling is complete. Raised once per
+    /// turn, after the `turnStart` window, status tick and deferred-event
+    /// release. 「此阶段之后的阶段也视为回合开始后」 -- a listener may fire at
+    /// any later phase too. Payload: tile = the player's position.
+    pub const TurnStartAfter: Self = Self(TriggerKind::TurnStartAfter);
+
+    /// Action hook (hook-only, no counteraction window). 行动阶段 6
+    /// 「经营/出牌阶段后」: the manage/play phase ends, immediately before the
+    /// main-move phase (or on an end-turn from 运营). Not raised on a
+    /// 眩晕-skipped turn (stage 4 skips 5 and 6 together). Payload: none
+    /// beyond the raise seat.
+    pub const ManageAfter: Self = Self(TriggerKind::ManageAfter);
+
     /// Engine-namespace kind. Same id as [`TriggerKind::engine`].
     pub const fn engine(id: i32) -> Self {
         Self(TriggerKind::engine(id))
@@ -3592,6 +3612,19 @@ impl TriggerKind {
     /// `ChainKind` window). `set_pay_amount` / `set_pay_target` fold into the
     /// declaration the `effect` window then sees.
     pub const PayCalcBefore: Self = Self::engine(142);
+
+    /// `turnStartAfter` -- 行动阶段 3 「回合开始后」: the turn-start handling
+    /// (status tick, `turnStartBefore` / `turnStart` windows, deferred-event
+    /// release) is complete. Hook-only stage marker. 「此阶段之后的阶段也视为
+    /// 回合开始后」, so an effect keyed to it may also fire later. Payload:
+    /// tile = the player's position.
+    pub const TurnStartAfter: Self = Self::engine(143);
+
+    /// `manageAfter` -- 行动阶段 6 「经营/出牌阶段后」: the manage/play phase
+    /// ends, immediately before the main-move phase or on an end-turn from
+    /// 运营. Hook-only stage marker; a 眩晕-skipped turn (stage 4 skips 5
+    /// and 6) does not raise it.
+    pub const ManageAfter: Self = Self::engine(144);
 
     /// `onBoardGate`
     pub const OnBoardGate: Self = Self::engine(108);

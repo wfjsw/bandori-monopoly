@@ -10,11 +10,22 @@
 //!
 //! Validate everything before changing the world; a suspended routine would
 //! otherwise overwrite changes when it resumes.
+//!
+//! The `state` cheat writes keyed state for ordinary keys; `charge` /
+//! `tempFire` are held-token rows of the persona-skill instance and are
+//! written through the token store instead (FIRE-TOKENS-2).
 
 #![cfg(debug_assertions)]
 
 use super::Match;
 use crate::{msg::Msg, net::NetMessage, state::stage};
+
+/// The two fire counters (「火罐」 / temp pots) are held-token rows of the
+/// persona-skill instance after the instance re-home, not keyed state; every
+/// other `state` key is still keyed state. Frozen wire names (MARKERS.md §7).
+fn is_held_fire_key(key: &str) -> bool {
+    matches!(key, "charge" | "tempFire")
+}
 
 impl Match {
     pub(super) fn debug_act(&mut self, actor: usize, m: &NetMessage) -> Result<(), Msg> {
@@ -39,7 +50,14 @@ impl Match {
             "draw" => (1..=100).contains(&m.value),
             "state" => {
                 (-1_000_000..=1_000_000).contains(&m.value)
-                    && self.world.st.players[target].state.contains_key(&m.persona)
+                    && if is_held_fire_key(&m.persona) {
+                        self.world.st.players[target]
+                            .tokens
+                            .iter()
+                            .any(|c| c.name == m.persona)
+                    } else {
+                        self.world.st.players[target].state.contains_key(&m.persona)
+                    }
             }
             // Deed cheats: same tile-rule primitives as the settle / net
             // commands (`ctx::buy` / `card_build` / `mortgage` / `redeem`),
@@ -70,7 +88,18 @@ impl Match {
                     cx.w.draw_cards(target as i32, m.value, true);
                 }
                 "state" => {
-                    cx.w.st.players[target].state_set(&m.persona, m.value);
+                    if is_held_fire_key(&m.persona) {
+                        // Keep the row's bound instance and advertised cap; the
+                        // engine stores a cap unclamped, as `set_held` does.
+                        let (instance, max) = cx.w.st.players[target]
+                            .tokens
+                            .iter()
+                            .find(|c| c.name == m.persona)
+                            .map_or((-1, 0), |c| (c.instance.unwrap_or(-1), c.max));
+                        cx.w.set_held(target as i32, &m.persona, m.value, instance, max);
+                    } else {
+                        cx.w.st.players[target].state_set(&m.persona, m.value);
+                    }
                 }
                 // The same mechanism primitives the tile rule's
                 // `On::Mortgage` / `On::Redeem` bodies call -- eligibility and

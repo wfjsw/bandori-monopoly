@@ -131,8 +131,7 @@ fn hook(player_id: i32) -> card_sdk::Asked {
 fn crystals_changed_guard(player_id: i32) -> bool {
     ctx::is_placed()
         && trigger::player_id() == player_id
-        && trigger::card_is(ID)
-        && trigger::name() == bandori_std::counter::CRYSTALS
+        && bandori_std::crystals_changed_of(ID)
         && ctx::crystals() == 0
         // Only a write that did not raise the count speaks for the empty
         // state; see AG:绯红之魂 (3).
