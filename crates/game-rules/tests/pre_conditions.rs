@@ -116,7 +116,7 @@ fn pre_hook_does_not_fire() {
         player_id: 0,
     };
     let ran = r
-        .run_hook(&w, call, &Default::default(), &[], None)
+        .run_hook(&w, call, &Default::default(), &[], None, None)
         .unwrap();
     assert!(
         ran.is_none(),
@@ -149,7 +149,14 @@ fn pre_gate_does_not_answer() {
     let mut flashed = false;
     let mut on_body = |_w: &mut TestWorld, _e: i32| flashed = true;
     let ran = r
-        .run_hook(&w, call, &Default::default(), &[], Some(&mut on_body))
+        .run_hook(
+            &w,
+            call,
+            &Default::default(),
+            &[],
+            Some(&mut on_body),
+            None,
+        )
         .unwrap();
     assert!(
         ran.is_none(),

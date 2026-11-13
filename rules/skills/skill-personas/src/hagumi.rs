@@ -18,17 +18,19 @@
 //! tile another player stands on (`PassTile`, `SETTLE-STAGES.md` §4 M4 -- the
 //! same reading sakiko takes for 「经过其他玩家」), not the end-tile
 //! [重叠]. 「主要阶段」 is the skill button (`On::Play`). 「其他角色拥有4个
-//! 可乐饼时」 is a standing condition on the held count; held-token writes have
-//! no post-commit `*Changed` hook (only the pre-move `markerGain` window), so
-//! the sweep runs after each of this skill's own croquette-raising writes --
-//! the only sites that can raise the count (marker ownership).
+//! 可乐饼时」 is a standing condition on the held count; held-token writes
+//! raise the post-commit `markerChanged` event (`ab-hagumi-held-tokens`), so
+//! the sweep is that event's handler -- filtered to the token name and to a
+//! holder other than her (`actor != owner`). The turn-end hook remains as the
+//! backstop for writes made while a `markerChanged` dispatch is already open
+//! (the depth-guarded nested writes).
 //!
 //! Spawn timing: 「每个回合」 is the owner's turn start, once (the `simple`
 //! tab spells it 「你每个回合开始」). The hook is `TurnStart` filtered to
 //! `actor == owner`, so it fires on her turn only, not at every player's
 //! turn end.
 
-use bandori_std::ctx;
+use bandori_std::ctx::{self, trigger};
 use card_sdk::abi::{ActionKind, Dice, FilterKind, MarkFilter};
 use card_sdk::{key, Action, CardDef, Filter, Msg, On, PlanValue};
 
@@ -42,8 +44,18 @@ pub const HAGUMI: CardDef = CardDef::new(
     &[
         // 「每个回合在北泽精肉店生成一个可乐饼」 -- the owner's turn start, once.
         On::Action(Action::TurnStart("actor == owner", None, at_turn_start)),
-        // 「其他角色拥有4个可乐饼时自动移除所有可乐饼停留一回合」 -- the
-        // standing sweep's catch-all tick.
+        // 「其他角色拥有4个可乐饼时自动移除所有可乐饼停留一回合」 -- a
+        // standing count clause on the post-commit `markerChanged` event: the
+        // holder is the raise seat (`actor`), `owner` is her. A write to any
+        // other seat's 可乐饼 trips it; her own gain does not.
+        On::Action(Action::MarkerChanged(
+            "actor != owner && counter_is('可乐饼')",
+            None,
+            on_marker_changed,
+        )),
+        // The sweep's catch-all tick: a held write made while a
+        // `markerChanged` dispatch is already open is not re-raised (the
+        // depth guard), so the count is re-read once at every turn end.
         On::Action(Action::TurnEnd("", None, on_turn_end)),
         // 「你经过格子上的可乐饼时」 / 「其他角色经过格子上可乐饼时」 -- a tile
         // with a croquette is the hook's applicability (`count_marks` is not in
@@ -97,10 +109,28 @@ fn at_turn_start(_player_id: i32) -> card_sdk::Asked {
     Ok(())
 }
 
-/// The standing overflow sweep's catch-all tick, at every turn end (the count
-/// can also change outside this skill's own writes).
-fn on_turn_end(player_id: i32) -> card_sdk::Asked {
-    sweep_overflow(player_id)
+/// `markerChanged` handler: the raise seat is the new holder. A hook body's
+/// `player_id` is the **card owner** (the field walk's seat), not the actor,
+/// so the holder comes from the trigger. The condition already filtered out
+/// the token name and her own seat; sweep that one holder.
+fn on_marker_changed(_player_id: i32) -> card_sdk::Asked {
+    sweep_holder(trigger::player_id())
+}
+
+/// The standing overflow sweep's catch-all tick, at every turn end. A held
+/// write made underneath a `markerChanged` dispatch is not re-raised (the
+/// depth guard in `commit_after`), so the count is re-read here once.
+fn on_turn_end(_player_id: i32) -> card_sdk::Asked {
+    // A hook runs as the raise actor. The skipped seat is the **owner**, not
+    // the turn-ender: the clause sweeps 「其他角色」 -- never herself.
+    let owner = ctx::instance_owner(ctx::self_uid());
+    for p in 0..ctx::player_count() {
+        if p == owner || ctx::player_out(p) {
+            continue;
+        }
+        sweep_holder(p)?;
+    }
+    Ok(())
 }
 
 /// 「你经过格子上的可乐饼时可以将其转移到自己场上（持有上限10）」, and
@@ -144,9 +174,7 @@ fn on_pass(player_id: i32) -> card_sdk::Asked {
     if mine {
         ctx::log(player_id, &Msg::new(key!("hagumi_got")).tile("tile", t));
     }
-    // 「其他角色拥有4个可乐饼时自动移除所有可乐饼停留一回合」 -- the take just
-    // raised another player's held count.
-    sweep_overflow(player_id)
+    Ok(())
 }
 
 /// 「育美经过其他角色时，可以把自己身上的可乐饼转移给该角色」.
@@ -195,9 +223,7 @@ fn on_pass_player(player_id: i32) -> card_sdk::Asked {
             .player_id("who", other)
             .i("n", n as i64),
     );
-    // 「其他角色拥有4个可乐饼时自动移除所有可乐饼停留一回合」 -- the gift just
-    // raised the recipient's held count (including when she hands over 4+).
-    sweep_overflow(player_id)
+    Ok(())
 }
 
 /// 「育美可在主要阶段消耗4个可乐饼兑换1000资金」 -- the skill button's gate.
@@ -223,33 +249,27 @@ fn cash(player_id: i32) -> card_sdk::Asked {
 }
 
 /// 「其他角色拥有4个可乐饼时自动移除所有可乐饼停留一回合」 -- automatic, no
-/// choice: every other player at 4+ held croquettes loses them all and gains one
-/// [停留] layer (「一回合」 is the stay layer's own `Tick::TurnEnd` wear-off).
+/// choice: a holder at 4+ croquettes loses them all and gains one [停留]
+/// layer (「一回合」 is the stay layer's own `Tick::TurnEnd` wear-off).
 ///
-/// Held-token writes raise only the pre-move `markerGain` window, not a
-/// post-commit `*Changed` event, so this sweep is the count-changed clause and
-/// runs after each of this skill's own croquette-raising writes (the only sites
-/// that can raise the count). A `TODO(规则书)` stays on the missing host event.
-fn sweep_overflow(player_id: i32) -> card_sdk::Asked {
-    for p in 0..ctx::player_count() {
-        if p == player_id || ctx::player_out(p) {
-            continue;
-        }
-        let n = ctx::held_count(p, HELD);
-        if n < 4 {
-            continue;
-        }
-        // 效果适用: one entry naming the clause, who, and the outcome, before
-        // the removal / stay land.
-        ctx::log(
-            player_id,
-            &Msg::new(key!("hagumi_overflow"))
-                .player_id("who", p)
-                .i("n", n as i64),
-        );
-        ctx::add_held_by_name(p, HELD, -n, 10)?;
-        rules_status::stay::add(p, 1);
+/// The write that raised `markerChanged` is already committed; this removal
+/// is a nested held write under the raise, so its own `markerChanged` is
+/// suppressed by the depth guard and cannot re-enter this handler.
+fn sweep_holder(p: i32) -> card_sdk::Asked {
+    let n = ctx::held_count(p, HELD);
+    if n < 4 {
+        return Ok(());
     }
+    // 效果适用: one entry naming the clause, who, and the outcome, before
+    // the removal / stay land.
+    ctx::log(
+        p,
+        &Msg::new(key!("hagumi_overflow"))
+            .player_id("who", p)
+            .i("n", n as i64),
+    );
+    ctx::add_held_by_name(p, HELD, -n, 10)?;
+    rules_status::stay::add(p, 1);
     Ok(())
 }
 
@@ -263,16 +283,6 @@ fn on_plan(player_id: i32, mut v: PlanValue) -> PlanValue {
     }
     v
 }
-
-// TODO(规则书): 「其他角色拥有4个可乐饼时」 is a standing count clause. Held
-// tokens (`add_held_by_name`) raise only the pre-move `markerGain` window -- there is no
-// post-commit held-changed event to hang the sweep on, so it is re-run at this
-// skill's own write sites (plus the turn-end tick). A host `heldChanged` event
-// would let this be a pure event handler.
-
-//
-
-//
 
 // Kani-only direct-call exports (ppcost). Production builds omit these.
 #[cfg(kani)]

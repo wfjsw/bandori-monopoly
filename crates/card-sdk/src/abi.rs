@@ -2883,6 +2883,17 @@ impl ActionKind {
     /// actions first (`host::CardInfo::hook_entries`).
     pub const DiceRollPlan: Self = Self(TriggerKind::DiceRollPlan);
 
+    /// Action hook (hook-only, no counteraction window). A **held** counter
+    /// (a player token of a creating card instance, written by
+    /// `add_held_by_name` / `set_held` / `spend_marker`) has just been
+    /// written. Payload: `name` = the counter name, `value` = the signed
+    /// delta the write applied, `player_id` = the token's holder,
+    /// `instance` = the creating instance (`-1` when unknown), `by_card` =
+    /// the causing player. The count after the write is readable with
+    /// `held_count`. Raised after the writing run commits, one raise per
+    /// bound write.
+    pub const MarkerChanged: Self = Self(TriggerKind::MarkerChanged);
+
     /// Engine-namespace kind. Same id as [`TriggerKind::engine`].
     pub const fn engine(id: i32) -> Self {
         Self(TriggerKind::engine(id))
@@ -3665,6 +3676,18 @@ impl TriggerKind {
     /// `ownerSet` -- effect spelling of an ownership write. Payload: `tile`,
     /// `value` (the new owner); `target` = the previous owner.
     pub const OwnerSet: Self = Self::engine(139);
+
+    /// `markerChanged` -- a **held** counter (a player token of a creating
+    /// card instance) has just been written. Payload: `name` = the counter
+    /// name, `value` = the signed delta the write applied, `player_id` = the
+    /// token's holder, `instance` = the creating instance (`-1` when unknown),
+    /// `by_card` = the causing player. Use its action spelling
+    /// [`ActionKind::MarkerChanged`]. The count after the write is readable
+    /// with `held_count`. Raised once per bound write (`bind_held` /
+    /// `add_held` / `set_held` / `spend_marker`) after the writing run
+    /// commits; a write made by a `markerChanged` handler does not re-raise
+    /// (`PlayCtx::marker_raise_depth`).
+    pub const MarkerChanged: Self = Self::engine(143);
 
     /// Engine-namespace kind. The fixed generic raise points.
     pub const fn engine(id: i32) -> Self {

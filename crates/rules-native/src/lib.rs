@@ -681,6 +681,7 @@ impl NativeModules {
         scope: &game_rules::condition::WindowScope,
         cand: &game_rules::condition::CandidateCtx,
         log: &game_core::engine::GuestLog,
+        mut on_trap: Option<&mut dyn FnMut(&mut Run, i32, &str)>,
     ) -> bool {
         let condition = self.index.condition(card, entry);
         if self.entry_guard_is_none(card, entry) {
@@ -714,7 +715,24 @@ impl NativeModules {
                 Ok(match res {
                     Ok(CallOut::Code(0)) => false,
                     Ok(_) => true,
-                    Err(_) => false,
+                    Err(e) => {
+                        // Historical dispatch leniency: a trapping guard
+                        // declines the entry, but must not do so silently
+                        // (DECLARE-TRAP-LOG). The callback (from `run_hook`)
+                        // writes the `log.card_trap` line.
+                        if let Some(cb) = on_trap.as_deref_mut() {
+                            let detail = match &e {
+                                HostError::Trap(m) => m.clone(),
+                                HostError::NeedInput => "need input".into(),
+                            };
+                            cb(
+                                state.as_mut().expect("host state present").w(),
+                                entry,
+                                &format!("guard trapped: {detail}"),
+                            );
+                        }
+                        false
+                    }
                 })
             });
         matches!(asked, Ok(true))
@@ -818,7 +836,7 @@ impl CardModules for NativeModules {
                 &info.id,
                 world.is_placed() != 0,
             );
-            if !self.entry_admitted(world, card, entry, player_id, &scope, &cand, log) {
+            if !self.entry_admitted(world, card, entry, player_id, &scope, &cand, log, None) {
                 return Ok(Outcome::Done(world.clone(), log.clone()));
             }
         }
@@ -848,6 +866,7 @@ impl CardModules for NativeModules {
         log: &game_core::engine::GuestLog,
         already_admitted: &[i32],
         mut on_body: Option<&mut dyn FnMut(&mut Run, i32)>,
+        mut on_trap: Option<&mut dyn FnMut(&mut Run, i32, &str)>,
     ) -> Result<Option<HookRun<Run>>, RuleError> {
         let (card, player_id) = (call.card(), call.player_id());
         let kind = world.trigger().kind;
@@ -869,6 +888,10 @@ impl CardModules for NativeModules {
         let mut cur = world.clone();
         let mut announced = false;
         let mut ran_any = false;
+        // A trapped entry wrote a `log.card_trap` line into `cur`; with no
+        // other entry run we still return that world so the line commits
+        // (mirrors `Ruleset::run_hook`), never a bare `Ok(None)`.
+        let mut trapped = false;
         // One cursor threads the whole `run_hook` call, mirrors
         // `Ruleset::run_hook` (`Admitted`): every guard, declare and body
         // reads the shared answer log in order, so an answer one entry's
@@ -919,7 +942,22 @@ impl CardModules for NativeModules {
                             Ok(match res {
                                 Ok(CallOut::Code(0)) => false,
                                 Ok(_) => true,
-                                Err(_) => false,
+                                Err(e) => {
+                                    // Historical dispatch leniency: a
+                                    // trapping guard declines the entry, but
+                                    // must not do so silently (DECLARE-
+                                    // TRAP-LOG). Write into `cur`: the guard
+                                    // store world is a throwaway clone.
+                                    trapped = true;
+                                    if let Some(cb) = on_trap.as_deref_mut() {
+                                        let detail = match &e {
+                                            HostError::Trap(m) => m.clone(),
+                                            HostError::NeedInput => "need input".into(),
+                                        };
+                                        cb(&mut cur, entry, &format!("guard trapped: {detail}"));
+                                    }
+                                    false
+                                }
                             })
                         });
                     matches!(asked, Ok(true))
@@ -963,7 +1001,7 @@ impl CardModules for NativeModules {
                 }
             }
         }
-        if !ran_any {
+        if !ran_any && !trapped {
             return Ok(None);
         }
         Ok(Some(HookRun {

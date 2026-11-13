@@ -615,6 +615,9 @@ pub struct PlayCtx<'a> {
     /// Nested `state` [反击] settlement depth. A counter's own skill-state
     /// toggles must not open another window (ping-pong). Transient.
     pub state_raise_depth: u32,
+    /// Nested `markerChanged` dispatch depth. A handler's own held write
+    /// commits underneath, and must not re-raise the event forever. Transient.
+    pub marker_raise_depth: u32,
     /// A nested skill teleport's tail is raising (see
     /// `PlayCtx::teleport_tail_only`). Transient.
     pub(crate) in_teleport_tail: bool,
@@ -3566,6 +3569,7 @@ impl<'a> PlayCtx<'a> {
             settle_stack: Vec::new(),
             ledger_exec: 0,
             state_raise_depth: 0,
+            marker_raise_depth: 0,
             in_teleport_tail: false,
             activation: Vec::new(),
             move_start: -1,
