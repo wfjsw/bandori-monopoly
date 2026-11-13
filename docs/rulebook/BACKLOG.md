@@ -1333,6 +1333,13 @@ Current: The comment grounded one crystal per pot in `t.value` without saying th
 
 Decision needed: Is a crystal added per 火罐 spent or per 消耗 event (a mixed temp+pool spend now raising two events)?
 
+**C-Q89 (anon-tokyo-tile-in-two-links).** *(filed 2026-11-13; `rules/cards/card-mygo/src/anon_tokyo.rs`)*
+并在上述的两个格子间放置1个[奇迹水晶]（上限1）
+
+Current: `place_mark_pair` is place-or-refuse atomic on **both ends**: a tile already carrying a link crystal of this kind refuses a second pair outright, so no tile ever sits at the end of two links. The singular 「放置1个…（上限1）」 leans that way, but nothing rules on it.
+
+Decision needed: Does 「上限1」 cap crystals per tile (a tile is an end of at most one link), or only the pair (a re-link of the same pair), so a tile may be shared by two different links?
+
 ---
 
 # Resolved ids cited from source
