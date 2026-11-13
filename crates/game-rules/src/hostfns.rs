@@ -1787,6 +1787,45 @@ pub fn card_prop<C: HostCtx>(
     Ok(rules.card_prop(&id, &key))
 }
 
+/// Is card rule `id` **derived** (`CardMeta::derived`, EVENT-04)? The
+/// 「非衍生」 filters read this instead of a hand-copied id table.
+pub fn card_derived<C: HostCtx>(c: &mut C, ip: i32, il: i32) -> Result<i32, HostError> {
+    let id = guest_str(c, ip, il)?;
+    let rules = c
+        .st()
+        .rules
+        .clone()
+        .ok_or_else(|| HostError::trap("card_derived unavailable here"))?;
+    Ok(rules.card_derived(&id) as i32)
+}
+
+/// Every **event** card id (`event:` prefix) in manifest order, postcard
+/// `Vec<String>` into the guest buffer (EVENT-04). The event pool a 「从所有
+/// 事件中选择」 body offers, paired with [`card_derived`] for the 「非衍生」
+/// filter. Ids keep the manifest `event:` prefix; the deck spells them bare,
+/// so a caller banishing one strips it.
+pub fn event_card_ids<C: HostCtx>(c: &mut C, buf: i32, cap: i32) -> Result<i32, HostError> {
+    let rules = c
+        .st()
+        .rules
+        .clone()
+        .ok_or_else(|| HostError::trap("event_card_ids unavailable here"))?;
+    let mut ids: Vec<String> = Vec::new();
+    let mut i = 0;
+    while let Some(card) = rules.card(i) {
+        if card.id.starts_with("event:") {
+            ids.push(card.id.clone());
+        }
+        i += 1;
+    }
+    let bytes = postcard::to_allocvec(&ids)
+        .map_err(|e| HostError::trap(format!("event_card_ids encode: {e}")))?;
+    if bytes.len() as i32 <= cap {
+        c.write_guest(buf, &bytes)?;
+    }
+    Ok(bytes.len() as i32)
+}
+
 pub fn is_placed<C: HostCtx>(c: &mut C) -> Result<i32, HostError> {
     Ok(c.st().wr().is_placed())
 }
@@ -2134,6 +2173,32 @@ fn invoke_inner<C: HostCtx>(
     let entry_name = on.id.clone().unwrap_or_default();
     let by_instance = c.st().wr().self_uid();
     let depth = c.st().depth as i32;
+    // ENG-COST: an invoked Play costs like a pressed one -- charge a declared
+    // activation cost once, before the body. The amount is a guest fn
+    // (`OP_COST`); run it on a throwaway state and charge the live world.
+    // The gate is not evaluated here (G13 I5), so the charge is clamped by
+    // `add_held_by_name` for a short caller.
+    if let Some(name) = on.cost.as_deref() {
+        let probe = HostState::new(
+            rules.clone(),
+            c.st().wr().clone(),
+            Default::default(),
+            c.st().depth + 1,
+        );
+        let (res, _probe, left) =
+            c.call_entry(probe, card, entry, export::OP_COST, player_id, &[], false);
+        c.set_fuel(left)?;
+        let need = match res {
+            Ok(CallOut::Code(v)) => v as i32,
+            Ok(CallOut::Msg(_)) => 0,
+            Err(e) => return Err(e),
+        };
+        if need > 0 {
+            c.st_mut()
+                .w()
+                .add_held_by_name(player_id, name, -need, i32::MAX);
+        }
+    }
     // The target instance on the invoking seat's field; `-1` when the card is
     // not placed there. The marked-instance rule applies: a stand-in answers
     // for its effective card.
@@ -4236,6 +4301,17 @@ pub fn add_extra_dice<C: HostCtx>(
     let reason = guest_str(c, p, n)?;
     c.st_mut().w().add_extra_dice(count, sides, &reason);
     Ok(())
+}
+
+/// `plan::set_direction_dice` -- roll the direction die from the world RNG and
+/// aim the walk by its parity (W3-KAORU-02, C-Q47).
+pub fn set_direction_dice<C: HostCtx>(c: &mut C, count: i32, sides: i32) -> Result<(), HostError> {
+    c.st_mut().w().set_direction_dice(count, sides);
+    Ok(())
+}
+
+pub fn direction_roll<C: HostCtx>(c: &mut C) -> Result<i32, HostError> {
+    Ok(c.st().wr().direction_roll().unwrap_or(i32::MIN))
 }
 
 pub fn set_tag<C: HostCtx>(c: &mut C, kp: i32, kl: i32, v: i32) -> Result<(), HostError> {

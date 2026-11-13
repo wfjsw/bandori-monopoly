@@ -59,7 +59,6 @@
   "kaoru_thief_decayed": "{{who}} 的「怪盗hello happy」奇迹水晶用完了，放入弃牌堆",
   "kaoru_thief_marked": "{{who}} 的场上放了一个 [怪盗标记]",
   "kaoru_thief_note": "「怪盗hello happy」在场",
-  "kaoru_thief_rollplan": "怪盗hello happy 的效果：{{who}} 在薰的格子上：这次移动（方向 {{dir}}）走 1d10 格",
   "kaoru_thief_stop_ask": "经过了 {{who}}：要在这里 [强制停下] 并结算吗？",
   "kaoru_thief_stop_title": "怪盗hello happy",
   "kaoru_thief_tok": "怪盗标记",

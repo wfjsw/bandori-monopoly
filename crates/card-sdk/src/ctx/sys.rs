@@ -1727,6 +1727,16 @@ mod abi {
         pub fn add_extra_dice(count: i32, sides: i32, ptr: i32, len: i32);
         #[cfg_attr(
             any(not(target_arch = "wasm32"), feature = "native-rules"),
+            link_name = "ruleset_set_direction_dice"
+        )]
+        pub fn set_direction_dice(count: i32, sides: i32);
+        #[cfg_attr(
+            any(not(target_arch = "wasm32"), feature = "native-rules"),
+            link_name = "ruleset_direction_roll"
+        )]
+        pub fn direction_roll() -> i32;
+        #[cfg_attr(
+            any(not(target_arch = "wasm32"), feature = "native-rules"),
             link_name = "ruleset_move_stopped"
         )]
         pub fn move_stopped() -> i32;
@@ -2083,6 +2093,11 @@ mod abi {
         pub fn card_prop(ip: i32, il: i32, kp: i32, kl: i32) -> i32;
         #[cfg_attr(
             any(not(target_arch = "wasm32"), feature = "native-rules"),
+            link_name = "ruleset_card_derived"
+        )]
+        pub fn card_derived(ip: i32, il: i32) -> i32;
+        #[cfg_attr(
+            any(not(target_arch = "wasm32"), feature = "native-rules"),
             link_name = "ruleset_gain_fixed"
         )]
         pub fn gain_fixed(player_id: i32, amount: i32, ptr: i32, len: i32) -> i32;
@@ -2158,6 +2173,11 @@ mod abi {
             link_name = "ruleset_designations"
         )]
         pub fn designations(player_id: i32, buf: i32, cap: i32) -> i32;
+        #[cfg_attr(
+            any(not(target_arch = "wasm32"), feature = "native-rules"),
+            link_name = "ruleset_event_card_ids"
+        )]
+        pub fn event_card_ids(buf: i32, cap: i32) -> i32;
         #[cfg_attr(
             any(not(target_arch = "wasm32"), feature = "native-rules"),
             link_name = "ruleset_cancel_designation"

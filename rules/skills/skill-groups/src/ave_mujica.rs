@@ -34,7 +34,10 @@ const ORIG: &str = "skill.aveMujica.orig";
 pub const AVE_MUJICA: CardDef = CardDef::new(
     "skill:Ave Mujica:假面之下的真实",
     &[
-        On::Play("", Some(can_halve), halve),
+        // 规则书（`PPP:Returns` [持续]（3））: 「使用因此卡获得的团卡的主动效果时需要
+        // 支付1星星贴纸」 -- declared activation cost (ENG-COST); the host refuses
+        // a short player and charges before the body.
+        On::Play("", Some(can_halve), halve).cost("星星贴纸", crate::copy_sticker_cost),
         On::Action(Action::TurnStartBefore(
             "slot('skillState') != 0",
             None,
@@ -232,11 +235,6 @@ fn can_halve(player_id: i32) -> Option<Msg> {
     if bandori_std::ctx::skill_blocked(player_id, "") {
         return Some(Msg::new(key!("skill_blocked")));
     }
-    // 规则书（`PPP:Returns` [持续]（3））: 「使用因此卡获得的团卡的主动效果时需要
-    // 支付1星星贴纸」 -- the sticker is a cost of activation on the borrowed copy.
-    if let Some(reason) = crate::copy_sticker_gate(player_id) {
-        return Some(reason);
-    }
     if state::get(player_id, state_key::SKILL_STATE) != 2 {
         return Some(Msg::new(key!("ave_mujica_not_two")));
     }
@@ -247,7 +245,6 @@ fn can_halve(player_id: i32) -> Option<Msg> {
 }
 
 fn halve(player_id: i32) -> card_sdk::Asked {
-    crate::spend_copy_sticker(player_id)?;
     // 规则书: 「每当乐队技能需要移除[奇迹水晶]时，可移除此卡上的一个[奇迹水晶]代替」
     // -- 「此卡」 is the placed `Sumimi:#L11`, drained first.
     crate::spend_crystals(player_id, 1)?;

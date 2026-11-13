@@ -3,6 +3,7 @@
 //! 事件文本（`CardMeta` beside the rule body, id `让我来结束一切`）:
 //! > 触发事件的玩家从所有非衍生事件中选择3个移除，并将此卡永久放置于场上，此卡在场上则[衍生]让我来结束一切不会被[衍生]迷子的追逐放置在事件牌堆顶部
 
+use alloc::string::String;
 use alloc::vec::Vec;
 
 use bandori_std::ctx;
@@ -10,36 +11,6 @@ use card_sdk::CardText;
 use card_sdk::{CardDef, Msg, On};
 
 use crate::util::keep;
-
-/// Every non-derived event id, in roster / `CARDS` order.
-/// TODO(规则书)/TODO(engine): the non-derived list lives on each event's
-/// `CardMeta` (`derived: false`) and is not reachable from `ctx`, so the ids
-/// are duplicated here. Keep the table in step with the `CardMeta` flags.
-const NON_DERIVED: &[&str] = &[
-    "对邦",
-    "弦卷集团地产开发",
-    "很噜的感觉",
-    "前往哈比内尔王国旅游",
-    "这只手我不会放开",
-    "PICO灵魂交换",
-    "协助CiRCLE重建",
-    "前场队还是后场队？",
-    "EX任务挑战",
-    "发送熊饼表情",
-    "飞鸟山之战",
-    "幻觉来了",
-    "卡池BUG",
-    "A！A！O！",
-    "麻里奈小姐的礼物箱",
-    "元祖！邦多利酱",
-    "超燃甩头",
-    "意外的对邦",
-    "Forbidden Moca",
-    "上学时间",
-    "泪水的含义",
-    "Kizuna Music",
-    "火种燃尽之后会怎么样呢？",
-];
 
 pub const END_IT_ALL: CardDef = CardDef::new("event:让我来结束一切", &[On::Play("", None, play)]).rule()
         .meta(&card_sdk::meta::CardMeta::new()
@@ -59,7 +30,14 @@ fn play(player_id: i32) -> card_sdk::Asked {
         &Msg::new("log.event.end_it_on").player_id("who", player_id),
     );
 
-    let mut pool: Vec<&str> = NON_DERIVED.to_vec();
+    // 规则书: 「从所有非衍生事件中选择3个移除」 -- the pool is the manifest's
+    // event roster (`ctx::event_card_ids`) minus every card whose
+    // `CardMeta.derived` is set (`ctx::card_derived`, EVENT-04). No hand table:
+    // the derived flags live beside each event's own rule body.
+    let mut pool: Vec<String> = ctx::event_card_ids()
+        .into_iter()
+        .filter(|id| !ctx::card_derived(id))
+        .collect();
     for _ in 0..3 {
         if pool.is_empty() {
             break;
@@ -76,13 +54,15 @@ fn play(player_id: i32) -> card_sdk::Asked {
             &options,
         )?;
         let id = pool.remove(pick.min(pool.len() - 1));
-        // 「移除」 -- out of the game entirely (`docs/EVENTS.md`).
-        ctx::event_banish(id);
+        // 「移除」 -- out of the game entirely (`docs/EVENTS.md`). The roster
+        // carries manifest ids (`event:` prefix); the event deck spells the
+        // same card bare.
+        ctx::event_banish(id.strip_prefix("event:").unwrap_or(&id));
         ctx::log(
             player_id,
             &Msg::new("log.event.end_it_banish")
                 .player_id("who", player_id)
-                .card("event", id),
+                .card("event", &id),
         );
     }
 

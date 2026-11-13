@@ -1956,6 +1956,13 @@ pub trait CardWorld: Clone + 'static {
     fn recorded_roll(&self) -> Option<i32> {
         None
     }
+    /// Roll the plan's direction die from the world RNG, record the face and
+    /// aim the walk by its parity (odd = reverse; C-Q47). W3-KAORU-02.
+    fn set_direction_dice(&mut self, _count: i32, _sides: i32) {}
+    /// The direction face rolled for this raise (`None` = no direction die).
+    fn direction_roll(&self) -> Option<i32> {
+        None
+    }
     fn move_tag(&self, _key: &str) -> i32 {
         0
     }

@@ -518,6 +518,12 @@ pub enum Op {
     persona_skins = 497,
     // v123: the character-card pile read.
     persona = 498,
+    // v124 (W3-KAORU-02): the plan's direction die (own recorded face).
+    set_direction_dice = 499,
+    direction_roll = 500,
+    // v124 (EVENT-04): manifest metadata reads (derived flag, event roster).
+    card_derived = 501,
+    event_card_ids = 502,
 }
 
 /// Six i32 wire slots, matching the ABI's arg convention.

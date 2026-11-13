@@ -131,6 +131,10 @@ pub struct CardInfo {
     /// The def is a **rule entity**, not a card (`CardDef::rule`, ABI v119).
     #[serde(default)]
     pub rule: bool,
+    /// The card is **derived** (`CardMeta::derived`, EVENT-04): a token /
+    /// generated card the 「非衍生」 filters exclude.
+    #[serde(default)]
+    pub derived: bool,
 }
 
 impl CardInfo {
@@ -2151,6 +2155,15 @@ impl Ruleset {
             .unwrap_or(0)
     }
 
+    /// Is the card rule `id` **derived** (`CardMeta::derived`, EVENT-04)? The
+    /// 「非衍生」 filter of 让我来结束一切 reads this instead of a hand list.
+    /// An unknown id answers `false`.
+    pub fn card_derived(&self, id: &str) -> bool {
+        self.card(id)
+            .and_then(|i| self.inner.cards.get(i as usize))
+            .is_some_and(|c| c.derived)
+    }
+
     /// The rule id that settles a board tile of this opaque kind (ABI v66).
     /// From `CardDef::governs` / `board_role == "tile"`; empty when none.
     pub fn tile_rule_id(&self, kind: &str) -> String {
@@ -2341,6 +2354,31 @@ impl Ruleset {
             }
         }
         let mut store = self.store_logged(world.clone(), log, next_answer)?;
+        // ENG-COST: charge a declared activation cost once, before the body.
+        // Admissibility (`cant_play` / the press gate) already refused a short
+        // player; a pause carries the charged world, so the body's re-run starts
+        // from the count it already paid.
+        if let Some(name) = self.inner.cards[card as usize]
+            .on
+            .get(entry as usize)
+            .and_then(|e| e.cost.as_deref())
+        {
+            let need = call_card(
+                &self.inner,
+                &mut store,
+                card,
+                entry,
+                export::OP_COST,
+                player_id,
+            )
+            .map_err(trap)? as i32;
+            if need > 0 {
+                store
+                    .data_mut()
+                    .w()
+                    .add_held_by_name(player_id, name, -need, i32::MAX);
+            }
+        }
         if let Some(cb) = on_body.as_deref_mut() {
             cb(store.data_mut().w(), entry);
         }
@@ -3032,6 +3070,38 @@ impl Ruleset {
                 },
             )?
         };
+        if reason.is_none() {
+            // ENG-COST: the entry's declared activation cost needs enough of
+            // the held token. The amount is guest-side (`OP_COST`) -- run it on
+            // a throwaway store exactly like the gate above; a refusal names
+            // the token and the amount.
+            if let Some(name) = self.inner.cards[card as usize]
+                .on
+                .get(entry as usize)
+                .and_then(|e| e.cost.as_deref())
+            {
+                let mut store = self.store(world.clone(), &[], 0)?;
+                let need = crate::inline::with_no_inline(|| {
+                    call_card(
+                        &self.inner,
+                        &mut store,
+                        card,
+                        entry,
+                        export::OP_COST,
+                        player_id,
+                    )
+                })
+                .map_err(trap)? as i32;
+                let held = world.held_count(player_id, name);
+                if need > 0 && held < need {
+                    return Ok(Some(
+                        crate::Msg::new("err.cost_short")
+                            .text("name", name)
+                            .i("n", need as i64),
+                    ));
+                }
+            }
+        }
         Ok(reason)
     }
 
@@ -3711,6 +3781,13 @@ pub trait RulesHandle: Clone + Send + Sync + 'static {
             .and_then(|c| c.props.get(key).copied())
             .unwrap_or(0)
     }
+    /// Is the card rule `id` **derived** (`CardInfo::derived`, EVENT-04)?
+    /// `false` for an unknown id.
+    fn card_derived(&self, id: &str) -> bool {
+        self.by_id(id)
+            .and_then(|i| self.card(i))
+            .is_some_and(|c| c.derived)
+    }
     /// The compiled condition of card `i`'s `entry` (docs/GUARDS.md G0), if
     /// any. Default `None` (no condition) so a stub handle need not care.
     fn condition(&self, i: i32, entry: i32) -> Option<&crate::condition::CompiledCondition> {
@@ -4192,6 +4269,7 @@ fn inspect(
             gate_skip_msgs: e.gate_skip_msgs,
             exemption_prop: e.exemption_prop,
             rule: e.rule,
+            derived: e.derived,
         })
         .collect();
     if cards.is_empty() {
@@ -5833,6 +5911,20 @@ fn build_linker<W: CardWorld>(engine: &Engine) -> Result<Linker<HostState<W>>, E
             hostfns::card_prop(&mut c, ip, il, kp, kl).map_err(HostError::into_err)
         },
     )?;
+    l.func_wrap(
+        m,
+        "card_derived",
+        |mut c: C<W>, ip: i32, il: i32| -> Result<i32, Error> {
+            hostfns::card_derived(&mut c, ip, il).map_err(HostError::into_err)
+        },
+    )?;
+    l.func_wrap(
+        m,
+        "event_card_ids",
+        |mut c: C<W>, buf: i32, cap: i32| -> Result<i32, Error> {
+            hostfns::event_card_ids(&mut c, buf, cap).map_err(HostError::into_err)
+        },
+    )?;
     l.func_wrap(m, "is_placed", |mut c: C<W>| -> Result<i32, Error> {
         hostfns::is_placed(&mut c).map_err(HostError::into_err)
     })?;
@@ -7057,6 +7149,16 @@ fn build_linker<W: CardWorld>(engine: &Engine) -> Result<Linker<HostState<W>>, E
     )?;
     l.func_wrap(m, "recorded_roll", |mut c: C<W>| -> Result<i32, Error> {
         hostfns::recorded_roll(&mut c).map_err(HostError::into_err)
+    })?;
+    l.func_wrap(
+        m,
+        "set_direction_dice",
+        |mut c: C<W>, count: i32, sides: i32| -> Result<(), Error> {
+            hostfns::set_direction_dice(&mut c, count, sides).map_err(HostError::into_err)
+        },
+    )?;
+    l.func_wrap(m, "direction_roll", |mut c: C<W>| -> Result<i32, Error> {
+        hostfns::direction_roll(&mut c).map_err(HostError::into_err)
     })?;
     l.func_wrap(
         m,

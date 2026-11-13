@@ -57,7 +57,12 @@ pub const POPPIN: CardDef = CardDef::new(
         // either is available; the body lists the available options and skips
         // the prompt when only one is. The 「或」 inside the crystal half is its
         // own sub-choice (draw 1 vs +2000).
-        On::Play("", Some(cant_play), press),
+        // 规则书（`PPP:Returns` [持续]（3））: 「使用因此卡获得的团卡的主动效果时需要
+        // 支付1星星贴纸」 -- an activation **cost** (ENG-COST): the borrowed copy
+        // needs 1 sticker, the owner's own band card is free. The host refuses a
+        // short player and charges the sticker before the body; the body no
+        // longer pays it itself.
+        On::Play("", Some(cant_play), press).cost(STICKER, crate::copy_sticker_cost),
         // （3）「星之鼓动山丘不可被抵押双倍支付购买，只有全部Poppin' Party角色
         // 破产后才可被正常购买」 -- a `BuyGate`, which the engine runs for **every**
         // [`BuyKind`] (Force included), so the lock covers 「抵押双倍支付购买」
@@ -210,15 +215,17 @@ fn before_settle(player_id: i32) -> card_sdk::Asked {
 /// Which press effects are available right now, in rulebook order: the
 /// sticker->crystal exchange and the crystal->draw/cash spend.
 ///
-/// `tax` is [`crate::copy_sticker_cost`] — the sticker option must budget it
-/// **and** its own 「使用2个星星贴纸」, or a borrowed copy with exactly 2 stickers
-/// passes the gate, burns the tax, and then skips the effect.
-fn available(player_id: i32, tax: i32) -> [bool; 2] {
+/// `budget` is the stickers the option may spend: the gate passes
+/// `held - tax` (the tax is charged later, by the host), the body passes the
+/// already-charged `held`. The sticker option needs its own 「使用2个星星贴纸」
+/// on top, or a borrowed copy with exactly 2 stickers passes the gate, burns
+/// the tax, and then skips the effect.
+fn available(player_id: i32, budget: i32) -> [bool; 2] {
     if bandori_std::ctx::skill_blocked(player_id, "") {
         return [false, false];
     }
     [
-        ctx::held_count(player_id, STICKER) >= 2 + tax,
+        budget >= 2,
         state::get(player_id, USED) == 0 && crate::cover_crystals(player_id) >= 2,
     ]
 }
@@ -229,17 +236,18 @@ fn cant_play(player_id: i32) -> Option<Msg> {
         return Some(Msg::new(key!("skill_blocked")));
     }
     // 规则书（`PPP:Returns` [持续]（3））: 「使用因此卡获得的团卡的主动效果时需要
-    // 支付1星星贴纸」 -- the sticker is a cost of activation on the borrowed copy.
+    // 支付1星星贴纸」 -- the tax is the entry's declared cost, charged by the
+    // host after this gate (a short player gets `err.cost_short` there). Budget
+    // it out here too so the sticker option is not offered when the tax would
+    // eat it.
     let tax = crate::copy_sticker_cost(player_id);
-    if tax > 0 && ctx::held_count(player_id, STICKER) < tax {
-        return Some(Msg::new(key!("skill_band_no_sticker")));
-    }
-    let avail = available(player_id, tax);
+    let budget = ctx::held_count(player_id, STICKER) - tax;
+    let avail = available(player_id, budget);
     if avail[0] || avail[1] {
         return None;
     }
     // Neither: name the closest reason.
-    if ctx::held_count(player_id, STICKER) < 2 + tax && crate::cover_crystals(player_id) < 2 {
+    if budget < 2 && crate::cover_crystals(player_id) < 2 {
         return Some(Msg::new(key!("poppin_no_sticker")));
     }
     if state::get(player_id, USED) != 0 {
@@ -254,7 +262,8 @@ fn cant_play(player_id: i32) -> Option<Msg> {
 /// available option is taken without prompting. The player can press again
 /// for the other.
 fn press(player_id: i32) -> card_sdk::Asked {
-    let avail = available(player_id, crate::copy_sticker_cost(player_id));
+    // The cost was already charged before the body; the budget is what is left.
+    let avail = available(player_id, ctx::held_count(player_id, STICKER));
     let crystal = avail[0];
     let cash_ok = avail[1];
     if !crystal && !cash_ok {
@@ -284,7 +293,6 @@ fn press(player_id: i32) -> card_sdk::Asked {
 
 /// （1）「随后可使用2个星星贴纸为此卡添加1个[奇迹水晶]」.
 fn to_crystal(player_id: i32) -> card_sdk::Asked {
-    crate::spend_copy_sticker(player_id)?;
     if ctx::held_count(player_id, STICKER) < 2 {
         return Ok(());
     }
@@ -296,7 +304,6 @@ fn to_crystal(player_id: i32) -> card_sdk::Asked {
 
 /// （1）「随后可使用此卡的2个[奇迹水晶]抽1张卡或[获得]2000资金（…为1回合1次）」.
 fn cash(player_id: i32) -> card_sdk::Asked {
-    crate::spend_copy_sticker(player_id)?;
     if state::get(player_id, USED) != 0 {
         return Ok(());
     }

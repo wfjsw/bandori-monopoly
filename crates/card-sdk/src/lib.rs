@@ -601,6 +601,12 @@ pub struct PlayEntry {
     /// and slice-valued fields are already the house style on entries
     /// ([`CounteractEntry::links`], [`MessageEntry::names`]).
     pub texts: &'static [(&'static str, &'static str, &'static str)],
+    /// Optional **activation cost** (`On::Play(..).cost(..)`, ENG-COST):
+    /// `(held-token name, amount fn)`. The amount runs host-side with the
+    /// pressing player and is a pure number; the press is inadmissible while
+    /// the player holds fewer of `name`, and exactly that many are charged
+    /// **once, before the body** when it runs. `None` = free (the normal case).
+    pub cost: Option<(&'static str, fn(i32) -> i32)>,
 }
 
 /// [反击] entry ([`On::Counteract`]).
@@ -934,7 +940,22 @@ impl On {
             flash: crate::abi::Flash::Auto,
             header: crate::abi::Presentation::Visible,
             texts: &[],
+            cost: None,
         })
+    }
+
+    /// Declare an **activation cost** on a Play entry (ENG-COST): the press
+    /// needs `amount(player_id)` of the held token `name` and is charged that
+    /// many exactly once before the body. `amount` is a pure per-player
+    /// number (0 = free right now, e.g. the owner's own card).
+    pub const fn cost(self, name: &'static str, amount: fn(i32) -> i32) -> Self {
+        match self {
+            On::PlayBody(e) => On::PlayBody(PlayEntry {
+                cost: Some((name, amount)),
+                ..e
+            }),
+            other => other,
+        }
     }
 
     /// A [反击] at these chain links: the guard decides whether the card is

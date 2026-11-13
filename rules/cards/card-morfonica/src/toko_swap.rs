@@ -8,12 +8,17 @@
 use alloc::vec::Vec;
 
 use bandori_std::ctx::is_color;
-use card_sdk::abi::{mark, MarkFilter};
+use card_sdk::abi::{mark, prop, MarkFilter};
 use card_sdk::CardText;
 use card_sdk::{ctx, key, CardDef, Msg, On};
 
 pub const TOKO_SWAP: CardDef =
-    CardDef::new("Mor:（toko）", &[On::Play("", Some(cant_play), toko_swap)]).meta(&card_sdk::meta::CardMeta::new()
+    CardDef::new("Mor:（toko）", &[On::Play("", Some(cant_play), toko_swap)])
+    // 规则书: 「选择…任意玩家颜色相同的被抵押地契交换」 -- the exchanged deed goes
+    // through `ctx::target_tile`, so the play has a [指定] target and 网络链接异常
+    // clause 1 applies.
+    .props(&[(prop::DESIGNATES, 1)])
+    .meta(&card_sdk::meta::CardMeta::new()
         .name("")
         .raw_name(r#"（toko）"#)
         .tags(&[])

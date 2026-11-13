@@ -10,7 +10,7 @@
 
 use bandori_std::ctx;
 use bandori_std::state_key;
-use card_sdk::abi::ChainKind;
+use card_sdk::abi::{prop, ChainKind};
 use card_sdk::{it, items, para, sec, CardText};
 use card_sdk::{key, CardDef, Msg, On};
 
@@ -20,7 +20,11 @@ pub const WELCOME_MUJICA: CardDef = CardDef::new(
         On::Play("", None, play),
         On::Counteract(&[ChainKind::State], "actor != owner", None, counteract).counter_reason(key!("welcome_mujica_when")),
     ],
-).meta(&card_sdk::meta::CardMeta::new()
+)
+// 规则书（1）: 「转换任意一名玩家的状态」 -- one named player, so the play has a
+// [指定] target and 网络链接异常 clause 1 applies (`ctx::target` in the body).
+.props(&[(prop::DESIGNATES, 1)])
+.meta(&card_sdk::meta::CardMeta::new()
         .name(r#"欢迎来到ave mujica的世界"#)
         .raw_name(r#"欢迎来到ave mujica的世界"#)
         .tags(&[r#"反击"#])

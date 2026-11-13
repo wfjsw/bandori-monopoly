@@ -77,9 +77,12 @@ pub const CARDS: &[CardDef] = &[
 ///
 /// `PPP:Returns` places the borrowed band and records its uid in
 /// `returns.borrow_uid`; the owner's own band card sits beside it (ruling
-/// 2026-10-06) and its presses are free. Single source of truth — every
-/// caller derives from this, and effects that spend the same token budget it
-/// on top of their own cost.
+/// 2026-10-06) and its presses are free.
+///
+/// This *is* the press's declared cost: every affected band skill writes
+/// `On::Play(..).cost("星星贴纸", crate::copy_sticker_cost)` (ENG-COST), so the
+/// host refuses a short player (`err.cost_short`) and charges the sticker once
+/// before the body — no rule body carries the pay-and-check algebra.
 pub fn copy_sticker_cost(player_id: i32) -> i32 {
     // (3) is a [持续] of `PPP:Returns`: once Returns has left the field (or is
     // face down) the borrowed copy stays, but the tax does not -- the same
@@ -95,30 +98,6 @@ pub fn copy_sticker_cost(player_id: i32) -> i32 {
     } else {
         0
     }
-}
-
-/// Play-gate half of 「使用因此卡获得的团卡的主动效果时需要支付1星星贴纸」.
-///
-/// 「需要支付」 is a **cost of activation**: with too few stickers the borrowed
-/// band's 主动 effect must not run. `Err(Prompt)` is the pause sentinel
-/// (`card-sdk`), not a refusal — the refusal belongs on the press's `cant_play`.
-pub fn copy_sticker_gate(player_id: i32) -> Option<card_sdk::Msg> {
-    let cost = copy_sticker_cost(player_id);
-    if cost > 0 && bandori_std::ctx::held_count(player_id, "星星贴纸") < cost {
-        Some(card_sdk::Msg::new(card_sdk::key!("skill_band_no_sticker")))
-    } else {
-        None
-    }
-}
-
-/// Charge the tax once the press is payable (`copy_sticker_gate` is the
-/// refusal). Skipping this would make a payable press free.
-pub fn spend_copy_sticker(player_id: i32) -> card_sdk::Asked {
-    let cost = copy_sticker_cost(player_id);
-    if cost > 0 {
-        bandori_std::ctx::add_held_by_name(player_id, "星星贴纸", -cost, i32::MAX)?;
-    }
-    Ok(())
 }
 
 /// `Sumimi:#L11`'s [奇迹水晶] cover: 「每当乐队技能需要移除[奇迹水晶]时，可移除此卡

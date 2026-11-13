@@ -3466,6 +3466,10 @@ impl CardWorld for Run {
         // A play whose card declares recipients (`DESIGNATES`) names the other
         // living players of its user (「designate[使用者]以外的所有玩家」 /
         // 「其他玩家[分摊]」). The play's card is the one the trigger names.
+        // Bodies are opaque here, so the static prop is the whole declaration:
+        // cards stamping it must target through the [指定] pipeline
+        // (`ctx::target` / `ctx::target_tile` / `ctx::target_all`); a bare
+        // `ctx::ask_tile` pick is an option list, not a [指定].
         let card = self.trigger.card.as_deref().unwrap_or("");
         let designates = props_of(&self.props, card)
             .get(game_core::state::prop::DESIGNATES)
@@ -3951,6 +3955,17 @@ impl CardWorld for Run {
     }
     fn recorded_roll(&self) -> Option<i32> {
         self.world.recorded_roll
+    }
+    fn set_direction_dice(&mut self, count: i32, sides: i32) {
+        self.stamp_skill_source();
+        // The die is cast here, from the world RNG (W3-KAORU-02); the face
+        // rides `World::direction_roll` and the outcome line below. C-Q47:
+        // odd = reverse.
+        let face = self.world.roll_direction_dice(count, sides);
+        self.outcome_plan("log.outcome.plan_direction", -1, face, "");
+    }
+    fn direction_roll(&self) -> Option<i32> {
+        self.world.direction_roll
     }
     fn move_tag(&self, key: &str) -> i32 {
         self.world.move_tag(key)

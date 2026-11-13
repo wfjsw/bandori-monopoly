@@ -88,7 +88,9 @@ fn counteract(player_id: i32) -> card_sdk::Asked {
         }
         TriggerKind::Card => {
             // The two branches are decided by whether the play *names* anyone
-            // (`ctx::designations`, the static targeting list).
+            // (`ctx::designations`, the static `DESIGNATES` declaration; the
+            // body is opaque here, so a card naming a single recipient through
+            // `ctx::target` / `ctx::target_tile` stamps it too).
             let designations = ctx::designations(trigger::player_id());
             if designations.is_empty() {
                 // （2）「没有[指定]目标则抵消其所有的效果」

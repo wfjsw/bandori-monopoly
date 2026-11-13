@@ -536,6 +536,10 @@ pub trait HostOps {
     fn op_add_base_dice(&mut self, a: [i32; 6]) -> Result<i64, HostError>;
     /// `ruleset_add_extra_dice`
     fn op_add_extra_dice(&mut self, a: [i32; 6]) -> Result<i64, HostError>;
+    /// `ruleset_set_direction_dice`
+    fn op_set_direction_dice(&mut self, a: [i32; 6]) -> Result<i64, HostError>;
+    /// `ruleset_direction_roll`
+    fn op_direction_roll(&mut self, a: [i32; 6]) -> Result<i64, HostError>;
     /// `ruleset_move_stopped`
     fn op_move_stopped(&mut self, a: [i32; 6]) -> Result<i64, HostError>;
     /// `ruleset_set_min_roll`
@@ -672,6 +676,8 @@ pub trait HostOps {
     fn op_card_text_mentions(&mut self, a: [i32; 6]) -> Result<i64, HostError>;
     /// `ruleset_card_prop`
     fn op_card_prop(&mut self, a: [i32; 6]) -> Result<i64, HostError>;
+    /// `ruleset_card_derived`
+    fn op_card_derived(&mut self, a: [i32; 6]) -> Result<i64, HostError>;
     /// `ruleset_gain_fixed`
     fn op_gain_fixed(&mut self, a: [i32; 6]) -> Result<i64, HostError>;
     /// `ruleset_paid_in_settle`
@@ -730,6 +736,8 @@ pub trait HostOps {
     fn op_held_names(&mut self, a: [i32; 6]) -> Result<i64, HostError>;
     /// `ruleset_designations`
     fn op_designations(&mut self, a: [i32; 6]) -> Result<i64, HostError>;
+    /// `ruleset_event_card_ids`
+    fn op_event_card_ids(&mut self, a: [i32; 6]) -> Result<i64, HostError>;
     /// `ruleset_cancel_designation`
     fn op_cancel_designation(&mut self, a: [i32; 6]) -> Result<i64, HostError>;
     /// `ruleset_designation_cancelled`
@@ -1838,6 +1846,13 @@ impl<C: crate::host::HostCtx> HostOps for C {
         crate::hostfns::add_extra_dice(self, a[0], a[1], a[2], a[3])?;
         Ok(0)
     }
+    fn op_set_direction_dice(&mut self, a: [i32; 6]) -> Result<i64, HostError> {
+        crate::hostfns::set_direction_dice(self, a[0], a[1])?;
+        Ok(0)
+    }
+    fn op_direction_roll(&mut self, a: [i32; 6]) -> Result<i64, HostError> {
+        crate::hostfns::direction_roll(self).map(|v| v as i64)
+    }
     fn op_move_stopped(&mut self, a: [i32; 6]) -> Result<i64, HostError> {
         Ok(crate::hostfns::move_stopped(self)? as i64)
     }
@@ -2075,6 +2090,9 @@ impl<C: crate::host::HostCtx> HostOps for C {
     fn op_card_prop(&mut self, a: [i32; 6]) -> Result<i64, HostError> {
         Ok(crate::hostfns::card_prop(self, a[0], a[1], a[2], a[3])? as i64)
     }
+    fn op_card_derived(&mut self, a: [i32; 6]) -> Result<i64, HostError> {
+        Ok(crate::hostfns::card_derived(self, a[0], a[1])? as i64)
+    }
     fn op_gain_fixed(&mut self, a: [i32; 6]) -> Result<i64, HostError> {
         Ok(crate::hostfns::gain_fixed(self, a[0], a[1], a[2], a[3])? as i64)
     }
@@ -2166,6 +2184,9 @@ impl<C: crate::host::HostCtx> HostOps for C {
     }
     fn op_designations(&mut self, a: [i32; 6]) -> Result<i64, HostError> {
         Ok(crate::hostfns::designations(self, a[0], a[1], a[2])? as i64)
+    }
+    fn op_event_card_ids(&mut self, a: [i32; 6]) -> Result<i64, HostError> {
+        Ok(crate::hostfns::event_card_ids(self, a[0], a[1])? as i64)
     }
     fn op_cancel_designation(&mut self, a: [i32; 6]) -> Result<i64, HostError> {
         crate::hostfns::cancel_designation(self, a[0])?;
@@ -4879,6 +4900,25 @@ pub unsafe extern "C-unwind" fn ruleset_set_base_dice(count: i32, sides: i32, pt
 }
 
 #[no_mangle]
+pub unsafe extern "C-unwind" fn ruleset_set_direction_dice(count: i32, sides: i32) {
+    with_host(|h| match h.op_set_direction_dice([count, sides, 0, 0, 0, 0]) {
+        Ok(_) => {}
+        Err(e) => abort_host(e),
+    })
+}
+
+#[no_mangle]
+pub unsafe extern "C-unwind" fn ruleset_direction_roll() -> i32 {
+    with_host(|h| match h.op_direction_roll([0, 0, 0, 0, 0, 0]) {
+        Ok(v) => v as i32,
+        Err(e) => {
+            abort_host(e);
+            0
+        }
+    })
+}
+
+#[no_mangle]
 pub unsafe extern "C-unwind" fn ruleset_add_base_dice(count: i32, sides: i32, ptr: i32, len: i32) {
     with_host(
         |h| match h.op_add_base_dice([count, sides, ptr, len, 0, 0]) {
@@ -5572,6 +5612,14 @@ pub unsafe extern "C-unwind" fn ruleset_card_prop(ip: i32, il: i32, kp: i32, kl:
 }
 
 #[no_mangle]
+pub unsafe extern "C-unwind" fn ruleset_card_derived(ip: i32, il: i32) -> i32 {
+    with_host(|h| match h.op_card_derived([ip, il, 0, 0, 0, 0]) {
+        Ok(v) => v as i32,
+        Err(e) => abort_host(e),
+    })
+}
+
+#[no_mangle]
 pub unsafe extern "C-unwind" fn ruleset_gain_fixed(
     player_id: i32,
     amount: i32,
@@ -5864,6 +5912,14 @@ pub unsafe extern "C-unwind" fn ruleset_designations(player_id: i32, buf: i32, c
             Err(e) => abort_host(e),
         },
     )
+}
+
+#[no_mangle]
+pub unsafe extern "C-unwind" fn ruleset_event_card_ids(buf: i32, cap: i32) -> i32 {
+    with_host(|h| match h.op_event_card_ids([buf, cap, 0, 0, 0, 0]) {
+        Ok(v) => v as i32,
+        Err(e) => abort_host(e),
+    })
 }
 
 #[no_mangle]

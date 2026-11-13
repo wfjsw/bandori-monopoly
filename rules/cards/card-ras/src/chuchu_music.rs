@@ -7,7 +7,7 @@
 
 use bandori_std::counter;
 use bandori_std::ctx::{self, trigger};
-use card_sdk::abi::ActionKind;
+use card_sdk::abi::{prop, ActionKind};
 use card_sdk::CardText;
 use card_sdk::{key, Action, CardDef, Msg, On};
 
@@ -22,8 +22,13 @@ pub const CHUCHU_MUSIC: CardDef = CardDef::new(
         On::Action(Action::Bought("", Some(buy_after_guard), buy_after)),
     ],
 )
+// 规则书「将此卡放置于你以外的一名玩家场上」: one named player, so the play has a
+// [指定] target and 网络链接异常 clause 1 applies.
 // 规则书「添加3个奇迹水晶」: the `⌛3` marker the client shows.
-.props(&[(bandori_std::marker::TURNS_LEFT, 3)])
+.props(&[
+    (bandori_std::marker::TURNS_LEFT, 3),
+    (prop::DESIGNATES, 1),
+])
 .meta(&card_sdk::meta::CardMeta::new()
         .name(r#"演奏我的音乐吧"#)
         .raw_name(r#"（chuchu）演奏我的音乐吧"#)

@@ -9,7 +9,7 @@ use alloc::vec::Vec;
 
 use bandori_std::ctx::{self, trigger};
 use bandori_std::zones::ZoneChangeCause;
-use card_sdk::abi::OutCause;
+use card_sdk::abi::{prop, OutCause};
 use card_sdk::CardText;
 use card_sdk::{key, Action, CardDef, Msg, On};
 
@@ -72,7 +72,11 @@ pub const ONE_OF_US: CardDef = CardDef::new(
             clear_measured_rent
         )).quiet_when_empty(),
     ],
-).props(&[(card_sdk::abi::prop::SONG, 1)]).meta(&card_sdk::meta::CardMeta::new()
+)
+// 规则书[手]: 「指定双方各一块地契」 -- both deeds go through
+// `ctx::target_tile`, so the play has a [指定] target and 网络链接异常 clause 1
+// applies.
+.props(&[(prop::SONG, 1), (prop::DESIGNATES, 1)]).meta(&card_sdk::meta::CardMeta::new()
         .name(r#"ONE OF US"#)
         .raw_name(r#"ONE OF US"#)
         .tags(&[])
