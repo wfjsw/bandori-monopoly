@@ -1996,7 +1996,11 @@ fn layer_keep_press_replaces_the_move_roll_with_a_kept_die() {
     drain(&mut t);
     // 「消耗一个火罐」 and 「删去该骰点」
     assert_eq!(t.charge(0), 0, "one fire pot spent");
-    assert_eq!(t.state(0, "layer_keep_count"), 1, "the die was deleted (zero kept, 1-based)");
+    assert_eq!(
+        t.state(0, "layer_keep_count"),
+        1,
+        "the die was deleted (zero kept, 1-based)"
+    );
     // 「替代当回合的移动掷骰」 -- the next move roll is the kept face (7).
     t.dice(&[1]); // loaded face is overridden by the fixed roll
     t.roll(0).unwrap();

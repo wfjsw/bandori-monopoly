@@ -476,6 +476,14 @@ pub mod prop {
     /// and back, one level. `-1` / absent = no binding. Mirrors
     /// `card_sdk::abi::prop::SWAPPED_TILE`.
     pub const SWAPPED_TILE: &str = "swappedTile";
+    /// 「…原本的所有效果迁移至…」 / 「…视为与…交换位置」 -- an instance prop
+    /// pair naming two squares (`RULE_SWAP_A` / `RULE_SWAP_B`). The **rule
+    /// instances** homed at one square govern the other and back; the squares'
+    /// board identity stays put (`World::governing_square`). `-1` / absent =
+    /// no binding. Mirrors `card_sdk::abi::prop::RULE_SWAP_A` / `RULE_SWAP_B`.
+    pub const RULE_SWAP_A: &str = "ruleSwapA";
+    /// The other half of [`RULE_SWAP_A`].
+    pub const RULE_SWAP_B: &str = "ruleSwapB";
 
     /// A `Dest` wire code the card wants when it leaves play, read at the
     /// `zoneLeft` commit. Absent = the Graveyard. Mirrors

@@ -1061,32 +1061,29 @@ it does today.
 
 `event:协助CiRCLE重建` migrates 「CiRCLE原本的所有效果」 onto 「CiRCLE咖啡厅」
 (「…迁移至CiRCLE咖啡厅并覆盖其原本效果」). One of those is `tile:circle`'s
-[经过] reward. The event does **not** call that body: it messages the card.
+[经过] reward. The event does **not** call that body, and since ABI-13 it does
+not message it either: it **swaps the rule instance** onto the cafe.
 
 ```rust
-// rules/events/src/circle_rebuild.rs -- the cafe's [经过]
-ctx::send(
-    &Target::Board("tile:circle".into()),
-    "settleReward",
-    &Message { name: "settleReward".into(), seat: who, b: landing as i32, tile: at, ..Default::default() },
-)?;
-
-// rules/tiles/src/circle.rs -- the same reward body the Pass arm runs
-On::Message(&["settleReward"], "", None, on_message_settle_reward),
-
-fn on_message_settle_reward(_owner: i32) -> Asked {
-    settle_reward(ctx::message::seat(), ctx::message::b() != 0)
-}
+// rules/events/src/circle_rebuild.rs -- play
+let circle = ctx::tile_named("CiRCLE");
+let cafe = ctx::tile_named(CAFE);
+ctx::tile_swap_rules(circle, cafe);
 ```
 
-The reward runs **as `tile:circle`**: its own choice prompt, its own
-`passRewardAffected` window, its own `prop::NO_REWARD` read. `settle_reward`
-is private to that module -- the only two ways in are the rule's own Pass arm
-and this message. `rules/events` does not depend on `rules-tiles` at all.
+The reward then runs **as `tile:circle`** wherever the café is passed: the
+body's own `ctx::self_tile()` reaches its home instance, so its choice prompt,
+`passRewardAffected` window and `prop::NO_REWARD` read all travel with it --
+instance state and any future clause do too, with no re-implementation. The
+dispatch (`World::tile_rule_instances` / `field_hears`, and the resolving
+replay) narrows a board instance to the square its rule governs. The swap is
+one prop pair on the event row, so it dies at expiry and rides save / restore.
+`rules/events` still does not depend on `rules-tiles`.
 
 This is the shape for any "carry this other card's effect somewhere else"
-clause. The remaining gap is *instance* state and future effects riding along
-automatically -- that needs a real tile-rule swap, BACKLOG **ABI-13**.
+clause (`docs/rulebook/spec/abi/ab-tile-swap.md`). 「交换位置」 instead uses the
+position binding `prop::SWAPPED_TILE` (笑容大游行 (3)), which swaps what stands
+at a slot; the two compose, and the rule swap is the effects-only one.
 
 ### PP fans in the per-player state dict (ABI v83)
 

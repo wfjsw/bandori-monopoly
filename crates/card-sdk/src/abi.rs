@@ -1943,6 +1943,16 @@ pub mod prop {
     /// the partner tile and the partner tile resolves to the slot, one level,
     /// both directions. `-1` / absent = no binding. Dies with the instance.
     pub const SWAPPED_TILE: &str = "swappedTile";
+    /// 「…原本的所有效果迁移至…」 / 「…视为与…交换位置」 -- an **instance**
+    /// pair of props naming two squares. While the instance is in play the
+    /// rule instances homed at `RULE_SWAP_A` govern `RULE_SWAP_B` and vice
+    /// versa (both squares' *rule bodies* move; the squares' board identity
+    /// -- kind, `is_start`, owners, houses -- does not). `-1` / absent = no
+    /// binding. Dies with the instance. [`crate::ctx::tile_swap_rules`] writes
+    /// the pair; the engine resolves it in `World::governing_square`.
+    pub const RULE_SWAP_A: &str = "ruleSwapA";
+    /// The other half of [`RULE_SWAP_A`].
+    pub const RULE_SWAP_B: &str = "ruleSwapB";
 }
 
 /// Shared **move tags** -- the keys a move carries on

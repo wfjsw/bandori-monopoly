@@ -210,8 +210,7 @@ fn on_discarded(_player_id: i32) -> card_sdk::Asked {
 /// `ownerSet` with a tile.
 fn owner_set(i: i32) -> Option<(i32, i32)> {
     let t = ctx::effect::tile(i);
-    (t >= 0 && ctx::effect::kind(i) == TriggerKind::OwnerSet)
-        .then(|| (t, ctx::effect::value(i)))
+    (t >= 0 && ctx::effect::kind(i) == TriggerKind::OwnerSet).then(|| (t, ctx::effect::value(i)))
 }
 
 /// Does any declared `ownerSet` move a tile to or away from this owner? The

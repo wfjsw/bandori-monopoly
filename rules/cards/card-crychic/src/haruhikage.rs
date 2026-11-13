@@ -327,11 +327,7 @@ fn cancel_pay_skill(player_id: i32) {
         // skill's own row run and the card goes to the discard pile as a used
         // non-[持续] hand card.
         ctx::set_dest(ctx::Dest::Field, card_sdk::abi::ZoneChangeCause::Effect);
-        ctx::place_card(
-            player_id,
-            ID,
-            &Msg::new(key!("haruhikage_pay_note")),
-        );
+        ctx::place_card(player_id, ID, &Msg::new(key!("haruhikage_pay_note")));
     }
 }
 
@@ -353,7 +349,11 @@ fn soyo_after(player_id: i32) -> card_sdk::Asked {
     // discard pile (a used non-[持续] hand card's destination).
     let uid = ctx::extra_of(player_id, ID);
     if uid >= 0 {
-        ctx::unplace_at(uid, ctx::Dest::Graveyard, card_sdk::abi::ZoneChangeCause::Effect);
+        ctx::unplace_at(
+            uid,
+            ctx::Dest::Graveyard,
+            card_sdk::abi::ZoneChangeCause::Effect,
+        );
     } else {
         ctx::to_discard(player_id, ID);
     }

@@ -622,9 +622,9 @@ fn circle_rebuild_counts_down_on_passes_then_discards() {
 }
 
 // 「CiRCLE原本的所有效果迁移至CiRCLE咖啡厅并覆盖其原本效果」 -- the [经过]
-// reward is one of them, so a pass of the cafe pays it. The reward runs as
-// `tile:circle` via the cross-card `"settleReward"` message, not as a call
-// into that module.
+// reward is one of them, so a pass of the cafe pays it. The whole `tile:circle`
+// instance rides the rule swap (`ctx::tile_swap_rules`), so the reward runs as
+// that rule on the cafe with no cross-card message.
 #[test]
 fn circle_rebuild_pays_the_reward_on_a_cafe_pass() {
     let mut t = Table::vanilla(2);
