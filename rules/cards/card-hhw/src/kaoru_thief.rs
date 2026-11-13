@@ -133,7 +133,9 @@ fn turn_end(_player_id: i32) -> card_sdk::Asked {
 /// `counter_is('crystals')` in the condition (kept here as well). Card identity is
 /// already in the CEL condition (`trigger_card == card.id`).
 fn crystals_changed_guard(_player_id: i32) -> bool {
-    trigger::name() == bandori_std::counter::CRYSTALS
+    // The entry's condition already pins `trigger_card == card.id`; the
+    // shared base adds the same `card_is` on the live raise.
+    bandori_std::crystals_changed_of(ID)
 }
 
 fn on_crystals_changed(player_id: i32) -> card_sdk::Asked {

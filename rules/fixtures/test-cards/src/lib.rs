@@ -1181,6 +1181,48 @@ fn pay_calc_w5(player_id: i32) -> card_sdk::Asked {
     Ok(())
 }
 
+/// HOST-03 行动阶段 3 / 6 probe: logs the `turnStart` window and the
+/// 「回合开始后」 stage marker (`turnStartAfter`) with distinct keys, so a test
+/// can pin that the marker fires once, after the window. The manage-phase
+/// marker is its own card below.
+const TURN_START_AFTER_PROBE: CardDef = CardDef::new(
+    "TEST:turnStartAfterProbe",
+    &[
+        On::Action(Action::TurnStart("actor == owner", None, turn_start_window)),
+        On::Action(Action::TurnStartAfter(
+            "actor == owner",
+            None,
+            turn_start_after,
+        )),
+    ],
+);
+
+fn turn_start_window(player_id: i32) -> card_sdk::Asked {
+    ctx::log(player_id, &Msg::new(key!("turn_start_window")));
+    Ok(())
+}
+
+fn turn_start_after(player_id: i32) -> card_sdk::Asked {
+    ctx::log(player_id, &Msg::new(key!("turn_start_after")));
+    Ok(())
+}
+
+/// HOST-03 行动阶段 6 probe: logs `manage_after` at 「经营/出牌阶段后」, the
+/// boundary into the main-move phase (or on an end-turn from 运营).
+const MANAGE_AFTER_PROBE: CardDef = CardDef::new(
+    "TEST:manageAfterProbe",
+    &[On::Action(Action::ManageAfter(
+        "actor == owner",
+        None,
+        manage_after,
+    ))],
+);
+
+fn manage_after(player_id: i32) -> card_sdk::Asked {
+    ctx::log(player_id, &Msg::new(key!("manage_after")));
+    Ok(())
+}
+
 /// HOST-03 window 7 probe: logs the settled `paid` figure with the payer's
 /// seat (-1 for a print), so a test can pin that a receipt fires it too.
 const PAID_PROBE: CardDef = CardDef::new(
@@ -4494,6 +4536,8 @@ card_sdk::ruleset!(&[
     GAIN_1000,
     LOSE_1000,
     PAY_CALC_PROBE,
+    TURN_START_AFTER_PROBE,
+    MANAGE_AFTER_PROBE,
     PAID_PROBE,
     MARKER_DENY,
     MARKER_SPEND,

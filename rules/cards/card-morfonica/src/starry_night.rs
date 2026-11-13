@@ -105,8 +105,7 @@ fn crystals_changed_guard(player_id: i32) -> bool {
         // ignores it (`trigger::instance` is the raise's subject, not the job's).
         && trigger::instance() == ctx::self_uid()
         // Redundant once the instance matches, but keeps the name check readable.
-        && trigger::card_is(ID)
-        && trigger::name() == bandori_std::counter::CRYSTALS
+        && bandori_std::crystals_changed_of(ID)
         // （3） pays for removals; （1） leaves when the count lands on 0.
         && (trigger::value() < 0 || ctx::crystals() == 0)
 }

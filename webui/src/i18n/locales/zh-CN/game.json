@@ -502,6 +502,7 @@
   "log.reason.exile": "{{target}} 获得 [除外]",
   "log.reason.gain": "{{target}} [获得] {{value}}",
   "log.reason.generic": "{{who}}：{{kind}}",
+  "log.reason.manage_end": "{{who}} 的经营/出牌阶段结束",
   "log.reason.marker": "{{who}} 的标记变化 {{value}}",
   "log.reason.mortgage": "{{who}} 抵押 {{tile}}",
   "log.reason.out": "{{who}} 退出游戏",

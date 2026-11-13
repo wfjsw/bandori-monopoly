@@ -92,13 +92,10 @@ fn anon_tokyo(player_id: i32) -> card_sdk::Asked {
         return Ok(());
     }
     if ctx::tile_owner(here) == player_id && ctx::tile_owner(t) == player_id {
-        // TODO(规则书)（[使用者]同时拥有上述的两个格子则[消耗]其中地契购买价格中更高者的资金的一半）: `buy_price`). the 消耗 and
-        // the 放置 are one body -- we pay before `place_mark_pair`, which refuses at the
-        // cap, so a re-link spends the half and places nothing.
-        let amount = ctx::tile_price(here).max(ctx::tile_price(t)) / 2;
-        if amount > 0 {
-            ctx::pay(player_id, amount, &Msg::new(key!("anon_tokyo_pay")))?;
-        }
+        // TODO(规则书)（[使用者]同时拥有上述的两个格子则[消耗]其中地契购买价格中更高者的资金的一半）: `buy_price`).
+        // The 消耗 and the 放置 are one body, but the pair is place-or-refuse
+        // atomic at the cap: the charge runs only **after** the pair actually
+        // placed, so a capped re-link costs nothing.
         // Place the stand-in **before** the crystal so the two rows bind to its instance
         // and die with it.
         if !ctx::is_placed() {
@@ -124,6 +121,11 @@ fn anon_tokyo(player_id: i32) -> card_sdk::Asked {
             card_sdk::abi::Stack::Fresh,
         );
         if placed {
+            // 规则书[手]1: 「[消耗]其中地契购买价格中更高者的资金的一半」
+            let amount = ctx::tile_price(here).max(ctx::tile_price(t)) / 2;
+            if amount > 0 {
+                ctx::pay(player_id, amount, &Msg::new(key!("anon_tokyo_pay")))?;
+            }
             ctx::log(
                 player_id,
                 &Msg::new(key!("anon_tokyo_linked"))

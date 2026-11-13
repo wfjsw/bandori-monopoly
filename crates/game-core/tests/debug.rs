@@ -107,6 +107,21 @@ fn cheats_update_views_and_survive_save_restore() {
     assert!(st.debug_open);
     assert_eq!(st.players[human].money, 50_000);
     assert_eq!(st.players[bot].pos, 10);
+    // The `state` cheat reaches the held fire row (not the dead keyed state):
+    // it writes the row value and keeps the row's bound instance and cap.
+    let mut fire = cheat("state", 7, human as i32);
+    fire.persona = "charge".into();
+    m.act(1, &fire).unwrap();
+    let st = m.state();
+    let row = st.players[human]
+        .tokens
+        .iter()
+        .find(|c| c.name == "charge")
+        .expect("charge row");
+    assert_eq!(row.value, 7, "the cheat wrote the held row");
+    assert_eq!(row.max, 5, "the advertised cap is kept");
+    assert_eq!(row.instance, None, "the bound instance is kept");
+    assert_eq!(st.players[human].state_get("charge"), 0, "no state key");
     // Dumb storage: the engine stores the advertised cap for display and
     // does not police it. A raw token write is not clamped.
     m.world_mut().set_held(human as i32, "charge", 1_000, -1, 5);
@@ -159,6 +174,12 @@ fn invalid_commands_leave_the_world_unchanged() {
         assert!(m.act(1, &cmd).is_err());
         assert_eq!(m.save(), before, "{cmd:?}");
     }
+    // A fire key needs a live token row; no row, no write.
+    let mut fire = cheat("state", 1, 0);
+    fire.persona = "charge".into();
+    let before = m.save();
+    assert!(m.act(1, &fire).is_err());
+    assert_eq!(m.save(), before);
 }
 
 #[cfg(debug_assertions)]

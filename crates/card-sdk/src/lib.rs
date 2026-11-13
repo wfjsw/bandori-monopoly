@@ -1924,6 +1924,16 @@ mod tests {
             "payCalcBefore"
         );
         assert_eq!(TriggerKind::PayCalcBefore.id, 142);
+        assert_eq!(
+            TriggerKind::from_str("turnStartAfter").spelling(),
+            "turnStartAfter"
+        );
+        assert_eq!(TriggerKind::TurnStartAfter.id, 143);
+        assert_eq!(
+            TriggerKind::from_str("manageAfter").spelling(),
+            "manageAfter"
+        );
+        assert_eq!(TriggerKind::ManageAfter.id, 144);
         // v105 hook kinds (104 / 107 stay retired).
         assert_eq!(TriggerKind::from_str("cardFired").spelling(), "cardFired");
         assert_eq!(

@@ -150,6 +150,8 @@
   "anim.chainKind.turnEndAfter": "回合结束后",
   "anim.chainKind.turnEndBefore": "回合结束前",
   "anim.chainKind.turnStartBefore": "回合开始前",
+  "anim.chainKind.turnStartAfter": "回合开始后",
+  "anim.chainKind.manageAfter": "经营/出牌阶段后",
   "anim.chainKind.twoCards": "两张牌",
   "anim.chainKind.untargetable": "不可指定",
   "anim.chainKind.zoneLeft": "离场",

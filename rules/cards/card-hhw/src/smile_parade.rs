@@ -156,8 +156,7 @@ fn on_group() -> bool {
 /// and the counter name stay here (the name is not yet in the condition
 /// vocabulary).
 fn crystals_changed_guard(_player_id: i32) -> bool {
-    let g = on_group();
-    trigger::card_is(ID) && trigger::name() == bandori_std::counter::CRYSTALS && g
+    bandori_std::crystals_changed_of(ID) && on_group()
 }
 
 fn on_crystals_changed(player_id: i32) -> card_sdk::Asked {

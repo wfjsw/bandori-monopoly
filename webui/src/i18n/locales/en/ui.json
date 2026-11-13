@@ -150,6 +150,8 @@
   "anim.chainKind.turnEndAfter": "After turn end",
   "anim.chainKind.turnEndBefore": "Before turn end",
   "anim.chainKind.turnStartBefore": "Before turn start",
+  "anim.chainKind.turnStartAfter": "After turn start",
+  "anim.chainKind.manageAfter": "After manage phase",
   "anim.chainKind.twoCards": "Two cards",
   "anim.chainKind.untargetable": "Untargetable",
   "anim.chainKind.zoneLeft": "Leaves the field",

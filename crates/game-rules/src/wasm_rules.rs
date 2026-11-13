@@ -15506,6 +15506,9 @@ mod tests {
             "paySplitMulBefore",
             // v120: 支付阶段 1 「支付计算前」 (hook-only Action)
             "payCalcBefore",
+            // v120: 行动阶段 3 / 6 stage markers (hook-only Actions)
+            "turnStartAfter",
+            "manageAfter",
             // v107: the raw-spend window (a redeem / auction / `lose_raw` hook)
             "spendBefore",
         ] {

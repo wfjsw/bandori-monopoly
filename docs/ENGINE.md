@@ -628,7 +628,9 @@ rarely go broke, so bot-only games mostly end by `finish()` (human games end by 
 (world, pending routine + answer log, clocks, vote, deferred host actions) to JSON;
 `Match::restore(data, rules, json)` rebuilds it. A restored match continues
 identically (`tests/engine.rs::save_and_restore_continue_identically`). The format
-is versioned (`SAVE_VERSION`); older saves are rejected rather than misread. The
+is versioned (`SAVE_VERSION`); anything older than one version is rejected rather
+than misread (the immediately preceding version loads as a one-step migration
+source -- v22's keyed fire state folds into held-token rows, see `fold_legacy_fire`). The
 web client uses it for solo refresh recovery (`SoloMatch.save` / `SoloMatch.restore`).
 
 A field added under `#[serde(default)]` does **not** bump `SAVE_VERSION`: the

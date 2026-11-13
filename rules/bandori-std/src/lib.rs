@@ -577,8 +577,9 @@ pub fn offer_build(player_id: i32, tile: i32) -> Result<(), Prompt> {
 
 // ------------------------------------------------------------- shared guards
 
-/// Base half of the x11 `crystals_changed_guard` copies: this instance's
-/// crystals counter changed. Cards add their own residual (value vs 0, …).
+/// Base of every per-card `crystals_changed_guard`: this instance's crystals
+/// counter changed. Cards add only their own residual (value vs 0,
+/// `is_placed`, …) next to the call.
 pub fn crystals_changed_of(card_id: &str) -> bool {
     card_sdk::ctx::trigger::card_is(card_id) && card_sdk::ctx::trigger::name() == counter::CRYSTALS
 }
