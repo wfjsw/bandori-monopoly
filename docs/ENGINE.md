@@ -412,7 +412,8 @@ the generic mechanics (`purchase.rs`):
 
 * **Quote.** `CardRules::buy_quote(w, data, q)` returns `base_quote` (land +
   houses; 2× for `Force`) for `StubRules`. `WasmRules` overrides it and runs the
-  `BuyGate` / `BuyAdd` → `BuyMul` → `BuySet` hooks in **pure guard mode**
+  `BuyGate` / `BuyAdd` → `BuyMul` → `BuySet` hooks (a `Force` quote:
+  `BuyGate` / `ForceBuyAdd` → `ForceBuyMul` → `ForceBuySet`) in **pure guard mode**
   against a world copy -- the `cant_play` shape, so a quote never mutates the
   match and never prompts -- but only when a hooking instance exists. The
   commit re-quotes, so quote == charge. It takes the world by reference, so

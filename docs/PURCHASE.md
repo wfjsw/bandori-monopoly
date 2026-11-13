@@ -90,7 +90,9 @@ how ownership is assigned — are handled by the `rules/` crates.
 * **Price:**
   * the base from tile props;
   * then the stages `BuyAdd` (fixed ±) → `BuyMul` (×) → `BuySet` (free /
-    fixed), each floored at 0, mirroring 支付阶段 2 / 4 / 5.
+    fixed), each floored at 0, mirroring 支付阶段 2 / 4 / 5. A Force quote
+    instead runs the 强制购买 twins `ForceBuyAdd` → `ForceBuyMul` →
+    `ForceBuySet`; the generic stages skip Force.
 * **Payer and payee:**
   * `seller` is the bank (-1) for land / agent / card / auction buys, and the
     owner for force-buy and 收购;
@@ -204,8 +206,10 @@ StubRules and the sim run.
 * **P2 — agent.** `agent.rs` owns the set / branch / offers;
   `ctx::agent_offer`; `prices[]`; soyo tests.
 * **P3 — force-buy and 收购.** Kind Force through the quote (Poppin lock
-  included); direct transfer; `FORCE_STAYS_MORTGAGED`; no buy hooks until
-  ruling 6; `ctx::acquire` and the tomoe_savior port.
+  included); direct transfer; `FORCE_STAYS_MORTGAGED` (default on, an explicit
+  `0` clears); the 强制购买 price stages `ForceBuyAdd` / `ForceBuyMul` /
+  `ForceBuySet` (generic `Buy*` still skip Force); `ctx::acquire` and the
+  tomoe_savior port.
 * **P4 — auction.** `BuyGate` filters bidders; the quote base sets AI worth;
   the commit goes through assign + `bought`; money stays direct until ruling 7.
 * **P5 — flags, cards, colours.** `linger`; the card ports; delete the
@@ -227,12 +231,16 @@ StubRules and the sim run.
     record `turn.lingering` (the mechanism those flags became) and treat it as
     turn-scoped.
   * `q4/names.rs`'s `extraColor:` filter goes with the key.
-* **The price stages run for every `BuyKind`.** `BuyAdd` / `BuyMul` / `BuySet`
-  are the engine's generic quote stages, so a lingering 「本回合购买格子…」
-  discount also shapes a Force / Acquire / Auction quote. Before the migration
-  the flags only applied to `buy()`. Whether 强制购买 / an auction win is a
-  「购买」 for those clauses is rulings 6 / 7 — **not decided here**; if a ruling
-  says they are not, the cards' hooks must scope on `trigger::buy_kind()`.
+* **The generic price stages skip `BuyKind::Force`.** `BuyAdd` / `BuyMul` /
+  `BuySet` are the engine's generic quote stages; 强制购买 is immune to them
+  (rulebook 其他规则 6 「抵押，赎回，和强制购买的资金变动不受任何效果影响，
+  除非效果写明改动抵押，赎回，或强制购买」). An entry that writes 「强制购买」
+  declares the 强制购买 twins `ForceBuyAdd` / `ForceBuyMul` / `ForceBuySet`
+  (FORCE-WRITE-01), which run on a Force quote only. The stages still run for
+  every other `BuyKind` (Land / Agent / Card / Auction / Acquire), so a
+  lingering 「本回合购买格子…」 discount shapes those. An auction win is a
+  「购买」 for those clauses is ruling 7 — **not decided here**; if a ruling
+  says it is not, the cards' hooks must scope on `trigger::buy_kind()`.
   `bought` / `buyAfter` still do not fire for Force or Auction (unchanged).
 
 ## Rulings (proposed defaults in brackets)

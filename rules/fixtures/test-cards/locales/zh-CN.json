@@ -119,5 +119,7 @@
   "stopper_done": "强制停下：允许={{allowed}}",
   "teleporter_done": "传送到 {{pos}}",
   "end_stay_done": "移动后落下一层停留",
-  "end_stay_note": "在回合结束时使行动者停留"
+  "end_stay_note": "在回合结束时使行动者停留",
+  "pay_amount_reason": "试探支付金额",
+  "force_buy_add_reason": "force-buy add ran from {{from}}"
 }

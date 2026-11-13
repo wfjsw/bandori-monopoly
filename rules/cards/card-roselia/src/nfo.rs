@@ -24,15 +24,19 @@ pub const NFO: CardDef = CardDef::new(
         // `gain_guard` keeps only a `pay` effect aimed at this player.
         On::Action(Action::Effect("", Some(gain_guard), gain_bump)),
         On::Play("", None, play),
-        // TODO(规则书): 规则书: 「你下次付款时自动减免1000资金的消耗并将此卡置入弃牌堆」 -- ABI v74 Pattern A/D: pure
-        // amount shave on Filter(PaySplitAt); the card is used up by a paired Action
-        // (Filter cannot `set_dest`). The unplace rides PayAfter (always raised, so a
-        // shave-to-0 still uses the card up). PayAfter fires for cancelled / zeroed
-        // payments too and carries no "PaySplitAt ran" bit, and a Filter cannot latch
-        // one (`state::set` is refuse_if_filter'd) -- so the unplace cannot tell
-        // cancelled-before-PaySplitAt from shave-to-0.
+        // 规则书: 「你下次付款时自动减免1000资金的消耗并将此卡置入弃牌堆」 -- ABI v74
+        // Pattern A/D: pure amount shave on Filter(PaySplitAt); the card is used up by a
+        // paired Action (Filter cannot `set_dest`). The unplace rides PayAfter, which
+        // fires for cancelled / zeroed payments too, so its guard needs
+        // `trigger::pay_split_ran()` (NFO-CANCEL-01): a payment that got as far as this
+        // stage -- including one this body shaved to 0 -- uses the card up, while one
+        // cancelled or negated before the stage leaves it placed.
         On::Filter(Filter::PaySplitAt("actor == owner && card.placed && value > 0", None, pay_shave)),
-        On::Action(Action::PayAfter("actor == owner && card.placed", None, pay_unplace)),
+        On::Action(Action::PayAfter(
+            "actor == owner && card.placed",
+            Some(pay_split_ran),
+            pay_unplace,
+        )),
         On::Schedule("at_end", "", None, at_end),
     ],
 ).meta(&card_sdk::meta::CardMeta::new()
@@ -267,8 +271,15 @@ fn pay_shave(player_id: i32, value: i32) -> i32 {
     cut
 }
 
+/// NFO-CANCEL-01: only a payment that actually reached this card's
+/// `PaySplitAt` shave uses the card up. A cancelled / negated payment also
+/// raises `PayAfter` (with 0) but never ran the stage.
+fn pay_split_ran(_player_id: i32) -> bool {
+    ctx::trigger::pay_split_ran()
+}
+
 /// Action half of [`pay_shave`]: 「并将此卡置入弃牌堆」 -- the card is used up.
-/// Rides PayAfter (Filter cannot `set_dest`); see the TODO on the entry.
+/// Rides PayAfter (Filter cannot `set_dest`); see the guard on the entry.
 fn pay_unplace(player_id: i32) -> card_sdk::Asked {
     ctx::set_dest(ctx::Dest::Graveyard, card_sdk::abi::ZoneChangeCause::Effect);
     let _ = player_id;

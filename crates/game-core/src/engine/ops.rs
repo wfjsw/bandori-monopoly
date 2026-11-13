@@ -1168,6 +1168,8 @@ impl World {
         }
         let paid = amount.min(s.money);
         s.money -= paid;
+        // 「失去资金」 (NOW SUMIMI): the actual figure out.
+        self.bump_loss(player_id, paid);
         self.log(
             "lose",
             player_id,
@@ -1946,6 +1948,20 @@ impl World {
             .find(|f| f.tile == tile)
             .and_then(|f| f.props.get(key).copied())
             .unwrap_or(0)
+    }
+
+    /// Tri-state [`Self::tile_prop`]: `-1` = no board-owned instance on
+    /// `tile` carries `key`, `0` = present and clear, `1` = present and
+    /// non-zero. [`Self::tile_prop`] folds absent onto `0`, so a ternary prop
+    /// (「获得的地契仍为抵押状态」, `prop::FORCE_STAYS_MORTGAGED = 0`) cannot be
+    /// told from "nobody wrote it" through it.
+    pub fn tile_prop_state(&self, tile: i32, key: &str) -> i32 {
+        for f in self.st.board_field.iter().filter(|f| f.tile == tile) {
+            if let Some(&v) = f.props.get(key) {
+                return if v == 0 { 0 } else { 1 };
+            }
+        }
+        -1
     }
 
     /// Every prop key set on a board-owned rule instance governing `tile`

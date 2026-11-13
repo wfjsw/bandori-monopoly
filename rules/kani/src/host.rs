@@ -609,6 +609,7 @@ pub fn dispatch(op: Op, a: Args) -> i64 {
         Op::pay_leg => arm_pay_leg(a),
         Op::can_pay => arm_can_pay(a),
         Op::gains_this_turn => arm_gains_this_turn(a),
+        Op::lost_this_turn => arm_lost_this_turn(a),
         Op::paid_in_settle => 0,
 
         // ---- cards / piles ----
@@ -831,6 +832,16 @@ pub fn dispatch(op: Op, a: Args) -> i64 {
             } else {
                 0
             }
+        }
+        Op::tile_prop_state => {
+            // tile_prop_state(tile, kp, kl) -> [tile, kp, kl, …]; name (a1,a2).
+            // -1 absent / 0 present-and-clear / 1 present-and-non-zero.
+            let key = name_id(a1, a2);
+            world::with_world(|w| match w.tiles[tile_idx(a0)].props.get_opt(key) {
+                None => -1,
+                Some(0) => 0,
+                Some(_) => 1,
+            }) as i64
         }
         Op::set_self_prop | Op::set_prop_at | Op::set_tile_prop => {
             // hostfns: `set_self_prop(kp, kl, v)` writes the running instance's
@@ -1247,6 +1258,7 @@ pub fn dispatch(op: Op, a: Args) -> i64 {
         | Op::join_joiner_shielded
         | Op::trigger_pending_negation
         | Op::trigger_extreme_armed
+        | Op::trigger_pay_split_ran
         | Op::trigger_chain_depth => 0,
         Op::trig_set_cancelled => arm_trig_set_cancelled(a),
         Op::trig_set_abnormal_allowed => arm_trig_set_abnormal_allowed(a),
@@ -1626,6 +1638,7 @@ pub fn arm_adjust_money(a: Args) -> i64 {
                 } else if cost < 0 {
                     let n = (-cost).min(w.money[p].max(0));
                     w.money[p] -= n;
+                    w.losses_this_turn[p] = w.losses_this_turn[p].saturating_add(n);
                 }
             });
         }
@@ -2670,6 +2683,11 @@ pub fn arm_gains_this_turn(a: Args) -> i64 {
     }
 }
 
+pub fn arm_lost_this_turn(a: Args) -> i64 {
+    let [a0, ..] = a;
+    world::with_world(|w| w.losses_this_turn[player_idx(a0)]) as i64
+}
+
 pub fn arm_gate(a: Args) -> i64 {
     let [a0, ..] = a;
     world::with_world(|w| {
@@ -3213,6 +3231,7 @@ pub fn arm_pay(a: Args) -> i64 {
             world::with_world_mut(|w| {
                 let p = player_idx(a0);
                 w.money[p] = (w.money[p] - moved).max(0);
+                w.losses_this_turn[p] = w.losses_this_turn[p].saturating_add(moved);
                 w.push(Effect::PayMoney {
                     player: a0,
                     n: moved,
@@ -5248,6 +5267,7 @@ pub fn arm_pay_command(a: Args) -> i64 {
         world::with_world_mut(|w| {
             let f = player_idx(from);
             w.money[f] = (w.money[f] - moved).max(0);
+            w.losses_this_turn[f] = w.losses_this_turn[f].saturating_add(moved);
             if to >= 0 {
                 let t = player_idx(to);
                 w.money[t] = w.money[t].saturating_add(moved);

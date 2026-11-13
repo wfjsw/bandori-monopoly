@@ -661,6 +661,12 @@ mod abi {
             link_name = "ruleset_set_tile_prop"
         )]
         pub fn set_tile_prop(tile: i32, kp: i32, kl: i32, v: i32) -> i32;
+        // ABI-12: the tri-state [`tile_prop`] presence read.
+        #[cfg_attr(
+            any(not(target_arch = "wasm32"), feature = "native-rules"),
+            link_name = "ruleset_tile_prop_state"
+        )]
+        pub fn tile_prop_state(tile: i32, kp: i32, kl: i32) -> i32;
         // v50: one declared property of a field instance (`crystals_at` naming).
         #[cfg_attr(
             any(not(target_arch = "wasm32"), feature = "native-rules"),
@@ -1919,6 +1925,11 @@ mod abi {
         pub fn gains_this_turn(player_id: i32) -> i32;
         #[cfg_attr(
             any(not(target_arch = "wasm32"), feature = "native-rules"),
+            link_name = "ruleset_lost_this_turn"
+        )]
+        pub fn lost_this_turn(player_id: i32) -> i32;
+        #[cfg_attr(
+            any(not(target_arch = "wasm32"), feature = "native-rules"),
             link_name = "ruleset_placed_tile"
         )]
         pub fn placed_tile(player_id: i32, ptr: i32, len: i32) -> i32;
@@ -2235,6 +2246,11 @@ mod abi {
             link_name = "ruleset_trigger_pending_negation"
         )]
         pub fn trigger_pending_negation() -> i32;
+        #[cfg_attr(
+            any(not(target_arch = "wasm32"), feature = "native-rules"),
+            link_name = "ruleset_trigger_pay_split_ran"
+        )]
+        pub fn trigger_pay_split_ran() -> i32;
         #[cfg_attr(
             any(not(target_arch = "wasm32"), feature = "native-rules"),
             link_name = "ruleset_trigger_extreme_armed"

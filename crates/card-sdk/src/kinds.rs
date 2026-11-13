@@ -637,6 +637,9 @@ filter_kinds! {
     BuyAdd => value;
     BuyMul => value;
     BuySet => value;
+    ForceBuyAdd => value;
+    ForceBuyMul => value;
+    ForceBuySet => value;
     BuyAssign => payload(crate::payload::DealValue);
     PayCombinedAdd => value;
     PayCombinedMul => value;
@@ -775,7 +778,7 @@ mod tests {
 
     #[test]
     fn filter_kinds_registry_matches_table() {
-        assert_eq!(Filter::KINDS.len(), 35);
+        assert_eq!(Filter::KINDS.len(), 38);
         assert!(Filter::KINDS.iter().all(|k| k.is_filter));
         for k in Filter::KINDS {
             assert_eq!(k.kind.is_filter(), true, "{}", k.name);

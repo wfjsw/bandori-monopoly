@@ -2076,14 +2076,18 @@ impl CardWorld for Run {
             got
         } else {
             let amount = -delta;
-            let Some(s) = self.world.st.players.get_mut(player_id.max(0) as usize) else {
-                return 0;
+            let lost = {
+                let Some(s) = self.world.st.players.get_mut(player_id.max(0) as usize) else {
+                    return 0;
+                };
+                if s.out() {
+                    return 0;
+                }
+                let lost = amount.min(s.money).max(0);
+                s.money -= lost;
+                lost
             };
-            if s.out() {
-                return 0;
-            }
-            let lost = amount.min(s.money).max(0);
-            s.money -= lost;
+            self.world.bump_loss(player_id, lost);
             if lost != 0 {
                 let msg = Msg::new("log.lose")
                     .player_id("who", player_id)
@@ -2632,6 +2636,9 @@ impl CardWorld for Run {
     }
     fn set_tile_prop(&mut self, tile: i32, key: &str, value: i32) -> i32 {
         self.world.set_tile_prop(tile, key, value)
+    }
+    fn tile_prop_state(&self, tile: i32, key: &str) -> i32 {
+        self.world.tile_prop_state(tile, key)
     }
     fn unplace_at(&mut self, uid: i32, destination: i32, _cause: i32) -> i32 {
         let row = self.world.field_by_uid(uid).map(|f| {
@@ -3492,6 +3499,9 @@ impl CardWorld for Run {
     fn gains_this_turn(&self, player_id: i32) -> i32 {
         self.world.gains_this_turn(player_id)
     }
+    fn losses_this_turn(&self, player_id: i32) -> i32 {
+        self.world.losses_this_turn(player_id)
+    }
     fn designations(&self, player_id: i32) -> Vec<i32> {
         // A play whose card declares recipients (`DESIGNATES`) names the other
         // living players of its user (「designate[使用者]以外的所有玩家」 /
@@ -3862,6 +3872,9 @@ impl CardWorld for Run {
     }
     fn turn_move_abnormal(&self) -> bool {
         self.world.turn.move_abnormal
+    }
+    fn pay_split_ran(&self) -> bool {
+        self.world.pay_split_ran
     }
     fn turn_dice_immune(&self) -> bool {
         self.world.turn.dice_immune
@@ -7172,6 +7185,8 @@ impl<M: CardModules> RulesBridge<M> {
                     }
                     let lost = amount.min(s.money).max(0);
                     s.money -= lost;
+                    // 「失去资金」 (NOW SUMIMI): the actual figure out.
+                    w.bump_loss(player_id, lost);
                     if lost != 0 {
                         w.log(
                             "lose",
@@ -13835,6 +13850,16 @@ const BUY_STAGES: [TriggerKind; 3] = [
     TriggerKind::BuySet,
 ];
 
+/// The 强制购买 price stages (FORCE-WRITE-01), same order as [`BUY_STAGES`].
+/// Only a Force quote runs these; the generic `Buy*` stages keep skipping
+/// Force (rulebook 其他规则 6: its price is untouched unless the effect writes
+/// 「强制购买」, and declaring one of these is that writing).
+const FORCE_BUY_STAGES: [TriggerKind; 3] = [
+    TriggerKind::ForceBuyAdd,
+    TriggerKind::ForceBuyMul,
+    TriggerKind::ForceBuySet,
+];
+
 /// The bridge trigger a buy hook sees (`docs/PURCHASE.md`): the kind, who is
 /// buying what from whom, and the running price the stage rewrites with
 /// `set_price`. `value` mirrors `price` so a generic reader sees the figure.
@@ -14588,9 +14613,10 @@ impl<M: CardModules> CardRules for RulesBridge<M> {
     /// The purchase quote (`docs/PURCHASE.md`): what would `q.player` be
     /// charged for each tile, and may they buy it at all?
     ///
-    /// Runs the `BuyGate` / `BuyAdd` → `BuyMul` → `BuySet` hooks in pure guard
-    /// mode against a world copy (like [`Self::cant_play`]), **only** when a
-    /// hooking instance exists -- otherwise the plain rulebook formula answers
+    /// Runs the `BuyGate` / `BuyAdd` → `BuyMul` → `BuySet` hooks (a Force
+    /// quote: `BuyGate` / `ForceBuyAdd` → `ForceBuyMul` → `ForceBuySet`) in
+    /// pure guard mode against a world copy (like [`Self::cant_play`]), **only**
+    /// when a hooking instance exists -- otherwise the plain rulebook formula answers
     /// and nothing is instantiated, which is what `StubRules` and the sim run.
     /// The commit re-quotes ([`game_core::engine`]'s `buy`), so the quoted price
     /// is the price charged.
@@ -14721,22 +14747,28 @@ impl<M: CardModules> CardRules for RulesBridge<M> {
                 // 的资金变动不受任何效果影响，除非效果写明改动抵押，赎回，或强制
                 // 购买」). The price is the printed 2×(price+houses) figure; a
                 // generic buy-stage hook does not 「写明」 force-buy, so it must
-                // not retune this quote. `BuyGate` still runs above (can-you-buy,
-                // not a price). TODO(规则书): a hook that *does* write
-                // 「强制购买」 as its target has no wire spelling yet -- when one
-                // lands, only that entry may rewrite the Force base.
+                // not retune this quote. An entry that **does** write
+                // 「强制购买」 spells it as one of [`FORCE_BUY_STAGES`]
+                // (FORCE-WRITE-01) -- only those run on a Force quote, and the
+                // generic stages never do. `BuyGate` still runs above (can-you-buy,
+                // not a price).
                 let mut price = base;
-                if q.kind != game_core::engine::purchase::BuyKind::Force {
-                    for &kind in &BUY_STAGES {
-                        if !declares(kind) {
-                            continue;
-                        }
-                        price = at(&mut run, kind, price)
-                            .buy
-                            .map(|b| b.price)
-                            .unwrap_or(price)
-                            .max(0);
+                let stages: &[TriggerKind] = if q.kind
+                    == game_core::engine::purchase::BuyKind::Force
+                {
+                    &FORCE_BUY_STAGES
+                } else {
+                    &BUY_STAGES
+                };
+                for &kind in stages {
+                    if !declares(kind) {
+                        continue;
                     }
+                    price = at(&mut run, kind, price)
+                        .buy
+                        .map(|b| b.price)
+                        .unwrap_or(price)
+                        .max(0);
                 }
                 Quote {
                     price,

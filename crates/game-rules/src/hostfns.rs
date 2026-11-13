@@ -1855,6 +1855,17 @@ pub fn set_tile_prop<C: HostCtx>(
     Ok(c.st_mut().w().set_tile_prop(tile, &key, v))
 }
 
+/// ABI-12: the tri-state [`tile_prop`] presence read.
+pub fn tile_prop_state<C: HostCtx>(
+    c: &mut C,
+    tile: i32,
+    kp: i32,
+    kl: i32,
+) -> Result<i32, HostError> {
+    let key = guest_str(c, kp, kl)?;
+    Ok(c.st().wr().tile_prop_state(tile, &key))
+}
+
 pub fn prop_at<C: HostCtx>(c: &mut C, uid: i32, kp: i32, kl: i32) -> Result<i32, HostError> {
     let key = guest_str(c, kp, kl)?;
     Ok(c.st().wr().prop_at(uid, &key))
@@ -2923,6 +2934,12 @@ pub fn targeted_count<C: HostCtx>(c: &mut C, player_id: i32) -> Result<i32, Host
 
 pub fn gains_this_turn<C: HostCtx>(c: &mut C, player_id: i32) -> Result<i32, HostError> {
     Ok({ c.st().wr().gains_this_turn(player_id) })
+}
+
+/// 「本回合开始后…失去资金的总额」 (ABI-11): the running total `player_id` has
+/// lost since their own turn started.
+pub fn lost_this_turn<C: HostCtx>(c: &mut C, player_id: i32) -> Result<i32, HostError> {
+    Ok({ c.st().wr().losses_this_turn(player_id) })
 }
 
 pub fn designations<C: HostCtx>(
@@ -4804,6 +4821,11 @@ pub fn join_designation<C: HostCtx>(c: &mut C, i: i32) -> Result<i32, HostError>
 /// Declared, unresolved negating answers on this link.
 pub fn trigger_pending_negation<C: HostCtx>(c: &mut C) -> Result<i32, HostError> {
     Ok(c.st().wr().trigger().pending_negation)
+}
+
+/// Did the in-flight payment reach its `PaySplitAt` stage (NFO-CANCEL-01)?
+pub fn trigger_pay_split_ran<C: HostCtx>(c: &mut C) -> Result<i32, HostError> {
+    Ok(c.st().wr().pay_split_ran() as i32)
 }
 
 /// The activation this raise belongs to (stamped by `counteract`; 0 outside a

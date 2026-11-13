@@ -520,6 +520,11 @@ pub enum Op {
     persona = 498,
     // STA-02: the [不可阻挡] `abnormalChoice` yes answer.
     trig_set_abnormal_allowed = 499,
+    // AB payment pipeline: ABI-11 lost-this-turn, NFO-CANCEL-01 split-ran,
+    // ABI-12 the tri-state tile prop.
+    lost_this_turn = 500,
+    trigger_pay_split_ran = 501,
+    tile_prop_state = 502,
 }
 
 /// Six i32 wire slots, matching the ABI's arg convention.
