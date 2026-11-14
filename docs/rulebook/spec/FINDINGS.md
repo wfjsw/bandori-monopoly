@@ -52,8 +52,9 @@ counted under the first tag; the dual is named in the row.)
 
 | clause ID | unit | class | what the book says | what the implementation does | evidence | status |
 |---|---|---|---|---|---|---|
-| G-SETTLE-06 | settle | LESS | 「无主的[可购买格子]的[结算]是：可选择[消耗]购买格子地契和建造已有房子的资金总价，获得格子地契和拥有权。」 (`rulebook-doc.md:155`) | Main landing only *announces* (`log.land_unowned`) and defers the optional buy to the end step. The book makes the optional buy **the settle**. | `g_settle_06_unowned_buy_is_the_settle` | REGRESSION-ONLY |
-| G-SETTLE-07 | settle | LESS | 「如果格子地契未抵押则可选择[消耗]格子地契所标注的房屋建筑费进行升级建造…」 (`rulebook-doc.md:157`) | Same deferral for the own-land build offer (`log.land_own` announce only). | `g_settle_07_own_build_is_the_settle` | REGRESSION-ONLY |
+| G-SETTLE-06 | settle | LESS | 「无主的[可购买格子]的[结算]是：可选择[消耗]购买格子地契和建造已有房子的资金总价，获得格子地契和拥有权。」 (`rulebook-doc.md:155`) | **FIXED 2026-10-15**: the optional buy *is* the settle (`d4f52d24`); the body offers it, no end-step deferral. | `g_settle_06_unowned_buy_is_the_settle` | was REGRESSION-ONLY |
+| G-SETTLE-07 | settle | LESS | 「如果格子地契未抵押则可选择[消耗]格子地契所标注的房屋建筑费进行升级建造…」 (`rulebook-doc.md:157`) | **FIXED 2026-10-15**: same -- the own-land build offer is the settle. | `g_settle_07_own_build_is_the_settle` | was REGRESSION-ONLY |
+| G-SETTLE-15 | settle | MORE | 「购买与建造二选一，购买后不可立即在同一格建造。」 (`rulebook-doc.md:163`) | **FIXED 2026-11-14**: the settle body is re-run after the buy answer and the now-owner branch offered a build in the same settle. The settle entry's `SettleOperation` slot blocks the second normal operation. | `settle_08_buy_and_build_are_either_or_in_one_settle`, `settle_08_one_build_per_settle` | was REGRESSION-ONLY |
 
 ### G-FLOW — seat bounds
 

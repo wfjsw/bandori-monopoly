@@ -250,6 +250,48 @@ fn g_settle_06_unowned_buy_is_the_settle() {
     );
 }
 
+/// 基础[结算] item 8 (`rulebook-doc.md:163`): 「一个回合内，对一块地及其上的
+/// 建筑只能进行一次（常规）操作：购买与建造二选一，购买后不可立即在同一格
+/// 建造。」
+///
+/// The tile body re-runs after the buy answer (the guest replay model), and the
+/// re-run sees the player as the owner. Without a guard it takes the own-land
+/// branch and offers a second operation (the build) in the same settle.
+#[test]
+fn settle_08_buy_and_build_are_either_or_in_one_settle() {
+    let mut t = Table::vanilla(2);
+    let land = tile("购物中心");
+    t.set_money(0, 10_000);
+    settle_on(&mut t, 0, land);
+    let p = t.prompt().expect("the settle offers the buy");
+    assert!(p.title.key().contains("buy"), "{}", t.dump_prompt());
+    t.answer_one(0).unwrap(); // accept the buy
+    assert_eq!(t.owner(land), Some(0), "bought");
+    assert_eq!(t.houses(land), 0, "the buy brought no house");
+    assert!(
+        t.prompt().is_none(),
+        "the buy is the settle's one operation; no build offer in the same settle: {}",
+        t.dump_prompt()
+    );
+}
+
+/// Item 8's cap holds for builds too: one settle upgrades the same tile once.
+#[test]
+fn settle_08_one_build_per_settle() {
+    let mut t = Table::vanilla(2);
+    let land = tile("购物中心");
+    t.own(0, &[land]);
+    t.set_money(0, 10_000);
+    settle_on(&mut t, 0, land);
+    t.answer_one(0).unwrap(); // accept the build
+    assert_eq!(t.houses(land), 1);
+    assert!(
+        t.prompt().is_none(),
+        "the build is the settle's one operation; no second build: {}",
+        t.dump_prompt()
+    );
+}
+
 /// Same timing clause for own-land build: 「玩家拥有的[可购买格子]的[结算]是：
 /// …可选择[消耗]…进行升级建造」.
 #[test]
@@ -546,10 +588,11 @@ fn g_settle_clause_ids_are_sequential() {
     let ids: Vec<&str> = CLAUSES.iter().map(|c| c.id).collect();
     assert!(ids.contains(&"G-SETTLE-01"));
     assert!(ids.contains(&"G-SETTLE-14"));
+    assert!(ids.contains(&"G-SETTLE-15"));
     // Item 4 is missing from the book; we have no G-SETTLE-09 in CLAUSES
     // (scenario-only) but we do have the later items.
     assert!(ids.contains(&"G-SETTLE-10"));
-    assert_eq!(ids.len(), 13, "13 per-act clauses (09 is scenario-only)");
+    assert_eq!(ids.len(), 14, "14 per-act clauses (09 is scenario-only)");
 }
 
 /// Frame on a clean rent: only the two money balances move.

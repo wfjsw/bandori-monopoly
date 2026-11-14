@@ -527,6 +527,26 @@ pub enum HouseWrite {
     Add(i32),
 }
 
+/// The one (normal) operation a settle may perform on its tile -- 基础[结算]
+/// item 8 `「一个回合内，对一块地及其上的建筑只能进行一次（常规）操作：购买与
+/// 建造二选一，购买后不可立即在同一格建造。」` Buy and build are the same
+/// slot; the first one consumes it.
+///
+/// The settle body is re-run after every prompt answer (the guest replay
+/// model), so without this the re-run would see the new owner and offer the
+/// other operation in the same settle -- buy then build, or build after build.
+/// A card's own `ctx::card_offer_build` is not the settle's normal operation
+/// and does not consume the slot.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum SettleOperation {
+    /// The slot is still free.
+    None,
+    /// The settle bought this tile.
+    Bought(usize),
+    /// The settle built on this tile.
+    Built(usize),
+}
+
 /// A settle entry.
 #[derive(Debug, Clone)]
 pub struct SettleEntry {
@@ -567,6 +587,9 @@ pub struct SettleEntry {
     /// binding one. Seeded from the frame, so a later `set_no_buy(false)`
     /// cannot clear it.
     pub no_buy: bool,
+    /// The one normal operation this settle has performed on its tile, if any
+    /// (基础[结算] item 8; see [`SettleOperation`]).
+    pub operation: SettleOperation,
     /// The `settleBefore` window's final `trigger::set_pay_amount` value
     /// (`None` = untouched). The tile body's trigger starts at it, so a
     /// pre-stage that paid the settle itself (the Poppin' Party rent split)

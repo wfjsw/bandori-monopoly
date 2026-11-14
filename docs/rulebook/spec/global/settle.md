@@ -269,6 +269,25 @@ names from `docs/rulebook/SETTLE-STAGES.md` (settleBefore / settle / settleBody
 
 ---
 
+## G-SETTLE-15
+
+* **ID:** `G-SETTLE-15`
+* **Source:** `rulebook-doc.md:163`
+* **Quote:** 「一个回合内，对一块地及其上的建筑只能进行一次（常规）操作：购买与建造二选一，购买后不可立即在同一格建造。」
+* **Trigger:** a window with a `buy`, a `build`, or both.
+* **Condition:** no card activation (a card's own build is not the settle's
+  normal operation and may add one), no auction / funding window.
+* **Effect:** at most one normal operation per tile in the window -- no `build`
+  on a tile this settle bought, and no second `build` on the same tile.
+* **Frame:** n/a.
+* **Rulings & OPEN:** the settle body is re-run after every answer; the
+  per-settle operation slot (`SettleOperation`) is what enforces the clause.
+  Scenarios: `settle_08_buy_and_build_are_either_or_in_one_settle`,
+  `settle_08_one_build_per_settle` (`rules/tests/tests/spec_g_settle.rs`).
+* **Executable:** `g_settle_15`.
+
+---
+
 ## Open questions
 
 * **OPEN-结算定义** -- 「[结算]」 is defined twice (`rulebook-doc.md:61` and
@@ -289,13 +308,12 @@ names from `docs/rulebook/SETTLE-STAGES.md` (settleBefore / settle / settleBody
 
 ## Findings
 
-* **LESS (G-SETTLE-06 / G-SETTLE-07 timing)** -- genuine, stays failing: the book
-  makes the optional buy / build *the settle* of an unowned / own buyable
-  (「无主的[可购买格子]的[结算]是：可选择[消耗]…」 /
-  「玩家拥有的[可购买格子]的[结算]是：…可选择[消耗]…升级建造」). The engine's
-  `tile:property` body only *announces* on a main landing (`log.land_unowned` /
-  `log.land_own`) and defers the offers to the end step
-  (`docs/TILES.md` "the end step offers them again after a main move").
-  Non-main (card-driven) settles do offer during the settle. Tests:
-  `g_settle_06_unowned_buy_is_the_settle`,
-  `g_settle_07_own_build_is_the_settle`.
+* **G-SETTLE-06 / G-SETTLE-07 timing** -- **fixed 2026-10-15** (`d4f52d24`):
+  the book makes the optional buy / build *the settle* of an unowned / own
+  buyable (「无主的[可购买格子]的[结算]是：可选择[消耗]…」 /
+  「玩家拥有的[可购买格子]的[结算]是：…可选择[消耗]…升级建造」). The
+  `tile:property` body now offers both as the settle; no end-step deferral.
+* **G-SETTLE-15** -- **fixed 2026-11-14**: the body re-runs after the buy
+  answer (guest replay model) and the fresh owner branch offered a build in the
+  same settle. The per-settle `SettleOperation` slot keeps buy and build on one
+  tile either-or.

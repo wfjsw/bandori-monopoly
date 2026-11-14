@@ -1149,31 +1149,20 @@ fn band_free_house_on_cheap_buy() {
     assert_eq!(t.money(0), 9_400, "paid 600, house free");
 }
 
-// The free house is the skill's; the settle then re-offers a **normal** build
-// on the now-owned tile and a yes must actually charge it. The offer reaches
-// the settle routine's slot as a different request kind than the buy
-// (LOY-TSUGU-01 drift), so this also pins the replay bookkeeping: the pay
-// lands on the live world and is not reverted at a later pass top.
+// The free house is the skill's automatic effect, not the player's build
+// choice: 基础[结算] item 8 「购买与建造二选一，购买后不可立即在同一格建造」
+// makes the buy the settle's one (normal) operation, so no paid build follows.
 #[test]
-fn band_free_house_then_paid_second_build() {
+fn band_free_house_is_the_buys_one_operation() {
     let mut t = Table::vanilla(2);
     t.place_raw(0, "skill:Afterglow:商店街的宠儿");
     t.set_pos(0, FUJIMI - 1);
     t.dice(&[1]);
     t.roll(0).unwrap();
     t.buy(0).unwrap();
-    // Answer the settle's follow-up build offer with yes; decline the rest.
-    while let Some(p) = t.prompt() {
-        if p.title.key().contains("ask.build") {
-            t.answer(0, 0);
-        } else {
-            t.decline();
-        }
-    }
-    // 「自动免费在上面加盖一栋房子」 is one house; the accepted offer is the
-    // second and costs the printed build price (500 on FUJIMI).
-    assert_eq!(t.houses(FUJIMI), 2, "free house then the paid one");
-    assert_eq!(t.money(0), 8_900, "the second build is charged");
+    skip_all(&mut t);
+    assert_eq!(t.houses(FUJIMI), 1, "the automatic free house only");
+    assert_eq!(t.money(0), 9_400, "paid 600, no paid second build");
 }
 
 // 规则书: 「购买商店街的…格子时自动免费在上面加盖一栋房子」
