@@ -1735,3 +1735,121 @@ fn g04_doll_garden_victims_do_not_leak_shape() {
         "the sum walk settled at the full price"
     );
 }
+
+/// 状态1 「经过其他玩家时」 -- the pass hook acts only on a step onto a tile
+/// another player stands on, and only while that player carries 停留/眩晕.
+/// Every other step must stay silent (no 「效果适用 …（无事发生）」).
+#[test]
+fn saki_skill_pass_hook_is_silent_without_an_afflicted_passerby() {
+    let mut t = Table::new(&["丰川祥子", "三角初华"]);
+    t.clean();
+    t.set_state(0, "skillState", 1);
+    t.set_pos(0, 20);
+    t.set_pos(1, 21); // 21 is a plain property; P1 stands there
+    t.set_state(1, "stay", 0);
+    t.begin_turn(0);
+    drain(&mut t);
+    let mark = t.mark();
+    t.dice(&[1]); // step onto 21: a player is there, but not afflicted
+    t.roll(0).unwrap();
+    drain(&mut t);
+    let keys = t.keys_since(mark);
+    let announced = t
+        .events_since(mark)
+        .into_iter()
+        .filter(|e| {
+            e.card == "skill:丰川祥子:请把你们的人生交给我"
+                && e.msg.key() == "log.effect_applied"
+                && format!("{:?}", e.msg.args.get("reason")).contains("log.reason.pass")
+        })
+        .count();
+    assert_eq!(announced, 0, "pass activity without an affliction: {keys:?}");
+    assert!(
+        !keys.iter().any(|k| k == "log.effect_nothing"),
+        "no 「（无事发生）」: {keys:?}"
+    );
+}
+
+/// The same step announces once the passerby carries a [停留].
+#[test]
+fn saki_skill_pass_hook_announces_an_afflicted_passerby() {
+    let mut t = Table::new(&["丰川祥子", "三角初华"]);
+    t.clean();
+    t.set_state(0, "skillState", 1);
+    t.set_pos(0, 20);
+    t.set_pos(1, 21);
+    t.set_state(1, "stay", 1);
+    t.begin_turn(0);
+    drain(&mut t);
+    let mark = t.mark();
+    t.dice(&[1]);
+    t.roll(0).unwrap();
+    drain(&mut t);
+    let keys = t.keys_since(mark);
+    assert!(
+        t.events_since(mark).iter().any(|e| {
+            e.card == "skill:丰川祥子:请把你们的人生交给我"
+                && e.msg.key() == "log.effect_applied"
+                && format!("{:?}", e.msg.args.get("reason")).contains("log.reason.pass")
+        }),
+        "the transfer announces: {keys:?}"
+    );
+}
+
+/// 初华 状态2 「主动移动经过任何玩家都将向其收取200资金」 -- the pass hook
+/// acts only in 状态2 (and needs a player on the step's tile); everything else
+/// stays silent.
+#[test]
+fn uika_pass_hook_is_silent_outside_state2() {
+    let mut t = Table::new(&["三角初华", "丰川祥子"]);
+    t.clean();
+    t.set_state(0, "skillState", 1);
+    t.set_pos(0, 20);
+    t.set_pos(1, 21);
+    t.begin_turn(0);
+    drain(&mut t);
+    let mark = t.mark();
+    t.dice(&[1]);
+    t.roll(0).unwrap();
+    drain(&mut t);
+    let keys = t.keys_since(mark);
+    let announced = t
+        .events_since(mark)
+        .into_iter()
+        .filter(|e| {
+            e.card == "skill:三角初华:Imprisoned XII"
+                && e.msg.key() == "log.effect_applied"
+                && format!("{:?}", e.msg.args.get("reason")).contains("log.reason.pass")
+        })
+        .count();
+    assert_eq!(announced, 0, "pass activity outside 状态2: {keys:?}");
+}
+
+/// In 状态2 the same step announces the 200 fee.
+#[test]
+fn uika_pass_hook_announces_a_passenger_in_state2() {
+    let mut t = Table::new(&["三角初华", "丰川祥子"]);
+    t.clean();
+    t.set_state(0, "skillState", 2);
+    t.set_pos(0, 20);
+    t.set_pos(1, 21);
+    t.begin_turn(0);
+    drain(&mut t);
+    let mark = t.mark();
+    t.dice(&[1]);
+    t.roll(0).unwrap();
+    drain(&mut t);
+    let keys = t.keys_since(mark);
+    assert!(
+        keys.iter().any(|k| k.contains("uika_charged")),
+        "the fee is charged: {keys:?}"
+    );
+    assert!(
+        t.events_since(mark).iter().any(|e| {
+            e.card == "skill:三角初华:Imprisoned XII"
+                && e.msg.key() == "log.effect_applied"
+                && format!("{:?}", e.msg.args.get("reason")).contains("log.reason.pass")
+        }),
+        "the fee announces: {keys:?}"
+    );
+}

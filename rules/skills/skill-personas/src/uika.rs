@@ -52,7 +52,11 @@ pub const UIKA: CardDef = CardDef::new(
         // 状态2 「主动移动经过任何玩家」 -- 行动阶段 12 [经过]
         // (`SETTLE-STAGES.md` §4 M4): the step onto a tile a player stands on,
         // not the end-tile [重叠]. The other player is read off the tile.
-        On::Action(Action::PassTile("actor == owner && move.is_main_move && slot('skillState') == 2", None, on_pass_player)),
+        On::Action(Action::PassTile(
+            "actor == owner && move.is_main_move && slot('skillState') == 2 && players_on(tile.id, owner) > 0",
+            None,
+            on_pass_player,
+        )),
         // 状态2 「每次成功收取后可选择在[触发结算]前额外移动1d6」.
         // 「每次成功收取后可选择在[触发结算]前额外移动1d6（最多4次）」 -- the
         // 4-shot cap is `slot('skill.uikaImprisoned.bonus') < 4`.

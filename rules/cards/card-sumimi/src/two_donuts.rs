@@ -28,8 +28,15 @@ pub const TWO_DONUTS: CardDef = CardDef::new(
     &[
         On::Play("", None, two_donuts),
         // `card.placed` is the uniform gate; per-kind clauses (the other-passer
-        // latch, the `move_dir` read) stay in the arms below.
-        On::Action(Action::PassTile("card.placed", None, hook)),
+        // latch, the `move_dir` read) stay in the arms below. The PassTile arm
+        // acts only for another player's pass onto `Orig`, so that arm's whole
+        // applicability is its condition -- the entry would otherwise announce
+        // 「效果适用 …（无事发生）」 on every step of every walk.
+        On::Action(Action::PassTile(
+            "card.placed && actor != owner && tile.id == slot('two_donuts_orig') && slot('two_donuts_by') < 0",
+            None,
+            hook,
+        )),
         On::Action(Action::SettleAfter("card.placed", None, hook)),
         // A passer whose move never reaches `settleAfter` still ends the (2)
         // offer here: a 「不触发结算」 teleport raises `passTile` and no settle

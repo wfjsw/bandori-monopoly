@@ -37,8 +37,18 @@ pub const RANA: CardDef = CardDef::new(
         On::Play("", Some(can_use), use_skill),
         On::Action(Action::TurnStartBefore("", None, declare_cap)).silent(),
         On::Action(Action::DeckAtGameStart("", None, declare_cap)).silent(),
-        // （1） 「每次[经过]CiRCLE时获得一个[火罐]」
-        On::Action(Action::Pass(card_sdk::condition::MINE, None, on_pass)).label("（1）"),
+        // （1） 「每次[经过]CiRCLE时获得一个[火罐]」, and （3）'s RiNG half
+        // 「拥有"抹茶芭菲"的玩家经过任意"RiNG"时可使用一个"抹茶芭菲"获得400资金」.
+        // The pass hook fires on every step of every walk, so the whole
+        // applicability is the condition: a tile with nothing for （1）/（3）
+        // must not activate at all (a body-top branch that returns would still
+        // announce 「效果适用 …（无事发生）」 on every plain tile).
+        On::Action(Action::Pass(
+            "actor == owner && (tile_is(tile.id, \"circle\") || (tile_is(tile.id, \"ring\") && tok('抹茶芭菲') >= 1))",
+            None,
+            on_pass,
+        ))
+        .label("（1）"),
         // （2）「免除付款」 -- a payment-stage cancel (R4). The 「并抽1张卡」
         // rides the settle's effect list below.
         //
@@ -51,12 +61,27 @@ pub const RANA: CardDef = CardDef::new(
         // PayAfter is too late to cancel. Effect fires per `money()` call,
         // so on a split-pay the interactive offer is per leg rather than once
         // on the command total (single-pair behaviour is identical).
-        On::Filter(Filter::PayCombinedCancel("", Some(any), exempt_flag)).label("（2）"),
-        On::Action(Action::Effect("", Some(any), exempt_offer)).label("（2）"),
+        On::Filter(Filter::PayCombinedCancel(
+            "tile.id == tile_named('Space')",
+            Some(any),
+            exempt_flag,
+        ))
+        .label("（2）"),
+        On::Action(Action::Effect(
+            "tile.id == tile_named('Space')",
+            Some(any),
+            exempt_offer,
+        ))
+        .label("（2）"),
         // （2）「将该次结算改为在space格子上添加一个"抹茶芭菲"」 -- the
         // settle-body replace gesture (R4), and the 「抽1张卡」 half of the
         // other branch.
-        On::Action(Action::SettleBody("", Some(any), replace_body)).label("（2）"),
+        On::Action(Action::SettleBody(
+            "tile.id == tile_named('Space')",
+            Some(any),
+            replace_body,
+        ))
+        .label("（2）"),
         // （3）「你与其他玩家重合时」 -- 行动阶段 13 [重叠] (`passPlayer`). The
         // condition puts the owner in the actor seat (the mover); `target` is the
         // other player already standing on the landing tile (one raise per
@@ -95,15 +120,14 @@ fn on_pass(player_id: i32) -> card_sdk::Asked {
         bandori_std::fire::gain(player_id, 1, &Msg::new(key!("rana_gain")))?;
         return Ok(());
     }
-    if ctx::is_deed(t) && ctx::held_count(player_id, PARFAIT) >= 1 {
-        if ctx::ask_yes(
-            player_id,
-            &Msg::new(key!("rana_title")),
-            &Msg::new(key!("rana_ring")),
-        )? {
-            ctx::add_held_by_name(player_id, PARFAIT, -1, i32::MAX)?;
-            ctx::gain(player_id, 400, &Msg::new(key!("rana_ring_gain")))?;
-        }
+    // The condition admitted a RiNG with a held 抹茶芭菲.
+    if ctx::ask_yes(
+        player_id,
+        &Msg::new(key!("rana_title")),
+        &Msg::new(key!("rana_ring")),
+    )? {
+        ctx::add_held_by_name(player_id, PARFAIT, -1, i32::MAX)?;
+        ctx::gain(player_id, 400, &Msg::new(key!("rana_ring_gain")))?;
     }
     Ok(())
 }

@@ -1219,3 +1219,38 @@ fn ix_star_beat_counts_the_fives() {
     let msg = format!("{:?}", p.options[0]);
     assert!(msg.contains("30") || msg.contains("tile"), "{msg}");
 }
+
+/// `PPP:（沙绫）总有一天要给这片天空命名` records a pass only on 「此卡」's
+/// tile. The pass hook must stay silent elsewhere -- no
+/// 「效果适用 …（无事发生）」 per walked step.
+#[test]
+fn saaya_sky_pass_hook_is_silent_off_its_tile() {
+    let mut t = Table::vanilla(2);
+    let sky = tile("山吹面包房"); // where the play places the card
+    t.begin_turn(0);
+    skip_all(&mut t);
+    t.give_play(0, "PPP:（沙绫）总有一天要给这片天空命名").unwrap();
+    skip_all(&mut t);
+    assert!(t.on_field(0, "PPP:（沙绫）总有一天要给这片天空命名"));
+    assert_eq!(t.field(0)[0].tile, sky as i32, "placed on 山吹面包房");
+    let mark = t.mark();
+    t.set_pos(0, 20); // 20..22 are plain properties
+    t.dice(&[2]);
+    t.roll(0).unwrap();
+    skip_all(&mut t);
+    let keys = t.keys_since(mark);
+    let announced = t
+        .events_since(mark)
+        .into_iter()
+        .filter(|e| {
+            e.card == "PPP:（沙绫）总有一天要给这片天空命名"
+                && e.msg.key() == "log.effect_applied"
+                && format!("{:?}", e.msg.args.get("reason")).contains("log.reason.pass")
+        })
+        .count();
+    assert_eq!(announced, 0, "pass activity off 山吹面包房: {keys:?}");
+    assert!(
+        !keys.iter().any(|k| k == "log.effect_nothing"),
+        "no 「（无事发生）」: {keys:?}"
+    );
+}

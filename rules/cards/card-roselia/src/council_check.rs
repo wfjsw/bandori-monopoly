@@ -23,7 +23,14 @@ pub const COUNCIL_CHECK: CardDef = CardDef::new(
             "actor == owner && turn_player == owner && owned_within(owner, 3) > 0",
             None,
             counteract),
-        On::Action(Action::PassTile("card.placed && actor != owner && move.remaining > 0 && move.kind != Teleport", None, pass_tile)),
+        // 「下一个经过…的玩家」 -- the card's own tile is the applicability,
+        // not a body-top branch (the pass hook otherwise announces
+        // 「效果适用 …（无事发生）」 on every walked step).
+        On::Action(Action::PassTile(
+            "card.placed && actor != owner && move.remaining > 0 && move.kind != Teleport && tile.id == card.tile",
+            None,
+            pass_tile,
+        )),
         // 规则书[反击]: 「结算获得的资金」 -- the forced settle's rent is tracked so
         // the refund threshold below can compare against it.
         On::Action(Action::PayAfter("card.placed && pay_is_rent && target == owner", None, pay_after)).silent(),

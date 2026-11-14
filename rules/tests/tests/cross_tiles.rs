@@ -608,6 +608,51 @@ fn t12_student_council_check() {
     );
 }
 
+// 规则书: 学生会的检查: 「下一个经过…的你以外的玩家」 -- the placed card acts
+// only on a pass of its own tile; every other step must stay silent (no
+// 「效果适用 …（无事发生）」).
+#[test]
+fn t12b_student_council_check_pass_hook_is_silent_off_its_tile() {
+    let mut t = Table::vanilla(2);
+    let t1 = tile("购物中心");
+    t.own(0, &[t1]);
+    t.set_pos(0, t1);
+    t.give(0, &["R:学生会的检查"]);
+    t.dice(&[2]);
+    t.roll(0).unwrap();
+    t.counteract(0, "R:学生会的检查").unwrap();
+    while let Some(p) = t.prompt() {
+        if p.kind == "tile" {
+            t.answer_tile(0, t1).unwrap();
+        } else if let Some(k) = t.option("ask.yes") {
+            t.answer(0, k).unwrap();
+        } else {
+            t.decline();
+        }
+    }
+    until_turn(&mut t, 1);
+    t.set_pos(1, 20); // 20..22 are plain properties, far from 购物中心
+    let mark = t.mark();
+    t.dice(&[2]);
+    t.roll(1).unwrap();
+    drain(&mut t);
+    let keys = t.keys_since(mark);
+    let announced = t
+        .events_since(mark)
+        .into_iter()
+        .filter(|e| {
+            e.card == "R:学生会的检查"
+                && e.msg.key() == "log.effect_applied"
+                && format!("{:?}", e.msg.args.get("reason")).contains("log.reason.pass")
+        })
+        .count();
+    assert_eq!(announced, 0, "pass activity off the card's tile: {keys:?}");
+    assert!(
+        !keys.iter().any(|k| k == "log.effect_nothing"),
+        "no 「（无事发生）」: {keys:?}"
+    );
+}
+
 // =====================================================================
 // T13. 笑容大游行 swaps a tile with 弦卷集团
 // =====================================================================

@@ -27,8 +27,14 @@ pub const STARRY_NIGHT: CardDef = CardDef::new(
         // 规则书（1）: 「此卡在场时，你每次移动掷骰时可以放弃第一次的结果重骰一次」 and
         // 规则书（2）: 「当其他角色的移动掷骰结果是偶数时」 -- both arrive here.
         On::Action(Action::DiceRollAfter("card.placed && card.counter('crystals') > 0", None, hook)),
-        // 规则书（2）: 「此卡拥有者经过CiRCLE时此卡移除一个[奇迹水晶]」
-        On::Action(Action::PassTile("card.placed && card.counter('crystals') > 0", None, hook)),
+        // 规则书（2）: 「此卡拥有者经过CiRCLE时此卡移除一个[奇迹水晶]」 -- the
+        // pass arm acts only on the owner's own CiRCLE pass, so that is the
+        // applicability (the pass hook otherwise announces on every step).
+        On::Action(Action::PassTile(
+            "card.placed && actor == owner && card.counter('crystals') > 0 && tile_is(tile.id, \"circle\")",
+            None,
+            hook,
+        )),
         // 规则书（3）: 「此卡上的每个[奇迹水晶]移除时此卡拥有者获得1000资金」 -- and
         // 规则书（1）: 「此卡没有[奇迹水晶]时加入弃牌堆」.
         On::Action(Action::CounterChanged("", Some(crystals_changed_guard), on_crystals_changed)),

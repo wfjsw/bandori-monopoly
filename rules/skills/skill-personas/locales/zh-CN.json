@@ -134,6 +134,7 @@
   "yukina_stop_ask": "在 {{tile}} 停止移动？",
   "yukina_stop_title": "来练习吧",
   "yukina_stopped": "在 {{tile}} 强制停下",
+  "yukina_waived": "首次经过CiRCLE：不获得经过奖励",
   "mashiro_plan": "向后全速前进：2d20，反方向移动",
   "lisa_cancel_ask": "再消耗 1 个[火罐]，改为发放临时火罐并取消本次[结算]？",
   "lisa_cancel_title": "慈爱女神",

@@ -764,3 +764,38 @@ fn interaction_ag_counter_vs_two_donuts() {
     // Consistent state.
     assert!(t.money(0) >= 10_000 || t.money(0) < 10_000);
 }
+
+/// `Sumimi:一人两个甜甜圈`（1）ends only when another player passes the holder's
+/// original tile. The pass hook must stay silent on other tiles -- no
+/// 「效果适用 …（无事发生）」 per walked step.
+#[test]
+fn two_donuts_pass_hook_is_silent_away_from_orig() {
+    let mut t = Table::vanilla(2);
+    t.give(0, &["Sumimi:一人两个甜甜圈"]);
+    t.begin_turn(0);
+    drain(&mut t);
+    t.set_pos(0, 11); // the original tile `Orig`
+    t.play(0, "Sumimi:一人两个甜甜圈").unwrap();
+    drain(&mut t);
+    t.begin_turn(1);
+    t.set_pos(1, 20);
+    let mark = t.mark();
+    t.dice(&[2]); // 20 -> 22; neither step is `Orig`
+    t.roll(1).unwrap();
+    drain(&mut t);
+    let keys = t.keys_since(mark);
+    let announced = t
+        .events_since(mark)
+        .into_iter()
+        .filter(|e| {
+            e.card == "Sumimi:一人两个甜甜圈"
+                && e.msg.key() == "log.effect_applied"
+                && format!("{:?}", e.msg.args.get("reason")).contains("log.reason.pass")
+        })
+        .count();
+    assert_eq!(announced, 0, "pass activity away from Orig: {keys:?}");
+    assert!(
+        !keys.iter().any(|k| k == "log.effect_nothing"),
+        "no 「（无事发生）」: {keys:?}"
+    );
+}

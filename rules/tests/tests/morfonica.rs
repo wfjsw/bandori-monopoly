@@ -2120,3 +2120,33 @@ fn noble_foreign_tile_is_wasted() {
     assert!(!t.on_field(0, "Mor:高贵的微蓝"), "{:?}", t.field_ids(0));
     assert_eq!(t.pos(0), land, "no settle moved the player");
 }
+
+/// 「此卡拥有者经过CiRCLE时」 -- the pass hook acts on the owner's CiRCLE pass
+/// only and must stay silent elsewhere (no 「效果适用 …（无事发生）」 per
+/// walked step). The roll hook's own header carries the roll reason.
+#[test]
+fn starry_pass_hook_is_silent_off_circle() {
+    let mut t = Table::vanilla(2);
+    t.give_play(0, "Mor:蝴蝶飞舞的星月夜").unwrap();
+    t.answer_one(0).unwrap(); // X=1
+    t.set_pos(0, 20); // 20..22 are plain properties
+    let mark = t.mark();
+    t.dice(&[2]);
+    t.roll(0).unwrap();
+    decline_all(&mut t);
+    let keys = t.keys_since(mark);
+    let announced = t
+        .events_since(mark)
+        .into_iter()
+        .filter(|e| {
+            e.card == "Mor:蝴蝶飞舞的星月夜"
+                && e.msg.key() == "log.effect_applied"
+                && format!("{:?}", e.msg.args.get("reason")).contains("log.reason.pass")
+        })
+        .count();
+    assert_eq!(announced, 0, "pass activity off CiRCLE: {keys:?}");
+    assert!(
+        !keys.iter().any(|k| k == "log.effect_nothing"),
+        "no 「（无事发生）」: {keys:?}"
+    );
+}
