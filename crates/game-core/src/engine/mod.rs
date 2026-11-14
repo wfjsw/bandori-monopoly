@@ -645,6 +645,16 @@ impl Match {
             }
             None => data,
         };
+        // Same re-derivation for the one rule kind a card area keeps: a group
+        // skill is a card (「团技能卡」) and belongs in the pile when the book
+        // says so (`World::is_group_skill`).
+        world.group_skill_ids = std::sync::Arc::new(
+            rules
+                .rule_ids()
+                .into_iter()
+                .filter(|id| data.is_group_skill(id))
+                .collect(),
+        );
         Ok(Self {
             data,
             rules,
@@ -888,6 +898,13 @@ impl Match {
         let n = st.players.len();
         let mut world = World::new(st, n, world_rng);
         world.rule_ids = std::sync::Arc::new(rules.rule_ids().into_iter().collect());
+        world.group_skill_ids = std::sync::Arc::new(
+            rules
+                .rule_ids()
+                .into_iter()
+                .filter(|id| data.is_group_skill(id))
+                .collect(),
+        );
         world.clock = clock;
         world.legacy_clock = legacy_clock;
         let mut m = Self {

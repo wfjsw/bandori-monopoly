@@ -2208,7 +2208,8 @@ impl Ruleset {
     }
 
     /// Every **rule entity** id (`CardInfo::rule`, ABI v119): names that are
-    /// rules, not cards, so a card area drops them instead of filing them.
+    /// rules, not cards, so a card area drops them instead of filing them
+    /// (a group skill card is kept -- `World::is_group_skill`).
     pub fn rule_ids(&self) -> Vec<String> {
         self.inner
             .cards

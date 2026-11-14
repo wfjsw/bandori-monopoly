@@ -1048,7 +1048,9 @@ pub trait CardRules: Send + Sync {
     }
 
     /// Every **rule entity** id (`CardInfo::rule`, ABI v119): names that are
-    /// rules, not cards. A card area drops them (`World::note_non_card`).
+    /// rules, not cards. A card area drops them (`World::note_non_card`),
+    /// except a group skill card (`GameData::is_group_skill`), which is a
+    /// card and is kept.
     fn rule_ids(&self) -> Vec<String> {
         Vec::new()
     }

@@ -288,7 +288,9 @@ pub struct CardDef {
     /// Is this a **rule entity** rather than a card (`CardDef::rule`, ABI
     /// v119)? A rule name belongs in no card area: it is in no deck and
     /// `CardRules::normal` rejects it, so the engine removes a row that a body
-    /// files into a hand / draw pile / discard (`World::note_non_card`).
+    /// files into a hand / draw pile / discard (`World::note_non_card`). A
+    /// **group skill card** is the exception -- the book calls it 「团技能卡」
+    /// and gives it a pile destination, so the engine keeps it.
     /// [`Self::board_role`] implies it. `false` (default) = an ordinary card.
     pub rule: bool,
     /// Tile kinds this rule governs (`CardDef::governs`, ABI v66) when
@@ -400,9 +402,11 @@ impl CardDef {
     /// Mark this def as a **rule entity** rather than a card (ABI v119): its
     /// id names a rule (`tile:*` / `mark:*` / `status:*` / `skill:*` /
     /// `event:*`), never a deck card, so the engine drops it from a card area
-    /// instead of filing it (`World::note_non_card`). [`Self::board_role`]
-    /// already implies it; declare it explicitly for a rule with no board
-    /// role (a skill, an event).
+    /// instead of filing it (`World::note_non_card`). A group skill is the
+    /// one rule the book treats as a card (「团技能卡」), so it is kept. A
+    /// character skill, in contrast, is text on the character card.
+    /// [`Self::board_role`] already implies it; declare it explicitly for a
+    /// rule with no board role (a skill, an event).
     ///
     /// ```ignore
     /// pub const SKILL: CardDef = CardDef::new("skill:...", &[...]).rule();
