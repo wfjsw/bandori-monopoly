@@ -79,11 +79,13 @@ pub(crate) fn settle(player_id: i32) -> card_sdk::Asked {
         // gate (see the module doc); this body only offers.
         let _ = ctx::prop(prop::BUILD_MAX);
         ctx::offer_build(player_id, at)?;
-    } else if (0..ctx::player_count()).any(|p| ctx::is_co_owner(at, p)) {
+    } else if co_held_stands_down(at) {
         // 「视为同时拥有」: a co-held deed's rent is the holders' split
         // (`skill:Poppin' Party:星之鼓动` (3), paid at `settleBefore`), so the
-        // single primary-owner charge stands down. All stakes mortgaged pays
-        // nobody, which is the same result.
+        // single primary-owner charge stands down. The split zeroes the
+        // settle declaration (`trigger::set_pay_amount(0)`, carried onto this
+        // body as its trigger value) and then pays each holder; with no live
+        // un-mortgaged holder it pays nobody, which is the same result.
     } else if owner < 0 {
         ctx::offer_buy(player_id, at)?;
     } else if ctx::mortgaged_of(at) {
@@ -94,6 +96,29 @@ pub(crate) fn settle(player_id: i32) -> card_sdk::Asked {
         ctx::pay_rent(player_id, at, false)?;
     }
     Ok(())
+}
+
+/// Does a 「视为同时拥有」 deed's ordinary charge stand down for this settle?
+///
+/// Yes when the `settleBefore` pre-stage zeroed the settle declaration (the
+/// Poppin' Party rent split pays every holder itself and leaves `0` behind,
+/// carried onto this body as its trigger value), and when no co-holder can be
+/// paid at all (every stake mortgaged / out -- the split pays nobody too).
+/// An untouched declaration (`-1`) on a deed whose holders are payable falls
+/// through to the ordinary charge, which is what a table without the band
+/// skill in play (stripped fixtures) expects.
+fn co_held_stands_down(at: i32) -> bool {
+    let mut held = false;
+    let mut payee = false;
+    for p in 0..ctx::player_count() {
+        if ctx::is_co_owner(at, p) {
+            held = true;
+            if !ctx::player_out(p) && !ctx::mortgaged_for(at, p) {
+                payee = true;
+            }
+        }
+    }
+    held && (ctx::trigger::value() == 0 || !payee)
 }
 
 /// 规则书 「无主的[可购买格子]的[结算]是：可选择[消耗]购买格子地契和建造已有

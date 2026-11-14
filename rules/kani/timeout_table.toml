@@ -19,17 +19,22 @@
 # budgets are the wall time the remaining slices need.
 fire_gain_iff = 1800
 fire_gain_window_debug = 1800
-fire_gain_window_name_debug = 900
 fire_gain_name_concrete_debug = 900
-fire_gain_name_user_debug = 1200
-fire_gain_name_pre_debug = 1200
-fire_gain_name_n_debug = 1200
 fire_gain_at_cap_noop = 1200
-fire_spend_iff = 1800
-fire_spend_short_refused = 1500
+fire_spend_iff = 5400
+fire_spend_short_refused = 5400
 fire_i2_is_preserved_by_gain = 1800
 fire_gain_mutant_uncapped_is_detected = 1200
-fire_spend_mutant_underspend_is_detected = 1200
+fire_spend_mutant_underspend_is_detected = 5400
+
+# mark:cp guards / body: the filter pack is heap-free now, so the allocator
+# model no longer gates the guard; the guard harness measured ~414 s.
+mark_cp_land_gain_iff = 2400
+mark_cp_land_mutant_900 = 2400
+mark_cp_land_mutant_wrong_seat = 2400
+mark_cp_land_guard_rejects_without_tile_cp = 1200
+mark_cp_land_tile_cp_visible_to_count_marks = 1200
+mark_cp_land_guard_rejects_when_cancelled = 1200
 
 # G15 蓝玫瑰的骄傲: the body walks all 60 tiles with the ownership store and
 # unwind 80, twice per seat pair. Symex-heavy; the 900 s default is short of

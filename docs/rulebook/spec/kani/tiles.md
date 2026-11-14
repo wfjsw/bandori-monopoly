@@ -51,7 +51,7 @@ rows when those arrive.
 | G-SETTLE-14 | 「否则可选择该格子同色的无主或玩家拥有的[可购买格子]之一进行一次[结算]。」 | **BLOCKED-HOST** | spec: `g_settle_14_legal_target` | not run | same `is_color` stub; `ask_tiles` / `agent_offer` are protocol stubs | OPEN-同色 |
 | G-MONEY-05 | 「抵押后[获得]地契购买价格50%的资金」 | out of body scope (mortgage act, not a tile settle body) | — | — | owned by the mortgage pipeline / unit 1 money scenarios | — |
 | G-MONEY-06 | 「赎回后[消耗]地契购买价格60%的资金」 | out of body scope | — | — | same | OPEN-60%舍入 |
-| mark:cp `on_land` gain | 「…[获得]800资金。」 | **PROVEN** (observable half) | `mark_cp_land_gain_iff`, `mark_cp_land_mutant_900`, `mark_cp_land_mutant_wrong_seat` | see run table | 800 to the settling player. **Re-run 2026-10-28**: the harness was stale (the erased `RuleEntry::body` no longer type-checks as `fn(i32)`), and after re-plumbing it through the entry's `drive` it FAILS under Kani 0.68 on `__rust_dealloc` size / `same_allocation` unsupported-construct checks (the known allocator false-positive class, not a body discrepancy) — the PROVEN status predates the body-erasure refactor and needs a fresh green run | — |
+| mark:cp `on_land` gain | 「…[获得]800资金。」 | **PROVEN** (observable half) | `mark_cp_land_gain_iff`, `mark_cp_land_mutant_900`, `mark_cp_land_mutant_wrong_seat` | see run table | 800 to the settling player. **Re-run 2026-10-28**: the harness was stale (the erased `RuleEntry::body` no longer type-checks as `fn(i32)`), and after re-plumbing it through the entry's `drive` it FAILS under Kani 0.68 on `__rust_dealloc` size / `same_allocation` unsupported-construct checks (the known allocator false-positive class, not a body discrepancy) — the PROVEN status predates the body-erasure refactor and needs a fresh green run. **Re-run 2026-11-13** on the merged tree reproduces the identical six-check signature on `mark_cp_land_gain_iff`, `mark_cp_land_mutant_900` and `mark_cp_land_mutant_wrong_seat`, and (same class, `same_allocation` + `memcpy destination`) on `mark_cp_land_guard_rejects_without_tile_cp`; only `mark_cp_land_guard_rejects_when_cancelled` still passes. The fire-kernel proofs on the same tree are green. All five mark hits are the allocator class, not body divergences. **Fixed 2026-11-13**: the class came from heap traffic in the mark-filter path — `ctx::mf` postcard-`Vec`'d a `MarkFilter` whose `kind`/`category` were `String`s, while the Kani mark ops are stubs that ignore the bytes. Under `cfg(kani)` the pack is now a fixed 16-byte buffer and `MarkFilter` stores the names inline (`abi::MarkStr`, `len` + `[u8; 24]`), interned through `intern_bytes`; production keeps `String` + postcard. All six mark harnesses are green on the fixed tree | — |
 | mark:cp `on_land` mark+counter | 「移除格子上的个[CP点]和自己[场上]1个[CP点]」 | **BLOCKED-HOST** | `mark_cp_land_tile_cp_visible_to_count_marks` (prefix only) | see run table | `bump_mark_f` is a no-op stub; `mark_src_at` always `−1` so the guard's 「自己[场上]1个[CP点]」 conjunct can never admit and `add_counter_at` is unreachable | — |
 | mark:cp `on_land` guard / no-op | 「在拥有[CP]点的格子上[结算]时」 | **PROVEN** (guard rejects) | `mark_cp_land_guard_rejects_without_tile_cp`, `mark_cp_land_guard_rejects_when_cancelled` | see run table | no tile CP / cancelled ⇒ entry does not fire | — |
 | mark:cp `on_place` | 「在任意一个没有角色和[CP点]的格子上添加1个[CP点]…」 | **BLOCKED-HOST** | — | not run | `msg_tile` / `msg_arg0` / `msg_sender_uid` are protocol stubs (return 0) ⇒ the handler cannot see the payload. Specs kept (`mark_cp_place_guard`, `mark_cp_place_effects_ok`). | — |
@@ -81,6 +81,13 @@ suites) pins the same window contract concretely, including the exhaustive
 `fire_gain_iff` grid: a symbolically invisible name/order/time mistake shows
 there in under a second. It also records the `charge_max = 3` struct-default
 trap that the undeclared-seat harness hit.
+
+Name identity at the intern seam is `(FNV, bytes)` — the bytes compare runs on
+a hash-equal probe only. Hash+len alone is **not** sound under CBMC: a name
+interned through a runtime slice can be stored with a symbolic hash, and a
+later concrete-hash lookup then matches a different equal-length name for free
+(measured 2026-11-13: the window's `charge` resolved to the board's `circle`,
+`id_eq_str` FAILED; see TRIAGE-LOG batch 2).
 
 | ID | book quote / clause | classification | harnesses | verdict | finding |
 |---|---|---|---|---|---|
@@ -153,16 +160,18 @@ that fix merged.
 
 | harness | verdict | time (s) | notes |
 |---|---|---:|---|
-| `fire_gain_iff` | (running) | | clamp actual + one `GainFire` + one `markerGain` + I2 + frame |
-| `fire_gain_at_cap_noop` | SUCCESSFUL | 1116.2 | refusal, zero effect, one narration |
-| `fire_gain_zero_request_noop` | SUCCESSFUL | 806.1 | n = 0 no-op; also the first green compile of the unit |
-| `fire_gain_undeclared_seat_noop` | FAILED → fixed, rerun pending | 852.4 | I1; first run proved the *premise* wrong: `World::new` ships `charge_max = 3`, so the "undeclared" world was writable. The harness now clears `charge`/`charge_max`, and the native `conf_fire_windows` twin pins the no-row no-op |
-| `fire_spend_iff` | (running) | | one `AddToken(−n)` + `ChargePaying` then `markerSpend` windows + frame |
-| `fire_spend_short_refused` | (running) | | windows open, no write |
-| `fire_spend_zero_noop` | (running) | | trivial pay, nothing opens |
-| `fire_i2_is_preserved_by_gain` | (running) | | total I2 assert |
-| `fire_gain_mutant_uncapped_is_detected` | SUCCESSFUL (panic as expected) | 662.3 | should_panic |
-| `fire_spend_mutant_underspend_is_detected` | (running) | | should_panic |
+| `fire_gain_iff` | SUCCESSFUL 2026-11-13 (930.4 standalone; 1086.9 in unit) | 1086.9 | clamp actual + one `GainFire` + one `markerGain` + I2 + frame. **This is the run that pins the intern-model fix**: on the pre-fix model the window's `charge` resolved back as `cp` + zeros (id/len right), and the harness now passes on the inline-bytes model |
+| `fire_gain_at_cap_noop` | SUCCESSFUL 2026-11-13 | 772.0 | refusal, zero effect, one narration |
+| `fire_gain_zero_request_noop` | SUCCESSFUL 2026-11-13 | 255.4 | n = 0 no-op; also the first green compile of the unit |
+| `fire_gain_undeclared_seat_noop` | SUCCESSFUL 2026-11-13 (fixed harness) | 661.3 | I1; first run proved the *premise* wrong: `World::new` ships `charge_max = 3`, so the "undeclared" world was writable. The harness now clears `charge`/`charge_max`, and the native `conf_fire_windows` twin pins the no-row no-op |
+| `fire_spend_iff` | TIMEOUT 1800 s on the unit pass, 3600 s, then 5400 s after the raise-arm fix + `pre` concreteness; solver-bound after a short symex | | one `AddToken(−n)` + `ChargePaying` then `markerSpend` windows + frame |
+| `fire_spend_short_refused` | TIMEOUT 1500 s on the unit pass, 3000 s, then 5400 s after the raise-arm fix + a halved request range | | windows open, no write |
+| `fire_spend_zero_noop` | SUCCESSFUL 2026-11-13 | 189.7 | trivial pay, nothing opens |
+| `fire_i2_is_preserved_by_gain` | SUCCESSFUL 2026-11-13 | 731.5 | total I2 assert |
+| `fire_gain_mutant_uncapped_is_detected` | SUCCESSFUL 2026-11-13 (panic as expected) | 471.6 | should_panic |
+| `fire_gain_window_debug` | SUCCESSFUL 2026-11-13 | 1055.5 | DEBUG, kept: same grid as `fire_gain_iff`, one assert per window conjunct (names the wrong field, no snapshots) |
+| `fire_gain_name_concrete_debug` | SUCCESSFUL 2026-11-13 | 531.0 | DEBUG, kept: fully concrete args, id vs bytes split for the window name; green on the inline-bytes model (it was green on the old model too — the mangle needs the symbolic seat) |
+| `fire_spend_mutant_underspend_is_detected` | TIMEOUT 1200 s on the unit pass, then 5400 s — fully concrete, so budget alone | | should_panic |
 
 ### Written, verdict pending (slot queue; run centrally or retry)
 
@@ -177,14 +186,14 @@ that fix merged.
 | `circle_settle_mutant_wrong_player` | SUCCESSFUL (panic as expected) | |
 | `event_settle_mutant_two_cards` | SUCCESSFUL (panic as expected) | |
 | `event_settle_mutant_wrong_player` | SUCCESSFUL (panic as expected) | |
-| `mark_cp_land_gain_iff` | SUCCESSFUL | gain-800 observable half |
-| `mark_cp_land_mutant_900` | SUCCESSFUL (panic as expected) | |
-| `mark_cp_land_mutant_wrong_seat` | SUCCESSFUL (panic as expected) | |
-| `mark_cp_land_guard_rejects_without_tile_cp` | SUCCESSFUL | no-op when no [CP点] |
-| `mark_cp_land_guard_rejects_when_cancelled` | SUCCESSFUL | no-op when cancelled |
-| `mark_cp_land_tile_cp_visible_to_count_marks` | SUCCESSFUL | prefix of the guard; cover still-rejecting `mark_src_at` stub |
+| `mark_cp_land_gain_iff` | SUCCESSFUL 2026-11-13 (676.5 s) — after the heap-free filter fix, see the tile row above | gain-800 observable half |
+| `mark_cp_land_mutant_900` | SUCCESSFUL 2026-11-13 (531.2 s) — the six allocator checks are gone; the expected panic is the only failure | |
+| `mark_cp_land_mutant_wrong_seat` | SUCCESSFUL 2026-11-13 (476.6 s) | |
+| `mark_cp_land_guard_rejects_without_tile_cp` | SUCCESSFUL 2026-11-13 (414.3 s) | no-op when no [CP点] |
+| `mark_cp_land_guard_rejects_when_cancelled` | SUCCESSFUL 2026-11-13 (314.5 s) | no-op when cancelled |
+| `mark_cp_land_tile_cp_visible_to_count_marks` | SUCCESSFUL 2026-11-13 (579.2 s) | prefix of the guard; cover still-rejecting `mark_src_at` stub |
 
-All 20 harnesses compile under `cargo build -p rules-kani` on this branch.
+All 18 harnesses compile under `cargo build -p rules-kani` on this branch.
 
 ## What we tried for blocked / protocol rows
 

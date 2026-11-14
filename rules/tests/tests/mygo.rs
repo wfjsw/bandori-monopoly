@@ -309,6 +309,14 @@ fn light_crystal_pays_skill_fire_cost() {
     }
     rest(&mut t);
     drain(&mut t);
+    #[cfg(not(kani))]
+    eprintln!(
+        "DBG keys={:?} crystals={} charge={} field={:?}",
+        t.recent_keys(60),
+        crystals(&t, 0, "MyGO:（灯）不再迷茫"),
+        t.charge(0),
+        t.field_ids(0)
+    );
     // The crystal paid the fire cost; (3) then removed the card at 0.
     assert!(
         !t.on_field(0, "MyGO:（灯）不再迷茫"),

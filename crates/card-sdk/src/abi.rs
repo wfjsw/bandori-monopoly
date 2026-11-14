@@ -911,7 +911,64 @@ use crate::intern::NameId;
 ///    (import `ruleset_persona`, op 498) is the character card of a seat, the
 ///    same spelling `persona_is` matches; mutsumi 状态2 borrows the last
 ///    player's card through it. No id renumbered. SAVE / RECORD unchanged.
-pub const ABI_VERSION: i32 = 123;
+/// v124: **the A/B backlog close-out.** Every B item of the 2026-11-13 sweep,
+///    in one bump:
+///
+///    * `turnStartAfter = 143` / `manageAfter = 144` (HOST-03, 行动阶段 3 / 6):
+///      hook-only stage markers, raised once by the engine after the turn-start
+///      handling and when 运营 closes; 「此阶段之后的阶段也视为回合开始后」.
+///    * `markerChanged = 145` (HAG-01): raised post-commit on a held-token
+///      write with the holder as `player_id`, the token name and signed delta
+///      on the payload and the creating instance when known; a write made
+///      under an open `markerChanged` dispatch is not re-raised
+///      (`PlayCtx::marker_raise_depth`).
+///    * `abnormalChoice = 146` (STA-02, glossary 14): raised at the abnormal
+///      gate for a received 传送 / 强制移动 / 强制停下 with the abnormal kind on
+///      the payload; the [不可阻挡] holder answers it with
+///      `ctx::trigger::allow_abnormal` and the host then skips its gate
+///      refusal. Journaled; no answer = the old refusal path.
+///    * `forceBuyAdd = 147` / `forceBuyMul = 148` / `forceBuySet = 149`
+///      (FORCE-WRITE-01, 其他规则 6): the 强制购买 price stages. A Force quote
+///      runs these instead of the generic `buyAdd` / `buyMul` / `buySet`, which
+///      keep skipping a Force quote; `declares(kind)` keeps a stage off a
+///      ruleset that never spells one.
+///    * imports `trig_set_abnormal_allowed = 499` (the STA-02 yes answer),
+///      `lost_this_turn = 500` (ABI-11: the seat's running 失去 total since its
+///      own turn start, zeroed there), `trigger_pay_split_ran = 501`
+///      (NFO-CANCEL-01: the in-flight payment reached its `paySplitAt` shave --
+///      a cancelled payment did not 「付款」), `tile_prop_state = 502` (ABI-12:
+///      `-1` absent / `0` present-clear / `1` present-non-zero, so an explicit
+///      `FORCE_STAYS_MORTGAGED = 0` is distinguishable from an unset prop).
+///    * `add_group_pool_shuffled = 503` (SKILL-06: the reshuffle-tagged crystal
+///      add, 「只有洗牌时可以…」), `trig_card_tags = 504` (the trigger cards'
+///      sheet tags, so a listener says 「[手]效果」 without matching ids).
+///    * co-held deeds (SKILL-06): `add_co_owner = 505`, `is_co_owner = 506`,
+///      `owns_tile = 507`, `mortgaged_for = 508`. A tile keeps one primary
+///      owner and a holder row; every holder owns the deed for eligibility,
+///      mortgage / redeem are per holder, the tile-wide flag stays the
+///      aggregate. `CardWorld` gives every new method a safe default.
+///    * `set_direction_dice = 509` / `direction_roll = 510` (W3-KAORU-02): the
+///      declared plan direction die is its own recorded face (`1d2`), not a d6
+///      peek.
+///    * `card_derived = 511` / `event_card_ids = 512` (EVENT-04): 触発的玩家
+///      picks from every **non-derived** event; the hand-maintained table is
+///      gone.
+///    * no new id for ABI-13 (temporary tile-rule swap): sugar over two
+///      instance props `ruleSwapA` / `ruleSwapB`, resolved by
+///      `World::governing_square` at every rule read. Board identity reads stay
+///      static, the deed follows the homed instance, the binding reverses when
+///      the instance leaves play.
+///    * no new id for COND-01 (hooks re-evaluate against the running world),
+///      LOY-NET-01 / LOY-THANKS-01 / LOY-ANON-01 / CD-02, DECLARE-TRAP-LOG
+///      (host-only trap callback), ENG-COST (`ManifestEntry.cost` plus the
+///      `OP_COST` gate/charge) or G15 (the shared `tile_in` static table).
+///
+///    SAVE_VERSION 22 -> 23: the ABI-11 accumulator and the payment/crystal
+///    bookkeeping are world state, `fire` state charge / tempFire fold into
+///    held-token rows, all added fields are `#[serde(default)]` and a v22 save
+///    is an accepted one-step source. RECORD_VERSION unchanged (kind ids do
+///    not ride the record codec).
+pub const ABI_VERSION: i32 = 124;
 /// v108: **stage folds and rent / settle stages (MONEY-01)**. The amount
 ///    stages no longer apply one responder after the other: every responder of
 ///    an add stage reads the **stage input** and its deltas are summed, every
@@ -1653,13 +1710,52 @@ impl Default for MarkRef {
     }
 }
 
+/// `String` stand-in for the Kani build: an inline, heap-free fixed buffer.
+/// Mark filters are built from `&str` literals at guard time, and the Kani
+/// host's mark ops are stubs that ignore the packed bytes, so the `String`
+/// heap traffic only drags CBMC's allocator model (and its six known false
+/// positives) into every proof that evaluates a filter.
+#[cfg(kani)]
+#[derive(Clone, Debug, Default, PartialEq, Eq, serde::Serialize, serde::Deserialize)]
+pub struct MarkStr {
+    len: u8,
+    bytes: [u8; 24],
+}
+
+#[cfg(kani)]
+impl MarkStr {
+    const CAP: usize = 24;
+
+    pub fn as_bytes(&self) -> &[u8] {
+        &self.bytes[..self.len as usize]
+    }
+}
+
+#[cfg(kani)]
+impl From<&str> for MarkStr {
+    fn from(s: &str) -> Self {
+        // Every current filter argument fits (longest: `skill.uikaIdol.pot`).
+        let b = s.as_bytes();
+        let n = if b.len() > Self::CAP { Self::CAP } else { b.len() };
+        let mut bytes = [0u8; Self::CAP];
+        bytes[..n].copy_from_slice(&b[..n]);
+        Self { len: n as u8, bytes }
+    }
+}
+
+/// Gate string: `String` in the real build, [`MarkStr`] under Kani.
+#[cfg(not(kani))]
+pub type MarkString = String;
+#[cfg(kani)]
+pub type MarkString = MarkStr;
+
 /// A filter over tile marks (the generic tile-mark API). Empty `kind` /
 /// `category`, and [`mark::ANY`] for `owner` / `src` / `instance`, match
 /// anything. Packed as postcard across the guest/host boundary.
 #[derive(Clone, Debug, Default, PartialEq, Eq, serde::Serialize, serde::Deserialize)]
 pub struct MarkFilter {
-    pub kind: String,
-    pub category: String,
+    pub kind: MarkString,
+    pub category: MarkString,
     /// Display owner seat, `-1` for a neutral mark, or [`mark::ANY`].
     pub owner: i32,
     /// Provenance instance uid, or [`mark::ANY`].
@@ -1671,19 +1767,19 @@ pub struct MarkFilter {
 impl MarkFilter {
     pub fn any() -> Self {
         Self {
-            kind: String::new(),
-            category: String::new(),
+            kind: MarkString::default(),
+            category: MarkString::default(),
             owner: mark::ANY,
             src: mark::ANY,
             instance: mark::ANY,
         }
     }
     pub fn kind(mut self, k: &str) -> Self {
-        self.kind = String::from(k);
+        self.kind = MarkString::from(k);
         self
     }
     pub fn category(mut self, c: &str) -> Self {
-        self.category = String::from(c);
+        self.category = MarkString::from(c);
         self
     }
     pub fn owner(mut self, o: i32) -> Self {
@@ -3583,7 +3679,7 @@ impl TriggerKind {
     /// `buyAssign`
     pub const BuyAssign: Self = Self::engine(83);
 
-    /// `forceBuyAdd` (FORCE-WRITE-01) -- the 强制购买 price's fixed ± stage.
+    /// `forceBuyAdd` (FORCE-WRITE-01) -- the 强制购买 price's add stage.
     pub const ForceBuyAdd: Self = Self::engine(147);
 
     /// `forceBuyMul` -- the 强制购买 price's multiply stage.

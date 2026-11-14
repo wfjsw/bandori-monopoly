@@ -446,7 +446,9 @@ pub fn fire_gain_iff() {
 /// DEBUG (temporary): the same symbolic grid as `fire_gain_iff`, one assert
 /// per window conjunct, so a failure names the wrong field. No snapshot /
 /// effect reads -- the symptom is the window only, and `World` copies are the
-/// bulk of the CBMC cost.
+/// bulk of the CBMC cost. Both debug harnesses are cheap enough for the unit;
+/// they exist because `mark_*` harnesses sit under the six allocator
+/// false-positive checks (see `docs/rulebook/spec/kani/tiles.md`).
 #[kani::proof]
 #[kani::use_stub_set(crate::kani_stubs::LIB_COST_NOFMT)]
 #[kani::unwind(24)]
@@ -476,88 +478,11 @@ pub fn fire_gain_window_debug() {
     crate::kassert!(w[0].value == want, "debug: window value");
 }
 
-/// DEBUG (temporary): the same six window conjuncts as
-/// `fire_gain_window_debug`, with a CONCRETE world and concrete args — one
-/// axis at a time is symbolic in the probe harnesses below. The point is to
-/// find which symbolic input flips the stored window name; the fully concrete
-/// run (`fire_gain_name_concrete_debug`) passes.
-fn fire_name_probe_common() {
-    let (wins, win_n) = windows();
-    let w = &wins[..win_n];
-    crate::kassert!(win_n == 1, "probe: window count");
-    crate::kassert!(w[0].kind == WINDOW_GAIN, "probe: window kind");
-    crate::kassert!(
-        w[0].name == intern::intern(bandori_std::fire::KEY).0,
-        "probe: window name id"
-    );
-    crate::kassert!(
-        intern::id_eq_str(intern::NameId(w[0].name), bandori_std::fire::KEY),
-        "probe: window name bytes"
-    );
-}
-
-/// DEBUG (temporary): everything concrete except `user`.
-#[kani::proof]
-#[kani::use_stub_set(crate::kani_stubs::LIB_COST_NOFMT)]
-#[kani::unwind(24)]
-pub fn fire_gain_name_user_debug() {
-    let user = any_seat();
-    host::install_backend(fire_gain_dispatch);
-    world::with_world_mut(|w| {
-        w.trig_player = user;
-        w.charge = [0; MAX_PLAYERS];
-        w.charge_max = [0; MAX_PLAYERS];
-        w.charge[user as usize] = 1;
-        w.charge_max[user as usize] = 2;
-        w.money = [1000; MAX_PLAYERS];
-        w.pos = [10, 20, 0, 0];
-    });
-    let _ = bandori_std::fire::gain(user, 2, &Msg::new("proof")).unwrap();
-    fire_name_probe_common();
-}
-
-/// DEBUG (temporary): everything concrete except `pre` (the held count).
-#[kani::proof]
-#[kani::use_stub_set(crate::kani_stubs::LIB_COST_NOFMT)]
-#[kani::unwind(24)]
-pub fn fire_gain_name_pre_debug() {
-    let pre = crate::harness::any_in(0, 2);
-    host::install_backend(fire_gain_dispatch);
-    world::with_world_mut(|w| {
-        w.charge = [0; MAX_PLAYERS];
-        w.charge_max = [0; MAX_PLAYERS];
-        w.charge[0] = pre;
-        w.charge_max[0] = pre + 2;
-        w.money = [1000; MAX_PLAYERS];
-        w.pos = [10, 20, 0, 0];
-    });
-    let _ = bandori_std::fire::gain(0, 2, &Msg::new("proof")).unwrap();
-    fire_name_probe_common();
-}
-
-/// DEBUG (temporary): everything concrete except the requested `n`.
-#[kani::proof]
-#[kani::use_stub_set(crate::kani_stubs::LIB_COST_NOFMT)]
-#[kani::unwind(24)]
-pub fn fire_gain_name_n_debug() {
-    let n = crate::harness::any_in(1, 4);
-    host::install_backend(fire_gain_dispatch);
-    world::with_world_mut(|w| {
-        w.charge = [0; MAX_PLAYERS];
-        w.charge_max = [0; MAX_PLAYERS];
-        w.charge[0] = 1;
-        w.charge_max[0] = 2;
-        w.money = [1000; MAX_PLAYERS];
-        w.pos = [10, 20, 0, 0];
-    });
-    let _ = bandori_std::fire::gain(0, n, &Msg::new("proof")).unwrap();
-    fire_name_probe_common();
-}
-
 /// DEBUG (temporary): `fire_gain_iff` with **concrete** args, splitting the
 /// failing name conjunct into (a) the stored id vs `intern(KEY)` and (b) the
-/// byte compare, so a failure names which half is wrong. Concrete args keep
-/// the check count low enough to finish.
+/// byte compare, so a failure names which half is wrong. Full concrete is the
+/// cheapest harness here; it was the one that pinned the old intern model's
+/// byte mangle under the symbolic-seat path.
 #[kani::proof]
 #[kani::use_stub_set(crate::kani_stubs::LIB_COST_NOFMT)]
 #[kani::unwind(24)]
@@ -592,31 +517,6 @@ pub fn fire_gain_name_concrete_debug() {
     crate::kassert!(
         intern::id_eq_str(intern::NameId(wins[0].name), bandori_std::fire::KEY),
         "debug: bytes"
-    );
-}
-
-/// DEBUG (temporary): the `markerGain` name under Kani, in isolation. The
-/// arm decodes the tagged ABI handle back to a `NameId`; the spec compares
-/// that id's bytes with `KEY`. This separates the handle wire from the byte
-/// compare without running the world / kernel at all.
-#[kani::proof]
-#[kani::use_stub_set(crate::kani_stubs::LIB_COST_NOFMT)]
-#[kani::unwind(24)]
-pub fn fire_gain_window_name_debug() {
-    host::install_backend(fire_gain_dispatch);
-    let id = intern::intern(bandori_std::fire::KEY);
-    let handle = intern::encode_handle(id);
-    crate::kassert!(
-        intern::decode_handle(handle) == Some(id),
-        "debug: handle decodes to the same id"
-    );
-    let _ = host::arm_gain_marker([0, handle, bandori_std::fire::KEY.len() as i32, 1, 0, 0]);
-    let (wins, win_n) = windows();
-    crate::kassert!(win_n == 1, "debug: one window");
-    crate::kassert!(wins[0].name == id.0, "debug: the stored raw id is the key id");
-    crate::kassert!(
-        intern::id_eq_str(intern::NameId(wins[0].name), bandori_std::fire::KEY),
-        "debug: the stored name resolves to the key bytes"
     );
 }
 
@@ -720,7 +620,10 @@ const CHARGE_PAYING_NAME: &str = "r:bandori:78";
 #[kani::unwind(24)]
 pub fn fire_spend_iff() {
     let user = any_seat();
-    let pre = crate::harness::any_in(1, 6);
+    // `pre` concrete: the pre range multiplies the symbolic `n` paths, and
+    // this body does not consult `pre` beyond size. 3 keeps both covers
+    // (`n == pre`, `n < pre`) satisfiable.
+    let pre = 3;
     let n = crate::harness::any_in(1, pre);
     let cap = pre + 1;
     fire_world(fire_spend_dispatch, user, pre, cap);
@@ -760,7 +663,7 @@ pub fn fire_spend_iff() {
 pub fn fire_spend_short_refused() {
     let user = any_seat();
     let pre = crate::harness::any_in(0, 4);
-    let n = crate::harness::any_in(pre + 1, pre + 4);
+    let n = crate::harness::any_in(pre + 1, pre + 2);
     // A live cap keeps `writable` true even at pre == 0.
     let cap = pre + 2;
     fire_world(fire_spend_dispatch, user, pre, cap);

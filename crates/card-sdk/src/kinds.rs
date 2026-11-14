@@ -813,7 +813,7 @@ mod tests {
         // (ABI v114) = 79, plus G08's zone / attachment family (ABI v118)
         // = 89, plus G10's `eventResolved` (ABI v119) = 90, plus HOST-03's
         // `payCalcBefore` (ABI v120) = 91, plus HOST-03's `turnStartAfter` /
-        // `manageAfter` (ABI v120) = 93, plus HAG-01's `markerChanged` (ABI
+        // `manageAfter` (ABI v124) = 93, plus HAG-01's `markerChanged` (ABI
         // v124) = 94, plus STA-02's `abnormalChoice` (ABI v124) = 95.
         assert_eq!(Action::KINDS.len(), 95);
         // A dual kind is filter-shaped but still an action entry.

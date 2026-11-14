@@ -44,10 +44,11 @@ condition.
 
 ### 2.1 Kind
 
-New engine kind **143**, wire `abnormalChoice`: an `ActionKind` /
-`TriggerKind` pair, `is_filter: false`, `hook_only: true` (it is raised at a
-fixed engine point, never declared by a card's `On::Hook`). Appended after
-HOST-03's `payCalcBefore` (91 in the action pin, 143 in the kind table).
+New engine kind **146** (drafted 143, appended right after `payCalcBefore` =
+142 before the merge pushed it behind HOST-03's two stage markers), wire
+`abnormalChoice`: an `ActionKind` / `TriggerKind` pair, `is_filter: false`,
+`hook_only: true` (it is raised at a fixed engine point, never declared by a
+card's `On::Hook`).
 
 ### 2.2 Raise point — `wasm_rules.rs::abnormal_gate`
 
@@ -141,9 +142,9 @@ unchanged.
 
 | layer | addition |
 |---|---|
-| `crates/game-kinds/src/lib.rs` | kind row 143 (`abnormalChoice`, `hook_only`), `from_wire` arm, HOOKS pin |
+| `crates/game-kinds/src/lib.rs` | kind row 146 (`abnormalChoice`, `hook_only`), `from_wire` arm, HOOKS pin |
 | `crates/card-sdk/src/abi.rs` | `ActionKind::AbnormalChoice` / `TriggerKind::AbnormalChoice` doc constants |
-| `crates/card-sdk/src/kinds.rs` | engine action row, action pin 91 → 92 |
+| `crates/card-sdk/src/kinds.rs` | engine action row, action pin 94 → 95 |
 | `crates/card-sdk/src/ctx.rs` | `trigger::allow_abnormal` |
 | `crates/card-sdk/src/ctx/sys.rs` | extern `trig_set_abnormal_allowed` |
 | `crates/card-sdk/src/ctx/sys_kani.rs`, `kani_host.rs` | Kani `Op` 499 + dispatch |
@@ -152,8 +153,9 @@ unchanged.
 | `rules/status/src/unstoppable.rs` | the `On::Action` entry and body |
 | `webui/src/i18n/locales/{zh-CN,en}` | `ask.unstoppable_choice.title` / `.text`, `anim.chainKind.abnormalChoice` |
 
-No `ABI_VERSION` bump: the kind and import are additive at the tail and the
-release marker carries the new ids.
+No own `ABI_VERSION` bump on the branch: the kind and import are additive at
+the tail. Both landed in v124 with the batch (kind 146, `Op` 499), documented
+in `README.md`'s amendment.
 
 ## 3. Interaction with the rest of the gate
 

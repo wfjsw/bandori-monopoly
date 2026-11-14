@@ -8089,6 +8089,7 @@ mod gate_tests {
             gate_skip_msgs: Default::default(),
             exemption_prop: Default::default(),
             rule: Default::default(),
+            derived: false,
         }
     }
 
@@ -8109,6 +8110,7 @@ mod gate_tests {
             answer_effect: Default::default(),
             all_kinds: false,
             copies_previous: false,
+            cost: None,
         }
     }
 
@@ -8195,6 +8197,7 @@ mod gate_tests {
             answer_effect: Default::default(),
             all_kinds: false,
             copies_previous: false,
+            cost: None,
         }
     }
 

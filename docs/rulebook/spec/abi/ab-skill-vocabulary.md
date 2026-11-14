@@ -1,7 +1,8 @@
 # ab-skill-vocabulary — SKILL-06 deck / hand-building vocabulary
 
-Status: landed in the `wf_2376cbc1-b6e-4` worktree (uncommitted at note time).
-Backlog item: `docs/rulebook/BACKLOG.md` §SKILL-06 (class B, medium).
+Status: landed 2026-11-13 in ABI v124 (implemented on the
+`wf_2376cbc1-b6e-4` worktree, merged). Backlog item was
+`docs/rulebook/BACKLOG.md` SKILL-06 (class B, medium; closed and stubbed).
 
 This is an A/B-batch note, not one of the G01–G15 group drafts: it records
 eight sub-sites the sheet states but the ABI could not express, the generic
@@ -149,7 +150,7 @@ Plumbing (full discipline, per new verb):
 |---|---|
 | wasm extern + `link_name` | `crates/card-sdk/src/ctx/sys.rs` |
 | Kani sys | `crates/card-sdk/src/ctx/sys_kani.rs` |
-| Kani `Op` (appended 499–504) | `crates/card-sdk/src/kani_host.rs` |
+| Kani `Op` (drafted 499–504, landed 503–508) | `crates/card-sdk/src/kani_host.rs` |
 | typed wrapper | `crates/card-sdk/src/ctx.rs` |
 | `HostCtx` ops | `crates/game-rules/src/hostfns.rs` |
 | wasmtime `func_wrap` | `crates/game-rules/src/host.rs` |
@@ -204,7 +205,10 @@ own/base exclusive rule.
   `ctx::trigger::uid()`; later instances of the same raise return early.
 - `rules/tiles/src/property.rs`: a co-held deed's single-primary charge stands
   down (the split pays it); `owns_tile` / `mortgaged_for` drive the build,
-  mortgage and redeem eligibility.
+  mortgage and redeem eligibility. The carrier is the settle declaration: the
+  split's `trigger::set_pay_amount(0)` is moved onto the settle entry
+  (`TurnCtx::settle_seed`) and starts the tile body's trigger at `0`
+  (untouched = `-1`), so a table where the split did not run still charges.
 - Buy lock untouched: the hill cannot change hands while any band member is in
   the game, which already covers the double-pay route.
 
@@ -256,7 +260,8 @@ gains `skill.soyoClear.coloured` and `skill.soyoClear.waived`.
 
 - `MatchState.co_owners` / `co_mortgaged`: **new fields, `#[serde(default)]`**.
   An old save (and an old client) loads them empty = every deed ordinary, so
-  `SAVE_VERSION` does not move.
+  these rows alone need no version bump (the batch's 23 is the FIRE-TOKENS-1
+  fold).
 - Same two rows mirrored with `#[serde(default)]` into the replay/rollback
   snapshot types: `engine::world::TurnSnapshot`, `engine::journal::WorldSnapshot`,
   `card_sdk::ctx::TurnSnapshot`.
@@ -270,12 +275,13 @@ gains `skill.soyoClear.coloured` and `skill.soyoClear.waived`.
 
 ## 6. Versioning
 
-This worktree deliberately does **not** touch `ABI_VERSION` (123) or its doc
-block; the integration/landing pass owns the bump. The six imports append to
-the existing tail, and the Kani `Op` ids are appended at 499–504
-(`add_group_pool_shuffled`, `trig_card_tags`, `add_co_owner`, `is_co_owner`,
-`owns_tile`, `mortgaged_for`), after 498 (`persona`). `SAVE_VERSION` is
-unchanged.
+This worktree deliberately did **not** touch `ABI_VERSION` (123) or its doc
+block; the integration pass owned the bump. Landed 2026-11-13 in ABI v124: the
+six imports are `Op` 503–508 (`add_group_pool_shuffled`, `trig_card_tags`,
+`add_co_owner`, `is_co_owner`, `owns_tile`, `mortgaged_for`), drafted at
+499–504. The co-holder rows are `#[serde(default)]`; the batch's `SAVE_VERSION`
+23 comes from the FIRE-TOKENS-1 fold. Full allocation in `README.md`'s
+amendment.
 
 ## 7. Tests
 
@@ -339,11 +345,12 @@ Kani proofs and the fuzz targets were not run (opt-in).
    rather than the settle's own figure. If another effect ever reshapes the
    settled amount before the split, the split would not see it. The command
    pre-split stage (`PIPELINE-AUDIT` Q2) still shapes the divided figure.
-2. **A co-held hill with no band card left.** The tile's single-primary charge
-   stands down whenever a holder row exists, and only the split pays. If the
-   band card is gone while the row survives, the hill charges nobody. A held
-   row implies the card was in play; `release_deed` shrinks the row as seats
-   go out, but the row itself is not tied to the card instance.
+2. **A co-held hill with no band card left.** With the split's zeroed
+   declaration carried onto the settle, the tile stands down only where the
+   split actually paid (or where no holder is payable at all). Rows surviving
+   a departed card therefore fall back to the ordinary single-primary charge
+   instead of paying nobody. `release_deed` shrinks the row as seats go out,
+   but the row itself is not tied to the card instance.
 3. **`poppin.splitRaise`** is a persisted tile prop. It is one i32 overwritten
    per raise; a stale value can only collide with a recycled raise id.
 4. **Single fire-temp stamp.** A second provider (none today) would overwrite

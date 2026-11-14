@@ -2643,6 +2643,11 @@ pub fn arm_gain_marker(a: Args) -> i64 {
     // non-positive delta opens no window.
     if a3 > 0 {
         let name = name_id(a1, a2);
+        #[cfg(kani)]
+        kani::assert(
+            intern::id_eq_str(name, "charge"),
+            "probe: gain_marker arg is charge",
+        );
         world::with_world_mut(|w| w.push_window(world::WINDOW_GAIN, a0, name, a3));
     }
     {
@@ -3529,28 +3534,32 @@ pub fn arm_raise(a: Args) -> i64 {
     // answers `pay_amount` (the hostfns `trigger().value` twin); `trig_value`
     // is the ir_fill / fixture view of the same number.
     let raise_name = name_id(kp, kl);
-    world::with_world_mut(|w| w.push_window(world::WINDOW_RAISE, player_id, raise_name, value));
-    let kind_sp: &'static str = crate::intern::resolve_str(raise_name);
-    let saved = world::with_world(|w| {
-        (
+    // `resolve_str_trusted`, not `resolve_str`: the UTF-8 validation loop is
+    // ~23 unwind steps over the whole world state on every raise.
+    let kind_sp: &'static str = intern::resolve_str_trusted(raise_name);
+    // One world borrow for the window + the payload swap. Three separate
+    // `with_world` calls re-establish the world facts twice more per raise.
+    let saved = world::with_world_mut(|w| {
+        w.push_window(world::WINDOW_RAISE, player_id, raise_name, value);
+        let saved = (
             w.trig_kind,
             w.trig_player,
             w.trig_value,
             w.pay_amount,
             w.trig_cancelled,
-        )
-    });
-    world::with_world_mut(|w| {
+        );
         w.trig_kind = kind_sp;
         w.trig_player = player_id;
         w.trig_value = value;
         w.pay_amount = value;
         w.trig_cancelled = false;
+        saved
     });
     let mut settled = 1i64;
     #[cfg(all(kani, feature = "skills-groups"))]
     {
-        if kind_sp == "r:bandori:107" {
+        // Byte compare: a `&str` `==` lowers to memcmp (an unwind loop).
+        if intern::id_eq_bytes(raise_name, b"r:bandori:107") {
             settled = arm_raise_fans_flip(player_id, value);
         }
     }

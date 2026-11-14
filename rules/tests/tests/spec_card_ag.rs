@@ -286,6 +286,8 @@ fn glory_swaps_half_of_dearest_deeds() {
     forall(6, 0xA6_0020, |rng, _i| {
         let mut t = Table::vanilla(2);
         // P1's dearest = BUDOKAN 3400 -> 1700. Optionally give P0 a deed too.
+        // (`clean()` drops the Poppin' Party start grant's co-holder rows, so
+        // P0 owns nothing by itself here.)
         t.own(1, &[BUDOKAN, HILL]);
         let give_user = rng.chance(50);
         let user_dearest_half = if give_user {
@@ -1121,7 +1123,12 @@ fn soul_last_crystal_reduces_pay_and_leaves() {
             ));
         }
         // Owner pays rent on a 3-house tile: rent 1520, reduced to 520.
+        // P0 is a Poppin' Party character, so a table that ran the band
+        // skill's start grant would treat it as a 「视为同时拥有」 co-holder of
+        // the hill (the build offer instead of rent); drop the row so this is
+        // the ordinary rent path.
         t.own(1, &[HILL]);
+        t.co_disown(0, &[HILL]);
         t.set_houses(HILL, 3);
         t.begin_turn(0);
         t.set_pos(0, HILL - 1);
@@ -1134,7 +1141,6 @@ fn soul_last_crystal_reduces_pay_and_leaves() {
         }
         skip_all(&mut t);
 
-        // Rent 1520 - 1000 = 520 to P1; the crystal spend also pays P1 +500.
         // P1 = 10000 + 520 + 500; P0 = 10000 - 500 (load) - 520 (rent).
         if t.money(1) != 10_000 + 520 + 500 {
             return Err(format!(

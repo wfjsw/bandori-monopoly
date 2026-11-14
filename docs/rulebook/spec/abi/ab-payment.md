@@ -1,7 +1,7 @@
 # ABI design — payment-pipeline class-B batch
 
-**Status: implemented on `worktree-wf_2376cbc1-b6e-2`. Worktree
-`/home/monopoly/web/.claude/worktrees/wf_2376cbc1-b6e-2`.**
+**Status: landed 2026-11-13 in ABI v124** (implemented on
+`worktree-wf_2376cbc1-b6e-2`, merged).
 
 Four `docs/rulebook/BACKLOG.md` class-B items, all in the payment / purchase
 pipeline:
@@ -13,10 +13,17 @@ pipeline:
 | FORCE-WRITE-01 | `force-buy-write-stages` | 强制购买 had no price stages an effect could write |
 | NFO-CANCEL-01 | `nfo-cancel-unplace` | NFO's unplace ran on a payment cancelled before its shave stage |
 
-No `ABI_VERSION` change (the batch appends to the engine kind table and the
-host import surface; the ABI-version doc block is untouched by instruction).
-No `SAVE_VERSION` bump: both new world fields are `#[serde(default)]` and
-deserialize from older saves as empty / clear.
+No `ABI_VERSION` change on the branch (the batch appends to the engine kind
+table and the host import surface; the ABI-version doc block is untouched by
+instruction).
+
+**Landed 2026-11-13 (ABI v124).** Integration bumped `ABI_VERSION` 123 → 124
+for the whole A/B batch; the real allocation is in `README.md`'s amendment
+(this batch: kinds 147–149, imports 500–502). The id numbers in this document
+are the branch's pre-merge drafts. `SAVE_VERSION` 22 → 23 landed with the
+same batch — the FIRE-TOKENS-1 state fold drives the bump; both new world
+fields here are `#[serde(default)]` and deserialize from a v22 save as
+empty / clear.
 
 ---
 
@@ -76,14 +83,15 @@ shave-to-0 payment adds nothing (the debit never runs).
 
 ### 2.2 New kinds
 
-Three Filter kinds, appended to the engine table (ids **143–145**, after
-`payCalcBefore` = 142):
+Three Filter kinds, appended to the engine table — drafted as **143–145**
+(right after `payCalcBefore` = 142), landed as **147–149** when the batch
+merged behind the other kind allocations:
 
 | id | wire | payload |
 |---|---|---|
-| 143 | `forceBuyAdd` | `Payload` (the `BuyAdd` record) |
-| 144 | `forceBuyMul` | `Value` |
-| 145 | `forceBuySet` | `Value` |
+| 147 (draft 143) | `forceBuyAdd` | `Payload` (the `BuyAdd` record) |
+| 148 (draft 144) | `forceBuyMul` | `Value` |
+| 149 (draft 145) | `forceBuySet` | `Value` |
 
 Typed mirrors: `card_sdk::abi::{TriggerKind,FilterKind}::ForceBuy*`.
 
@@ -95,7 +103,7 @@ Typed mirrors: `card_sdk::abi::{TriggerKind,FilterKind}::ForceBuy*`.
   * `World::losses: Vec<i32>` (save, `serde(default)`), `bump_loss`,
     `losses_this_turn`; zeroed for the starting seat in `turn_start`.
   * `bump_loss` at each actual debit site listed in §2.1.
-  * Guest: `sys.rs` / `sys_kani.rs` / `kani_host.rs` (`Op` 499) / `ctx.rs` /
+  * Guest: `sys.rs` / `sys_kani.rs` / `kani_host.rs` (`Op` 500, drafted 499) / `ctx.rs` /
     `hostfns.rs` (`lost_this_turn`) / `CardWorld` + `wasm_rules` + trait
     default + `native_shims.rs` / `host.rs` / `rules/kani/src/{host,world}.rs`
     + `rules/kani/build.rs` `ARRAY_OPS`.
@@ -105,7 +113,7 @@ Typed mirrors: `card_sdk::abi::{TriggerKind,FilterKind}::ForceBuy*`.
   * `World::tile_prop_state` (engine read); `offer_force_buy` passes
     `stays_mortgaged = tile_prop_state(...) != 0` into `default_deal` (default
     `true`).
-  * Guest: the same full chain (`Op` 501).
+  * Guest: the same full chain (`Op` 502, drafted 501).
 * **FORCE-WRITE-01**
   * `game_kinds` rows, `abi.rs` consts, `kinds.rs` fold table,
     `kind_table_pin.rs` rows + shape map, `trigger_reason.rs`.
@@ -120,7 +128,7 @@ Typed mirrors: `card_sdk::abi::{TriggerKind,FilterKind}::ForceBuy*`.
     per payment (save / clear at start, restore after) so a nested payment
     cannot eat the outer leg's answer; `money_inner` sets it when the
     `paySplitAt` stage is about to run; guest `trigger::pay_split_ran()` (Op
-    500).
+    501, drafted 500).
   * `nfo.rs` PayAfter guard is a Rust fn `pay_split_ran`.
 
 Docs: `docs/PURCHASE.md` stage list / P3 / risk bullet now name the force

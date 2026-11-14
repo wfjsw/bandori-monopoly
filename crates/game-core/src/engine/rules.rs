@@ -398,6 +398,10 @@ pub struct Trigger {
     pub position: i32,
     pub card: Option<String>,
     pub value: i32,
+    /// Did a responder write `value` (`trigger::set_pay_amount`)? The
+    /// `settleBefore` window's answer is read back here so the settle's body
+    /// can tell its declaration was already shaped (`-1` = untouched).
+    pub value_set: bool,
     /// How this stage composes its responders' rewrites ([`Fold`]).
     pub fold: Fold,
     /// The stage input: what every responder reads as `value` while `fold` is
@@ -602,6 +606,7 @@ impl Trigger {
             position: -1,
             card: None,
             value: 0,
+            value_set: false,
             fold: Fold::Replace,
             fold_input: 0,
             fold_milli: 1_000_000,

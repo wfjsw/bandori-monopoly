@@ -2759,12 +2759,17 @@ impl PlayCtx<'_> {
         // `settleBody` / `settleAfter` does **not** re-target -- the landed
         // tile finishes (`settle_at` threads one `at`).
         let mut redirects = 0;
+        // `trigger::set_pay_amount` in the (last, non-redirecting)
+        // `settleBefore` window shapes the settle that follows: it is carried
+        // onto the settle entry so the tile body's own trigger starts at it.
+        let mut seed: Option<i32> = None;
         loop {
             let at = self.w.st.players[i].pos as usize;
             // `at` is re-read each redirect, so resolve with it (the move's
             // last path entry is the pre-redirect landing).
             let tile = self.w.tile_standing_at(at as i32);
-            raise!(self, "settleBefore", i, @m m, position = at as i32, tile = tile)?;
+            let t = raise!(self, "settleBefore", i, @m m, position = at as i32, tile = tile)?;
+            seed = t.value_set.then_some(t.value);
             if self.out(i) || !self.playing() {
                 return Ok(());
             }
@@ -2791,6 +2796,7 @@ impl PlayCtx<'_> {
             // else: the new tile gets its own `settleBefore` window
         }
         if !self.out(i) && self.playing() {
+            self.w.turn.settle_seed = seed;
             self.settle(i, m)?;
         }
         Ok(())
@@ -2889,6 +2895,7 @@ impl PlayCtx<'_> {
                     .expect("planted by `with_move`"),
                 is_main_move: frame.m.is_main_move,
                 no_buy: frame.no_buy,
+                seed: self.w.turn.settle_seed.take(),
             });
             frame.stack_idx = self.settle_stack.len() - 1;
             // The guest factor API reads the product and the innermost base

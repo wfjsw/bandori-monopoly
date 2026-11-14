@@ -320,3 +320,9 @@ pub fn cash_kani(player_id: i32) -> card_sdk::Asked {
 pub fn on_plan_kani(player_id: i32, v: card_sdk::PlanValue) -> card_sdk::PlanValue {
     on_plan(player_id, v)
 }
+
+#[cfg(kani)]
+#[inline(always)]
+pub fn on_marker_changed_kani(player_id: i32) -> card_sdk::Asked {
+    on_marker_changed(player_id)
+}

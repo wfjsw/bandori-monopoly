@@ -1,8 +1,9 @@
 # ABI design ABI-13 — temporary tile-rule swap
 
-**Status:** implemented on the ABI-13 branch. Guest sugar only — the mechanism is
-a pair of instance props resolved by the engine at every rule read, so the ABI
-surface (`ABI_VERSION`) and the save shape (`SAVE_VERSION`) do not change.
+**Status:** landed 2026-11-13 in ABI v124. Guest sugar only — the mechanism is
+a pair of instance props resolved by the engine at every rule read, so this
+document adds no id (the batch's `ABI_VERSION` bump and the `SAVE_VERSION` 23
+belong to the other B items).
 **Worktree:** `.claude/worktrees/wf_2376cbc1-b6e-3` (branch
 `worktree-wf_2376cbc1-b6e-3`).
 **Ground truth:** the sheet text. Every quoted fragment below is verbatim.
@@ -57,10 +58,11 @@ read on `b` and vice versa:
 * the deed-popup base text and its replacement precedence
   (`tile_text.rs`), and the `prop::START` flush on the walk
   (`play.rs` reads the governing square too);
-* tile props: `World::tile_prop` / `tile_prop_keys` / `set_tile_prop` resolve
-  through `governing_square`, so `ctx::tile_prop` / `ctx::set_tile_prop` and
-  the engine's rent / pay factor reads answer for the rule that actually runs
-  on the square;
+* tile props: `World::tile_prop` / `tile_prop_state` / `tile_prop_keys` /
+  `set_tile_prop` resolve through `governing_square`, so `ctx::tile_prop` /
+  `ctx::set_tile_prop` and the engine's rent / pay factor reads answer for the
+  rule that actually runs on the square (the ABI-12 tri-state read is in the
+  family);
 * the body's own reads: a tile body calls `ctx::self_tile()` and reaches its
   home instance, so `prop::NO_REWARD`, counters and every instance state ride
   along. This is the point of the mechanism: 「所有效果」 is the whole rule

@@ -2113,8 +2113,11 @@ impl World {
 
     /// A declared property of the rule instance governing `tile` -- what a card
     /// that bends a tile writes instead of an engine flag (`docs/TILES.md`).
-    /// Reads the first board-owned instance on `tile` that carries `key`; a tile
-    /// with no rule instance reads as `0`.
+    /// Reads the first board-owned instance on the governing square that
+    /// carries `key`; a tile with no rule instance reads as `0`. A rule swap
+    /// (`docs/rulebook/spec/abi/ab-tile-swap.md`) moves the read with the
+    /// effects, so a card asking the square answers for the rule that runs
+    /// there.
     pub fn tile_prop(&self, tile: i32, key: &str) -> i32 {
         let at = self.governing_square(tile);
         self.st
@@ -2125,13 +2128,15 @@ impl World {
             .unwrap_or(0)
     }
 
-    /// Tri-state [`Self::tile_prop`]: `-1` = no board-owned instance on
-    /// `tile` carries `key`, `0` = present and clear, `1` = present and
-    /// non-zero. [`Self::tile_prop`] folds absent onto `0`, so a ternary prop
-    /// (「获得的地契仍为抵押状态」, `prop::FORCE_STAYS_MORTGAGED = 0`) cannot be
-    /// told from "nobody wrote it" through it.
+    /// Tri-state [`Self::tile_prop`]: `-1` = no board-owned instance on the
+    /// governing square carries `key`, `0` = present and clear, `1` = present
+    /// and non-zero. [`Self::tile_prop`] folds absent onto `0`, so a ternary
+    /// prop (「获得的地契仍为抵押状态」, `prop::FORCE_STAYS_MORTGAGED = 0`)
+    /// cannot be told from "nobody wrote it" through it. Resolves the same
+    /// governing square, so the answer is the running rule's.
     pub fn tile_prop_state(&self, tile: i32, key: &str) -> i32 {
-        for f in self.st.board_field.iter().filter(|f| f.tile == tile) {
+        let at = self.governing_square(tile);
+        for f in self.st.board_field.iter().filter(|f| f.tile == at) {
             if let Some(&v) = f.props.get(key) {
                 return if v == 0 { 0 } else { 1 };
             }

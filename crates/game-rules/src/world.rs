@@ -48,6 +48,10 @@ pub struct Trigger {
     /// The amount (`t.Pay.amount` on pay triggers). On a fold stage this is
     /// the **composed** figure and `fold_input` is what bodies read.
     pub value: i32,
+    /// Did a body write `value` (`trigger::set_pay_amount` / a move roll)?
+    /// The settle body sees the `settleBefore` window's answer as `-1`
+    /// (untouched) or the written figure -- see [`Trigger::value`].
+    pub value_set: bool,
     /// How this stage composes its responders' writes (MONEY-01).
     pub fold: game_core::engine::rules::Fold,
     /// The stage input, read as `value` by every responder while `fold` is set.
@@ -295,6 +299,7 @@ impl Default for Trigger {
             // tile, so `trigger::position` must not read a false slot 0.
             position: -1,
             value: 0,
+            value_set: false,
             fold: game_core::engine::rules::Fold::Replace,
             fold_input: 0,
             fold_milli: 1_000_000,
@@ -377,6 +382,7 @@ impl Trigger {
             tile: -1,
             position: -1,
             value: 0,
+            value_set: false,
             fold: game_core::engine::rules::Fold::Replace,
             fold_input: 0,
             fold_milli: 1_000_000,

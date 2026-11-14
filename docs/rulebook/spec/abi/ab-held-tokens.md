@@ -1,5 +1,7 @@
 # Held-token `markerChanged` event (HAG-01)
 
+**Status:** landed 2026-11-13 in ABI v124 (kind `markerChanged` = 145).
+
 A **held token** is a player counter bound to the instance of the card that
 created it (`MARKERS.md`; `bind_held` stamps the creating uid). Until this
 item the only way a rule could react to one being written was to re-read the
@@ -21,10 +23,10 @@ instead of off each writer.
 | | |
 |---|---|
 | kind | `markerChanged` |
-| namespace | engine, id **143** (appended; ids are wire-stable) |
+| namespace | engine, id **145** at landing (drafted 143; appended; ids are wire-stable) |
 | shape | `On::Action(Action::MarkerChanged(condition, guard, body))` |
 | hook-only | yes -- no hand-counteraction window |
-| `ActionKind` | `ActionKind::MarkerChanged` = `Self::engine(143)` |
+| `ActionKind` | `ActionKind::MarkerChanged` = `Self::engine(145)` |
 | CEL spelling | `trig::MarkerChanged` / `kind == 'markerChanged'` |
 
 `TriggerKind::MarkerChanged` is the same engine id. Append-only: nothing is
@@ -105,9 +107,10 @@ Fixtures: `TEST:hagumiGive` (move the whole 可乐饼 pool to the other seat),
 
 ## Save / record impact
 
-None beyond the log: no new `MatchState` field, no `SAVE_VERSION` or
-`ABI_VERSION` change. A pre-143 ruleset simply never declares the kind and
-nothing raises.
+None beyond the log: no new `MatchState` field. The kind itself needs no save
+change; the batch's `SAVE_VERSION` 22 → 23 and `ABI_VERSION` 124 come from the
+FIRE-TOKENS-1 fold and the other B items, not from this document. A pre-145
+ruleset simply never declares the kind and nothing raises.
 
 ## Open questions
 

@@ -251,6 +251,10 @@ fn before_settle(player_id: i32) -> card_sdk::Asked {
         return Ok(());
     };
     let each = shaped / (payees.len() as i32).max(1);
+    // The settle's own body would otherwise charge the tile's rent a second
+    // time. Zeroing the declaration is the carrier: the engine moves the
+    // `settleBefore` value onto the settle, and the tile body sees it as its
+    // trigger value and stands down.
     ctx::trigger::set_pay_amount(0);
     for p in payees {
         ctx::pay_leg(from, p, each, &reason)?;
@@ -432,4 +436,10 @@ pub fn press_kani(player_id: i32) -> card_sdk::Asked {
 #[inline(always)]
 pub fn lock_hill_kani(player_id: i32, v: card_sdk::GateValue) -> card_sdk::GateValue {
     lock_hill(player_id, v)
+}
+
+#[cfg(kani)]
+#[inline(always)]
+pub fn grant_ownership_kani(player_id: i32) -> card_sdk::Asked {
+    grant_ownership(player_id)
 }

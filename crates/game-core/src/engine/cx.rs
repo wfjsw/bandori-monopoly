@@ -567,6 +567,11 @@ pub struct SettleEntry {
     /// binding one. Seeded from the frame, so a later `set_no_buy(false)`
     /// cannot clear it.
     pub no_buy: bool,
+    /// The `settleBefore` window's final `trigger::set_pay_amount` value
+    /// (`None` = untouched). The tile body's trigger starts at it, so a
+    /// pre-stage that paid the settle itself (the Poppin' Party rent split)
+    /// is visible to the body as a zeroed declaration.
+    pub seed: Option<i32>,
 }
 
 /// Routine context: the world being mutated, read-only game data, card rules, and
@@ -3525,6 +3530,13 @@ impl<'a> PlayCtx<'a> {
     /// The innermost open settle's tile, `-1` when none is open.
     pub fn settle_tile(&self) -> i32 {
         self.settle_stack.last().map_or(-1, |s| s.tile)
+    }
+
+    /// The innermost open settle's `settleBefore` pay seed (`None` = the
+    /// window left the declaration alone). The settle body's trigger starts
+    /// at it.
+    pub fn settle_seed(&self) -> Option<i32> {
+        self.settle_stack.last().and_then(|s| s.seed)
     }
 
     /// The open settles, innermost last (the raise-time move stamping reads

@@ -227,3 +227,15 @@ pub fn before_settle_self_kani(player_id: i32) -> card_sdk::Asked {
 pub fn before_settle_other_kani(player_id: i32) -> card_sdk::Asked {
     before_settle_other(player_id)
 }
+
+#[cfg(kani)]
+#[inline(always)]
+pub fn sync_state_kani(player_id: i32) -> card_sdk::Asked {
+    sync_state(player_id)
+}
+
+#[cfg(kani)]
+#[inline(always)]
+pub fn add_crystal_kani(player_id: i32) -> card_sdk::Asked {
+    add_crystal(player_id)
+}

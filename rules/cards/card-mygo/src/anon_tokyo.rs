@@ -111,7 +111,7 @@ fn anon_tokyo(player_id: i32) -> card_sdk::Asked {
         // cap is on **the pair** (「放置1个…（上限1）」). `place_mark_pair` is
         // place-or-refuse atomic: if either end already carries a mark of this
         // kind -- whoever linked it -- it places **neither** row (no half-link).
-        // TODO(规则书) Class C: whether a tile may sit in two links at once; the
+        // TODO(规则书) C-Q89: whether a tile may sit in two links at once; the
         // singular 「1个…（上限1）」 leans no, and `place_mark_pair`'s either-end
         // refusal is that reading.
         let placed = ctx::place_mark_pair(

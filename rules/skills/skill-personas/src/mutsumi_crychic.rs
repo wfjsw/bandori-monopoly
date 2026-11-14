@@ -196,3 +196,15 @@ pub fn on_pass_kani(player_id: i32) -> card_sdk::Asked {
 pub fn latch_kani(player_id: i32) -> card_sdk::Asked {
     latch(player_id)
 }
+
+#[cfg(kani)]
+#[inline(always)]
+pub fn sync_state_kani(player_id: i32) -> card_sdk::Asked {
+    sync_state(player_id)
+}
+
+#[cfg(kani)]
+#[inline(always)]
+pub fn add_crystal_kani(player_id: i32) -> card_sdk::Asked {
+    add_crystal(player_id)
+}

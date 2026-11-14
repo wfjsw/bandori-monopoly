@@ -434,6 +434,12 @@ pub struct TurnCtx {
     /// way.
     #[serde(default)]
     pub next_settle_pay_add: i32,
+    /// The last `settleBefore` window's `trigger::set_pay_amount` value for
+    /// the settle about to open, moved into the settle entry (`None` = the
+    /// window left the declaration alone). The tile body's trigger starts at
+    /// it, so a pre-stage that paid the settle itself can be seen there.
+    #[serde(default)]
+    pub settle_seed: Option<i32>,
     /// A move is in flight (walk / teleport through its tail). The `thisMove`
     /// factor scope is open while this holds.
     #[serde(default)]
@@ -568,6 +574,7 @@ impl Default for TurnCtx {
             next_move_pay_factor: milli_one(),
             next_settle_pay_factor: milli_one(),
             next_settle_pay_add: 0,
+            settle_seed: None,
             move_open: false,
             settle_open: 0,
             settle_pay_factor: one(),

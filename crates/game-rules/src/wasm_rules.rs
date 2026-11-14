@@ -3712,6 +3712,7 @@ impl CardWorld for Run {
         self.fig_write(roll);
     }
     fn set_trigger_value(&mut self, value: i32) {
+        self.trigger.value_set = true;
         self.fig_write(value);
     }
     fn set_trigger_target(&mut self, to: i32) {
@@ -5532,8 +5533,21 @@ impl<M: CardModules> RulesBridge<M> {
                         Err(e) => Ok(Some(Err(e))),
                         // Not activated -- the guard refused. Nothing ran, and
                         // nothing about the card reaches the UI.
-                        Ok(None) => Ok(None),
-                        Ok(Some(hr)) => Ok(Some(Ok(hr.outcome))),
+                        Ok(None) => {
+                            if std::env::var("DBG_CT").is_ok() {
+                                eprintln!(
+                                    "DBG_CT guard refused card={card_id} kind={:?}",
+                                    trigger.kind
+                                );
+                            }
+                            Ok(None)
+                        }
+                        Ok(Some(hr)) => {
+                            if std::env::var("DBG_CT").is_ok() {
+                                eprintln!("DBG_CT body ran card={card_id} kind={:?}", trigger.kind);
+                            }
+                            Ok(Some(Ok(hr.outcome)))
+                        }
                     }
                 } else {
                     Ok(Some(self.ruleset.run(
@@ -7552,6 +7566,7 @@ impl<M: CardModules> RulesBridge<M> {
                 spec,
                 src,
             } => {
+
                 let shape = game_core::engine::PayShape::from_i32(spec & 0xF);
                 let kind = game_core::engine::PayKind::from_i32((spec >> 4) & 0xF);
                 let flags = (spec >> 8) & 0xF;
@@ -7818,6 +7833,12 @@ impl<M: CardModules> RulesBridge<M> {
         }
         after.house_log.extend(owed);
         let dest = after.dest;
+        if std::env::var("DBG_CT").is_ok() && card_id.contains("不再迷茫") {
+            eprintln!(
+                "DBG_CT commit card={card_id} uid={} dest={dest} cause={:?} trig={:?}",
+                after.current_uid, after.dest_cause, trigger.kind
+            );
+        }
         *trigger = after.trigger.clone();
         // Keep the live event tail (write-through order) over the guest
         // copy's stale one. The guest copy is the state; the event stream
@@ -8313,6 +8334,9 @@ impl<M: CardModules> RulesBridge<M> {
         // (3) and kin) live here rather than at each spend site, so a
         // count emptied by *any* path still leaves the field.
         for (owner, card, uid, name, change) in after.counter_log {
+            if std::env::var("DBG_CT").is_ok() {
+                eprintln!("DBG_CT raise owner={owner} card={card} uid={uid} name={name} change={change}");
+            }
             self.raise_core(cx, "counterChanged", owner, |t| {
                 t.card = Some(card);
                 t.name = Some(name);
@@ -8426,6 +8450,13 @@ impl<M: CardModules> RulesBridge<M> {
             eprintln!(
                 "DECL kind={} mapped={:?} declares={}",
                 t.kind,
+                trigger_kind(t.kind.as_str()),
+                self.ruleset.declares(trigger_kind(t.kind.as_str()))
+            );
+        }
+        if std::env::var("DBG_CT").is_ok() {
+            eprintln!(
+                "DBG_CT counteract kind={:?} declares={}",
                 trigger_kind(t.kind.as_str()),
                 self.ruleset.declares(trigger_kind(t.kind.as_str()))
             );
@@ -8636,6 +8667,14 @@ impl<M: CardModules> RulesBridge<M> {
                                 let Some(idx) = self.ruleset.card(&id) else {
                                     continue;
                                 };
+                                if std::env::var("DBG_CT").is_ok()
+                                    && id.contains("不再迷茫")
+                                {
+                                    eprintln!(
+                                        "DBG_CT field cand uid={uid} id={id} kind={kind:?} hooks={}",
+                                        self.ruleset.cards()[idx as usize].hooks(kind)
+                                    );
+                                }
                                 // 「场上所有背面朝上的卡无法产生效果」 -- a face-down
                                 // card on the field is inert, so its hooks must not run.
                                 if self.ruleset.cards()[idx as usize].hooks(kind)
@@ -8971,6 +9010,10 @@ impl<M: CardModules> RulesBridge<M> {
                 .and_then(|m| m.roll)
                 .unwrap_or(trigger.value)
         };
+        // Did any responder write the figure (`settleBefore`'s
+        // `set_pay_amount`)? The settle body reads it back to tell "already
+        // paid by the pre-stage" (`0`) from "untouched" (`-1`).
+        t.value_set = trigger.value_set;
         // The composed multiplier of a `Fold::Mul` stage (the settle stages
         // read it back).
         t.fold_milli = trigger.fold_milli;
@@ -12030,6 +12073,7 @@ fn bridge_trigger(t: &CoreTrigger) -> Trigger {
         position: t.position,
         ordinal: t.ordinal,
         value: t.value,
+        value_set: t.value_set,
         fold: t.fold,
         fold_input: t.fold_input,
         fold_milli: t.fold_milli,
@@ -14356,6 +14400,11 @@ impl<M: CardModules> CardRules for RulesBridge<M> {
             position: position as i32,
             step: cx.state().step,
             is_main_move,
+            // The `settleBefore` pre-stage's pay shaping, so a body can tell
+            // the settle was already paid (e.g. the Poppin' Party rent split
+            // zeroes it before paying the holders itself). `-1` = untouched.
+            value: cx.settle_seed().unwrap_or(-1),
+            value_set: cx.settle_seed().is_some(),
             ..Trigger::default()
         };
         let world = cx.world_copy();
@@ -15271,6 +15320,10 @@ impl<M: CardModules> CardRules for RulesBridge<M> {
                 .and_then(|m| m.roll)
                 .unwrap_or(trigger.value)
         };
+        // Did any responder write the figure (`settleBefore`'s
+        // `set_pay_amount`)? The settle body reads it back to tell "already
+        // paid by the pre-stage" (`0`) from "untouched" (`-1`).
+        t.value_set = trigger.value_set;
         // The composed multiplier of a `Fold::Mul` stage (the settle stages
         // read it back).
         t.fold_milli = trigger.fold_milli;

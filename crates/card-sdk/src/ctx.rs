@@ -2168,8 +2168,32 @@ pub mod message {
 // -- small serialisation helpers -------------------------------------------
 
 fn mf(f: &crate::abi::MarkFilter) -> (i32, i32) {
-    let bytes = postcard::to_allocvec(f).unwrap_or_default();
-    in_bytes(&bytes)
+    #[cfg(kani)]
+    {
+        // Fixed pack, no postcard/heap (same reason as `target_bytes`). The
+        // bytes only feed a host that decodes them; under Kani the mark ops
+        // are stubbed and ignore the buffer, but the pack stays in field
+        // order so the two sides cannot drift: kind, category (interned ids),
+        // owner, src, instance. `postcard::to_allocvec` pushed a `Vec<u8>`
+        // (extend_from_slice → memcpy destination check) and dropped it with a
+        // capacity CBMC read back off its layout — the six allocator
+        // false-positive checks the `mark_cp_land_*` proofs tripped.
+        // `MarkString` is likewise inline under Kani (`abi::MarkStr`), so the
+        // builders that fill the filter allocate nothing either.
+        let mut buf = [0u8; 16];
+        // `as_bytes` (not `intern`): skips the UTF-8 validation loop.
+        buf[0..2].copy_from_slice(&crate::intern::intern_bytes(f.kind.as_bytes()).0.to_le_bytes());
+        buf[2..4].copy_from_slice(&crate::intern::intern_bytes(f.category.as_bytes()).0.to_le_bytes());
+        buf[4..8].copy_from_slice(&f.owner.to_le_bytes());
+        buf[8..12].copy_from_slice(&f.src.to_le_bytes());
+        buf[12..16].copy_from_slice(&f.instance.to_le_bytes());
+        in_bytes(&buf)
+    }
+    #[cfg(not(kani))]
+    {
+        let bytes = postcard::to_allocvec(f).unwrap_or_default();
+        in_bytes(&bytes)
+    }
 }
 
 fn target_bytes(t: &crate::abi::Target) -> (i32, i32) {

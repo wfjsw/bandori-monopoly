@@ -18,15 +18,14 @@
 //! never a silent cut. Production walks are unbounded on purpose (see
 //! [`MAX_NAME`]).
 //!
-//! ## Name bytes live outside the table
+//! ## Name bytes live outside the table (production)
 //!
-//! A slot holds a `&'static [u8]` produced by [`leak_name`] (write-once
-//! `Box::leak`), not an inline buffer. [`resolve`] hands that slice out as a
-//! genuine `'static`, so it cannot alias the `&mut Table` that [`intern`] /
-//! [`reset`] take. The old inline `[u8; MAX_NAME]` made `resolve` lifetime-
-//! extend table memory (UB across `intern`, dangling after `reset`) and
-//! silently turned longer names into [`NameId::INVALID`] — the nanami mark
-//! namespace `角色标记:<skill id>` is 65..78 bytes.
+//! Production slots hold a `&'static [u8]` produced by [`leak_name`]
+//! (write-once `Box::leak`), not an inline buffer. [`resolve`] hands that
+//! slice out as a genuine `'static`, so it cannot alias the `&mut Table` that
+//! [`intern`] / [`reset`] take, and production has no length cap. The Kani
+//! model keeps `[u8; MAX_NAME]` + `len` inline instead (a static arena pointer
+//! mis-resolved under CBMC) and copies out into a static ring; see [`Slot`].
 //!
 //! Game-specific meaning of a name (which id is 「P✽P粉丝」) lives in
 //! `rules-kani`, not here.
@@ -179,9 +178,28 @@ pub fn decode_handle(handle: i32) -> Option<NameId> {
 /// One open-addressed bucket. `hash == 0` marks empty (FNV of a non-empty
 /// name is never 0; empty string hashes to the offset basis, not 0).
 ///
-/// `name` is a write-once leak from [`leak_name`], never table memory:
-/// [`resolve`] returns it directly, so an outstanding `&'static [u8]` cannot
-/// alias the `&mut Table` that insert / [`reset`] take.
+/// Production keeps the bytes out of the table (`name` is a write-once
+/// [`leak_name`] allocation): [`resolve`] returns it directly, so an
+/// outstanding `&'static [u8]` cannot alias the `&mut Table` that insert /
+/// [`reset`] take.
+///
+/// The Kani model keeps the bytes **inline** plus a length. That model used a
+/// separate static arena indexed by insertion ordinal; a stored slot then held
+/// a pointer into it, and a covers probe measured a stored `NameId`
+/// resolving to a *different* equal-length name's bytes while the id itself
+/// still compared equal (the window's `charge` read back with a non-`h`
+/// second byte). With the bytes in the slot there is no second object to lose
+/// track of, and `resolve` reconstructs from `name[..len]`; `fire_gain_iff`
+/// and `fire_gain_window_debug` are the harnesses that pin it.
+#[cfg(kani)]
+#[derive(Clone, Copy)]
+struct Slot {
+    hash: u64,
+    len: u8,
+    name: [u8; MAX_NAME],
+}
+
+#[cfg(not(kani))]
 #[derive(Clone, Copy)]
 struct Slot {
     hash: u64,
@@ -189,31 +207,24 @@ struct Slot {
 }
 
 impl Slot {
+    #[cfg(kani)]
+    const EMPTY: Slot = Slot {
+        hash: 0,
+        len: 0,
+        name: [0; MAX_NAME],
+    };
+    #[cfg(not(kani))]
     const EMPTY: Slot = Slot { hash: 0, name: &[] };
 }
 
-/// Write-once interned name bytes.
+/// Copy a name into a slot cell (`cfg(kani)` half of [`leak_name`]).
 ///
-/// The allocation is never mutated or freed. That is the whole point: a
-/// `&'static [u8]` into it is a real `'static`, and no later `&mut Table` can
-/// alias it. [`reset`] drops the table's *reachability* of the bytes (the
-/// `NameId` stops resolving) without touching them, so a slice already handed
-/// out stays readable.
-///
-/// Under `cfg(kani)` the copy is the same zero-loop 64-step walk the old
-/// inline slot used — `copy_from_slice` lowers to memcpy plus a
+/// Zero-loop 64-step walk — `copy_from_slice` lowers to memcpy plus a
 /// `len_mismatch_fail` panic path CBMC still explores. `s.len() <= MAX_NAME`
-/// here (the caller rejects longer).
+/// here (the caller rejects longer). Bytes past `s.len()` are left as they
+/// were; the slot's `len` bounds every read.
 #[cfg(kani)]
-fn leak_name(s: &[u8], cell: usize) -> &'static [u8] {
-    let n = s.len().min(MAX_NAME);
-    // Write-once and a real `'static` so a returned slice can outlive every
-    // `&mut Table` (see the docs above). Kani does **not** use the heap here:
-    // every `Box::leak` is a fresh object under the verifier's
-    // `same_allocation` model, and `known_init` alone leaks seventeen of them
-    // (minutes of checks per harness). One fixed `MAX_NAME` cell per name in a
-    // static arena instead; `cell < MAX_INTERN` is the insert's own bound.
-    let buf: &'static mut [u8; MAX_NAME] = unsafe { &mut (*core::ptr::addr_of_mut!(ARENA))[cell] };
+fn copy_name(buf: &mut [u8; MAX_NAME], s: &[u8]) {
     macro_rules! cpy {
         ($i:expr) => {
             // `.get`, not `[i]`: no slice_index_fail panic path.
@@ -286,22 +297,14 @@ fn leak_name(s: &[u8], cell: usize) -> &'static [u8] {
     cpy!(61);
     cpy!(62);
     cpy!(63);
-    &buf[..n]
 }
 
-/// Kani name-byte arena — one `MAX_NAME` cell per interned name, indexed by
-/// insertion order. Write-once like the production leaks; static so the
-/// verifier never sees the allocator.
-#[cfg(kani)]
-static mut ARENA: [[u8; MAX_NAME]; MAX_INTERN] = [[0u8; MAX_NAME]; MAX_INTERN];
-
-/// Production twin of [`leak_name`] — ordinary copy, no length cap. See the
-/// write-once note on the `cfg(kani)` twin for why the bytes are leaked.
+/// Production name bytes for a slot: one write-once leak, no length cap.
+/// [`resolve`] returns it directly, so it must be a real `'static` (no later
+/// `&mut Table` may alias it) and is never freed. `_cell` is only meaningful
+/// to the inline `cfg(kani)` twin ([`copy_name`]).
 #[cfg(not(kani))]
 fn leak_name(s: &[u8], _cell: usize) -> &'static [u8] {
-    // Leak justified by the `leak_name` docs above: write-once name bytes that
-    // must be a real `'static` (no later `&mut Table` may alias them). One
-    // allocation per distinct name, sized to the name, never freed.
     Box::leak(Vec::from(s).into_boxed_slice())
 }
 
@@ -619,13 +622,13 @@ pub fn intern_bytes(s: &[u8]) -> NameId {
 /// Table lookup/insert for a **precomputed** FNV-1a hash. Split from
 /// [`intern_bytes`] so an inlined call site can constant-fold `fnv1a`
 /// (the hash of a string literal is a compile-time `u64`) and this routine
-/// only does integer probes + a zero-loop length compare.
+/// only does integer probes; the zero-loop [`bytes_eq`] confirms a
+/// hash-equal candidate.
 #[cfg(kani)]
 pub fn intern_by_hash(mut h: u64, s: &[u8]) -> NameId {
     if s.len() > MAX_NAME {
         return NameId::INVALID;
     }
-    let n = s.len();
     // FNV of any byte string is never 0 (offset basis is nonzero and the
     // multiplier is odd). Still guard: a zero hash would alias EMPTY.
     if h == 0 {
@@ -647,16 +650,16 @@ pub fn intern_by_hash(mut h: u64, s: &[u8]) -> NameId {
                     if first_empty == usize::MAX {
                         first_empty = idx;
                     }
-                } else if slot.hash == h && slot.name.len() == n {
-                    // Hash+len identity. `bytes_eq` (64 steps × 8 probes) was the
-                    // money_shave setup cliff (`known_init` interns 10 names).
-                    // Collisions (same FNV+len, different bytes) are a loud
-                    // INVALID below — never a silent alias. The pilot set is
-                    // pinned unique in `model_bounds`.
-                    return NameId(idx as u16);
-                } else if slot.hash == h && slot.name.len() != n {
-                    // Same FNV, different length: collision. Loud, not an alias.
-                    return NameId::INVALID;
+                } else if slot.hash == h {
+                    // Hash **and** bytes. The bytes compare runs only on the
+                    // hash-equal probe (usually one per intern), not on every
+                    // probe. Hash+len alone is not enough under CBMC: a name
+                    // interned through a runtime slice can be stored with a
+                    // **symbolic** hash, and a later concrete-hash lookup then
+                    // satisfies `slot.hash == h` for another name.
+                    if bytes_eq(&slot.name[..slot.len as usize], s) {
+                        return NameId(idx as u16);
+                    }
                 }
                 probe += 1;
             }};
@@ -674,10 +677,10 @@ pub fn intern_by_hash(mut h: u64, s: &[u8]) -> NameId {
         }
         let slot = &mut t.slots[first_empty];
         slot.hash = h;
-        // Write-once leak, not table memory — `resolve` can hand out a real
-        // `&'static` (see [`leak_name`]). The zero-loop copy lives there.
-        let cell = t.n as usize;
-        slot.name = leak_name(s, cell);
+        // Bytes stay **in the slot** (see the `Slot` note): no second static
+        // object to keep in step with the id.
+        slot.len = s.len() as u8;
+        copy_name(&mut slot.name, s);
         t.n += 1;
         NameId(first_empty as u16)
     })
@@ -730,10 +733,11 @@ pub fn intern_bytes(s: &[u8]) -> NameId {
 /// The bytes previously interned as `id`. Empty when `id` is stale.
 /// (The slot index **is** the id under the open-addressed table.)
 ///
-/// The returned slice is the [`leak_name`] allocation, not table memory —
-/// a genuine `&'static` that `intern`'s `&mut Table` cannot alias. After
-/// [`reset`] a previously-valid `id` resolves to `&[]`; any slice already
-/// handed out stays readable (the leak is write-once).
+/// Production: the returned slice is the [`leak_name`] allocation, not table
+/// memory — a genuine `&'static` that `intern`'s `&mut Table` cannot alias.
+/// After [`reset`] a previously-valid `id` resolves to `&[]`; any slice
+/// already handed out stays readable (the leak is write-once).
+#[cfg(not(kani))]
 pub fn resolve(id: NameId) -> &'static [u8] {
     if !id.is_valid() {
         return &[];
@@ -747,11 +751,52 @@ pub fn resolve(id: NameId) -> &'static [u8] {
     })
 }
 
+/// `cfg(kani)` twin: the slot holds the bytes inline, so there is no
+/// `'static` allocation to hand out. They are copied into a small static ring
+/// and the copy is returned. Four cells cover the nesting the model actually
+/// has (a `resolve` result is live across another `resolve` at most once —
+/// `key_get_name`-style prefixes and `bytes_eq(resolve(id), s)`).
+#[cfg(kani)]
+pub fn resolve(id: NameId) -> &'static [u8] {
+    if !id.is_valid() {
+        return &[];
+    }
+    static mut OUT: [[u8; MAX_NAME]; 4] = [[0u8; MAX_NAME]; 4];
+    static mut NEXT: usize = 0;
+    with_table(|t| {
+        let idx = id.0 as usize;
+        if idx >= SLOTS || t.slots[idx].hash == 0 {
+            return &[] as &[u8];
+        }
+        let slot = &t.slots[idx];
+        let n = slot.len as usize;
+        // SAFETY: single-threaded verifier; the ring cell is picked by a
+        // wrapping counter and never outlives its own copy use.
+        let buf: &'static mut [u8; MAX_NAME] = unsafe {
+            let cell = NEXT & 3;
+            NEXT += 1;
+            &mut (*core::ptr::addr_of_mut!(OUT))[cell]
+        };
+        copy_name(buf, &slot.name[..n]);
+        &buf[..n]
+    })
+}
+
 /// Resolve as `&str` only when the stored bytes are valid UTF-8.
 /// Avoid this under `cfg(kani)` — it runs the UTF-8 validation loop.
 /// [`NameId::as_str`] is the ergonomic wrapper.
 pub fn resolve_str(id: NameId) -> &'static str {
     core::str::from_utf8(resolve(id)).unwrap_or("")
+}
+
+/// [`resolve_str`] without the UTF-8 validation loop (under the verifier that
+/// is ~23 unwind steps over the whole world state, per call). Sound here
+/// because every name enters the table through `&str` (`intern`, or the
+/// `held_count`-style `&str` keys); the Kani host asserts every handle is
+/// tagged, so no raw byte source reaches it.
+pub fn resolve_str_trusted(id: NameId) -> &'static str {
+    // SAFETY: see above — the table only holds bytes from `&str`.
+    unsafe { core::str::from_utf8_unchecked(resolve(id)) }
 }
 
 /// True when `id`'s stored bytes equal `s` (byte compare, no UTF-8).

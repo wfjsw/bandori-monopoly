@@ -271,3 +271,9 @@ pub fn on_settle_kani(player_id: i32) -> card_sdk::Asked {
 pub fn after_settle_kani(player_id: i32) -> card_sdk::Asked {
     after_settle(player_id)
 }
+
+#[cfg(kani)]
+#[inline(always)]
+pub fn arm_waiver_kani(player_id: i32) -> card_sdk::Asked {
+    arm_waiver(player_id)
+}
