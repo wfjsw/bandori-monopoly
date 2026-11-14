@@ -19,6 +19,13 @@ pub fn cant_play(data: &GameData, c: &PersonaData, card: &CardData) -> Option<Ms
     if card.derived {
         return Some(Msg::new("err.deck_derived"));
     }
+    // 「（1）只能在卡组中加入"通用"卡」 (CiRCLE 后勤人员的努力): only 通用 rows,
+    // even the character's own exclusives. (The skill's 「（除将牌加入卡组的效果
+    // 以外）」 carve-out is about its (2) number-doubling, tagged by
+    // `ctx::n_deck` at the card's own deck-insert site.)
+    if data.group_general_only(c) && !card.is_universal() {
+        return Some(Msg::new("err.deck_general_only"));
+    }
     if card.exclusive() && card.owner != c.name && !shares_exclusives(data, c, card) {
         return Some(Msg::new("err.deck_exclusive").persona("owner", card.owner.clone()));
     }

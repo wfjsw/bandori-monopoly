@@ -661,6 +661,12 @@ mod abi {
             link_name = "ruleset_set_tile_prop"
         )]
         pub fn set_tile_prop(tile: i32, kp: i32, kl: i32, v: i32) -> i32;
+        // ABI-12: the tri-state [`tile_prop`] presence read.
+        #[cfg_attr(
+            any(not(target_arch = "wasm32"), feature = "native-rules"),
+            link_name = "ruleset_tile_prop_state"
+        )]
+        pub fn tile_prop_state(tile: i32, kp: i32, kl: i32) -> i32;
         // v50: one declared property of a field instance (`crystals_at` naming).
         #[cfg_attr(
             any(not(target_arch = "wasm32"), feature = "native-rules"),
@@ -922,6 +928,14 @@ mod abi {
             link_name = "ruleset_add_group_pool"
         )]
         pub fn add_group_pool(player_id: i32, np: i32, nl: i32, n: i32, max: i32) -> i32;
+        // The same write tagged as a reshuffle-time add
+        // (「只有洗牌时可以…添加奇迹水晶」): the count write is identical, the
+        // outcome line carries the reshuffle source.
+        #[cfg_attr(
+            any(not(target_arch = "wasm32"), feature = "native-rules"),
+            link_name = "ruleset_add_group_pool_shuffled"
+        )]
+        pub fn add_group_pool_shuffled(player_id: i32, np: i32, nl: i32, n: i32, max: i32) -> i32;
         #[cfg_attr(
             any(not(target_arch = "wasm32"), feature = "native-rules"),
             link_name = "ruleset_group_skill"
@@ -1372,6 +1386,14 @@ mod abi {
             link_name = "ruleset_trig_cards"
         )]
         pub fn trig_cards(buf: i32, cap: i32) -> i32;
+        // Card tags of the trigger cards (the sheet's [主] / [手] / [特] / …
+        // marks), so a listener can tell a [手] effect from any other hand
+        // play without string-matching the id.
+        #[cfg_attr(
+            any(not(target_arch = "wasm32"), feature = "native-rules"),
+            link_name = "ruleset_trig_card_tags"
+        )]
+        pub fn trig_card_tags(buf: i32, cap: i32) -> i32;
         #[cfg_attr(
             any(not(target_arch = "wasm32"), feature = "native-rules"),
             link_name = "ruleset_trig_move_roll"
@@ -1480,6 +1502,11 @@ mod abi {
             link_name = "ruleset_trig_set_spare"
         )]
         pub fn trig_set_spare(seat: i32);
+        #[cfg_attr(
+            any(not(target_arch = "wasm32"), feature = "native-rules"),
+            link_name = "ruleset_trig_set_abnormal_allowed"
+        )]
+        pub fn trig_set_abnormal_allowed();
         #[cfg_attr(
             any(not(target_arch = "wasm32"), feature = "native-rules"),
             link_name = "ruleset_trig_cancelled"
@@ -1727,6 +1754,16 @@ mod abi {
         pub fn add_extra_dice(count: i32, sides: i32, ptr: i32, len: i32);
         #[cfg_attr(
             any(not(target_arch = "wasm32"), feature = "native-rules"),
+            link_name = "ruleset_set_direction_dice"
+        )]
+        pub fn set_direction_dice(count: i32, sides: i32);
+        #[cfg_attr(
+            any(not(target_arch = "wasm32"), feature = "native-rules"),
+            link_name = "ruleset_direction_roll"
+        )]
+        pub fn direction_roll() -> i32;
+        #[cfg_attr(
+            any(not(target_arch = "wasm32"), feature = "native-rules"),
             link_name = "ruleset_move_stopped"
         )]
         pub fn move_stopped() -> i32;
@@ -1914,6 +1951,11 @@ mod abi {
         pub fn gains_this_turn(player_id: i32) -> i32;
         #[cfg_attr(
             any(not(target_arch = "wasm32"), feature = "native-rules"),
+            link_name = "ruleset_lost_this_turn"
+        )]
+        pub fn lost_this_turn(player_id: i32) -> i32;
+        #[cfg_attr(
+            any(not(target_arch = "wasm32"), feature = "native-rules"),
             link_name = "ruleset_placed_tile"
         )]
         pub fn placed_tile(player_id: i32, ptr: i32, len: i32) -> i32;
@@ -2083,6 +2125,11 @@ mod abi {
         pub fn card_prop(ip: i32, il: i32, kp: i32, kl: i32) -> i32;
         #[cfg_attr(
             any(not(target_arch = "wasm32"), feature = "native-rules"),
+            link_name = "ruleset_card_derived"
+        )]
+        pub fn card_derived(ip: i32, il: i32) -> i32;
+        #[cfg_attr(
+            any(not(target_arch = "wasm32"), feature = "native-rules"),
             link_name = "ruleset_gain_fixed"
         )]
         pub fn gain_fixed(player_id: i32, amount: i32, ptr: i32, len: i32) -> i32;
@@ -2160,6 +2207,11 @@ mod abi {
         pub fn designations(player_id: i32, buf: i32, cap: i32) -> i32;
         #[cfg_attr(
             any(not(target_arch = "wasm32"), feature = "native-rules"),
+            link_name = "ruleset_event_card_ids"
+        )]
+        pub fn event_card_ids(buf: i32, cap: i32) -> i32;
+        #[cfg_attr(
+            any(not(target_arch = "wasm32"), feature = "native-rules"),
             link_name = "ruleset_cancel_designation"
         )]
         pub fn cancel_designation(seat: i32);
@@ -2230,6 +2282,11 @@ mod abi {
             link_name = "ruleset_trigger_pending_negation"
         )]
         pub fn trigger_pending_negation() -> i32;
+        #[cfg_attr(
+            any(not(target_arch = "wasm32"), feature = "native-rules"),
+            link_name = "ruleset_trigger_pay_split_ran"
+        )]
+        pub fn trigger_pay_split_ran() -> i32;
         #[cfg_attr(
             any(not(target_arch = "wasm32"), feature = "native-rules"),
             link_name = "ruleset_trigger_extreme_armed"
@@ -2424,6 +2481,29 @@ mod abi {
             link_name = "ruleset_set_dest_unwatched"
         )]
         pub fn set_dest_unwatched(dest: i32);
+        // Co-held deeds (「视为同时拥有」): a further holder on the tile's
+        // deed; the read-only predicates are the eligibility / rent-split
+        // surface.
+        #[cfg_attr(
+            any(not(target_arch = "wasm32"), feature = "native-rules"),
+            link_name = "ruleset_add_co_owner"
+        )]
+        pub fn add_co_owner(tile: i32, player_id: i32) -> i32;
+        #[cfg_attr(
+            any(not(target_arch = "wasm32"), feature = "native-rules"),
+            link_name = "ruleset_is_co_owner"
+        )]
+        pub fn is_co_owner(tile: i32, player_id: i32) -> i32;
+        #[cfg_attr(
+            any(not(target_arch = "wasm32"), feature = "native-rules"),
+            link_name = "ruleset_owns_tile"
+        )]
+        pub fn owns_tile(tile: i32, player_id: i32) -> i32;
+        #[cfg_attr(
+            any(not(target_arch = "wasm32"), feature = "native-rules"),
+            link_name = "ruleset_mortgaged_for"
+        )]
+        pub fn mortgaged_for(tile: i32, player_id: i32) -> i32;
     }
 } // mod abi
 

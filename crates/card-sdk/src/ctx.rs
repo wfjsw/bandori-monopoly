@@ -305,6 +305,32 @@ pub fn tile_owner(tile: i32) -> i32 {
     unsafe { sys::tile_owner(tile) }
 }
 
+/// Make `player_id` a further holder of `tile`'s deed (「视为同时拥有」). The
+/// tile keeps its primary owner ([`tile_owner`]); every holder reads as an
+/// owner through [`owns_tile`]. Answers whether the holder was added.
+#[cfg_attr(kani, inline(always))]
+pub fn add_co_owner(tile: i32, player_id: i32) -> i32 {
+    unsafe { sys::add_co_owner(tile, player_id) }
+}
+
+/// Is `player_id` a co-holder of `tile`'s deed (primary excluded)?
+pub fn is_co_owner(tile: i32, player_id: i32) -> bool {
+    unsafe { sys::is_co_owner(tile, player_id) != 0 }
+}
+
+/// Does `player_id` hold `tile`'s deed -- primary owner or co-holder? The
+/// owner read for eligibility.
+pub fn owns_tile(tile: i32, player_id: i32) -> bool {
+    unsafe { sys::owns_tile(tile, player_id) != 0 }
+}
+
+/// Is `player_id`'s **own stake** of `tile` mortgaged? Ordinary deeds have
+/// one stake (same answer as [`mortgaged_of`]); a co-held deed has one per
+/// holder.
+pub fn mortgaged_for(tile: i32, player_id: i32) -> bool {
+    unsafe { sys::mortgaged_for(tile, player_id) != 0 }
+}
+
 /// The tile standing at board position `position` (`position` itself when
 /// nothing is bound there).
 pub fn tile_at(position: i32) -> i32 {
@@ -1610,6 +1636,17 @@ pub fn tile_prop(tile: i32, key: &str) -> i32 {
     unsafe { sys::tile_prop(tile, p, l) }
 }
 
+/// Tri-state [`tile_prop`] (ABI-12): `-1` = no governing rule instance
+/// carries `key`, `0` = present and clear, `1` = present and non-zero.
+/// [`tile_prop`] folds absent onto `0`, which cannot tell an explicit clear
+/// from "nobody wrote it" for a ternary prop such as
+/// `prop::FORCE_STAYS_MORTGAGED` (`= 0` clears).
+#[cfg_attr(kani, inline(always))]
+pub fn tile_prop_state(tile: i32, key: &str) -> i32 {
+    let (p, l) = s(key);
+    unsafe { sys::tile_prop_state(tile, p, l) }
+}
+
 /// Write [`tile_prop`] on the rule instance(s) governing `tile`; returns the
 /// stored value. 「无法获取[CiRCLE奖励]」 arms `prop::NO_REWARD` on CiRCLE's
 /// `tile:circle` instance this way, and the reward step reads it back.
@@ -1640,6 +1677,29 @@ pub fn set_prop_at(uid: i32, key: &str, value: i32) -> i32 {
 /// [`set_prop`]`(prop::SWAPPED_TILE, …)`, so it dies with the instance.
 pub fn set_swapped_tile(partner: i32) -> i32 {
     set_prop(crate::abi::prop::SWAPPED_TILE, partner)
+}
+
+/// 「…原本的所有效果迁移至…」 / 「…视为与…交换位置」 -- while **this
+/// instance** is in play, the rule instances governing `first` govern
+/// `second` and the other way round (`docs/rulebook/spec/abi/ab-tile-swap.md`).
+///
+/// This moves the *effects* only: the squares keep their board identity
+/// (kind, `is_start` / `tile_is`, owners, houses, `prop::START`), so cards
+/// keyed *on* a square do not ride it. The binding is a pair of props on the
+/// calling instance ([`crate::abi::prop::RULE_SWAP_A`] / `_B`), applied
+/// immediately and reversed the moment the instance leaves play
+/// (`destroy_instance_units`). Sugar over two [`set_prop`] writes -- no import
+/// of its own.
+pub fn tile_swap_rules(first: i32, second: i32) -> i32 {
+    set_prop(crate::abi::prop::RULE_SWAP_A, first);
+    set_prop(crate::abi::prop::RULE_SWAP_B, second)
+}
+
+/// Drop [`tile_swap_rules`]' binding from this instance; both squares' own
+/// rule instances govern them again. `-1` on both halves = no binding.
+pub fn tile_clear_rule_swap() -> i32 {
+    set_prop(crate::abi::prop::RULE_SWAP_A, -1);
+    set_prop(crate::abi::prop::RULE_SWAP_B, -1)
 }
 
 // ------------------------------------------------------ counters & marks
@@ -2108,8 +2168,32 @@ pub mod message {
 // -- small serialisation helpers -------------------------------------------
 
 fn mf(f: &crate::abi::MarkFilter) -> (i32, i32) {
-    let bytes = postcard::to_allocvec(f).unwrap_or_default();
-    in_bytes(&bytes)
+    #[cfg(kani)]
+    {
+        // Fixed pack, no postcard/heap (same reason as `target_bytes`). The
+        // bytes only feed a host that decodes them; under Kani the mark ops
+        // are stubbed and ignore the buffer, but the pack stays in field
+        // order so the two sides cannot drift: kind, category (interned ids),
+        // owner, src, instance. `postcard::to_allocvec` pushed a `Vec<u8>`
+        // (extend_from_slice → memcpy destination check) and dropped it with a
+        // capacity CBMC read back off its layout — the six allocator
+        // false-positive checks the `mark_cp_land_*` proofs tripped.
+        // `MarkString` is likewise inline under Kani (`abi::MarkStr`), so the
+        // builders that fill the filter allocate nothing either.
+        let mut buf = [0u8; 16];
+        // `as_bytes` (not `intern`): skips the UTF-8 validation loop.
+        buf[0..2].copy_from_slice(&crate::intern::intern_bytes(f.kind.as_bytes()).0.to_le_bytes());
+        buf[2..4].copy_from_slice(&crate::intern::intern_bytes(f.category.as_bytes()).0.to_le_bytes());
+        buf[4..8].copy_from_slice(&f.owner.to_le_bytes());
+        buf[8..12].copy_from_slice(&f.src.to_le_bytes());
+        buf[12..16].copy_from_slice(&f.instance.to_le_bytes());
+        in_bytes(&buf)
+    }
+    #[cfg(not(kani))]
+    {
+        let bytes = postcard::to_allocvec(f).unwrap_or_default();
+        in_bytes(&bytes)
+    }
 }
 
 fn target_bytes(t: &crate::abi::Target) -> (i32, i32) {
@@ -3670,6 +3754,27 @@ pub mod plan {
         unsafe { sys::add_extra_dice(count, sides, p, l) }
     }
 
+    /// Roll the plan's **direction** die (`count`d`sides`, the book's
+    /// 「投掷1d2（前后）」) and aim the walk by its face: odd = reverse (C-Q47).
+    /// The host rolls from the world RNG (replay-deterministic), records the
+    /// face in [`direction_roll`] and logs it. The die is its own face, not the
+    /// `recorded_roll` d6 peek.
+    pub fn set_direction_dice(count: i32, sides: i32) {
+        unsafe { sys::set_direction_dice(count, sides) }
+    }
+
+    /// The host-rolled direction face for this raise, `None` when no direction
+    /// die was asked for. (Written by [`set_direction_dice`]; read it on a
+    /// later pass -- the write's own body cannot see it.)
+    pub fn direction_roll() -> Option<i32> {
+        let v = unsafe { sys::direction_roll() };
+        if v == i32::MIN {
+            None
+        } else {
+            Some(v)
+        }
+    }
+
     /// Did the walk stop before its full length? Read-only: the walk loop sets
     /// it. To force a stop, name the tile with [`Self::set_stop_at`].
     pub fn stopped() -> bool {
@@ -3854,6 +3959,17 @@ pub fn gains_this_turn(player_id: i32) -> i32 {
     unsafe { sys::gains_this_turn(player_id) }
 }
 
+/// 「当你在你的本回合开始后到下回合开始前之间失去资金的总额」 -- what
+/// `player_id` has **actually** lost since their own turn started (ABI-11).
+/// Every real debit counts (a settled payment, a spend, a buy, a build, a
+/// redeem, a forced buy); a cancelled or shaved-to-0 payment adds 0. Zeroed at
+/// that player's own turn start. Reads the running total *before* the payment
+/// being offered, so a 「即将超过」 guard is
+/// `lost + trigger::value() > tag && lost <= tag`.
+pub fn lost_this_turn(player_id: i32) -> i32 {
+    unsafe { sys::lost_this_turn(player_id) }
+}
+
 /// The **static targeting query**: which players the play being resolved (by
 /// `player_id`) designates. Empty
 /// when the play names nobody. This is what 「有[指定]目标」 /
@@ -3862,6 +3978,29 @@ pub fn designations(player_id: i32) -> Vec<i32> {
     let cap = 4096;
     let (p, scratch) = out_buf(cap as usize);
     let n = unsafe { sys::designations(player_id, p, cap) };
+    if n <= 0 || n > cap {
+        return Vec::new();
+    }
+    let buf = out_read(p, n, scratch);
+    postcard::from_bytes(&buf[..n as usize]).unwrap_or_default()
+}
+
+/// Is card rule `id` **derived** (`CardMeta::derived`, EVENT-04)? A derived
+/// card is a token / generated card, what 「非衍生」 filters exclude. Reads the
+/// manifest metadata the guest cannot see.
+pub fn card_derived(id: &str) -> bool {
+    let (ip, il) = s(id);
+    unsafe { sys::card_derived(ip, il) != 0 }
+}
+
+/// Every **event** card id (from the manifest), in roster order -- the pool a
+/// 「从所有事件中选择…」 body offers (EVENT-04). Pair with [`card_derived`] for
+/// the 「非衍生」 subset. Ids keep the manifest `event:` prefix; the event deck
+/// (`ctx::event_banish`) spells the same card bare, so strip it there.
+pub fn event_card_ids() -> Vec<String> {
+    let cap = 8192;
+    let (p, scratch) = out_buf(cap as usize);
+    let n = unsafe { sys::event_card_ids(p, cap) };
     if n <= 0 || n > cap {
         return Vec::new();
     }
@@ -3935,6 +4074,21 @@ pub fn n(k: i32, value: i32) -> i32 {
     } else {
         value
     }
+}
+
+/// A number from this card's text that a doubling effect may **name** but must
+/// not double -- 「（除将牌加入卡组的效果以外）」.
+///
+/// The `k`-th number is still a legal answer to 「将…一个数字变为两倍」; naming
+/// it consumes the one-shot flag here without changing the figure. Use it for
+/// the count in a 「将N张…加入卡组」 effect (the played card's own deck insert),
+/// e.g. `ctx::add_to_dest(…, ctx::n_deck(2, 1), …)` when the printed count is
+/// one copy.
+pub fn n_deck(k: i32, value: i32) -> i32 {
+    if unsafe { sys::play_doubled() } == k {
+        unsafe { sys::set_play_doubled(-1) };
+    }
+    value
 }
 
 // ------------------------------------------------- turn plan & scheduling
@@ -4222,6 +4376,23 @@ pub mod trigger {
         decode_name_list(&buf)
     }
 
+    /// The sheet tags of the card(s) on the trigger ([主] / [手] / [特] / …),
+    /// deduped. Lets a listener say 「[手]效果」 without string-matching ids;
+    /// the names are interned like [`cards`], so compare with
+    /// [`NameId::as_str`].
+    pub fn card_tags() -> Vec<NameId> {
+        let need = unsafe { sys::trig_card_tags(0, 0) };
+        if need <= 0 {
+            return Vec::new();
+        }
+        let (p, scratch) = out_buf(need as usize);
+        if unsafe { sys::trig_card_tags(p, need) } != need {
+            return Vec::new();
+        }
+        let buf = out_read(p, need, scratch);
+        decode_name_list(&buf)
+    }
+
     pub fn move_remaining() -> i32 {
         unsafe { sys::trig_move_remaining() }
     }
@@ -4430,6 +4601,14 @@ pub mod trigger {
         unsafe { sys::trig_set_negate_effect() }
     }
 
+    /// Answer an `AbnormalChoice` window with **yes**: the received movement
+    /// abnormal lands after all (「可选择受到的…效果是否生效」, glossary 14).
+    /// Without this write the gate stays refused; the body asks the holder
+    /// with [`super::ask_yes`] and calls this on yes.
+    pub fn allow_abnormal() {
+        unsafe { sys::trig_set_abnormal_allowed() }
+    }
+
     /// Take one recipient out of settlement. The effect still settles for
     /// everyone else -- this is *not* a complete invalidation; use
     /// [`set_cancelled`] for that. Counter cards differ on which they mean.
@@ -4461,6 +4640,15 @@ pub mod trigger {
     /// [`crate::abi::AnswerEffect::NEGATES`] (design G06 §6.2).
     pub fn pending_negation() -> i32 {
         unsafe { sys::trigger_pending_negation() }
+    }
+
+    /// Did the payment this `PayAfter` / `Paid` link is about reach its
+    /// `PaySplitAt` stage (NFO-CANCEL-01)? `false` on a payment cancelled or
+    /// negated at an earlier window, `true` once the stage ran -- including a
+    /// body that shaved the figure to 0. Per payment; only meaningful on a
+    /// payment link.
+    pub fn pay_split_ran() -> bool {
+        unsafe { sys::trigger_pay_split_ran() != 0 }
     }
 
     /// An extreme is armed on this play, or a declared answer on this link
@@ -5085,6 +5273,8 @@ pub struct TurnSnapshot {
     pub state: alloc::collections::BTreeMap<String, i32>,
     pub money: i32,
     pub owners: Vec<i32>,
+    pub co_owners: Vec<Vec<i32>>,
+    pub co_mortgaged: Vec<Vec<i32>>,
     pub houses: Vec<i32>,
     pub mortgaged: Vec<bool>,
 }

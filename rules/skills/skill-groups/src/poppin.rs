@@ -22,6 +22,10 @@ const ID: &str = "skill:Poppin' Party:星之鼓动";
 const STICKER: &str = "星星贴纸";
 /// 「使用此卡[奇迹水晶]的效果为1回合1次」.
 const USED: &str = "skill.poppin.used";
+/// The raise id of the last hill split. Every copy of this band card hears the
+/// same `settleBefore`, so the split reads this to run once (「分摊支付」 is one
+/// division of the rent, not one per copy of the card).
+const SPLIT_RAISE: &str = "poppin.splitRaise";
 
 pub const POPPIN: CardDef = CardDef::new(
     "skill:Poppin' Party:星之鼓动",
@@ -32,6 +36,10 @@ pub const POPPIN: CardDef = CardDef::new(
             at_turn_start,
         ))
         .silent(),
+        // （3）「游戏开始时所有Poppin' Party角色视为同时拥有"星之鼓动山丘"」.
+        // A deed write is a visible outcome (`ctx::set_owner`), so the entry is
+        // not `silent`.
+        On::Action(Action::DeckAtGameStart("", None, grant_ownership)),
         // （1）'s 「[经过]第#1，#16，#31，#46号格子时」 is the hook's applicability,
         // not its effect. The four spots are fixed tile ids, so the OR is the
         // condition (docs/GUARDS.md §0); a body that ran and immediately
@@ -57,7 +65,12 @@ pub const POPPIN: CardDef = CardDef::new(
         // either is available; the body lists the available options and skips
         // the prompt when only one is. The 「或」 inside the crystal half is its
         // own sub-choice (draw 1 vs +2000).
-        On::Play("", Some(cant_play), press),
+        // 规则书（`PPP:Returns` [持续]（3））: 「使用因此卡获得的团卡的主动效果时需要
+        // 支付1星星贴纸」 -- an activation **cost** (ENG-COST): the borrowed copy
+        // needs 1 sticker, the owner's own band card is free. The host refuses a
+        // short player and charges the sticker before the body; the body no
+        // longer pays it itself.
+        On::Play("", Some(cant_play), press).cost(STICKER, crate::copy_sticker_cost),
         // （3）「星之鼓动山丘不可被抵押双倍支付购买，只有全部Poppin' Party角色
         // 破产后才可被正常购买」 -- a `BuyGate`, which the engine runs for **every**
         // [`BuyKind`] (Force included), so the lock covers 「抵押双倍支付购买」
@@ -74,6 +87,27 @@ pub const POPPIN: CardDef = CardDef::new(
     ],
 )
 .rule();
+
+/// （3）「游戏开始时所有Poppin' Party角色视为同时拥有"星之鼓动山丘"」 -- the
+/// hill gets a holder row at game start: this card's owner as the primary
+/// (the deed needs one for display / the ordinary rent path) and every band
+/// character as a co-holder, this one included. Deed eligibility reads
+/// `ctx::owns_tile`, so each member may mortgage their own stake.
+fn grant_ownership(player_id: i32) -> card_sdk::Asked {
+    let hill = ctx::tile_named("星之鼓动山丘");
+    if hill < 0 {
+        return Ok(());
+    }
+    if ctx::tile_owner(hill) < 0 {
+        ctx::set_owner(hill, player_id);
+    }
+    for p in 0..ctx::player_count() {
+        if ctx::in_group(p, "Poppin' Party") {
+            ctx::add_co_owner(hill, p);
+        }
+    }
+    Ok(())
+}
 
 /// （3）'s purchase lock. The tile is the entry's condition; whether any
 /// Poppin' Party character is still in the game is [`lock_hill_applies`].
@@ -114,13 +148,16 @@ fn before_settle_applies(player_id: i32) -> bool {
     if ctx::in_group(actor, "Poppin' Party") {
         return false;
     }
-    if ctx::trigger::value() <= 0 {
+    // The settle's rent is the base the split divides; `settleBefore` carries
+    // no value of its own, so the tile's own figure is read (houses included,
+    // no dice spend).
+    if ctx::rent_of(hill) <= 0 {
         return false;
     }
-    // At least one un-mortgaged Poppin' Party payee.
-    ctx::others(player_id)
-        .into_iter()
-        .any(|p| ctx::in_group(p, "Poppin' Party") && !ctx::mortgaged_of(hill))
+    // At least one un-mortgaged, still-standing Poppin' Party payee.
+    (0..ctx::player_count()).any(|p| {
+        ctx::in_group(p, "Poppin' Party") && !ctx::player_out(p) && !ctx::mortgaged_for(hill, p)
+    })
 }
 
 /// PPP:Returns 「无效[拥有者]Poppin' Party团卡的（4）效果」 (ruling 2026-10-06)
@@ -180,14 +217,32 @@ fn before_settle(player_id: i32) -> card_sdk::Asked {
     }
     // （3）「非Poppin' Party角色对"星之鼓动山丘"的[结算]改为分摊支付给所有
     // 未抵押"星之鼓动山丘"的Poppin' Party角色」
+    // 「所有未抵押"星之鼓动山丘"的Poppin' Party角色」 -- the split is per
+    // holder's own mortgage stake and skips seats that have gone out.
     let hill = ctx::tile_named("星之鼓动山丘");
+    // One split per raise, not per copy: every Poppin' Party seat carries this
+    // band card (and `PPP:Returns` borrows a second copy beside it), so the
+    // engine dispatches this hook once per instance. 「分摊支付」 is the rent
+    // divided once -- the raise id is the latch.
+    let raise = ctx::trigger::uid();
+    if raise != 0 && ctx::tile_prop(hill, SPLIT_RAISE) == raise {
+        return Ok(());
+    }
+    if raise != 0 {
+        ctx::set_tile_prop(hill, SPLIT_RAISE, raise);
+    }
     let mut payees: alloc::vec::Vec<i32> = alloc::vec::Vec::new();
-    for p in ctx::others(player_id) {
-        if ctx::in_group(p, "Poppin' Party") && !ctx::mortgaged_of(hill) {
+    for p in 0..ctx::player_count() {
+        if ctx::in_group(p, "Poppin' Party")
+            && !ctx::player_out(p)
+            && !ctx::mortgaged_for(hill, p)
+        {
             payees.push(p);
         }
     }
-    let amount = ctx::trigger::value();
+    // The settle's own rent. `settleBefore` carries no value, so the tile's
+    // figure is read here (the same table the property body would charge).
+    let amount = ctx::rent_of(hill);
     // `PIPELINE-AUDIT` Q2: the command-wide pre-split stage shapes the settled
     // amount before it divides among the payees (the 「分摊前」 figure).
     let reason = Msg::new(key!("poppin_share"));
@@ -196,6 +251,10 @@ fn before_settle(player_id: i32) -> card_sdk::Asked {
         return Ok(());
     };
     let each = shaped / (payees.len() as i32).max(1);
+    // The settle's own body would otherwise charge the tile's rent a second
+    // time. Zeroing the declaration is the carrier: the engine moves the
+    // `settleBefore` value onto the settle, and the tile body sees it as its
+    // trigger value and stands down.
     ctx::trigger::set_pay_amount(0);
     for p in payees {
         ctx::pay_leg(from, p, each, &reason)?;
@@ -210,15 +269,17 @@ fn before_settle(player_id: i32) -> card_sdk::Asked {
 /// Which press effects are available right now, in rulebook order: the
 /// sticker->crystal exchange and the crystal->draw/cash spend.
 ///
-/// `tax` is [`crate::copy_sticker_cost`] — the sticker option must budget it
-/// **and** its own 「使用2个星星贴纸」, or a borrowed copy with exactly 2 stickers
-/// passes the gate, burns the tax, and then skips the effect.
-fn available(player_id: i32, tax: i32) -> [bool; 2] {
+/// `budget` is the stickers the option may spend: the gate passes
+/// `held - tax` (the tax is charged later, by the host), the body passes the
+/// already-charged `held`. The sticker option needs its own 「使用2个星星贴纸」
+/// on top, or a borrowed copy with exactly 2 stickers passes the gate, burns
+/// the tax, and then skips the effect.
+fn available(player_id: i32, budget: i32) -> [bool; 2] {
     if bandori_std::ctx::skill_blocked(player_id, "") {
         return [false, false];
     }
     [
-        ctx::held_count(player_id, STICKER) >= 2 + tax,
+        budget >= 2,
         state::get(player_id, USED) == 0 && crate::cover_crystals(player_id) >= 2,
     ]
 }
@@ -229,17 +290,18 @@ fn cant_play(player_id: i32) -> Option<Msg> {
         return Some(Msg::new(key!("skill_blocked")));
     }
     // 规则书（`PPP:Returns` [持续]（3））: 「使用因此卡获得的团卡的主动效果时需要
-    // 支付1星星贴纸」 -- the sticker is a cost of activation on the borrowed copy.
+    // 支付1星星贴纸」 -- the tax is the entry's declared cost, charged by the
+    // host after this gate (a short player gets `err.cost_short` there). Budget
+    // it out here too so the sticker option is not offered when the tax would
+    // eat it.
     let tax = crate::copy_sticker_cost(player_id);
-    if tax > 0 && ctx::held_count(player_id, STICKER) < tax {
-        return Some(Msg::new(key!("skill_band_no_sticker")));
-    }
-    let avail = available(player_id, tax);
+    let budget = ctx::held_count(player_id, STICKER) - tax;
+    let avail = available(player_id, budget);
     if avail[0] || avail[1] {
         return None;
     }
     // Neither: name the closest reason.
-    if ctx::held_count(player_id, STICKER) < 2 + tax && crate::cover_crystals(player_id) < 2 {
+    if budget < 2 && crate::cover_crystals(player_id) < 2 {
         return Some(Msg::new(key!("poppin_no_sticker")));
     }
     if state::get(player_id, USED) != 0 {
@@ -254,7 +316,8 @@ fn cant_play(player_id: i32) -> Option<Msg> {
 /// available option is taken without prompting. The player can press again
 /// for the other.
 fn press(player_id: i32) -> card_sdk::Asked {
-    let avail = available(player_id, crate::copy_sticker_cost(player_id));
+    // The cost was already charged before the body; the budget is what is left.
+    let avail = available(player_id, ctx::held_count(player_id, STICKER));
     let crystal = avail[0];
     let cash_ok = avail[1];
     if !crystal && !cash_ok {
@@ -284,7 +347,6 @@ fn press(player_id: i32) -> card_sdk::Asked {
 
 /// （1）「随后可使用2个星星贴纸为此卡添加1个[奇迹水晶]」.
 fn to_crystal(player_id: i32) -> card_sdk::Asked {
-    crate::spend_copy_sticker(player_id)?;
     if ctx::held_count(player_id, STICKER) < 2 {
         return Ok(());
     }
@@ -296,7 +358,6 @@ fn to_crystal(player_id: i32) -> card_sdk::Asked {
 
 /// （1）「随后可使用此卡的2个[奇迹水晶]抽1张卡或[获得]2000资金（…为1回合1次）」.
 fn cash(player_id: i32) -> card_sdk::Asked {
-    crate::spend_copy_sticker(player_id)?;
     if state::get(player_id, USED) != 0 {
         return Ok(());
     }
@@ -320,10 +381,14 @@ fn cash(player_id: i32) -> card_sdk::Asked {
 // 山丘"」 and 「"星之鼓动山丘"不可被抵押双倍支付购买，只有全部Poppin' Party角色
 // 破产后才可被正常购买」 -- shared ownership of one tile across every band member,
 // with a mortgage each and a purchase lock.
-// TODO(规则书)（3）: 「所有Poppin' Party角色视为同时拥有"星之鼓动山丘"」 -- a tile
-//   has one owner in `st.owners`; co-ownership across every band member (and a
-//   per-member mortgage of the same tile) has no form. The rent split above is
-//   written against the single-owner shape.
+//
+// The co-ownership is engine state (`st.co_owners` / `st.co_mortgaged`, the
+// `ctx::add_co_owner` / `ctx::owns_tile` / `ctx::mortgaged_for` verbs): the
+// deed keeps a primary row for display and the ordinary rent path, and every
+// holder reads as an owner for settle / build / mortgage eligibility. The
+// tile body (`rules/tiles/src/property.rs`) makes those reads; this file
+// grants the row at game start, splits the rent to the un-mortgaged holders
+// and holds the buy lock.
 // （3）「"星之鼓动山丘"不可被抵押双倍支付购买，只有全部Poppin' Party角色破产后
 // 才可被正常购买」 -- a `buyBefore` lock: while any band member is still in the
 // game the hill cannot change hands at all, which covers both the double-pay path
@@ -371,4 +436,10 @@ pub fn press_kani(player_id: i32) -> card_sdk::Asked {
 #[inline(always)]
 pub fn lock_hill_kani(player_id: i32, v: card_sdk::GateValue) -> card_sdk::GateValue {
     lock_hill(player_id, v)
+}
+
+#[cfg(kani)]
+#[inline(always)]
+pub fn grant_ownership_kani(player_id: i32) -> card_sdk::Asked {
+    grant_ownership(player_id)
 }

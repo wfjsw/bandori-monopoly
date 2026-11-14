@@ -10,7 +10,7 @@
 //!
 //! Never derived from engine behaviour.
 
-use crate::world::Effect;
+use crate::world::{Effect, WindowPoint};
 
 // ===========================================================================
 // mark:cp — landing settle
@@ -112,4 +112,112 @@ pub fn mark_cp_place_effects_ok(
     post_tile_cp == pre_tile_cp + count
         && effects.len() == 1
         && matches!(effects[0], Effect::PlaceMark { tile: t, .. } if t == tile)
+}
+
+// ===========================================================================
+// fire kernel — gain / spend policy
+//
+// `data/rules.txt` 126: 「· 火罐：技能指示物，在任意时刻，您持有的火罐数量不能超过
+// 持有上限」. MARKERS.md §7: 火罐 is instance-owned by the character skill that
+// prints 「（初始N，上限M）」; every write goes through the kernel
+// (`bandori_std::fire::gain` / `spend`), which applies the owner's policy and
+// returns **actuals**. I2 (「在任意时刻」) is the cap; I4 is "every change
+// passes the owner's policy exactly once (one 效果适用 log, one window point)".
+//
+// The clauses the kernel owns, in order: the `markerGain` / `markerSpend`
+// window opens **before** the write (spend opens the `ChargePaying`
+// substitution window first, over the whole cost); gain clamps to the cap and
+// logs the landed amount; spend is all-or-nothing and draws temp pots first
+// (§10(2)); neither touches money or positions.
+// ===========================================================================
+
+/// I2, exactly as 「在任意时刻」 states it: the pool sits in `0..=max` (a
+/// missing declaration is cap 0, so the only legal count is 0).
+pub fn fire_i2_holds(value: i32, cap: i32) -> bool {
+    value >= 0 && value <= cap.max(0)
+}
+
+/// How many pots a gain may land under 「不能超过持有上限」.
+pub fn fire_gain_actual(n: i32, have: i32, cap: i32) -> i32 {
+    if n <= 0 || cap <= 0 {
+        0
+    } else {
+        n.clamp(0, (cap - have).max(0))
+    }
+}
+
+/// Exactly one `GainFire` for `player` of `n` — the counter write's log.
+pub fn fire_gain_log_ok(effects: &[Effect], player: i32, n: i32) -> bool {
+    effects.len() == 1
+        && matches!(effects[0], Effect::GainFire { player: p, n: m } if p == player && m == n)
+}
+
+/// The whole book outcome of one `fire::gain`: the pool took exactly the
+/// clamped `actual`, I2 holds after, and the effect log is that one counter
+/// write.
+pub fn fire_gain_ok(
+    effects: &[Effect],
+    player: i32,
+    pre: i32,
+    cap: i32,
+    n: i32,
+    post: i32,
+) -> bool {
+    let actual = fire_gain_actual(n, pre, cap);
+    post == pre + actual && fire_i2_holds(post, cap) && fire_gain_log_ok(effects, player, actual)
+}
+
+/// MUTANT: the reference forgets the cap and adds the whole `n`.
+pub fn fire_gain_mutant_uncapped(effects: &[Effect], player: i32, pre: i32, n: i32, post: i32) -> bool {
+    post == pre + n && fire_gain_log_ok(effects, player, n)
+}
+
+/// Exactly one window point of `kind`, on `player`, carrying `name` with
+/// payload `value`.
+pub fn fire_one_window(
+    points: &[WindowPoint],
+    kind: u8,
+    player: i32,
+    name: &str,
+    value: i32,
+) -> bool {
+    points.len() == 1
+        && points[0].kind == kind
+        && points[0].player == player
+        && crate::intern::id_eq_str(crate::intern::NameId(points[0].name), name)
+        && points[0].value == value
+}
+
+/// A spend opens the `ChargePaying` window over the whole cost, then the
+/// `markerSpend` window — both **before** any pot moves (user ruling
+/// 2026-10-07; §10(2) keeps temp first inside that order).
+pub fn fire_spend_windows_ok(points: &[WindowPoint], player: i32, n: i32, pay_name: &str) -> bool {
+    points.len() == 2
+        && points[0].kind == crate::world::WINDOW_RAISE
+        && points[0].player == player
+        && points[0].value == n
+        && crate::intern::id_eq_str(crate::intern::NameId(points[0].name), pay_name)
+        && fire_one_window(&points[1..], crate::world::WINDOW_SPEND, player, bandori_std::fire::KEY, -n)
+}
+
+/// Exactly one `AddToken{player, "charge", -n}` — the engine's 效果适用 line
+/// for a spend (`wasm_rules::spend_marker` posts the caller's message with
+/// value `-n`).
+pub fn fire_spend_log_ok(effects: &[Effect], player: i32, n: i32) -> bool {
+    effects.len() == 1
+        && matches!(effects[0], Effect::AddToken { player: p, key, n: m }
+            if p == player
+                && key == crate::intern::intern(bandori_std::fire::KEY).0
+                && m == -n)
+}
+
+/// The whole book outcome of one `fire::spend`: the cost was paid in full,
+/// the pool fell by exactly `n`, and the effect log is that one write.
+pub fn fire_spend_ok(effects: &[Effect], player: i32, pre: i32, n: i32, post: i32, paid: bool) -> bool {
+    paid && n > 0 && pre >= n && post == pre - n && fire_spend_log_ok(effects, player, n)
+}
+
+/// MUTANT: the reference takes one pot too few.
+pub fn fire_spend_mutant_underspend(post: i32, pre: i32, n: i32) -> bool {
+    post == pre - n + 1
 }

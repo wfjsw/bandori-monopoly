@@ -22,6 +22,13 @@
 //!    Its texts use `tile: ""` (the instance's own tile). Only wins when no
 //!    replacement speaks for that slot.
 //!
+//! A **rule swap** (`docs/rulebook/spec/abi/ab-tile-swap.md`) re-homes a
+//! `tile: ""` declaration to the square the instance currently *governs*
+//! (`World::governing_square`), and a base is only a base for the square it
+//! governs. The swapped-in rule is the base of its new square -- its texts
+//! travel with its body -- and the emptied square takes the other instance as
+//! its base in turn.
+//!
 //! A speaker whose key is `""` suppresses that slot (the effective text is
 //! nothing). A replacement that does not declare a given slot has no opinion
 //! (the base can still win it). The consumer takes the first entry of each
@@ -81,22 +88,36 @@ pub fn compose(world: &World, data: &GameData, rules: &dyn CardRules) -> Vec<Vec
     }
 
     // The base instance of each tile: the first `board_field` row whose
-    // `card` is that tile's `tile_rule_id` and whose `tile` is that square.
-    // An extra attached `tile:*` of the same id is a *replacement*.
+    // `card` is its home tile's `tile_rule_id` and which currently **governs**
+    // that square (a rule swap moves the governance, not the home). An extra
+    // attached `tile:*` of the same id is always a *replacement*. Without a
+    // swap the home is the governed square, so every per-row resolution is
+    // skipped.
+    let swapped = world.has_rule_swaps();
+    let governed = |f: &FieldCard| {
+        if swapped {
+            world.governing_square(f.tile)
+        } else {
+            f.tile
+        }
+    };
     let mut base_uid = vec![None; n_tiles];
     for f in &world.st.board_field {
-        let Ok(t) = usize::try_from(f.tile) else {
+        let Ok(home) = usize::try_from(f.tile) else {
             continue;
         };
-        let Some(td) = data.tiles.get(t) else {
+        let Some(td) = data.tiles.get(home) else {
             continue;
         };
         let want = rules.tile_rule_id(td.kind.as_str());
         if want.is_empty() || f.card != want {
             continue;
         }
-        if base_uid[t].is_none() {
-            base_uid[t] = Some(f.uid);
+        let Ok(governs) = usize::try_from(governed(f)) else {
+            continue;
+        };
+        if base_uid.get(governs).is_some_and(Option::is_none) {
+            base_uid[governs] = Some(f.uid);
         }
     }
 
@@ -134,7 +155,7 @@ pub fn compose(world: &World, data: &GameData, rules: &dyn CardRules) -> Vec<Vec
         let Ok(n) = u32::try_from(n) else {
             continue;
         };
-        let is_base = usize::try_from(f.tile)
+        let is_base = usize::try_from(governed(f))
             .ok()
             .and_then(|t| base_uid.get(t).copied().flatten())
             .is_some_and(|u| u == f.uid);
@@ -216,10 +237,15 @@ fn push_speakers(
     }
 }
 
-/// The board tile a declaration speaks for: `""` = the instance's own
-/// `FieldCard::tile`, otherwise the board tile named in `data`.
+/// The board tile a declaration speaks for: `""` = the instance's own square
+/// -- its `FieldCard::tile` for a player card, the square a board rule
+/// currently **governs** (a rule swap re-homes its own text with its body) --
+/// otherwise the board tile named in `data`.
 fn resolve_tile(world: &World, data: &GameData, f: &FieldCard, d: &TileTextDecl) -> i32 {
     if d.tile.is_empty() {
+        if f.owner == crate::state::BOARD_OWNER && world.has_rule_swaps() {
+            return world.governing_square(f.tile);
+        }
         return f.tile;
     }
     world.tile_named(data, &d.tile)

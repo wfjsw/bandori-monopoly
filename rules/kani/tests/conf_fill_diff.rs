@@ -258,10 +258,18 @@ fn board_is_deed(tile: i32) -> bool {
     matches!(rules_kani::board::TILES.get(tile as usize), Some(t) if t.kind == 3)
 }
 fn board_is_venue(tile: i32) -> bool {
-    matches!(rules_kani::board::TILES.get(tile as usize), Some(t) if (t.kind == 1 || t.kind == 3) && t.group == 6)
+    // Delegates to the shared class table (G15): buyable ∧ group 6.
+    match rules_kani::board::data_at(tile) {
+        Some(t) => rules_kani::board::tile_in(t, -1, "livehouse"),
+        None => false,
+    }
 }
 fn board_is_buyable(tile: i32) -> bool {
-    matches!(rules_kani::board::TILES.get(tile as usize), Some(t) if t.kind == 1 || t.kind == 3)
+    // Delegates to the shared class table (G15): `price > 0`.
+    match rules_kani::board::data_at(tile) {
+        Some(t) => rules_kani::board::is_buyable(t),
+        None => false,
+    }
 }
 fn board_price(tile: i32) -> i32 {
     rules_kani::board::TILES

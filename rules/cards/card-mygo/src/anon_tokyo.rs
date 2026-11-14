@@ -15,7 +15,7 @@
 use alloc::vec::Vec;
 
 use bandori_std::ctx::{self, trigger};
-use card_sdk::abi::{FilterKind, MarkFilter, TriggerKind};
+use card_sdk::abi::{prop, FilterKind, MarkFilter, TriggerKind};
 use card_sdk::{key, CardDef, Filter, Msg, On, PayAddValue};
 use card_sdk::{para, sec, steps, CardText};
 
@@ -25,7 +25,12 @@ pub const ANON_TOKYO: CardDef = CardDef::new(
         On::Play("", Some(cant_play), anon_tokyo),
         On::Filter(Filter::PaySplitAdd("card.placed && pay_is_rent && target == owner && value > 0", Some(link_guard), link_rent)),
     ],
-).meta(&card_sdk::meta::CardMeta::new()
+)
+// 规则书[手]: 「[指定][使用者]所在当格的任一相邻的[可购买格子]」 -- the
+// adjacency tile goes through `ctx::target_tile`, so the play has a [指定]
+// target and 网络链接异常 clause 1 applies.
+.props(&[(prop::DESIGNATES, 1)])
+.meta(&card_sdk::meta::CardMeta::new()
         .name(r#"Anon Tokyo"#)
         .raw_name(r#"[千早爱音]Anon Tokyo"#)
         .tags(&[r#"手"#, r#"限"#])
@@ -92,13 +97,10 @@ fn anon_tokyo(player_id: i32) -> card_sdk::Asked {
         return Ok(());
     }
     if ctx::tile_owner(here) == player_id && ctx::tile_owner(t) == player_id {
-        // TODO(规则书)（[使用者]同时拥有上述的两个格子则[消耗]其中地契购买价格中更高者的资金的一半）: `buy_price`). the 消耗 and
-        // the 放置 are one body -- we pay before `place_mark_pair`, which refuses at the
-        // cap, so a re-link spends the half and places nothing.
-        let amount = ctx::tile_price(here).max(ctx::tile_price(t)) / 2;
-        if amount > 0 {
-            ctx::pay(player_id, amount, &Msg::new(key!("anon_tokyo_pay")))?;
-        }
+        // TODO(规则书)（[使用者]同时拥有上述的两个格子则[消耗]其中地契购买价格中更高者的资金的一半）: `buy_price`).
+        // The 消耗 and the 放置 are one body, but the pair is place-or-refuse
+        // atomic at the cap: the charge runs only **after** the pair actually
+        // placed, so a capped re-link costs nothing.
         // Place the stand-in **before** the crystal so the two rows bind to its instance
         // and die with it.
         if !ctx::is_placed() {
@@ -109,7 +111,7 @@ fn anon_tokyo(player_id: i32) -> card_sdk::Asked {
         // cap is on **the pair** (「放置1个…（上限1）」). `place_mark_pair` is
         // place-or-refuse atomic: if either end already carries a mark of this
         // kind -- whoever linked it -- it places **neither** row (no half-link).
-        // TODO(规则书) Class C: whether a tile may sit in two links at once; the
+        // TODO(规则书) C-Q89: whether a tile may sit in two links at once; the
         // singular 「1个…（上限1）」 leans no, and `place_mark_pair`'s either-end
         // refusal is that reading.
         let placed = ctx::place_mark_pair(
@@ -124,6 +126,11 @@ fn anon_tokyo(player_id: i32) -> card_sdk::Asked {
             card_sdk::abi::Stack::Fresh,
         );
         if placed {
+            // 规则书[手]1: 「[消耗]其中地契购买价格中更高者的资金的一半」
+            let amount = ctx::tile_price(here).max(ctx::tile_price(t)) / 2;
+            if amount > 0 {
+                ctx::pay(player_id, amount, &Msg::new(key!("anon_tokyo_pay")))?;
+            }
             ctx::log(
                 player_id,
                 &Msg::new(key!("anon_tokyo_linked"))

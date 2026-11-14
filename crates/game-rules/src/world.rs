@@ -48,6 +48,10 @@ pub struct Trigger {
     /// The amount (`t.Pay.amount` on pay triggers). On a fold stage this is
     /// the **composed** figure and `fold_input` is what bodies read.
     pub value: i32,
+    /// Did a body write `value` (`trigger::set_pay_amount` / a move roll)?
+    /// The settle body sees the `settleBefore` window's answer as `-1`
+    /// (untouched) or the written figure -- see [`Trigger::value`].
+    pub value_set: bool,
     /// How this stage composes its responders' writes (MONEY-01).
     pub fold: game_core::engine::rules::Fold,
     /// The stage input, read as `value` by every responder while `fold` is set.
@@ -156,6 +160,10 @@ pub struct Trigger {
     /// on the `effect` / `abnormal` raises of an abnormal
     /// (`trigger::abnormal_blocked`).
     pub abnormal_blocked: bool,
+    /// Did the `abnormalChoice` holder let a received movement abnormal land?
+    /// Written by `trigger::allow_abnormal`; read by the gate after the
+    /// window. Meaningful only on that raise.
+    pub abnormal_allowed: bool,
     /// The kind of every link from the root to this one, root first
     /// (`trigger::answered_kind`).
     pub answered_kinds: Vec<crate::TriggerKind>,
@@ -291,6 +299,7 @@ impl Default for Trigger {
             // tile, so `trigger::position` must not read a false slot 0.
             position: -1,
             value: 0,
+            value_set: false,
             fold: game_core::engine::rules::Fold::Replace,
             fold_input: 0,
             fold_milli: 1_000_000,
@@ -335,6 +344,7 @@ impl Default for Trigger {
             extreme_armed: false,
             activation_ordinal: 0,
             abnormal_blocked: false,
+            abnormal_allowed: false,
             answered_kinds: Vec::new(),
         }
     }
@@ -372,6 +382,7 @@ impl Trigger {
             tile: -1,
             position: -1,
             value: 0,
+            value_set: false,
             fold: game_core::engine::rules::Fold::Replace,
             fold_input: 0,
             fold_milli: 1_000_000,
@@ -416,6 +427,7 @@ impl Trigger {
             extreme_armed: false,
             activation_ordinal: 0,
             abnormal_blocked: false,
+            abnormal_allowed: false,
             answered_kinds: Vec::new(),
         }
     }
@@ -604,6 +616,21 @@ pub trait CardWorld: Clone + 'static {
         String::new()
     }
     fn tile_owner(&self, tile: i32) -> i32;
+    /// Add a co-holder to the tile's deed (「视为同时拥有」).
+    fn add_co_owner(&mut self, _tile: i32, _player_id: i32) -> bool {
+        false
+    }
+    fn is_co_owner(&self, _tile: i32, _player_id: i32) -> bool {
+        false
+    }
+    /// Does the player hold the deed (primary or co-holder)?
+    fn owns_tile(&self, tile: i32, player_id: i32) -> bool {
+        self.tile_owner(tile) == player_id
+    }
+    /// Is the player's own stake of the tile mortgaged?
+    fn mortgaged_for(&self, tile: i32, player_id: i32) -> bool {
+        self.owns_tile(tile, player_id) && self.mortgaged_of(tile) != 0
+    }
     fn player_pos(&self, player_id: i32) -> i32;
     /// Tile `steps` around the board loop from a player (-1 when the player is out).
     fn tile_steps_ahead(&self, player_id: i32, steps: i32) -> i32;
@@ -1016,6 +1043,10 @@ pub trait CardWorld: Clone + 'static {
     fn card_text_mentions(&self, _card: &str, _needle: &str) -> bool {
         false
     }
+    /// Sheet tags of `card` ([主] / [手] / [特] / …). Default none.
+    fn card_tags(&self, _card: &str) -> Vec<String> {
+        Vec::new()
+    }
     /// A named on-card pool on a placed card (generic; ruleset names the key).
     fn card_pool(&self, _player_id: i32, _card: &str, _name: &str) -> i32 {
         0
@@ -1069,6 +1100,12 @@ pub trait CardWorld: Clone + 'static {
     /// reads as the key's default (`0`).
     fn tile_prop(&self, _tile: i32, _key: &str) -> i32 {
         0
+    }
+    /// Tri-state [`Self::tile_prop`] (ABI-12): `-1` absent, `0` present and
+    /// clear, `1` present and non-zero. Lets a ternary prop tell an explicit
+    /// `0` from "nobody wrote it".
+    fn tile_prop_state(&self, _tile: i32, _key: &str) -> i32 {
+        -1
     }
     /// Write a [`Self::tile_prop`] on every rule instance governing `tile`.
     /// Returns the stored value. The **source** owns the arming and the
@@ -1479,6 +1516,12 @@ pub trait CardWorld: Clone + 'static {
             self.add_pool_at(uid, name, n, max)
         }
     }
+    /// [`Self::add_group_pool`] tagged as a reshuffle-time add
+    /// (「只有洗牌时可以…添加奇迹水晶」): the write is the same; a real host
+    /// also tags the visible outcome with the reshuffle source.
+    fn add_group_pool_shuffled(&mut self, player_id: i32, name: &str, n: i32, max: i32) -> i32 {
+        self.add_group_pool(player_id, name, n, max)
+    }
     // -------------------------------------------- skill / group attachments
     // Group attachments on a placed card, and the bound group skill
     // (the first in placement order, [`Self::group_skill_uid`]) and the persona
@@ -1633,6 +1676,8 @@ pub trait CardWorld: Clone + 'static {
     }
     /// Negate the trigger's effect (`trigger.Cancelled = true`).
     fn set_trigger_cancelled(&mut self);
+    /// The `abnormalChoice` holder's yes: let the received abnormal land.
+    fn set_trigger_abnormal_allowed(&mut self);
     /// Yu-Gi-Oh's *negate the effect*: the link happened, but settles to nothing.
     fn set_trigger_negate_effect(&mut self);
     /// Take one recipient out of settlement; the effect still settles for the rest.
@@ -1719,6 +1764,11 @@ pub trait CardWorld: Clone + 'static {
     fn turn_move_abnormal(&self) -> bool {
         false
     }
+    /// Did the in-flight payment reach its `PaySplitAt` stage
+    /// (`trigger::pay_split_ran`, NFO-CANCEL-01)?
+    fn pay_split_ran(&self) -> bool {
+        false
+    }
     /// 「打出此卡的回合…」: the turn's dice-immunity flag.
     fn turn_dice_immune(&self) -> bool {
         false
@@ -1770,6 +1820,11 @@ pub trait CardWorld: Clone + 'static {
     }
     /// 「当前回合内你每获得过一次资金」 -- money-ins for `player_id` this turn.
     fn gains_this_turn(&self, _player: i32) -> i32 {
+        0
+    }
+    /// 「本回合开始后…失去资金的总额」 -- money `player_id` actually lost since
+    /// their own turn started (ABI-11; zeroed at that turn start).
+    fn losses_this_turn(&self, _player: i32) -> i32 {
         0
     }
     /// The **static targeting query**: which players the play being resolved
@@ -1954,6 +2009,13 @@ pub trait CardWorld: Clone + 'static {
     fn set_tag(&mut self, _key: &str, _v: i32) {}
     /// v78: host-supplied recorded roll for a Filter body (`None` = none).
     fn recorded_roll(&self) -> Option<i32> {
+        None
+    }
+    /// Roll the plan's direction die from the world RNG, record the face and
+    /// aim the walk by its parity (odd = reverse; C-Q47). W3-KAORU-02.
+    fn set_direction_dice(&mut self, _count: i32, _sides: i32) {}
+    /// The direction face rolled for this raise (`None` = no direction die).
+    fn direction_roll(&self) -> Option<i32> {
         None
     }
     fn move_tag(&self, _key: &str) -> i32 {

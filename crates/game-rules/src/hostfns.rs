@@ -830,6 +830,24 @@ pub fn tile_owner<C: HostCtx>(c: &mut C, tile: i32) -> Result<i32, HostError> {
     Ok({ c.st().wr().tile_owner(tile) })
 }
 
+/// Add a co-holder to `tile`'s deed (「视为同时拥有」); answers whether it was
+/// added.
+pub fn add_co_owner<C: HostCtx>(c: &mut C, tile: i32, player_id: i32) -> Result<i32, HostError> {
+    Ok(c.st_mut().w().add_co_owner(tile, player_id) as i32)
+}
+
+pub fn is_co_owner<C: HostCtx>(c: &mut C, tile: i32, player_id: i32) -> Result<i32, HostError> {
+    Ok({ c.st().wr().is_co_owner(tile, player_id) as i32 })
+}
+
+pub fn owns_tile<C: HostCtx>(c: &mut C, tile: i32, player_id: i32) -> Result<i32, HostError> {
+    Ok({ c.st().wr().owns_tile(tile, player_id) as i32 })
+}
+
+pub fn mortgaged_for<C: HostCtx>(c: &mut C, tile: i32, player_id: i32) -> Result<i32, HostError> {
+    Ok({ c.st().wr().mortgaged_for(tile, player_id) as i32 })
+}
+
 pub fn player_pos<C: HostCtx>(c: &mut C, player_id: i32) -> Result<i32, HostError> {
     Ok({ c.st().wr().player_pos(player_id) })
 }
@@ -1787,6 +1805,45 @@ pub fn card_prop<C: HostCtx>(
     Ok(rules.card_prop(&id, &key))
 }
 
+/// Is card rule `id` **derived** (`CardMeta::derived`, EVENT-04)? The
+/// 「非衍生」 filters read this instead of a hand-copied id table.
+pub fn card_derived<C: HostCtx>(c: &mut C, ip: i32, il: i32) -> Result<i32, HostError> {
+    let id = guest_str(c, ip, il)?;
+    let rules = c
+        .st()
+        .rules
+        .clone()
+        .ok_or_else(|| HostError::trap("card_derived unavailable here"))?;
+    Ok(rules.card_derived(&id) as i32)
+}
+
+/// Every **event** card id (`event:` prefix) in manifest order, postcard
+/// `Vec<String>` into the guest buffer (EVENT-04). The event pool a 「从所有
+/// 事件中选择」 body offers, paired with [`card_derived`] for the 「非衍生」
+/// filter. Ids keep the manifest `event:` prefix; the deck spells them bare,
+/// so a caller banishing one strips it.
+pub fn event_card_ids<C: HostCtx>(c: &mut C, buf: i32, cap: i32) -> Result<i32, HostError> {
+    let rules = c
+        .st()
+        .rules
+        .clone()
+        .ok_or_else(|| HostError::trap("event_card_ids unavailable here"))?;
+    let mut ids: Vec<String> = Vec::new();
+    let mut i = 0;
+    while let Some(card) = rules.card(i) {
+        if card.id.starts_with("event:") {
+            ids.push(card.id.clone());
+        }
+        i += 1;
+    }
+    let bytes = postcard::to_allocvec(&ids)
+        .map_err(|e| HostError::trap(format!("event_card_ids encode: {e}")))?;
+    if bytes.len() as i32 <= cap {
+        c.write_guest(buf, &bytes)?;
+    }
+    Ok(bytes.len() as i32)
+}
+
 pub fn is_placed<C: HostCtx>(c: &mut C) -> Result<i32, HostError> {
     Ok(c.st().wr().is_placed())
 }
@@ -1853,6 +1910,17 @@ pub fn set_tile_prop<C: HostCtx>(
 ) -> Result<i32, HostError> {
     let key = guest_str(c, kp, kl)?;
     Ok(c.st_mut().w().set_tile_prop(tile, &key, v))
+}
+
+/// ABI-12: the tri-state [`tile_prop`] presence read.
+pub fn tile_prop_state<C: HostCtx>(
+    c: &mut C,
+    tile: i32,
+    kp: i32,
+    kl: i32,
+) -> Result<i32, HostError> {
+    let key = guest_str(c, kp, kl)?;
+    Ok(c.st().wr().tile_prop_state(tile, &key))
 }
 
 pub fn prop_at<C: HostCtx>(c: &mut C, uid: i32, kp: i32, kl: i32) -> Result<i32, HostError> {
@@ -1965,6 +2033,23 @@ pub fn add_group_pool<C: HostCtx>(
     Ok(c.st_mut().w().add_group_pool(player_id, &name, n, max))
 }
 
+/// [`add_group_pool`] for a write made on a reshuffle: same count write, and
+/// the visible outcome names the reshuffle as its source (「只有洗牌时可以…
+/// 添加奇迹水晶」).
+pub fn add_group_pool_shuffled<C: HostCtx>(
+    c: &mut C,
+    player_id: i32,
+    np: i32,
+    nl: i32,
+    n: i32,
+    max: i32,
+) -> Result<i32, HostError> {
+    let name = guest_str(c, np, nl)?;
+    Ok(c.st_mut()
+        .w()
+        .add_group_pool_shuffled(player_id, &name, n, max))
+}
+
 pub fn group_skill<C: HostCtx>(
     c: &mut C,
     player_id: i32,
@@ -1997,10 +2082,15 @@ pub fn persona_skill<C: HostCtx>(
 
 /// The seat's character card (a persona name, postcard `String`), the
 /// character-card pile read.
-pub fn persona<C: HostCtx>(c: &mut C, player_id: i32, buf: i32, cap: i32) -> Result<i32, HostError> {
+pub fn persona<C: HostCtx>(
+    c: &mut C,
+    player_id: i32,
+    buf: i32,
+    cap: i32,
+) -> Result<i32, HostError> {
     let s = c.st().wr().persona_name(player_id).unwrap_or_default();
-    let bytes = postcard::to_allocvec(&s)
-        .map_err(|e| HostError::trap(format!("persona encode: {e}")))?;
+    let bytes =
+        postcard::to_allocvec(&s).map_err(|e| HostError::trap(format!("persona encode: {e}")))?;
     if bytes.len() as i32 <= cap {
         c.write_guest(buf, &bytes)?;
     }
@@ -2134,6 +2224,32 @@ fn invoke_inner<C: HostCtx>(
     let entry_name = on.id.clone().unwrap_or_default();
     let by_instance = c.st().wr().self_uid();
     let depth = c.st().depth as i32;
+    // ENG-COST: an invoked Play costs like a pressed one -- charge a declared
+    // activation cost once, before the body. The amount is a guest fn
+    // (`OP_COST`); run it on a throwaway state and charge the live world.
+    // The gate is not evaluated here (G13 I5), so the charge is clamped by
+    // `add_held_by_name` for a short caller.
+    if let Some(name) = on.cost.as_deref() {
+        let probe = HostState::new(
+            rules.clone(),
+            c.st().wr().clone(),
+            Default::default(),
+            c.st().depth + 1,
+        );
+        let (res, _probe, left) =
+            c.call_entry(probe, card, entry, export::OP_COST, player_id, &[], false);
+        c.set_fuel(left)?;
+        let need = match res {
+            Ok(CallOut::Code(v)) => v as i32,
+            Ok(CallOut::Msg(_)) => 0,
+            Err(e) => return Err(e),
+        };
+        if need > 0 {
+            c.st_mut()
+                .w()
+                .add_held_by_name(player_id, name, -need, i32::MAX);
+        }
+    }
     // The target instance on the invoking seat's field; `-1` when the card is
     // not placed there. The marked-instance rule applies: a stand-in answers
     // for its effective card.
@@ -2925,6 +3041,12 @@ pub fn gains_this_turn<C: HostCtx>(c: &mut C, player_id: i32) -> Result<i32, Hos
     Ok({ c.st().wr().gains_this_turn(player_id) })
 }
 
+/// 「本回合开始后…失去资金的总额」 (ABI-11): the running total `player_id` has
+/// lost since their own turn started.
+pub fn lost_this_turn<C: HostCtx>(c: &mut C, player_id: i32) -> Result<i32, HostError> {
+    Ok({ c.st().wr().losses_this_turn(player_id) })
+}
+
 pub fn designations<C: HostCtx>(
     c: &mut C,
     player_id: i32,
@@ -3286,6 +3408,27 @@ pub fn trig_cards<C: HostCtx>(c: &mut C, buf: i32, cap: i32) -> Result<i32, Host
     let list = c.st().wr().trigger().cards;
     let bytes = postcard::to_allocvec(&list)
         .map_err(|e| HostError::trap(format!("trig_cards encode: {e}")))?;
+    if bytes.len() as i32 <= cap {
+        c.write_guest(buf, &bytes)?;
+    }
+    Ok(bytes.len() as i32)
+}
+
+/// The tags of every card named on the trigger, deduped, as an interned name
+/// list (`postcard`). A trigger with no cards, or cards the roster does not
+/// know, yields an empty list.
+pub fn trig_card_tags<C: HostCtx>(c: &mut C, buf: i32, cap: i32) -> Result<i32, HostError> {
+    let cards = c.st().wr().trigger().cards.clone();
+    let mut tags: Vec<String> = Vec::new();
+    for card in &cards {
+        for tag in c.st().wr().card_tags(card) {
+            if !tags.contains(&tag) {
+                tags.push(tag);
+            }
+        }
+    }
+    let bytes = postcard::to_allocvec(&tags)
+        .map_err(|e| HostError::trap(format!("trig_card_tags encode: {e}")))?;
     if bytes.len() as i32 <= cap {
         c.write_guest(buf, &bytes)?;
     }
@@ -3730,6 +3873,11 @@ pub fn multiply_pay_factor<C: HostCtx>(c: &mut C, milli: i32, scope: i32) -> Res
 
 pub fn trig_set_cancelled<C: HostCtx>(c: &mut C) -> Result<(), HostError> {
     c.st_mut().w().set_trigger_cancelled();
+    Ok(())
+}
+
+pub fn trig_set_abnormal_allowed<C: HostCtx>(c: &mut C) -> Result<(), HostError> {
+    c.st_mut().w().set_trigger_abnormal_allowed();
     Ok(())
 }
 
@@ -4236,6 +4384,17 @@ pub fn add_extra_dice<C: HostCtx>(
     let reason = guest_str(c, p, n)?;
     c.st_mut().w().add_extra_dice(count, sides, &reason);
     Ok(())
+}
+
+/// `plan::set_direction_dice` -- roll the direction die from the world RNG and
+/// aim the walk by its parity (W3-KAORU-02, C-Q47).
+pub fn set_direction_dice<C: HostCtx>(c: &mut C, count: i32, sides: i32) -> Result<(), HostError> {
+    c.st_mut().w().set_direction_dice(count, sides);
+    Ok(())
+}
+
+pub fn direction_roll<C: HostCtx>(c: &mut C) -> Result<i32, HostError> {
+    Ok(c.st().wr().direction_roll().unwrap_or(i32::MIN))
 }
 
 pub fn set_tag<C: HostCtx>(c: &mut C, kp: i32, kl: i32, v: i32) -> Result<(), HostError> {
@@ -4799,6 +4958,11 @@ pub fn join_designation<C: HostCtx>(c: &mut C, i: i32) -> Result<i32, HostError>
 /// Declared, unresolved negating answers on this link.
 pub fn trigger_pending_negation<C: HostCtx>(c: &mut C) -> Result<i32, HostError> {
     Ok(c.st().wr().trigger().pending_negation)
+}
+
+/// Did the in-flight payment reach its `PaySplitAt` stage (NFO-CANCEL-01)?
+pub fn trigger_pay_split_ran<C: HostCtx>(c: &mut C) -> Result<i32, HostError> {
+    Ok(c.st().wr().pay_split_ran() as i32)
 }
 
 /// The activation this raise belongs to (stamped by `counteract`; 0 outside a

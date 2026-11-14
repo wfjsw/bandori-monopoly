@@ -1504,8 +1504,8 @@ on its slot and calls a new `ctx::tile_pass_at(owner, group)` that re-raises the
 other rule's body, with the same `TAG_REDIRECT` one-shot. Much smaller than
 §5.1, but the settle half must keep its hand-rolled redirect (two mechanisms),
 extras on either tile still do not travel, and `circle_rebuild` gets nothing.
-Rejected in favour of the swap, which is ABI-13's promised capability and
-subsumes both halves.
+Rejected in favour of the swap, which is ABI-13's promised capability
+(implemented, `ab-tile-swap.md`) and subsumes both halves.
 
 **A3 — keep `card_build`, add hook raises to `add_house`.**
 `add_house` would raise `buildBefore`/`buildAfter` around itself. Rejected:

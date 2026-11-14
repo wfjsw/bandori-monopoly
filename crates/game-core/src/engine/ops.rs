@@ -9,7 +9,7 @@ use std::collections::BTreeMap;
 
 use crate::data::GameData;
 use crate::msg::Msg;
-use crate::state::{key, Counter, FieldCard, MarkFilter, StateVar, Tick, TileMark};
+use crate::state::{Counter, FieldCard, MarkFilter, StateVar, Tick, TileMark};
 
 use super::play::PayFactorScope;
 use super::world::World;
@@ -152,6 +152,25 @@ impl World {
     pub fn clear_dice(&mut self) {
         self.plan_mut().dice.clear();
     }
+    /// Roll the plan's **direction** die (`count`d`sides`, the book's
+    /// 「投掷1d2（前后）」) from this world's RNG and aim the walk by its parity:
+    /// odd = reverse (C-Q47). The face is recorded on [`World::direction_roll`]
+    /// so the log line can name it. Returns the face.
+    ///
+    /// A direction die is its own cast: it is neither the walk's distance roll
+    /// (`base` / `dice`) nor the `recorded_roll` d6 peek, and the loaded face
+    /// stays recorded for the rest of the pass.
+    pub fn roll_direction_dice(&mut self, count: i32, sides: i32) -> i32 {
+        let (count, sides) = (count.max(1), sides.max(1));
+        let mut face = 0;
+        for _ in 0..count {
+            face += self.rng.d(sides);
+        }
+        self.direction_roll = Some(face);
+        self.set_reverse(face % 2 == 1);
+        face
+    }
+
     /// Extra dice added to the roll (summed into the face). A flat add
     /// is a `0`-sided term: `add_extra_dice(n, 0, reason)`.
     pub fn add_extra_dice(&mut self, count: i32, sides: i32, reason: &str) {
@@ -435,9 +454,154 @@ impl World {
             .unwrap_or(-1)
     }
 
+    /// The holders sharing `tile`'s deed, primary owner included
+    /// (「视为同时拥有」, Poppin' Party's 星之鼓动山丘). Empty for an ordinary
+    /// deed.
+    pub fn co_owners(&self, tile: i32) -> &[i32] {
+        usize::try_from(tile)
+            .ok()
+            .and_then(|i| self.st.co_owners.get(i))
+            .map_or(&[], |v| v.as_slice())
+    }
+
+    /// Is `player` a co-holder of `tile`?
+    pub fn is_co_owner(&self, tile: i32, player: i32) -> bool {
+        self.co_owners(tile).contains(&player)
+    }
+
+    /// Does `player` hold the deed (primary owner or co-owner)? The **single
+    /// owner read** for eligibility; [`Self::tile_owner`] stays the primary
+    /// holder (deed display / rent recipient of the ordinary path).
+    pub fn owns(&self, tile: i32, player: i32) -> bool {
+        self.tile_owner(tile) == player || self.is_co_owner(tile, player)
+    }
+
+    /// Is `player`'s **own stake** of `tile` mortgaged?
+    pub fn co_mortgaged_by(&self, tile: i32, player: i32) -> bool {
+        usize::try_from(tile)
+            .ok()
+            .and_then(|i| self.st.co_mortgaged.get(i))
+            .is_some_and(|v| v.contains(&player))
+    }
+
+    /// Is any stake of `tile` mortgaged (the `mortgaged` aggregate)?
+    pub fn any_mortgaged(&self, tile: i32) -> bool {
+        usize::try_from(tile)
+            .ok()
+            .is_some_and(|i| self.st.mortgaged.get(i).copied().unwrap_or(false))
+    }
+
+    /// Can `player` mortgage their own stake of `tile`? Ordinary deeds have
+    /// one stake (the tile flag); a co-owned deed has one per holder.
+    pub fn stake_can_mortgage(&self, tile: i32, player: i32) -> bool {
+        if !self.owns(tile, player) {
+            return false;
+        }
+        if self.co_owners(tile).is_empty() {
+            !self.any_mortgaged(tile)
+        } else {
+            !self.co_mortgaged_by(tile, player)
+        }
+    }
+
+    /// Can `player` redeem their own stake of `tile`? Mirror of
+    /// [`Self::stake_can_mortgage`].
+    pub fn stake_mortgaged(&self, tile: i32, player: i32) -> bool {
+        if self.co_owners(tile).is_empty() {
+            self.owns(tile, player) && self.any_mortgaged(tile)
+        } else {
+            self.co_mortgaged_by(tile, player)
+        }
+    }
+
+    /// Make `player` a co-holder of `tile` (idempotent). Returns whether the
+    /// row was added. The caller sets the primary with [`Self::set_tile_owner`]
+    /// first; the grant adds every holder, primary included, so the mortgage
+    /// row always has the full holder list.
+    pub fn add_co_owner(&mut self, tile: i32, player: i32) -> bool {
+        let Ok(t) = usize::try_from(tile) else {
+            return false;
+        };
+        if player < 0 || self.is_co_owner(tile, player) {
+            return false;
+        }
+        if self.st.co_owners.len() <= t {
+            self.st.co_owners.resize(t + 1, Vec::new());
+        }
+        self.st.co_owners[t].push(player);
+        true
+    }
+
+    /// Write (or clear) `player`'s own mortgage stake of `tile` and keep the
+    /// tile-wide aggregate in step. An ordinary deed has one stake: the flag
+    /// itself.
+    pub fn set_co_mortgaged(&mut self, tile: i32, player: i32, on: bool) {
+        let Ok(t) = usize::try_from(tile) else {
+            return;
+        };
+        if self.co_owners(tile).is_empty() {
+            if let Some(v) = self.st.mortgaged.get_mut(t) {
+                *v = on;
+            }
+            return;
+        }
+        if !self.is_co_owner(tile, player) {
+            return;
+        }
+        if self.st.co_mortgaged.len() <= t {
+            self.st.co_mortgaged.resize(t + 1, Vec::new());
+        }
+        let row = &mut self.st.co_mortgaged[t];
+        if on && !row.contains(&player) {
+            row.push(player);
+        } else if !on {
+            row.retain(|&p| p != player);
+        }
+        let any = !row.is_empty();
+        if let Some(v) = self.st.mortgaged.get_mut(t) {
+            *v = any;
+        }
+    }
+
+    /// A holder leaves `tile` (going out). A co-owned deed stays with any
+    /// living co-holder -- the primary row hands over; the last stake clears
+    /// the deed.
+    pub fn release_deed(&mut self, tile: i32, player: i32) {
+        let Ok(t) = usize::try_from(tile) else {
+            return;
+        };
+        self.set_co_mortgaged(tile, player, false);
+        let living: Vec<i32> = self
+            .co_owners(tile)
+            .iter()
+            .copied()
+            .filter(|&p| p != player && !self.player_out(p))
+            .collect();
+        if let Some(row) = self.st.co_owners.get_mut(t) {
+            row.retain(|&p| p != player);
+        }
+        if let Some(&next) = living.first() {
+            if self.tile_owner(tile) == player {
+                self.st.owners[t] = next;
+                for p in [player, next] {
+                    let first = self.earliest_owned_tile(p);
+                    if let Some(s) = self.player_mut(p) {
+                        s.state_set(crate::state::key::FIRST_TILE, first + 1);
+                    }
+                }
+            }
+            return;
+        }
+        self.set_tile_owner(tile, -1);
+        if let Some(v) = self.st.mortgaged.get_mut(t) {
+            *v = false;
+        }
+    }
+
+    /// Every tile `player` holds, co-owned deeds included.
     pub fn owned_tiles(&self, player_id: i32) -> Vec<i32> {
         (0..self.st.owners.len() as i32)
-            .filter(|&t| self.tile_owner(t) == player_id)
+            .filter(|&t| self.owns(t, player_id))
             .collect()
     }
 
@@ -543,8 +707,7 @@ impl World {
                     Some(t) != exclude
                         && tile.is_buyable()
                         && self.tile_prop(t as i32, crate::state::prop::NO_MORTGAGE) == 0
-                        && self.st.owners[t] == player as i32
-                        && !self.st.mortgaged[t]
+                        && self.stake_can_mortgage(t as i32, player as i32)
                 })
                 .map(|(_, tile)| tile.price / 2)
                 .sum::<i32>()
@@ -1168,6 +1331,8 @@ impl World {
         }
         let paid = amount.min(s.money);
         s.money -= paid;
+        // 「失去资金」 (NOW SUMIMI): the actual figure out.
+        self.bump_loss(player_id, paid);
         self.log(
             "lose",
             player_id,
@@ -1478,10 +1643,7 @@ impl World {
         let Some(t) = usize::try_from(tile).ok().and_then(|t| data.tiles.get(t)) else {
             return Some(Msg::new("err.build_not_own"));
         };
-        if !t.is_buyable()
-            || self.st.owners.get(tile as usize).copied().unwrap_or(-1) != player_id
-            || self.player_id(player_id).is_none()
-        {
+        if !t.is_buyable() || !self.owns(tile, player_id) || self.player_id(player_id).is_none() {
             return Some(Msg::new("err.build_not_own"));
         }
         self.guard_buildable(data, player_id, tile)
@@ -1856,11 +2018,25 @@ impl World {
             + marks) as i32
     }
 
-    /// The rule instances on board tile `tile`, in placement order -- what the
-    /// settle body runs. Board-owned only; a player's card *placed on* the tile
+    /// The rule instances **governing** board tile `tile`, in placement order
+    /// -- what the settle body and a tile-carrying hook run. A rule swap
+    /// (`World::governing_square`) makes the other square's instances the
+    /// answer, while the instances stay anchored at their home
+    /// (`docs/rulebook/spec/abi/ab-tile-swap.md`).
+    ///
+    /// Board-owned only; a player's card *placed on* the tile
     /// (`place_card_on(player, tile, …)`) is on that player's field and hears
     /// the settle point through the normal field-hook dispatch.
     pub fn tile_rule_instances(&self, tile: i32) -> Vec<(i32, String)> {
+        self.tile_rule_instances_homed(self.governing_square(tile))
+    }
+
+    /// The rule instances **homed** on board tile `tile`, placement order --
+    /// the tile's own effects wherever a rule swap sends them. Deed operations
+    /// (buy / build / mortgage / redeem) are keyed to the **deed**, so they
+    /// keep asking their own tile's rule even when its effects are swapped
+    /// onto another square.
+    pub fn tile_rule_instances_homed(&self, tile: i32) -> Vec<(i32, String)> {
         self.st
             .board_field
             .iter()
@@ -1937,24 +2113,45 @@ impl World {
 
     /// A declared property of the rule instance governing `tile` -- what a card
     /// that bends a tile writes instead of an engine flag (`docs/TILES.md`).
-    /// Reads the first board-owned instance on `tile` that carries `key`; a tile
-    /// with no rule instance reads as `0`.
+    /// Reads the first board-owned instance on the governing square that
+    /// carries `key`; a tile with no rule instance reads as `0`. A rule swap
+    /// (`docs/rulebook/spec/abi/ab-tile-swap.md`) moves the read with the
+    /// effects, so a card asking the square answers for the rule that runs
+    /// there.
     pub fn tile_prop(&self, tile: i32, key: &str) -> i32 {
+        let at = self.governing_square(tile);
         self.st
             .board_field
             .iter()
-            .find(|f| f.tile == tile)
+            .find(|f| f.tile == at)
             .and_then(|f| f.props.get(key).copied())
             .unwrap_or(0)
+    }
+
+    /// Tri-state [`Self::tile_prop`]: `-1` = no board-owned instance on the
+    /// governing square carries `key`, `0` = present and clear, `1` = present
+    /// and non-zero. [`Self::tile_prop`] folds absent onto `0`, so a ternary
+    /// prop (「获得的地契仍为抵押状态」, `prop::FORCE_STAYS_MORTGAGED = 0`)
+    /// cannot be told from "nobody wrote it" through it. Resolves the same
+    /// governing square, so the answer is the running rule's.
+    pub fn tile_prop_state(&self, tile: i32, key: &str) -> i32 {
+        let at = self.governing_square(tile);
+        for f in self.st.board_field.iter().filter(|f| f.tile == at) {
+            if let Some(&v) = f.props.get(key) {
+                return if v == 0 { 0 } else { 1 };
+            }
+        }
+        -1
     }
 
     /// Every prop key set on a board-owned rule instance governing `tile`
     /// (the keys [`Self::tile_prop`] can answer non-zero for).
     pub fn tile_prop_keys(&self, tile: i32) -> impl Iterator<Item = &str> {
+        let at = self.governing_square(tile);
         self.st
             .board_field
             .iter()
-            .filter(move |f| f.tile == tile)
+            .filter(move |f| f.tile == at)
             .flat_map(|f| f.props.keys().map(String::as_str))
     }
 
@@ -1962,8 +2159,9 @@ impl World {
     /// `tile`; returns the stored value. The source owns the arming and the
     /// disarming; the reader is the tile instance.
     pub fn set_tile_prop(&mut self, tile: i32, key: &str, value: i32) -> i32 {
+        let at = self.governing_square(tile);
         let mut any = false;
-        for f in self.st.board_field.iter_mut().filter(|f| f.tile == tile) {
+        for f in self.st.board_field.iter_mut().filter(|f| f.tile == at) {
             f.props.insert(key.to_string(), value);
             any = true;
         }
@@ -1998,6 +2196,109 @@ impl World {
     }
 
     // ------------------------------------------------- tile / position
+
+    /// Every **rule-swap** binding currently in the world: a live instance
+    /// carrying both `prop::RULE_SWAP_A` and `prop::RULE_SWAP_B`, as the pair
+    /// of squares it names (`docs/rulebook/spec/abi/ab-tile-swap.md`). The
+    /// binding rides the instance, so it dies with it.
+    pub(crate) fn rule_swap_records(&self) -> impl Iterator<Item = (i32, i32)> + '_ {
+        let pair = |f: &FieldCard| {
+            let first = f
+                .props
+                .get(crate::state::prop::RULE_SWAP_A)
+                .copied()
+                .filter(|&v| v >= 0)?;
+            let second = f
+                .props
+                .get(crate::state::prop::RULE_SWAP_B)
+                .copied()
+                .filter(|&v| v >= 0)?;
+            Some((first, second))
+        };
+        self.st
+            .board_field
+            .iter()
+            .chain(self.st.players.iter().flat_map(|p| p.field.iter()))
+            .filter_map(pair)
+    }
+
+    /// The square on the other end of the first rule-swap binding naming
+    /// `tile` (`None` = unbound). Two bindings naming the same square: the
+    /// first in row order (`board_field` then seats) wins.
+    fn rule_swap_partner(&self, tile: i32) -> Option<i32> {
+        if tile < 0 {
+            return None;
+        }
+        self.rule_swap_records()
+            .find_map(|(first, second)| match tile {
+                _ if first == tile => Some(second),
+                _ if second == tile => Some(first),
+                _ => None,
+            })
+    }
+
+    /// The square whose **rule instances** govern `tile`: the tile itself
+    /// unless a rule swap binds it to another square, followed across
+    /// overlapping bindings (`docs/rulebook/spec/abi/ab-tile-swap.md`). A
+    /// visited list stops a cyclic pair at the first repeat, so the answer is
+    /// deterministic for any binding graph.
+    ///
+    /// The square's **identity** does not follow -- kind, `is_start`,
+    /// owners, houses and `prop::START` stay on `tile`. Only the settle /
+    /// hook dispatch, the deed-op dispatch's fallbacks and the tile text
+    /// resolve through here.
+    pub fn governing_square(&self, tile: i32) -> i32 {
+        if tile < 0 {
+            return tile;
+        }
+        let mut at = tile;
+        let mut seen = vec![tile];
+        for _ in 0..=self.st.owners.len() {
+            match self.rule_swap_partner(at) {
+                Some(next) if !seen.contains(&next) => {
+                    seen.push(next);
+                    at = next;
+                }
+                _ => break,
+            }
+        }
+        at
+    }
+
+    /// Is any rule-swap binding in the world? The flush / text walks skip
+    /// their per-slot resolution without one.
+    pub fn has_rule_swaps(&self) -> bool {
+        self.rule_swap_records().next().is_some()
+    }
+
+    /// Does the live instance `uid` carry a rule-swap binding naming `tile`,
+    /// either end? A **one-shot** binder must hear the governed square's
+    /// `tileResolved` to drop itself even while it is anchored on the other
+    /// square (smile_parade (1) sits on 弦卷集团 while the endpoint settles).
+    pub fn bears_rule_swap_for(&self, uid: i32, tile: i32) -> bool {
+        if tile < 0 {
+            return false;
+        }
+        self.field_by_uid(uid).is_some_and(|f| {
+            let names = |key: &str| f.props.get(key).copied() == Some(tile);
+            names(crate::state::prop::RULE_SWAP_A) || names(crate::state::prop::RULE_SWAP_B)
+        })
+    }
+
+    /// The square the instance at `uid`'s rule instances govern. A
+    /// board-owned rule instance is anchored at its home (`FieldCard::tile`,
+    /// which a rule swap never rewrites) and runs wherever that home is
+    /// swapped to; a player instance's display is the tile standing at its
+    /// slot. `-1` when the uid is gone.
+    pub fn governing_square_of(&self, uid: i32) -> i32 {
+        self.field_by_uid(uid).map_or(-1, |f| {
+            if f.owner == crate::state::BOARD_OWNER {
+                self.governing_square(f.tile)
+            } else {
+                self.tile_standing_at(f.position())
+            }
+        })
+    }
 
     /// Every instance that can carry a swap binding: the board field and every
     /// seat's field.
@@ -2609,6 +2910,15 @@ impl World {
             return;
         }
         self.st.owners[t] = owner;
+        // A changed holder clears the previous row's co-holders and their
+        // mortgage stakes; the primary grant then re-adds the new holder set
+        // through [`Self::add_co_owner`].
+        if let Some(row) = self.st.co_owners.get_mut(t) {
+            row.clear();
+        }
+        if let Some(row) = self.st.co_mortgaged.get_mut(t) {
+            row.clear();
+        }
         if self.st.owned_seq.len() <= t {
             self.st.owned_seq.resize(t + 1, -1);
         }
@@ -2639,8 +2949,8 @@ impl World {
     /// none.
     pub fn earliest_owned_tile(&self, player_id: i32) -> i32 {
         let mut best: Option<(i32, i32)> = None;
-        for (tile, &owner) in self.st.owners.iter().enumerate() {
-            if owner != player_id {
+        for tile in 0..self.st.owners.len() {
+            if !self.owns(tile as i32, player_id) {
                 continue;
             }
             let Some(&seq) = self.st.owned_seq.get(tile) else {

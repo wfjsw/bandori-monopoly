@@ -476,6 +476,10 @@ pub struct DeferredEvent {
 pub struct WorldSnapshot {
     pub players: Vec<PlayerSnapshot>,
     pub owners: Vec<i32>,
+    #[serde(default)]
+    pub co_owners: Vec<Vec<i32>>,
+    #[serde(default)]
+    pub co_mortgaged: Vec<Vec<i32>>,
     pub houses: Vec<i32>,
     pub mortgaged: Vec<bool>,
 }

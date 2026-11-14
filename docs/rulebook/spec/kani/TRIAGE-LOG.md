@@ -74,7 +74,7 @@ New runs: `/home/monopoly/kani-triage1-results/<tag>/`.
 | **card-sdk Msg facade (`cfg(kani)`)** | `Vec::extend_with` 31 + `drop_glue` in `ctx::log` | E (TUNING §10) | `Msg` = interned key + fixed `[i64;4]` args (`Copy`); builders never construct `Arg`/`String`/`Box`; `mj()` = 2 ints, no arena `Vec` per log | **Vec cliff gone** (profile 0 extend/drop); dist hashes **byte-identical** to master |
 | **sys_kani `join_redirect_target` / `set_join_used`** | central `general` unit failed to compile on master | C | mirrored `sys.rs` externs | compiles; central can pick up after merge |
 | **invoke integer hook + zero-loop `by_idx`** | `memcmp` 10, `by_idx` 10 | E | `hook_kind_only_idx(HookKind)`; `tag_key` packed-int dispatch; `by_idx` unrolled band select | **memcmp 0, by_idx 0** |
-| **intern identity `(FNV,len)`** | `bytes_eq` 64×8×10 known names | E | drop `bytes_eq` from probe hit; loud INVALID on hash+len mismatch; `pilot_intern_hashes_are_unique` | intern aborts collapsed |
+| **intern identity `(FNV,len)`** | `bytes_eq` 64×8×10 known names | E | drop `bytes_eq` from probe hit; loud INVALID on hash+len mismatch; `pilot_intern_hashes_are_unique` | intern aborts collapsed — **but not sound**: 2026-11-13 the window's `charge` name resolved back as `cp` + zeros while its id **and** length stayed right (covers probe: `id == charge id`, length 6 and byte 0 `c` SATISFIED; byte 1 `p` SATISFIED and every other letter UNSATISFIABLE; `name = charge` UNSATISFIABLE) and `id_eq_str` FAILED. `bytes_eq` is back on the **hash-equal probe only** (falling through on a mismatch; hash+len INVALID bail gone) — that alone did not fix it. Root cause: the `cfg(kani)` slot stored the name as a `&'static [u8]` into a static arena and **the stored pointer came apart from its id/len under CBMC** (a slice into the same static object read back at another offset; the isolation harness with the kernel stripped never failed). The `cfg(kani)` slot now keeps `[u8; MAX_NAME]` + `len` **inline** and `resolve` copies out of `name[..len]`; production keeps the write-once `Box::leak` pointer |
 | money_shave splits drop guard IR | `fill_pay_add` + `named_set` 8 | A/setup | halves assume host invoked body (`shave_iff` proves the IR) | IR gone from split profile |
 | money_shave::aya_haruka_02_shave_not_poorest_noop | TIMEOUT 1800 s | E | all of the above | still **TIMEOUT** at 1800 s (profile now only `poorest` Range 4 + world setup 4+4); 10 min goal **not met** |
 | money_shave::aya_haruka_02_* (iff / poorest / mutants) | TIMEOUT | E | same stack | pending re-run (not reached inside budget) |
@@ -1820,3 +1820,51 @@ Kani's generic-count check.
 
 See TUNING.md §12 "Soundness argument per stub". panic_fmt stub keeps
 non-mutant panics as FAILED properties; mutants keep a real panic! event.
+
+## 2026-11-13 — the six-check allocator class is a filter-pack artifact, not a body defect
+
+The `mark_cp_land_*` proofs (both body and guard ones) failed the same six
+checks since the body-erasure refactor: `__rust_dealloc` layout mismatch,
+`same_allocation` unsupported construct, `memcpy destination writeable`, and
+three `free`-argument preconditions. Kani prints "failures other than panics",
+so the mutants' expected panic is reached but the verdict stays FAILED.
+
+Root cause: `ctx::mf()` packed `abi::MarkFilter` with
+`postcard::to_allocvec` — a heap `Vec<u8>` — and the filter itself carried two
+`String`s built at guard time. The Kani host's mark ops are stubs that ignore
+the packed bytes, so the heap traffic bought nothing and only dragged CBMC's
+allocator model in.
+
+Fix (`cfg(kani)` only; production keeps `String` + postcard):
+`mf` packs a fixed 16-byte buffer (kind / `category` as interned ids, then
+owner / src / instance in field order — same layout, the two sides cannot
+drift), and `MarkFilter`'s name fields use `abi::MarkString` = `MarkStr`, an
+inline `len: u8` + `[u8; 24]` buffer (`as_bytes`; longest current argument is
+`skill.uikaIdol.pot`). The pack interns through `intern_bytes`, skipping the
+UTF-8 validation loop (`from_utf8` was worth a 3× symex slowdown — 1200 s
+timeout — before it went).
+
+Verdicts on the fixed tree (all six, `--timeout 2400` unless noted from the
+table): `mark_cp_land_guard_rejects_without_tile_cp` SUCCESSFUL 414.3,
+`_guard_rejects_when_cancelled` SUCCESSFUL 314.5, `_gain_iff` SUCCESSFUL
+676.5, `_mutant_900` SUCCESSFUL 531.2 (panic the only failure),
+`_mutant_wrong_seat` SUCCESSFUL 476.6, `_tile_cp_visible_to_count_marks`
+SUCCESSFUL 579.2. `timeout_table.toml` carries the wall budgets; the guard
+rows sit at 1200 (measured 414–579 s), the body rows at 2400.
+
+### Follow-up: the spend rows are wall-clock-bound, not defect-bound
+
+Bisect on 2026-11-13 (throwaway harnesses, deleted after): a bare
+`ctx::raise_from(ChargePaying)` on an empty world timed out 300 s; so did a
+direct `host::arm_raise` with a pre-interned name. The arm's own symex is
+206 s; its solver phase is 3 s. The rest of the capture is the per-check
+result table — these worlds produce ~20k checks and CBMC/Kani spends minutes
+merely rendering them (the green mark guard row above: 19.7k checks,
+414 s total). So a "TIMEOUT" on the spend rows is budget, not divergence:
+`pre` is concrete in `fire_spend_iff` (n stays symbolic, both covers intact),
+the short-refusal request range is halved, and the spend budgets are 5400 s.
+`fire_spend_mutant_underspend_is_detected` is fully concrete and is budget
+alone.
+
+Spend rows keep their TIMEOUT-at-<old budget> records until the raised-budget
+rerun reports; a verdict is required before the row calls itself proven.

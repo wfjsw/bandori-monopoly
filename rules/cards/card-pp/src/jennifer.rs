@@ -15,7 +15,7 @@
 //! user bankrupted by the 400 still gets the fan and the Ranger.
 
 use bandori_std::ctx;
-use card_sdk::abi::ActionKind;
+use card_sdk::abi::{prop, ActionKind};
 use card_sdk::{key, Action, CardDef, Msg, On};
 use card_sdk::{para, sec, steps, CardText};
 use skill_groups::fans;
@@ -32,6 +32,9 @@ pub const JENNIFER: CardDef = CardDef::new(
         )),
     ],
 )
+// 规则书[手]: 「将此卡放置在除[使用者]以外的一名玩家的[场地]」 -- one named
+// player, so the play has a [指定] target and 网络链接异常 clause 1 applies.
+.props(&[(prop::DESIGNATES, 1)])
 .meta(
     &card_sdk::meta::CardMeta::new()
         .name(r#"找回珍妮弗"#)

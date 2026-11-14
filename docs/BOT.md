@@ -1462,7 +1462,7 @@ Pure checks share the live handle (`PlayCtx::share_world`, a refcount bump):
 
 **C -- skip the buy-hook quote when no card declares one.** The counteract
 index's shape, applied to buy kinds (`BUY_HOOK_KINDS` = `BuyGate`/`BuyAdd`/
-`BuyMul`/`BuySet`):
+`BuyMul`/`BuySet` and their `ForceBuyAdd`/`ForceBuyMul`/`ForceBuySet` twins):
 
 - `Ruleset::declares_buy()` ORs the whole-set `declared` bitmask over those
   kinds. No card in the manifest hooks a buy kind -> `buy_quote` returns the

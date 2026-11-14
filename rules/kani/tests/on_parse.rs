@@ -88,6 +88,8 @@ fn parse_on_bodies_one_per_shape() {
             "payadd_body",
             "redirect_body",
             "on_turn_start",
+            "seen",
+            "draw_after",
             "my_rewrite",
         ]
     );
@@ -337,7 +339,7 @@ fn every_registration_names_a_declared_kind() {
             "Action::KINDS has `{name}` but the action_kinds! table parse missed it"
         );
     }
-    assert_eq!(sdk_filter.len(), 35, "Filter::KINDS row count");
+    assert_eq!(sdk_filter.len(), 38, "Filter::KINDS row count");
 
     for f in &files {
         let Ok(src) = std::fs::read_to_string(f) else {

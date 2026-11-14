@@ -23,20 +23,20 @@ pub const TOMORI_NO_LONGER: CardDef = CardDef::new(
     &[
         On::Play("", None, tomori_no_longer),
         // 规则书: 「当此卡上的水晶由于此效果以外的原因减少时，此卡立刻获得等同于减少量的[奇迹水晶]」
-        // -- declared **before** the sweep entry below so a refund body runs
-        // before the removal body. Guards evaluate on the pre-raise world (a
-        // body's writes never move it), so the sweep guard predicts the refund
-        // instead of reading the refilled count (see [`sweep_guard`]).
-        // `ActionKind::CounterChanged` name-filtered to `counter::CRYSTALS`
-        // (the name is not yet in the condition vocabulary).
+        // -- declared **before** the sweep entry below so the refund body runs
+        // before the removal check: sibling hooks accumulate on one world, so
+        // the sweep guard reads the count *after* this refund instead of
+        // predicting it (see [`sweep_guard`]). `ActionKind::CounterChanged`
+        // name-filtered to `counter::CRYSTALS` (the name is not yet in the
+        // condition vocabulary).
         // TODO(ABI) trigger uid: `trigger::card_is` is name-only, so with two
         // copies on the field one copy's raise also runs the other copy's
         // `refill`, which consumes the player-wide `SLOT_COVERING` slot.
         On::Action(Action::CounterChanged(card_sdk::condition::MINE, Some(refill_guard), refill)),
         // （3）「此卡上的奇迹水晶耗尽后，[移除]此卡」 -- swept whenever the
-        // count empties, whichever write emptied it (the skill-cost swap, a
-        // move, or a decay). `CounterChanged` is name-filtered to
-        // `counter::CRYSTALS`.
+        // count is empty once the refund above had its say, whichever write
+        // emptied it (the skill-cost swap, a move, or a decay).
+        // `CounterChanged` is name-filtered to `counter::CRYSTALS`.
         On::Action(Action::CounterChanged("", Some(sweep_guard), sweep)),
         // （2）「可移除此卡上的一个[奇迹水晶]以代替此次技能的火罐消耗」 -- a
         // fire-cost substitution. The offer exists only for a positive spend
@@ -184,29 +184,21 @@ fn tomori_no_longer(player_id: i32) -> card_sdk::Asked {
     Ok(())
 }
 
-/// Guard for [`sweep`] -- the count emptied: the write was a decrease and no
-/// refund is owed for it. A guard is evaluated on the **pre-raise** world (a
-/// body's writes never move it), so the refund [`refill`] is about to add must
-/// be predicted, not read: the card is emptied only when the loss is the
-/// substitution (a parked [`SLOT_COVERING`]) or when even the refund would
-/// leave the count at 0. Name-filtered to `counter::CRYSTALS`.
+/// Guard for [`sweep`] -- the count emptied: the write was a decrease and the
+/// count is still 0 after entry 1 ran. [`refill`] is declared **before** this
+/// entry and the host runs sibling hooks on one accumulated world (later
+/// entries see earlier bodies' writes), so a decrease that is refunded has
+/// already been put back by the time this guard reads `ctx::crystals()`; only
+/// the skill-cost substitution (its [`SLOT_COVERING`] consumed by `refill`
+/// with no refund) leaves the count at 0 here. Name-filtered to
+/// `counter::CRYSTALS`.
 fn sweep_guard(player_id: i32) -> bool {
     trigger::name() == bandori_std::counter::CRYSTALS
         && ctx::is_placed()
         && trigger::player_id() == player_id
         && trigger::card_is(ID)
         && trigger::value() <= 0
-        && ctx::crystals() + pending_refund(player_id) == 0
-}
-
-/// The crystals [`refill`] will put back for the current decrease: the whole
-/// loss, unless [`SLOT_COVERING`] marks it as the skill-cost substitution.
-fn pending_refund(player_id: i32) -> i32 {
-    if ctx::slot(player_id, SLOT_COVERING) > 0 {
-        0
-    } else {
-        -trigger::value()
-    }
+        && ctx::crystals() <= 0
 }
 
 /// （3）「此卡上的奇迹水晶耗尽后，[移除]此卡」 -- `[移除]` is

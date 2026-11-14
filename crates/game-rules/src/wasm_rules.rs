@@ -113,7 +113,10 @@ fn field_hears(
     }
     // `tileResolved` is answered by **slot**: after smile_parade (2) moved
     // itself, the card's governing tile is the swapped-in one, so its own
-    // settle no longer matches on the tile.
+    // settle no longer matches on the tile. A live rule-swap binding hears the
+    // raise at **either** end regardless of anchoring: a one-shot binder
+    // (smile_parade (1), sitting on 弦卷集团) is dropped at this terminal
+    // (`docs/rulebook/spec/abi/ab-tile-swap.md`).
     if kind == TriggerKind::TileResolved {
         return position < 0
             || w.field_by_uid(uid).is_some_and(|f| {
@@ -123,6 +126,7 @@ fn field_hears(
                     } else {
                         f.position() == position
                     }
+                    || w.bears_rule_swap_for(uid, tile)
             });
     }
     if !tile_local_kind(kind) {
@@ -134,8 +138,10 @@ fn field_hears(
 
 /// Is field instance `f` **on** `tile`? A board instance is anchored to the
 /// tile identity it was put on (it keeps `position = -1`, so `f.position()`
-/// is `f.tile` and would resolve through the wrong slot after a swap); a
-/// player instance answers through the tile standing at its slot.
+/// is `f.tile` and would resolve through the wrong slot after a swap); it
+/// answers through the square its rule *governs*, so a rule swap moves it
+/// with the effects. A player instance answers through the tile standing at
+/// its slot.
 ///
 /// A `tile = -1` instance (owner-held / board-wide) is on no tile: callers
 /// that want it to reach every tile test `f.tile < 0` themselves.
@@ -144,7 +150,7 @@ fn on_tile(w: &game_core::engine::World, f: &game_core::state::FieldCard, tile: 
         return false;
     }
     if f.owner == game_core::state::BOARD_OWNER {
-        return f.tile == tile;
+        return w.governing_square(f.tile) == tile;
     }
     w.tile_standing_at(f.position()) == tile
 }
@@ -545,6 +551,13 @@ pub struct Run {
     /// kind 73 (`fireSpent`, wire-stable) once the run commits. The name is
     /// payload; `charge` is one caller.
     marker_spent_log: Vec<(i32, i32, String)>,
+    /// Bound held-token writes this run made, `(holder, delta, name,
+    /// instance)` -- the engine raises `markerChanged` for each once the run
+    /// commits (HAG-01). `delta` is the signed change the write actually
+    /// applied; every player-token write (`bind_held` / `add_held` /
+    /// `set_held` / `spend_marker`, and a transfer's two player legs) is in
+    /// here, so a standing 「has N」 count has a post-commit event to hang on.
+    marker_changed_log: Vec<(i32, i32, String, i32)>,
     /// Houses added during the run, raised as kind 75 once it commits.
     /// House writes this run applied: `(owner, tile, now, delta)` -- the
     /// owner at write time (design 5.5). `commit_after` raises `houseAdded`
@@ -1914,6 +1927,18 @@ impl CardWorld for Run {
     fn tile_owner(&self, tile: i32) -> i32 {
         self.world.tile_owner(tile)
     }
+    fn add_co_owner(&mut self, tile: i32, player_id: i32) -> bool {
+        self.world.add_co_owner(tile, player_id)
+    }
+    fn is_co_owner(&self, tile: i32, player_id: i32) -> bool {
+        self.world.is_co_owner(tile, player_id)
+    }
+    fn owns_tile(&self, tile: i32, player_id: i32) -> bool {
+        self.world.owns(tile, player_id)
+    }
+    fn mortgaged_for(&self, tile: i32, player_id: i32) -> bool {
+        self.world.stake_mortgaged(tile, player_id)
+    }
     fn player_pos(&self, player_id: i32) -> i32 {
         self.world.player_pos(player_id)
     }
@@ -2069,14 +2094,18 @@ impl CardWorld for Run {
             got
         } else {
             let amount = -delta;
-            let Some(s) = self.world.st.players.get_mut(player_id.max(0) as usize) else {
-                return 0;
+            let lost = {
+                let Some(s) = self.world.st.players.get_mut(player_id.max(0) as usize) else {
+                    return 0;
+                };
+                if s.out() {
+                    return 0;
+                }
+                let lost = amount.min(s.money).max(0);
+                s.money -= lost;
+                lost
             };
-            if s.out() {
-                return 0;
-            }
-            let lost = amount.min(s.money).max(0);
-            s.money -= lost;
+            self.world.bump_loss(player_id, lost);
             if lost != 0 {
                 let msg = Msg::new("log.lose")
                     .player_id("who", player_id)
@@ -2466,6 +2495,9 @@ impl CardWorld for Run {
     fn placed_cards(&self, player_id: i32) -> Vec<String> {
         self.world.placed_cards(player_id)
     }
+    fn card_tags(&self, card: &str) -> Vec<String> {
+        self.data.card(card).map(|c| c.tags.clone()).unwrap_or_default()
+    }
     fn card_text_mentions(&self, card: &str, needle: &str) -> bool {
         if let Some(c) = self.data.card(card) {
             return c.text.contains(needle);
@@ -2598,6 +2630,35 @@ impl CardWorld for Run {
     fn pool_at(&self, uid: i32, name: &str) -> i32 {
         self.world.pool_at(uid, name)
     }
+    /// [`CardWorld::add_group_pool`] for a reshuffle-time add. The count write
+    /// is the same as `add_group_pool`; the line also says *why* (「只有洗牌时
+    /// 可以…添加奇迹水晶」), so a shuffle-sourced crystal is distinguishable
+    /// from every other add in the log.
+    fn add_group_pool_shuffled(&mut self, player_id: i32, name: &str, n: i32, max: i32) -> i32 {
+        let uid = self.group_skill_uid(player_id);
+        if uid < 0 {
+            return 0;
+        }
+        let was = self.world.counter_at(uid, name);
+        let now = self.add_group_pool(player_id, name, n, max);
+        if now != was && !self.silent_body {
+            let holder = self.world.holder_of(uid);
+            let card = self.group_skill_id(player_id).unwrap_or_default();
+            let shuffler = self.trigger.player_id;
+            self.outcome(
+                holder,
+                Msg::new("log.outcome.counter_reshuffled")
+                    .card("card", card)
+                    .msg(
+                        "source",
+                        Msg::new("log.reason.reshuffled").player_id("who", shuffler),
+                    )
+                    .msg("name", crate::trigger_reason::counter_name(name))
+                    .i("value", (now - was) as i64),
+            );
+        }
+        now
+    }
     fn self_uid(&self) -> i32 {
         self.current_uid
     }
@@ -2625,6 +2686,9 @@ impl CardWorld for Run {
     }
     fn set_tile_prop(&mut self, tile: i32, key: &str, value: i32) -> i32 {
         self.world.set_tile_prop(tile, key, value)
+    }
+    fn tile_prop_state(&self, tile: i32, key: &str) -> i32 {
+        self.world.tile_prop_state(tile, key)
     }
     fn unplace_at(&mut self, uid: i32, destination: i32, _cause: i32) -> i32 {
         let row = self.world.field_by_uid(uid).map(|f| {
@@ -2880,8 +2944,14 @@ impl CardWorld for Run {
         // Marker ownership: the rule that creates a marker owns it.
         let who = self.current_card.clone();
         self.world.note_marker_owner(name, &who);
-        self.world
-            .bind_held(self.current_uid, name, player_id, n, max)
+        let got = self
+            .world
+            .bind_held(self.current_uid, name, player_id, n, max);
+        // Post-commit `markerChanged` (HAG-01): the holder is the raise seat.
+        // `instance` is the running card -- the rule that owns the token.
+        self.marker_changed_log
+            .push((player_id, got, name.to_string(), self.current_uid));
+        got
     }
     fn count_held_name(&self, name: &str, player_id: i32) -> i32 {
         // Name-keyed (any owner / instance): the legacy `held` lookup.
@@ -2898,7 +2968,13 @@ impl CardWorld for Run {
         } else {
             self.current_uid
         };
+        let was = self.world.held_count(player_id, name);
         self.world.set_held(player_id, name, v, inst, max);
+        // Post-commit `markerChanged` (HAG-01), even at delta 0: a raw set is
+        // a write the holder's count hears about (the fire kernel re-declares
+        // its row this way).
+        self.marker_changed_log
+            .push((player_id, v - was, name.to_string(), inst));
     }
     fn held_max(&self, player_id: i32, name: &str) -> i32 {
         self.world.held_max(player_id, name)
@@ -2912,7 +2988,7 @@ impl CardWorld for Run {
         to_player: i32,
         n: i32,
     ) -> i32 {
-        self.world.move_units(
+        let got = self.world.move_units(
             self.current_uid,
             name,
             from_tile,
@@ -2920,7 +2996,18 @@ impl CardWorld for Run {
             to_tile,
             to_player,
             n,
-        )
+        );
+        // The player-side legs are bound held writes: raise `markerChanged`
+        // (HAG-01) after the run commits, one per leg the move actually made.
+        if got > 0 && from_player >= 0 {
+            self.marker_changed_log
+                .push((from_player, -got, name.to_string(), self.current_uid));
+        }
+        if got > 0 && to_player >= 0 {
+            self.marker_changed_log
+                .push((to_player, got, name.to_string(), self.current_uid));
+        }
+        got
     }
     fn mark_rule_instances(&self) -> Vec<(i32, String)> {
         self.world.mark_rule_instances()
@@ -3462,10 +3549,17 @@ impl CardWorld for Run {
     fn gains_this_turn(&self, player_id: i32) -> i32 {
         self.world.gains_this_turn(player_id)
     }
+    fn losses_this_turn(&self, player_id: i32) -> i32 {
+        self.world.losses_this_turn(player_id)
+    }
     fn designations(&self, player_id: i32) -> Vec<i32> {
         // A play whose card declares recipients (`DESIGNATES`) names the other
         // living players of its user (「designate[使用者]以外的所有玩家」 /
         // 「其他玩家[分摊]」). The play's card is the one the trigger names.
+        // Bodies are opaque here, so the static prop is the whole declaration:
+        // cards stamping it must target through the [指定] pipeline
+        // (`ctx::target` / `ctx::target_tile` / `ctx::target_all`); a bare
+        // `ctx::ask_tile` pick is an option list, not a [指定].
         let card = self.trigger.card.as_deref().unwrap_or("");
         let designates = props_of(&self.props, card)
             .get(game_core::state::prop::DESIGNATES)
@@ -3538,6 +3632,15 @@ impl CardWorld for Run {
         }
         // A consumer of the counter: all-or-nothing, and it logs the spend. It
         // does not consult any cap -- spending is not the capped direction.
+        // The row's creating instance, for the `markerChanged` payload.
+        let instance = self
+            .world
+            .st
+            .players
+            .get(player_id.max(0) as usize)
+            .and_then(|s| s.tokens.iter().find(|t| t.name == name))
+            .and_then(|t| t.instance)
+            .unwrap_or(-1);
         if self.world.spend_marker(player_id, name, n) == 0 {
             return 0;
         }
@@ -3546,6 +3649,10 @@ impl CardWorld for Run {
             self.world.log(name, player_id, reason).value = -n;
         }
         self.marker_spent_log.push((player_id, n, name.to_string()));
+        // Post-commit `markerChanged` (HAG-01): a spend is a held write too,
+        // with the negative delta. `markerSpent` stays spend-only.
+        self.marker_changed_log
+            .push((player_id, -n, name.to_string(), instance));
         1
     }
     fn turn_player(&self) -> i32 {
@@ -3605,6 +3712,7 @@ impl CardWorld for Run {
         self.fig_write(roll);
     }
     fn set_trigger_value(&mut self, value: i32) {
+        self.trigger.value_set = true;
         self.fig_write(value);
     }
     fn set_trigger_target(&mut self, to: i32) {
@@ -3678,6 +3786,9 @@ impl CardWorld for Run {
     }
     fn set_trigger_cancelled(&mut self) {
         self.trigger.negate_activation();
+    }
+    fn set_trigger_abnormal_allowed(&mut self) {
+        self.trigger.abnormal_allowed = true;
     }
     fn set_trigger_negate_effect(&mut self) {
         self.trigger.negate_effect();
@@ -3817,6 +3928,9 @@ impl CardWorld for Run {
     fn turn_move_abnormal(&self) -> bool {
         self.world.turn.move_abnormal
     }
+    fn pay_split_ran(&self) -> bool {
+        self.world.pay_split_ran
+    }
     fn turn_dice_immune(&self) -> bool {
         self.world.turn.dice_immune
     }
@@ -3951,6 +4065,17 @@ impl CardWorld for Run {
     }
     fn recorded_roll(&self) -> Option<i32> {
         self.world.recorded_roll
+    }
+    fn set_direction_dice(&mut self, count: i32, sides: i32) {
+        self.stamp_skill_source();
+        // The die is cast here, from the world RNG (W3-KAORU-02); the face
+        // rides `World::direction_roll` and the outcome line below. C-Q47:
+        // odd = reverse.
+        let face = self.world.roll_direction_dice(count, sides);
+        self.outcome_plan("log.outcome.plan_direction", -1, face, "");
+    }
+    fn direction_roll(&self) -> Option<i32> {
+        self.world.direction_roll
     }
     fn move_tag(&self, key: &str) -> i32 {
         self.world.move_tag(key)
@@ -5232,6 +5357,7 @@ impl<M: CardModules> RulesBridge<M> {
                 hand_log: vec![],
                 reshuffle_log: vec![],
                 marker_spent_log: vec![],
+                marker_changed_log: vec![],
                 house_log: vec![],
                 counter_log: vec![],
                 named_raise_log: vec![],
@@ -5381,6 +5507,19 @@ impl<M: CardModules> RulesBridge<M> {
                 }
             };
             cx.guest_log = std::mem::take(&mut log);
+            // A trapping guard / declare declines its entry. That must not be
+            // silent (DECLARE-TRAP-LOG): one `log.card_trap` line naming the
+            // card and the failure, posted into the world `run_hook` returns.
+            // The guard / declare store world is a throwaway clone, so the
+            // line goes here, never into the store.
+            let mut on_trap = |w: &mut crate::Run, _entry: i32, detail: &str| {
+                w.log(
+                    call.player_id(),
+                    Msg::new("log.card_trap")
+                        .card("card", card_id)
+                        .text("detail", detail),
+                );
+            };
             let mut guest = || -> Result<Option<Result<Outcome<Run>, RuleError>>, RuleError> {
                 if guarded {
                     match self.ruleset.run_hook(
@@ -5389,12 +5528,26 @@ impl<M: CardModules> RulesBridge<M> {
                         &cx.guest_log,
                         &already_admitted,
                         Some(&mut announce),
+                        Some(&mut on_trap),
                     ) {
                         Err(e) => Ok(Some(Err(e))),
                         // Not activated -- the guard refused. Nothing ran, and
                         // nothing about the card reaches the UI.
-                        Ok(None) => Ok(None),
-                        Ok(Some(hr)) => Ok(Some(Ok(hr.outcome))),
+                        Ok(None) => {
+                            if std::env::var("DBG_CT").is_ok() {
+                                eprintln!(
+                                    "DBG_CT guard refused card={card_id} kind={:?}",
+                                    trigger.kind
+                                );
+                            }
+                            Ok(None)
+                        }
+                        Ok(Some(hr)) => {
+                            if std::env::var("DBG_CT").is_ok() {
+                                eprintln!("DBG_CT body ran card={card_id} kind={:?}", trigger.kind);
+                            }
+                            Ok(Some(Ok(hr.outcome)))
+                        }
                     }
                 } else {
                     Ok(Some(self.ruleset.run(
@@ -5886,13 +6039,6 @@ impl<M: CardModules> RulesBridge<M> {
                         drive_header_ids = run.header_ids.clone();
                     }
                     let live_before = cx.live_event_count();
-                    if std::env::var("DBG_HOOK").is_ok() {
-                        eprintln!(
-                            "APPLY_REQ card={card_id} draining={} answers={} req={req:?}",
-                            cx.is_draining_work(),
-                            log.answers.len()
-                        );
-                    }
                     let linger = run.linger_props.clone();
                     // A zone request takes its row off live; the copy is
                     // reloaded from live below, so the re-run's reads would no
@@ -6073,7 +6219,7 @@ impl<M: CardModules> RulesBridge<M> {
                 }
                 Err(e) => {
                     // A trapping module must not take the match down with it.
-                    let detail = declare_err_detail(&e);
+                    let detail = crate::host::trap_detail(&e);
                     let player_id = call.player_id();
                     cx.log(
                         player_id,
@@ -6782,12 +6928,8 @@ impl<M: CardModules> RulesBridge<M> {
                 // seat time pools; the answer is the winner seat (-1 = none).
                 // The requesting seat (`ctx::auction`'s player) opens the bid
                 // order -- not necessarily the turn seat for a nested call.
-                let winner = cx.auction_deed(
-                    tile.max(0) as usize,
-                    player_id.max(0) as usize,
-                    true,
-                    15.0,
-                )?;
+                let winner =
+                    cx.auction_deed(tile.max(0) as usize, player_id.max(0) as usize, true, 15.0)?;
                 return Ok(winner);
             }
             // Guest-raised trigger points (`ctx::raise`): the pass-reward trigger from
@@ -7111,6 +7253,8 @@ impl<M: CardModules> RulesBridge<M> {
                     }
                     let lost = amount.min(s.money).max(0);
                     s.money -= lost;
+                    // 「失去资金」 (NOW SUMIMI): the actual figure out.
+                    w.bump_loss(player_id, lost);
                     if lost != 0 {
                         w.log(
                             "lose",
@@ -7422,6 +7566,7 @@ impl<M: CardModules> RulesBridge<M> {
                 spec,
                 src,
             } => {
+
                 let shape = game_core::engine::PayShape::from_i32(spec & 0xF);
                 let kind = game_core::engine::PayKind::from_i32((spec >> 4) & 0xF);
                 let flags = (spec >> 8) & 0xF;
@@ -7611,6 +7756,18 @@ impl<M: CardModules> RulesBridge<M> {
             Some("house")
         } else if !after.marker_spent_log.is_empty() {
             Some("marker-spend")
+        } else if after.trigger.kind != TriggerKind::DeckAtGameStart
+            && after
+                .marker_changed_log
+                .iter()
+                .any(|(_, delta, _, _)| *delta != 0)
+        {
+            // Only a real count move is visible. A `set_held` re-stamp at
+            // delta 0 (`fire::declare`'s per-turn cap restatement) raises the
+            // event but is bookkeeping -- that is what the silent mark hides.
+            // The game-start pot declaration establishes the initial count;
+            // setup is not a clause event either.
+            Some("marker-change")
         } else if after.logged > 0 {
             Some("log line")
         } else {
@@ -7676,6 +7833,12 @@ impl<M: CardModules> RulesBridge<M> {
         }
         after.house_log.extend(owed);
         let dest = after.dest;
+        if std::env::var("DBG_CT").is_ok() && card_id.contains("不再迷茫") {
+            eprintln!(
+                "DBG_CT commit card={card_id} uid={} dest={dest} cause={:?} trig={:?}",
+                after.current_uid, after.dest_cause, trigger.kind
+            );
+        }
         *trigger = after.trigger.clone();
         // Keep the live event tail (write-through order) over the guest
         // copy's stale one. The guest copy is the state; the event stream
@@ -7757,6 +7920,7 @@ impl<M: CardModules> RulesBridge<M> {
                 && after.house_log.len() == borrowed_house
                 && after.state_log.is_empty()
                 && after.marker_spent_log.is_empty()
+                && after.marker_changed_log.is_empty()
                 && after.counter_log.is_empty()
                 && after.named_raise_log.is_empty();
             if quiet_when_empty && body_empty && !after.prompted && !flash_cued {
@@ -8124,6 +8288,36 @@ impl<M: CardModules> RulesBridge<M> {
                 t.name = Some(name.clone());
             })?;
         }
+        // `markerChanged` (HAG-01) -- one raise per bound held write, after
+        // it committed. `player_id` is the token **holder**, `value` the
+        // signed delta, `name` the counter name, `instance` the creating
+        // instance. A standing 「has N」 clause hangs here instead of at each
+        // write site. A handler's own held write commits in a nested drive
+        // whose `commit_after` sees the depth -- it re-raises nothing
+        // (`PlayCtx::marker_raise_depth`), so an unconditional writer cannot
+        // chain forever. The turn-end backstop in hagumi covers writes made
+        // under the guard.
+        for (holder, delta, name, instance) in after.marker_changed_log {
+            if std::env::var("DBG_MC").is_ok() {
+                eprintln!(
+                    "MC raise holder={holder} delta={delta} name={name} declares={} depth={}",
+                    self.ruleset.declares(TriggerKind::MarkerChanged),
+                    cx.marker_raise_depth
+                );
+            }
+            if cx.marker_raise_depth > 0 {
+                continue;
+            }
+            cx.marker_raise_depth += 1;
+            let raised = self.raise_core(cx, "markerChanged", holder, |t| {
+                t.name = Some(name.clone());
+                t.value = delta;
+                t.instance = instance;
+                t.by_card = by_player;
+            });
+            cx.marker_raise_depth = cx.marker_raise_depth.saturating_sub(1);
+            raised?;
+        }
         for (player_id, tile, now, delta) in after.house_log {
             let kind = if delta > 0 {
                 "houseAdded"
@@ -8140,6 +8334,9 @@ impl<M: CardModules> RulesBridge<M> {
         // (3) and kin) live here rather than at each spend site, so a
         // count emptied by *any* path still leaves the field.
         for (owner, card, uid, name, change) in after.counter_log {
+            if std::env::var("DBG_CT").is_ok() {
+                eprintln!("DBG_CT raise owner={owner} card={card} uid={uid} name={name} change={change}");
+            }
             self.raise_core(cx, "counterChanged", owner, |t| {
                 t.card = Some(card);
                 t.name = Some(name);
@@ -8253,6 +8450,13 @@ impl<M: CardModules> RulesBridge<M> {
             eprintln!(
                 "DECL kind={} mapped={:?} declares={}",
                 t.kind,
+                trigger_kind(t.kind.as_str()),
+                self.ruleset.declares(trigger_kind(t.kind.as_str()))
+            );
+        }
+        if std::env::var("DBG_CT").is_ok() {
+            eprintln!(
+                "DBG_CT counteract kind={:?} declares={}",
                 trigger_kind(t.kind.as_str()),
                 self.ruleset.declares(trigger_kind(t.kind.as_str()))
             );
@@ -8463,6 +8667,14 @@ impl<M: CardModules> RulesBridge<M> {
                                 let Some(idx) = self.ruleset.card(&id) else {
                                     continue;
                                 };
+                                if std::env::var("DBG_CT").is_ok()
+                                    && id.contains("不再迷茫")
+                                {
+                                    eprintln!(
+                                        "DBG_CT field cand uid={uid} id={id} kind={kind:?} hooks={}",
+                                        self.ruleset.cards()[idx as usize].hooks(kind)
+                                    );
+                                }
                                 // 「场上所有背面朝上的卡无法产生效果」 -- a face-down
                                 // card on the field is inert, so its hooks must not run.
                                 if self.ruleset.cards()[idx as usize].hooks(kind)
@@ -8681,6 +8893,14 @@ impl<M: CardModules> RulesBridge<M> {
                         // walks above, and a body that raises must not hear its
                         // own raise twice (a self-driving tile would pay its
                         // reward once per pass).
+                        //
+                        // A **board rule instance** among them answers the same
+                        // tile narrowing the board walk applies: it hears only
+                        // the squares its rule governs (`on_tile`, which reads
+                        // through a rule swap). Without this, a resumed walk
+                        // replays its earlier `passTile` steps and drives the
+                        // mid-prompt tile body at every one of them -- the
+                        // start square's reward paid once per stepped tile.
                         let resolving = resolving_snapshot();
                         for (card, uid, seat) in resolving {
                             if drove.contains(&uid) {
@@ -8693,6 +8913,15 @@ impl<M: CardModules> RulesBridge<M> {
                                 continue;
                             };
                             if !self.ruleset.cards()[idx as usize].hooks(kind) {
+                                continue;
+                            }
+                            if trigger.tile >= 0
+                                && world.field_by_uid(uid).is_some_and(|f| {
+                                    f.owner == game_core::state::BOARD_OWNER
+                                        && f.tile >= 0
+                                        && !on_tile(&world, f, trigger.tile)
+                                })
+                            {
                                 continue;
                             }
                             self.drive_hook(
@@ -8781,12 +9010,19 @@ impl<M: CardModules> RulesBridge<M> {
                 .and_then(|m| m.roll)
                 .unwrap_or(trigger.value)
         };
+        // Did any responder write the figure (`settleBefore`'s
+        // `set_pay_amount`)? The settle body reads it back to tell "already
+        // paid by the pre-stage" (`0`) from "untouched" (`-1`).
+        t.value_set = trigger.value_set;
         // The composed multiplier of a `Fold::Mul` stage (the settle stages
         // read it back).
         t.fold_milli = trigger.fold_milli;
         if trigger.negation != Default::default() {
             t.negation = trigger.negation;
         }
+        // The `abnormalChoice` holder's yes (`trigger::allow_abnormal`); the
+        // gate reads it back and skips its refusal.
+        t.abnormal_allowed = trigger.abnormal_allowed;
         for s in trigger.spared {
             t.spare(s);
         }
@@ -8839,9 +9075,6 @@ impl<M: CardModules> RulesBridge<M> {
             }
             for (uid, raw) in world.field_instances(player_id as i32) {
                 if is_money_hook_kind(kind) && cx.reentrant_hooks.contains(&uid) {
-                    if std::env::var("DBG_HOOK").is_ok() {
-                        eprintln!("SKIP uid={uid} kind={kind:?} reentrant");
-                    }
                     continue;
                 }
                 if !field_hears(&world, t.tile, t.position, uid, kind)
@@ -9022,7 +9255,21 @@ impl<M: CardModules> RulesBridge<M> {
         // owner -- a frame at `-1` (a hand card being played) has no row. Last,
         // like the inline walk: a card also on the field or the board already
         // has its job and must not hear its own raise a second time.
+        //
+        // A **board rule instance** keeps the inline walk's tile narrowing: it
+        // hears only the squares its rule governs (`on_tile`, through a rule
+        // swap), so a resumed walk does not drive a mid-prompt tile body at
+        // every earlier stepped tile.
         for (card, uid, seat) in resolving_snapshot() {
+            if t.tile >= 0
+                && world.field_by_uid(uid).is_some_and(|f| {
+                    f.owner == game_core::state::BOARD_OWNER
+                        && f.tile >= 0
+                        && !on_tile(&world, f, t.tile)
+                })
+            {
+                continue;
+            }
             push_job(&mut jobs, &card, uid, seat);
         }
         jobs
@@ -9250,14 +9497,29 @@ impl<M: CardModules> RulesBridge<M> {
             exemption: false,
         };
         if !cx.world().gate_open(self, ask, s) {
-            self.refuse_abnormal(cx, player_id, by_player, kind, on)?;
-            // The refusing rule supplies the skip line as data
-            // (`gate_skip_msgs`), same as every other gate.
-            cx.log(
-                player_id,
-                self.gate_skip_msg(ask, s).player_id("who", player_id),
-            );
-            return Ok(false);
+            // 「处于该状态时可选择受到的[传送]，[强制移动]，[强制停下]效果
+            // 是否生效」 (glossary 14): a *received* movement abnormal (kinds
+            // 4–7) gets the holder's per-effect choice window before the
+            // refusal. A self-caused move (`by == player_id`) is chosen, not
+            // 「受到的」, and stays unprompted. The `abnormalChoice` body
+            // answers yes with `trigger::allow_abnormal`, which rides the
+            // trigger back; the refusal below is then skipped.
+            let chosen = if by_player != player_id && (4..=7).contains(&kind.as_i32()) {
+                let t = self.raise_core(cx, "abnormalChoice", player_id, on)?;
+                t.abnormal_allowed
+            } else {
+                false
+            };
+            if !chosen {
+                self.refuse_abnormal(cx, player_id, by_player, kind, on)?;
+                // The refusing rule supplies the skip line as data
+                // (`gate_skip_msgs`), same as every other gate.
+                cx.log(
+                    player_id,
+                    self.gate_skip_msg(ask, s).player_id("who", player_id),
+                );
+                return Ok(false);
+            }
         }
         // Blocked-ness: did this landing hold the mover's move? The engine
         // half is the mover's `MOVE_EXEMPT` (the same expression the clamp
@@ -10966,6 +11228,7 @@ impl<M: CardModules> RulesBridge<M> {
             hand_log: vec![],
             reshuffle_log: vec![],
             marker_spent_log: vec![],
+            marker_changed_log: vec![],
             house_log: vec![],
             counter_log: vec![],
             named_raise_log: vec![],
@@ -11300,6 +11563,7 @@ impl<M: CardModules> RulesBridge<M> {
                 hand_log: vec![],
                 reshuffle_log: vec![],
                 marker_spent_log: vec![],
+                marker_changed_log: vec![],
                 house_log: vec![],
                 counter_log: vec![],
                 named_raise_log: vec![],
@@ -11670,7 +11934,7 @@ impl<M: CardModules> RulesBridge<M> {
                         s as i32,
                         Msg::new("log.card_trap")
                             .card("card", id)
-                            .text("detail", declare_err_detail(&e)),
+                            .text("detail", crate::host::trap_detail(&e)),
                     );
                     return Ok(None);
                 }
@@ -11723,6 +11987,7 @@ impl<M: CardModules> RulesBridge<M> {
             hand_log: vec![],
             reshuffle_log: vec![],
             marker_spent_log: vec![],
+            marker_changed_log: vec![],
             house_log: vec![],
             counter_log: vec![],
             named_raise_log: vec![],
@@ -11747,24 +12012,6 @@ impl<M: CardModules> RulesBridge<M> {
             flash_cued: false,
             flash_ordinal: 0,
         }
-    }
-}
-
-/// The module's view of an engine trigger (the bridge `Trigger`). One-line detail
-/// for a [`RuleError`], for `log.card_trap`. Shared by the body trap path and the
-/// `OP_DECLARE` collector path -- a trapping module is reported the same way
-/// wherever it traps.
-fn declare_err_detail(e: &RuleError) -> String {
-    match e {
-        RuleError::Trap(m) | RuleError::Load(m) | RuleError::DuplicateCard(m) => m.clone(),
-        RuleError::NoSuchCard(i) => format!("no such card {i}"),
-        RuleError::GuardPrompted => "guard prompted".into(),
-        RuleError::BadCondition {
-            card,
-            entry,
-            source,
-            err,
-        } => format!("bad guard condition on {card}/{entry}: {err} ({source})"),
     }
 }
 
@@ -11826,6 +12073,7 @@ fn bridge_trigger(t: &CoreTrigger) -> Trigger {
         position: t.position,
         ordinal: t.ordinal,
         value: t.value,
+        value_set: t.value_set,
         fold: t.fold,
         fold_input: t.fold_input,
         fold_milli: t.fold_milli,
@@ -11886,6 +12134,7 @@ fn bridge_trigger(t: &CoreTrigger) -> Trigger {
         extreme_armed: t.extreme_armed,
         activation_ordinal: t.activation_ordinal,
         abnormal_blocked: t.abnormal_blocked,
+        abnormal_allowed: t.abnormal_allowed,
         answered_kinds: t.answered_kinds.iter().map(|k| trigger_kind(k)).collect(),
     }
 }
@@ -13727,6 +13976,16 @@ const BUY_STAGES: [TriggerKind; 3] = [
     TriggerKind::BuySet,
 ];
 
+/// The 强制购买 price stages (FORCE-WRITE-01), same order as [`BUY_STAGES`].
+/// Only a Force quote runs these; the generic `Buy*` stages keep skipping
+/// Force (rulebook 其他规则 6: its price is untouched unless the effect writes
+/// 「强制购买」, and declaring one of these is that writing).
+const FORCE_BUY_STAGES: [TriggerKind; 3] = [
+    TriggerKind::ForceBuyAdd,
+    TriggerKind::ForceBuyMul,
+    TriggerKind::ForceBuySet,
+];
+
 /// The bridge trigger a buy hook sees (`docs/PURCHASE.md`): the kind, who is
 /// buying what from whom, and the running price the stage rewrites with
 /// `set_price`. `value` mirrors `price` so a generic reader sees the figure.
@@ -13875,6 +14134,9 @@ impl<M: CardModules> RulesBridge<M> {
             &Default::default(),
             &[],
             None,
+            // A quote's world is dropped, so a trap line has no home here;
+            // the commit's re-quote runs the real (logging) drive.
+            None,
         ) {
             if let Outcome::Done(after, _) = hr.outcome {
                 *trig = after.trigger;
@@ -13898,7 +14160,11 @@ impl<M: CardModules> RulesBridge<M> {
         snap: impl Fn(&game_core::state::MatchState) -> T,
         ok: impl FnOnce(T, T) -> bool,
     ) -> Flow<bool> {
-        let instances = cx.world().tile_rule_instances(tile as i32);
+        // The deed ops (buy / build / mortgage / redeem) are keyed to the
+        // **deed**, not to the square's displayed effects: they keep asking
+        // the tile's own (homed) rule even when a rule swap sent its effects
+        // elsewhere (`docs/rulebook/spec/abi/ab-tile-swap.md`).
+        let instances = cx.world().tile_rule_instances_homed(tile as i32);
         if instances.is_empty() {
             return standalone(cx, player_id, tile);
         }
@@ -14134,6 +14400,11 @@ impl<M: CardModules> CardRules for RulesBridge<M> {
             position: position as i32,
             step: cx.state().step,
             is_main_move,
+            // The `settleBefore` pre-stage's pay shaping, so a body can tell
+            // the settle was already paid (e.g. the Poppin' Party rent split
+            // zeroes it before paying the holders itself). `-1` = untouched.
+            value: cx.settle_seed().unwrap_or(-1),
+            value_set: cx.settle_seed().is_some(),
             ..Trigger::default()
         };
         let world = cx.world_copy();
@@ -14327,6 +14598,7 @@ impl<M: CardModules> CardRules for RulesBridge<M> {
             hand_log: vec![],
             reshuffle_log: vec![],
             marker_spent_log: vec![],
+            marker_changed_log: vec![],
             house_log: vec![],
             counter_log: vec![],
             named_raise_log: vec![],
@@ -14409,6 +14681,7 @@ impl<M: CardModules> CardRules for RulesBridge<M> {
                 hand_log: vec![],
                 reshuffle_log: vec![],
                 marker_spent_log: vec![],
+                marker_changed_log: vec![],
                 house_log: vec![],
                 counter_log: vec![],
                 named_raise_log: vec![],
@@ -14464,7 +14737,7 @@ impl<M: CardModules> CardRules for RulesBridge<M> {
                         player_id as i32,
                         Msg::new("log.card_trap")
                             .card("card", card)
-                            .text("detail", declare_err_detail(&e)),
+                            .text("detail", crate::host::trap_detail(&e)),
                     );
                     return Ok(None);
                 }
@@ -14475,9 +14748,10 @@ impl<M: CardModules> CardRules for RulesBridge<M> {
     /// The purchase quote (`docs/PURCHASE.md`): what would `q.player` be
     /// charged for each tile, and may they buy it at all?
     ///
-    /// Runs the `BuyGate` / `BuyAdd` → `BuyMul` → `BuySet` hooks in pure guard
-    /// mode against a world copy (like [`Self::cant_play`]), **only** when a
-    /// hooking instance exists -- otherwise the plain rulebook formula answers
+    /// Runs the `BuyGate` / `BuyAdd` → `BuyMul` → `BuySet` hooks (a Force
+    /// quote: `BuyGate` / `ForceBuyAdd` → `ForceBuyMul` → `ForceBuySet`) in
+    /// pure guard mode against a world copy (like [`Self::cant_play`]), **only**
+    /// when a hooking instance exists -- otherwise the plain rulebook formula answers
     /// and nothing is instantiated, which is what `StubRules` and the sim run.
     /// The commit re-quotes ([`game_core::engine`]'s `buy`), so the quoted price
     /// is the price charged.
@@ -14551,6 +14825,7 @@ impl<M: CardModules> CardRules for RulesBridge<M> {
             hand_log: vec![],
             reshuffle_log: vec![],
             marker_spent_log: vec![],
+            marker_changed_log: vec![],
             house_log: vec![],
             counter_log: vec![],
             named_raise_log: vec![],
@@ -14607,22 +14882,28 @@ impl<M: CardModules> CardRules for RulesBridge<M> {
                 // 的资金变动不受任何效果影响，除非效果写明改动抵押，赎回，或强制
                 // 购买」). The price is the printed 2×(price+houses) figure; a
                 // generic buy-stage hook does not 「写明」 force-buy, so it must
-                // not retune this quote. `BuyGate` still runs above (can-you-buy,
-                // not a price). TODO(规则书): a hook that *does* write
-                // 「强制购买」 as its target has no wire spelling yet -- when one
-                // lands, only that entry may rewrite the Force base.
+                // not retune this quote. An entry that **does** write
+                // 「强制购买」 spells it as one of [`FORCE_BUY_STAGES`]
+                // (FORCE-WRITE-01) -- only those run on a Force quote, and the
+                // generic stages never do. `BuyGate` still runs above (can-you-buy,
+                // not a price).
                 let mut price = base;
-                if q.kind != game_core::engine::purchase::BuyKind::Force {
-                    for &kind in &BUY_STAGES {
-                        if !declares(kind) {
-                            continue;
-                        }
-                        price = at(&mut run, kind, price)
-                            .buy
-                            .map(|b| b.price)
-                            .unwrap_or(price)
-                            .max(0);
+                let stages: &[TriggerKind] = if q.kind
+                    == game_core::engine::purchase::BuyKind::Force
+                {
+                    &FORCE_BUY_STAGES
+                } else {
+                    &BUY_STAGES
+                };
+                for &kind in stages {
+                    if !declares(kind) {
+                        continue;
                     }
+                    price = at(&mut run, kind, price)
+                        .buy
+                        .map(|b| b.price)
+                        .unwrap_or(price)
+                        .max(0);
                 }
                 Quote {
                     price,
@@ -15039,12 +15320,19 @@ impl<M: CardModules> CardRules for RulesBridge<M> {
                 .and_then(|m| m.roll)
                 .unwrap_or(trigger.value)
         };
+        // Did any responder write the figure (`settleBefore`'s
+        // `set_pay_amount`)? The settle body reads it back to tell "already
+        // paid by the pre-stage" (`0`) from "untouched" (`-1`).
+        t.value_set = trigger.value_set;
         // The composed multiplier of a `Fold::Mul` stage (the settle stages
         // read it back).
         t.fold_milli = trigger.fold_milli;
         if trigger.negation != Default::default() {
             t.negation = trigger.negation;
         }
+        // The `abnormalChoice` holder's yes (`trigger::allow_abnormal`); the
+        // gate reads it back and skips its refusal.
+        t.abnormal_allowed = trigger.abnormal_allowed;
         for s in trigger.spared {
             t.spare(s);
         }
@@ -15490,6 +15778,8 @@ mod tests {
             // v50: named counter writes
             "counterChanged",
             "r:bandori:78",
+            // held-token write (HAG-01)
+            "markerChanged",
             // v42: the command-wide pre-split payment stage + terminals
             "payCombinedAdd",
             "payCombinedMul",
@@ -15506,6 +15796,9 @@ mod tests {
             "paySplitMulBefore",
             // v120: 支付阶段 1 「支付计算前」 (hook-only Action)
             "payCalcBefore",
+            // v120: 行动阶段 3 / 6 stage markers (hook-only Actions)
+            "turnStartAfter",
+            "manageAfter",
             // v107: the raw-spend window (a redeem / auction / `lose_raw` hook)
             "spendBefore",
         ] {

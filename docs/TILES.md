@@ -211,13 +211,13 @@ runs, published so a rule body can call it. They raise the same `buy*` /
 own / other / mortgaged) over those primitives. `tile:ring` is `tile:property`
 plus the dice-rent term. `tile:edogawa` is one draw. `tile:agent` is the
 「若…则…否则…」 branch (the 同色 set, the all-owned half-rent sweep, and one
-buy/build offer). `tile:circle` is the landing draw plus the [经过] reward
-(the reward body also answers the `"settleReward"` message, which is how
-`event:协助CiRCLE重建` re-homes it onto 「CiRCLE咖啡厅」 -- see
-[CARDS.md](CARDS.md) 「Cross-card messages」).
+buy/build offer). `tile:circle` is the landing draw plus the [经过] reward.
 That is the point: once the body is a rule instance, a card can swap it, stack
 another one next to it, or rewrite its props -- without the engine knowing the
-card's name.
+card's name. `event:协助CiRCLE重建` moves the whole `tile:circle` instance onto
+「CiRCLE咖啡厅」 with `ctx::tile_swap_rules` (no `"settleReward"` message any
+more -- the body itself travels, [CARDS.md](CARDS.md) 「Cross-card messages」).
+A **rule swap** rebinds which instances govern a square and is described below.
 
 ## Binding
 
@@ -237,6 +237,29 @@ owner**, mirroring `bind_skills`:
   that attaches a second `tile:circle` to a tile adds an instance; it does not
   rename the first.
 
+### Rule swap (「效果迁移至…」 / 「视为与…交换位置」)
+
+`ctx::tile_swap_rules(a, b)` rebinds which rule **instances** govern two
+squares: while the calling instance is in play, the instances homed at `a`
+answer every rule read on `b` and vice versa. `ctx::tile_clear_rule_swap()`
+drops it early (a one-shot). The binding is a prop pair on the calling row
+(`prop::RULE_SWAP_A` / `_B`), so it is applied immediately and dies with the
+instance; `World::governing_square` resolves it.
+
+What moves is the **effects** — settlements, tile hooks, the deed-popup base
+text, the body's own `ctx::self_tile()` reads and all instance state. What stays
+is the square's **identity**: kind / `tile_is`, `ctx::is_start`,
+`guards::OWN_START`, owners, houses, the deed (`prop::PRICE` and kin are read
+from the homed instance, so buy / build / mortgage / redeem follow the deed),
+and `prop::START`. Dispatch (`tile_rule_instances` / `field_hears` / the
+resolving replay), the `prop::START` flush and the text base all read through
+the governing square; `tile_rule_instances_homed` is the deed-op path.
+
+The position exchange 「交换位置」 (`prop::SWAPPED_TILE`, `World::tile_standing_at`)
+is the older, separate mechanism: it swaps what *stands* at a slot (display and
+player placements). A rule swap carries effects only and composes with it.
+Full design: [spec/abi/ab-tile-swap.md](spec/abi/ab-tile-swap.md).
+
 ### Tile data rides the property map
 
 `TileData` (price, rent table, group, …) is stamped into the instance's
@@ -255,7 +278,9 @@ constants, mirrored in `game_core::state::prop`:
 | `ringMult` | `match_rules.ring_multiplier` | ring only; TODO(规则书) |
 
 Defined default `0` for every key, same as `CardDef::props`. A key a tile does
-not have reads as `0`.
+not have reads as `0`. Reads and writes go through `World::governing_square`
+(`World::tile_prop` / `set_tile_prop`), so the instance that answers is the one
+whose rule runs on the square — a rule swap moves its keys with it.
 
 The rent table as `rent:0`…`rent:N` is deliberate: props are `key -> i32`, and
 a table is just N of them. `buildMax` is derived, not stored twice -- the body
@@ -279,8 +304,9 @@ settleBody        -- the settle body, a chain link.
   |      may `set_cancelled()` to *replace* the body -- today's
   |      `settleInstead` gesture. `settleAfter` still runs.
   |  (b) if not cancelled: the tile's board-owned rule instances settle, in
-  |      instance order. Each is an effect link, so [反击]s to it and field
-  |      hooks apply as they would to any effect.
+  |      instance order -- the ones **governing** the tile, so a rule swap
+  |      brings the other square's bodies here. Each is an effect link, so
+  |      [反击]s to it and field hooks apply as they would to any effect.
   ↓
 settleAfter                           (unchanged)
 ```
@@ -385,14 +411,15 @@ clients and older saves ignore it.
 
 The one that wins the settle body also wins the text:
 
-1. **Replacements first** -- any speaking instance other than the tile's own
-   `tile:*` base (a player-field instance on that tile, an `event:*` naming
-   the tile, an extra attached `tile:*`). Ordered by `effect_order_key`
-   (lookup group → source order → declaration order; [ENGINE.md](ENGINE.md)
-   「Effect ordering」). Among replacements **first claim wins** -- the settle
-   body's `cancelled` bail.
-2. **Base last** -- the `tile:*` bound to that tile (`tile: ""` texts). Wins
-   only unclaimed slots.
+1. **Replacements first** -- any speaking instance other than the `tile:*`
+   **governing** that square (a player-field instance on that tile, an
+   `event:*` naming the tile, an extra attached `tile:*`). Ordered by
+   `effect_order_key` (lookup group → source order → declaration order;
+   [ENGINE.md](ENGINE.md) 「Effect ordering」). Among replacements **first
+   claim wins** -- the settle body's `cancelled` bail.
+2. **Base last** -- the `tile:*` governing that square (`tile: ""` texts). Its
+   home resolves through `World::governing_square`, so a rule swap moves the
+   base with the rule. Wins only unclaimed slots.
 
 An empty `key` suppresses the slot. A replacement silent on a slot has no
 opinion -- the base can still win it. `TODO(规则书)`: the book's 「该改变[触发
@@ -403,18 +430,21 @@ ordering.
 
 ### Worked example: `event:协助CiRCLE重建`
 
-While the event is live its instance speaks for both re-homed tiles
-(`rules/events/src/circle_rebuild.rs`):
+While the event is live its instance speaks for CiRCLE
+(`rules/events/src/circle_rebuild.rs`), and the rule swap makes the swapped-in
+`tile:circle` the cafe's base:
 
 | tile | settle | pass |
 |---|---|---|
-| CiRCLE | `deed.note.rebuildSettle` | `""` (suppressed -- the reward is re-homed) |
-| CiRCLE 咖啡厅 | `deed.note.draw` | `deed.note.circlePass` |
+| CiRCLE | `deed.note.rebuildSettle` (event replacement) | `""` (suppressed -- the reward moved to the cafe) |
+| CiRCLE 咖啡厅 | `deed.note.circleSettle` (base, swapped in) | `deed.note.circlePass` (base, swapped in) |
 
 CiRCLE's settle becomes the rebuild choice and its [经过] reward text
 disappears, while the cafe shows CiRCLE's original notes
-(「CiRCLE原本的所有效果迁移至CiRCLE咖啡厅并覆盖其原本效果」). Expire drops
-the instance and the base `tile:*` texts return automatically -- no restore
+(「CiRCLE原本的所有效果迁移至CiRCLE咖啡厅并覆盖其原本效果」). The cafe's own
+`tile:event` (`deed.note.drawEvent`) is swapped away onto CiRCLE, where it is
+outranked by the event's replacement. Expire drops the event and the binding
+with it; both squares' base `tile:*` texts return automatically -- no restore
 step.
 
 ### Webui
@@ -446,7 +476,7 @@ with `player_id = -1`.
 | card | today | new |
 |---|---|---|
 | 黑衣人的补给 | ~~a 「黑衣人的补给」 tile mark + `CircleLike` special case~~ **done** | **attaches a `tile:circle` instance to 弦卷集团** while it carries the crystal (`place_card_on(BOARD_OWNER, tile, "tile:circle")`); passing/landing runs it alongside `tile:agent`. 「获得CiRCLE格子的全部效果」 is additive. No card hook draws. |
-| 笑容大游行 | `settleInstead` + tile-position rewrite | **swaps the two tiles' instances** (「那格视为与"弦卷集团"格子交换位置」); the move's endpoint borrows 弦卷集团's `tile:agent` instance for that one settle |
+| 笑容大游行 | `settleInstead` + tile-position rewrite | (3) **swaps the two tiles' positions** (「那格视为与"弦卷集团"格子交换位置」, `prop::SWAPPED_TILE`); (1) 「移动终点视为…地产商」 is a one-shot **rule swap** of the endpoint onto 弦卷集团, dropped at that settle's `tileResolved` (`ctx::tile_clear_rule_swap`) |
 | （kkr）前往笑容集结的地方！ | ~~a `settleAfter` hook on a field stand-in~~ moved to `settleBody` | 「视为格子的收款」 is an entry in the tile's settle effect list (`SETTLE-STAGES.md` §4 M3), skipped when a field card replaces the body. Long-term home: a collect rule instance on CiRCLE. |
 | Parking Space | `ActionKind::SettleInstead` | **replaces the body in the chain** (a `settleBody` instance on the Space tile) |
 | Hey Kids | `ActionKind::SettleInstead` | same |
@@ -609,8 +639,12 @@ than the only path. Phase 3 landed the following (2026-10-06):
 * **The [经过] CiRCLE reward** is `tile:circle`'s **Pass entry** --
   `On::Action(&[ActionKind::PassTile])` running the reward body (suppression,
   the choice, the `passRewardAffected (kind 26)` window, the payout).
-  `event:协助CiRCLE重建` re-homes that body onto 「CiRCLE咖啡厅」 by messaging
-  the card (`On::Message("settleReward")`), not by calling into the module.
+  `event:协助CiRCLE重建` re-homes that body onto 「CiRCLE咖啡厅」 with a **rule
+  swap** (`ctx::tile_swap_rules`); the body itself travels, so there is no
+  cross-card message any more. The [经过] entry's body-side re-check is
+  unnecessary: `pass_pays` gates only on the clause, and the dispatch (board
+  walk and resolving replay alike) narrows a board instance to the square its
+  rule governs.
   The hook dispatch visits `board_field` (tile-filtered, and only for kinds a
   `tile:*` rule declares), so board-owned instances hear `passTile` and the
   other hooks they declare. Suppression is `prop::NO_REWARD`; `plan::no_circle_reward`

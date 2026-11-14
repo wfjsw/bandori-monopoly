@@ -884,6 +884,12 @@ use crate::intern::NameId;
 ///    the one command-total window of a 「[分摊]」 command so a responder can
 ///    answer the share instead. `ManifestOn` unchanged (an engine id).
 ///    SAVE_VERSION / RECORD_VERSION unchanged.
+/// v120 (HOST-03 行动阶段 half, pending the integration bump): new
+///    hook-only stage-marker kinds `TurnStartAfter = engine(143)` (行动阶段 3
+///    「回合开始后」, after the `turnStart` handling) and `ManageAfter =
+///    engine(144)` (行动阶段 6 「经营/出牌阶段后」, at the end of 运营 before
+///    the main move). No payload beyond the position / raise seat; no
+///    import, no SAVE_VERSION / RECORD_VERSION change.
 /// v121: **one-shot `DiscardNextFx` (ABI-08)**. New host request / import
 ///    `discard_next_fx = 495` (`ctx::discard_next_fx(player_id)`): 「若无手牌
 ///    则弃掉下一张抽到的牌」. It arms a per-seat flag; the draw loop discards
@@ -905,7 +911,64 @@ use crate::intern::NameId;
 ///    (import `ruleset_persona`, op 498) is the character card of a seat, the
 ///    same spelling `persona_is` matches; mutsumi 状态2 borrows the last
 ///    player's card through it. No id renumbered. SAVE / RECORD unchanged.
-pub const ABI_VERSION: i32 = 123;
+/// v124: **the A/B backlog close-out.** Every B item of the 2026-11-13 sweep,
+///    in one bump:
+///
+///    * `turnStartAfter = 143` / `manageAfter = 144` (HOST-03, 行动阶段 3 / 6):
+///      hook-only stage markers, raised once by the engine after the turn-start
+///      handling and when 运营 closes; 「此阶段之后的阶段也视为回合开始后」.
+///    * `markerChanged = 145` (HAG-01): raised post-commit on a held-token
+///      write with the holder as `player_id`, the token name and signed delta
+///      on the payload and the creating instance when known; a write made
+///      under an open `markerChanged` dispatch is not re-raised
+///      (`PlayCtx::marker_raise_depth`).
+///    * `abnormalChoice = 146` (STA-02, glossary 14): raised at the abnormal
+///      gate for a received 传送 / 强制移动 / 强制停下 with the abnormal kind on
+///      the payload; the [不可阻挡] holder answers it with
+///      `ctx::trigger::allow_abnormal` and the host then skips its gate
+///      refusal. Journaled; no answer = the old refusal path.
+///    * `forceBuyAdd = 147` / `forceBuyMul = 148` / `forceBuySet = 149`
+///      (FORCE-WRITE-01, 其他规则 6): the 强制购买 price stages. A Force quote
+///      runs these instead of the generic `buyAdd` / `buyMul` / `buySet`, which
+///      keep skipping a Force quote; `declares(kind)` keeps a stage off a
+///      ruleset that never spells one.
+///    * imports `trig_set_abnormal_allowed = 499` (the STA-02 yes answer),
+///      `lost_this_turn = 500` (ABI-11: the seat's running 失去 total since its
+///      own turn start, zeroed there), `trigger_pay_split_ran = 501`
+///      (NFO-CANCEL-01: the in-flight payment reached its `paySplitAt` shave --
+///      a cancelled payment did not 「付款」), `tile_prop_state = 502` (ABI-12:
+///      `-1` absent / `0` present-clear / `1` present-non-zero, so an explicit
+///      `FORCE_STAYS_MORTGAGED = 0` is distinguishable from an unset prop).
+///    * `add_group_pool_shuffled = 503` (SKILL-06: the reshuffle-tagged crystal
+///      add, 「只有洗牌时可以…」), `trig_card_tags = 504` (the trigger cards'
+///      sheet tags, so a listener says 「[手]效果」 without matching ids).
+///    * co-held deeds (SKILL-06): `add_co_owner = 505`, `is_co_owner = 506`,
+///      `owns_tile = 507`, `mortgaged_for = 508`. A tile keeps one primary
+///      owner and a holder row; every holder owns the deed for eligibility,
+///      mortgage / redeem are per holder, the tile-wide flag stays the
+///      aggregate. `CardWorld` gives every new method a safe default.
+///    * `set_direction_dice = 509` / `direction_roll = 510` (W3-KAORU-02): the
+///      declared plan direction die is its own recorded face (`1d2`), not a d6
+///      peek.
+///    * `card_derived = 511` / `event_card_ids = 512` (EVENT-04): 触発的玩家
+///      picks from every **non-derived** event; the hand-maintained table is
+///      gone.
+///    * no new id for ABI-13 (temporary tile-rule swap): sugar over two
+///      instance props `ruleSwapA` / `ruleSwapB`, resolved by
+///      `World::governing_square` at every rule read. Board identity reads stay
+///      static, the deed follows the homed instance, the binding reverses when
+///      the instance leaves play.
+///    * no new id for COND-01 (hooks re-evaluate against the running world),
+///      LOY-NET-01 / LOY-THANKS-01 / LOY-ANON-01 / CD-02, DECLARE-TRAP-LOG
+///      (host-only trap callback), ENG-COST (`ManifestEntry.cost` plus the
+///      `OP_COST` gate/charge) or G15 (the shared `tile_in` static table).
+///
+///    SAVE_VERSION 22 -> 23: the ABI-11 accumulator and the payment/crystal
+///    bookkeeping are world state, `fire` state charge / tempFire fold into
+///    held-token rows, all added fields are `#[serde(default)]` and a v22 save
+///    is an accepted one-step source. RECORD_VERSION unchanged (kind ids do
+///    not ride the record codec).
+pub const ABI_VERSION: i32 = 124;
 /// v108: **stage folds and rent / settle stages (MONEY-01)**. The amount
 ///    stages no longer apply one responder after the other: every responder of
 ///    an add stage reads the **stage input** and its deltas are summed, every
@@ -1521,6 +1584,10 @@ pub mod export {
     /// or [`crate::abi::EXIT_DECLINED`]. Only called when
     /// [`ManifestOn::has_declare`].
     pub const OP_DECLARE: i32 = 2;
+    /// ENG-COST: the entry's activation **cost amount** for the calling
+    /// player (an `i32`; `0` = free). Only called when [`ManifestOn::cost`] is
+    /// set.
+    pub const OP_COST: i32 = 3;
     pub const MEMORY: &str = "memory";
     /// `() -> i64` packed `(ptr << 32) | len` pointing at a postcard
     /// [`crate::meta::MetaDoc`] (ABI v63). Built only when called; absent on
@@ -1643,13 +1710,52 @@ impl Default for MarkRef {
     }
 }
 
+/// `String` stand-in for the Kani build: an inline, heap-free fixed buffer.
+/// Mark filters are built from `&str` literals at guard time, and the Kani
+/// host's mark ops are stubs that ignore the packed bytes, so the `String`
+/// heap traffic only drags CBMC's allocator model (and its six known false
+/// positives) into every proof that evaluates a filter.
+#[cfg(kani)]
+#[derive(Clone, Debug, Default, PartialEq, Eq, serde::Serialize, serde::Deserialize)]
+pub struct MarkStr {
+    len: u8,
+    bytes: [u8; 24],
+}
+
+#[cfg(kani)]
+impl MarkStr {
+    const CAP: usize = 24;
+
+    pub fn as_bytes(&self) -> &[u8] {
+        &self.bytes[..self.len as usize]
+    }
+}
+
+#[cfg(kani)]
+impl From<&str> for MarkStr {
+    fn from(s: &str) -> Self {
+        // Every current filter argument fits (longest: `skill.uikaIdol.pot`).
+        let b = s.as_bytes();
+        let n = if b.len() > Self::CAP { Self::CAP } else { b.len() };
+        let mut bytes = [0u8; Self::CAP];
+        bytes[..n].copy_from_slice(&b[..n]);
+        Self { len: n as u8, bytes }
+    }
+}
+
+/// Gate string: `String` in the real build, [`MarkStr`] under Kani.
+#[cfg(not(kani))]
+pub type MarkString = String;
+#[cfg(kani)]
+pub type MarkString = MarkStr;
+
 /// A filter over tile marks (the generic tile-mark API). Empty `kind` /
 /// `category`, and [`mark::ANY`] for `owner` / `src` / `instance`, match
 /// anything. Packed as postcard across the guest/host boundary.
 #[derive(Clone, Debug, Default, PartialEq, Eq, serde::Serialize, serde::Deserialize)]
 pub struct MarkFilter {
-    pub kind: String,
-    pub category: String,
+    pub kind: MarkString,
+    pub category: MarkString,
     /// Display owner seat, `-1` for a neutral mark, or [`mark::ANY`].
     pub owner: i32,
     /// Provenance instance uid, or [`mark::ANY`].
@@ -1661,19 +1767,19 @@ pub struct MarkFilter {
 impl MarkFilter {
     pub fn any() -> Self {
         Self {
-            kind: String::new(),
-            category: String::new(),
+            kind: MarkString::default(),
+            category: MarkString::default(),
             owner: mark::ANY,
             src: mark::ANY,
             instance: mark::ANY,
         }
     }
     pub fn kind(mut self, k: &str) -> Self {
-        self.kind = String::from(k);
+        self.kind = MarkString::from(k);
         self
     }
     pub fn category(mut self, c: &str) -> Self {
-        self.category = String::from(c);
+        self.category = MarkString::from(c);
         self
     }
     pub fn owner(mut self, o: i32) -> Self {
@@ -1777,11 +1883,16 @@ pub mod prop {
     /// a human can still play the card. Read by `CardRules::ai_play`; rides
     /// the existing `ManifestEntry.props`.
     pub const AI_NEVER: &str = "aiNever";
-    /// 「有[指定]目标」: `1` = this play names
-    /// recipients, so 「取消其对目标之一的[指定]」 applies instead of 「抵消其
-    /// 所有的效果」. The named set is the play's **other living players** (the
-    /// 「[指定][使用者]以外的所有玩家」 / 「其他玩家[分摊]」 shape). Default `0`
-    /// (names nobody).
+    /// 「有[指定]目标」: `1` = this play names recipients, so 「取消其对目标之一
+    /// 的[指定]」 applies instead of 「抵消其所有的效果」. Declaring promises the
+    /// play body targets through the [指定] pipeline (`ctx::target`,
+    /// `ctx::target_tile` or `ctx::target_all`). A choice made only through
+    /// `ctx::ask_tile` / `ctx::ask_player` is an option list, not a [指定], and
+    /// does not qualify. Card bodies are not introspectable at runtime, so the
+    /// prop is the static declaration; the host approximates the named set as
+    /// the user's **other living players** (the 「[指定][使用者]以外的所有玩家」
+    /// / 「其他玩家[分摊]」 shape). A single named recipient is still a
+    /// designation: clause 1 cancels that one name. Default `0` (names nobody).
     pub const DESIGNATES: &str = "designates";
     /// 真奈 join (「其反击卡中针对打出玩家自身的效果改为你」): `1` = this
     /// counter opens a join; self-targeted effects of later counters answering
@@ -1929,7 +2040,9 @@ pub mod prop {
     pub const FORCE_FIXED: &str = "forceFixed";
     /// 「获得的地契仍为抵押状态」 (`data/rules.txt` line 106) -- `1` = a
     /// force-buy leaves the deed mortgaged. Default `1` for Force (the
-    /// rulebook's own words); `0` clears it.
+    /// rulebook's own words); an explicitly stamped `0` clears it. Absence
+    /// keeps the default, so a reader must tell it from `0` -- see
+    /// `ctx::tile_prop_state` (ABI-12).
     pub const FORCE_STAYS_MORTGAGED: &str = "forceStaysMortgaged";
     /// 「该格获得所有颜色」 / soyo 「所有颜色」 -- this tile counts as every
     /// colour group for agent-set membership. Mirrors [`ALL_COLORS`] as a
@@ -1943,6 +2056,16 @@ pub mod prop {
     /// the partner tile and the partner tile resolves to the slot, one level,
     /// both directions. `-1` / absent = no binding. Dies with the instance.
     pub const SWAPPED_TILE: &str = "swappedTile";
+    /// 「…原本的所有效果迁移至…」 / 「…视为与…交换位置」 -- an **instance**
+    /// pair of props naming two squares. While the instance is in play the
+    /// rule instances homed at `RULE_SWAP_A` govern `RULE_SWAP_B` and vice
+    /// versa (both squares' *rule bodies* move; the squares' board identity
+    /// -- kind, `is_start`, owners, houses -- does not). `-1` / absent = no
+    /// binding. Dies with the instance. [`crate::ctx::tile_swap_rules`] writes
+    /// the pair; the engine resolves it in `World::governing_square`.
+    pub const RULE_SWAP_A: &str = "ruleSwapA";
+    /// The other half of [`RULE_SWAP_A`].
+    pub const RULE_SWAP_B: &str = "ruleSwapB";
 }
 
 /// Shared **move tags** -- the keys a move carries on
@@ -2486,6 +2609,15 @@ impl ActionKind {
     /// are AbnormalGuard and the Effect counteraction.
     pub const Abnormal: Self = Self(TriggerKind::Abnormal);
 
+    /// Action, hook-only. The `abnormalGate` closed for a received movement
+    /// abnormal (kinds 4–7): the holder may let the effect apply after all
+    /// (「处于该状态时可选择受到的[传送]，[强制移动]，[强制停下]效果是否生效」,
+    /// glossary 14). Payload: the holder on `player_id` (raise seat),
+    /// `value` = the abnormal kind, `by_card` = the causer. The holder's body
+    /// asks yes/no and answers yes with `ctx::trigger::allow_abnormal`; the
+    /// host then skips its gate refusal. No answer = today's refusal path.
+    pub const AbnormalChoice: Self = Self(TriggerKind::AbnormalChoice);
+
     /// Action. A single-target effect settled on the target. Payload: player_id =
     /// the causer, target, tile, card, by_card. Settlement hook only; the
     /// counteraction key for being hit by an effect is Effect. Declaration-side
@@ -2883,6 +3015,31 @@ impl ActionKind {
     /// actions first (`host::CardInfo::hook_entries`).
     pub const DiceRollPlan: Self = Self(TriggerKind::DiceRollPlan);
 
+    /// Action hook (hook-only, no counteraction window). 行动阶段 3
+    /// 「回合开始后」: the turn-start handling is complete. Raised once per
+    /// turn, after the `turnStart` window, status tick and deferred-event
+    /// release. 「此阶段之后的阶段也视为回合开始后」 -- a listener may fire at
+    /// any later phase too. Payload: tile = the player's position.
+    pub const TurnStartAfter: Self = Self(TriggerKind::TurnStartAfter);
+
+    /// Action hook (hook-only, no counteraction window). 行动阶段 6
+    /// 「经营/出牌阶段后」: the manage/play phase ends, immediately before the
+    /// main-move phase (or on an end-turn from 运营). Not raised on a
+    /// 眩晕-skipped turn (stage 4 skips 5 and 6 together). Payload: none
+    /// beyond the raise seat.
+    pub const ManageAfter: Self = Self(TriggerKind::ManageAfter);
+
+    /// Action hook (hook-only, no counteraction window). A **held** counter
+    /// (a player token of a creating card instance, written by
+    /// `add_held_by_name` / `set_held` / `spend_marker`) has just been
+    /// written. Payload: `name` = the counter name, `value` = the signed
+    /// delta the write applied, `player_id` = the token's holder,
+    /// `instance` = the creating instance (`-1` when unknown), `by_card` =
+    /// the causing player. The count after the write is readable with
+    /// `held_count`. Raised after the writing run commits, one raise per
+    /// bound write.
+    pub const MarkerChanged: Self = Self(TriggerKind::MarkerChanged);
+
     /// Engine-namespace kind. Same id as [`TriggerKind::engine`].
     pub const fn engine(id: i32) -> Self {
         Self(TriggerKind::engine(id))
@@ -3061,6 +3218,24 @@ impl FilterKind {
     /// record including deal owner / houses / mortgaged. Body rewrites those
     /// deal fields; the host applies only the fields the body changed.
     pub const BuyAssign: Self = Self(TriggerKind::BuyAssign);
+
+    /// Filter, FORCE-WRITE-01. The **强制购买** price's first modifier stage
+    /// (fixed plus/minus). Same payload as [`Self::BuyAdd`], but only a Force
+    /// quote runs it: 强制购买 is immune to the generic `BuyAdd` / `BuyMul` /
+    /// `BuySet` stages (rulebook 其他规则 6) unless the effect writes
+    /// 「强制购买」, which is what this spelling is for. Body returns the new
+    /// figure; the host folds it into the price.
+    pub const ForceBuyAdd: Self = Self(TriggerKind::ForceBuyAdd);
+
+    /// Filter, FORCE-WRITE-01. The 强制购买 price's multiply stage, after
+    /// [`Self::ForceBuyAdd`]. Same payload and fold as [`Self::BuyMul`], Force
+    /// quotes only.
+    pub const ForceBuyMul: Self = Self(TriggerKind::ForceBuyMul);
+
+    /// Filter, FORCE-WRITE-01. The 强制购买 price's free / fixed stage, after
+    /// [`Self::ForceBuyMul`]. Same payload as [`Self::BuySet`]; Force quotes
+    /// only. Each stage floors the price at zero.
+    pub const ForceBuySet: Self = Self(TriggerKind::ForceBuySet);
 
     /// Filter. The payment command's Combined fixed plus/minus stage on the
     /// whole figure, before any split divide (支付阶段 2 on the command total).
@@ -3504,6 +3679,15 @@ impl TriggerKind {
     /// `buyAssign`
     pub const BuyAssign: Self = Self::engine(83);
 
+    /// `forceBuyAdd` (FORCE-WRITE-01) -- the 强制购买 price's add stage.
+    pub const ForceBuyAdd: Self = Self::engine(147);
+
+    /// `forceBuyMul` -- the 强制购买 price's multiply stage.
+    pub const ForceBuyMul: Self = Self::engine(148);
+
+    /// `forceBuySet` -- the 强制购买 price's free / fixed stage.
+    pub const ForceBuySet: Self = Self::engine(149);
+
     /// `payCombinedAdd`
     pub const PayCombinedAdd: Self = Self::engine(84);
 
@@ -3593,6 +3777,37 @@ impl TriggerKind {
     /// declaration the `effect` window then sees.
     pub const PayCalcBefore: Self = Self::engine(142);
 
+    /// `turnStartAfter` -- 行动阶段 3 「回合开始后」: the turn-start handling
+    /// (status tick, `turnStartBefore` / `turnStart` windows, deferred-event
+    /// release) is complete. Hook-only stage marker. 「此阶段之后的阶段也视为
+    /// 回合开始后」, so an effect keyed to it may also fire later. Payload:
+    /// tile = the player's position.
+    pub const TurnStartAfter: Self = Self::engine(143);
+
+    /// `manageAfter` -- 行动阶段 6 「经营/出牌阶段后」: the manage/play phase
+    /// ends, immediately before the main-move phase or on an end-turn from
+    /// 运营. Hook-only stage marker; a 眩晕-skipped turn (stage 4 skips 5
+    /// and 6) does not raise it.
+    pub const ManageAfter: Self = Self::engine(144);
+
+    /// `markerChanged` -- a **held** counter (a player token of a creating
+    /// card instance) has just been written. Payload: `name` = the counter
+    /// name, `value` = the signed delta the write applied, `player_id` = the
+    /// token's holder, `instance` = the creating instance (`-1` when unknown),
+    /// `by_card` = the causing player. Use its action spelling
+    /// [`ActionKind::MarkerChanged`]. The count after the write is readable
+    /// with `held_count`. Raised once per bound write (`bind_held` /
+    /// `add_held` / `set_held` / `spend_marker`) after the writing run
+    /// commits; a write made by a `markerChanged` handler does not re-raise
+    /// (`PlayCtx::marker_raise_depth`).
+    pub const MarkerChanged: Self = Self::engine(145);
+
+    /// `abnormalChoice` — the `abnormalGate` closed for a received movement
+    /// abnormal (kinds 4–7): the holder's per-effect opt-in
+    /// (「可选择受到的…效果是否生效」). Action, hook-only. Payload: the holder
+    /// on `player_id`, `value` = the abnormal kind, `by_card` = the causer.
+    pub const AbnormalChoice: Self = Self::engine(146);
+
     /// `onBoardGate`
     pub const OnBoardGate: Self = Self::engine(108);
 
@@ -3606,8 +3821,11 @@ impl TriggerKind {
     pub const AbnormalRefused: Self = Self::engine(121);
 
     // Ids 104 and 107 stay retired (104 was "flipAfter", 107 is
-    // ruleset-declared "fansFlip"); the next free **engine** id was 121, and
-    // the highest engine id is now 134 (abnormalGate).
+    // ruleset-declared "fansFlip"); the next free **engine** id was 121. G09
+    // took 135-139, G10 141, `payCalcBefore` 142, HOST-03's stage markers
+    // 143 / 144, `markerChanged` 145, `abnormalChoice` 146 and the force-buy
+    // filter stages (FORCE-WRITE-01) 147-149. The highest engine id is now
+    // 149 (`forceBuySet`).
 
     /// `cardFired` -- a card's body entered its resolution frame: every
     /// body, a play, a hook or a counteraction alike. Hook-only: no
@@ -3803,6 +4021,12 @@ pub struct ManifestEntry {
     /// its name belongs in no card area. Trailing field.
     #[serde(default)]
     pub rule: bool,
+    /// The card is **derived** (`CardMeta::derived`): a token / generated card
+    /// that 「非衍生」 filters exclude (e.g. 让我来结束一切 picks from
+    /// non-derived events only). Read back by the guest as
+    /// `ctx::card_derived`. Trailing field (EVENT-04).
+    #[serde(default)]
+    pub derived: bool,
 }
 
 /// One per-entry **tile text** declaration (`On::texts`, v59): the
@@ -3890,6 +4114,12 @@ pub struct ManifestOn {
     /// stands in for 「场上其他玩家打出的上一张卡」 (v112).
     #[serde(default)]
     pub copies_previous: bool,
+    /// Activation cost of a `Play` entry (`PlayEntry::cost`, ENG-COST): the
+    /// held-token name, or `None` = free. The **amount** is not on the wire --
+    /// it is a guest fn the host runs through [`export::OP_COST`], so a
+    /// per-player cost stays one declaration. Trailing field.
+    #[serde(default)]
+    pub cost: Option<String>,
 }
 
 /// What numeric shape a counteraction entry answers (v112). Offer filter: the

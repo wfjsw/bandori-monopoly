@@ -34,7 +34,10 @@ const ORIG: &str = "skill.aveMujica.orig";
 pub const AVE_MUJICA: CardDef = CardDef::new(
     "skill:Ave Mujica:假面之下的真实",
     &[
-        On::Play("", Some(can_halve), halve),
+        // 规则书（`PPP:Returns` [持续]（3））: 「使用因此卡获得的团卡的主动效果时需要
+        // 支付1星星贴纸」 -- declared activation cost (ENG-COST); the host refuses
+        // a short player and charges before the body.
+        On::Play("", Some(can_halve), halve).cost("星星贴纸", crate::copy_sticker_cost),
         On::Action(Action::TurnStartBefore(
             "slot('skillState') != 0",
             None,
@@ -95,11 +98,25 @@ fn at_turn_start(player_id: i32) -> card_sdk::Asked {
     state::set(player_id, IN_TWO, n);
     // 「处于状态2的第三回合开始时为此卡添加一个奇迹水晶」 -- a *band-card*
     // crystal: this rule's own instance, the same pool `group_crystals` reads.
-    if n == 3 {
+    // The two CRYCHIC faces with 「只有洗牌时可以…添加奇迹水晶」 move this add
+    // to reshuffles, so it stands down for them.
+    if n == 3 && !shuffle_only(player_id) {
         ctx::add_crystals(1, i32::MAX)?;
         ctx::log(player_id, &Msg::new(key!("ave_mujica_crystal")));
     }
     Ok(())
+}
+
+/// Character faces whose own clause moves the crystal add to shuffles
+/// (「但只有洗牌时可以为你的乐队技能卡上添加奇迹水晶」, 若叶睦（CRYCHIC）(3) /
+/// 丰川祥子（CRYCHIC）(4)). Their rule ids are stable; the add itself lives in
+/// those skills.
+fn shuffle_only(player_id: i32) -> bool {
+    matches!(
+        bandori_std::persona_skill(player_id).as_deref(),
+        Some("skill:若叶睦（CRYCHIC）:精致的人偶")
+            | Some("skill:丰川祥子（CRYCHIC）:你愿意和我组建乐队吗？")
+    )
 }
 
 /// 「进入状态2时将火罐补充至上限」 -- the character skills drive the entry, so
@@ -232,11 +249,6 @@ fn can_halve(player_id: i32) -> Option<Msg> {
     if bandori_std::ctx::skill_blocked(player_id, "") {
         return Some(Msg::new(key!("skill_blocked")));
     }
-    // 规则书（`PPP:Returns` [持续]（3））: 「使用因此卡获得的团卡的主动效果时需要
-    // 支付1星星贴纸」 -- the sticker is a cost of activation on the borrowed copy.
-    if let Some(reason) = crate::copy_sticker_gate(player_id) {
-        return Some(reason);
-    }
     if state::get(player_id, state_key::SKILL_STATE) != 2 {
         return Some(Msg::new(key!("ave_mujica_not_two")));
     }
@@ -247,7 +259,6 @@ fn can_halve(player_id: i32) -> Option<Msg> {
 }
 
 fn halve(player_id: i32) -> card_sdk::Asked {
-    crate::spend_copy_sticker(player_id)?;
     // 规则书: 「每当乐队技能需要移除[奇迹水晶]时，可移除此卡上的一个[奇迹水晶]代替」
     // -- 「此卡」 is the placed `Sumimi:#L11`, drained first.
     crate::spend_crystals(player_id, 1)?;

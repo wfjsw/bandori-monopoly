@@ -131,6 +131,10 @@ pub struct CardInfo {
     /// The def is a **rule entity**, not a card (`CardDef::rule`, ABI v119).
     #[serde(default)]
     pub rule: bool,
+    /// The card is **derived** (`CardMeta::derived`, EVENT-04): a token /
+    /// generated card the 「非衍生」 filters exclude.
+    #[serde(default)]
+    pub derived: bool,
 }
 
 impl CardInfo {
@@ -1330,6 +1334,23 @@ impl fmt::Display for RuleError {
 
 impl std::error::Error for RuleError {}
 
+/// One-line detail for a [`RuleError`], for `log.card_trap`. Shared by every
+/// trapping path -- a body, a residual guard and an `OP_DECLARE` collector
+/// report a trap the same way (docs/ACTIVATION.md §2).
+pub(crate) fn trap_detail(e: &RuleError) -> String {
+    match e {
+        RuleError::Trap(m) | RuleError::Load(m) | RuleError::DuplicateCard(m) => m.clone(),
+        RuleError::NoSuchCard(i) => format!("no such card {i}"),
+        RuleError::GuardPrompted => "guard prompted".into(),
+        RuleError::BadCondition {
+            card,
+            entry,
+            source,
+            err,
+        } => format!("bad guard condition on {card}/{entry}: {err} ({source})"),
+    }
+}
+
 /// Result of one effect run.
 #[derive(Debug)]
 pub enum Outcome<W> {
@@ -1907,14 +1928,18 @@ fn compile_pre(
 }
 
 /// The buy-quote hook kinds (`docs/PURCHASE.md`): the gate that may cancel a
-/// buy, plus the three price stages (`BuyAdd` → `BuyMul` → `BuySet`).
-/// [`Ruleset::declares_buy`] ORs these against the manifest's declared-kind
-/// bitmask (fix C).
-pub const BUY_HOOK_KINDS: [crate::TriggerKind; 4] = [
+/// buy, plus the three price stages (`BuyAdd` → `BuyMul` → `BuySet`) and their
+/// 强制购买 twins (`ForceBuyAdd` → `ForceBuyMul` → `ForceBuySet`,
+/// FORCE-WRITE-01). [`Ruleset::declares_buy`] ORs these against the manifest's
+/// declared-kind bitmask (fix C).
+pub const BUY_HOOK_KINDS: [crate::TriggerKind; 7] = [
     crate::TriggerKind::BuyGate,
     crate::TriggerKind::BuyAdd,
     crate::TriggerKind::BuyMul,
     crate::TriggerKind::BuySet,
+    crate::TriggerKind::ForceBuyAdd,
+    crate::TriggerKind::ForceBuyMul,
+    crate::TriggerKind::ForceBuySet,
 ];
 
 /// The pure half of [`Ruleset::contract_admits`]: may an entry with this
@@ -2151,6 +2176,15 @@ impl Ruleset {
             .unwrap_or(0)
     }
 
+    /// Is the card rule `id` **derived** (`CardMeta::derived`, EVENT-04)? The
+    /// 「非衍生」 filter of 让我来结束一切 reads this instead of a hand list.
+    /// An unknown id answers `false`.
+    pub fn card_derived(&self, id: &str) -> bool {
+        self.card(id)
+            .and_then(|i| self.inner.cards.get(i as usize))
+            .is_some_and(|c| c.derived)
+    }
+
     /// The rule id that settles a board tile of this opaque kind (ABI v66).
     /// From `CardDef::governs` / `board_role == "tile"`; empty when none.
     pub fn tile_rule_id(&self, kind: &str) -> String {
@@ -2298,6 +2332,20 @@ impl Ruleset {
                 world.self_uid(),
                 world.is_placed() != 0,
             );
+            // A guarding / declaring trap declines the entry; report it
+            // (DECLARE-TRAP-LOG) into a copy of the caller's world, which the
+            // `Admitted::No` arm then commits.
+            let mut trap_world: Option<W> = None;
+            let mut on_trap = |_w: &mut W, _entry: i32, detail: &str| {
+                let mut tw = world.clone();
+                tw.log(
+                    player_id,
+                    crate::Msg::new("log.card_trap")
+                        .card("card", info.id.as_str())
+                        .text("detail", detail),
+                );
+                trap_world = Some(tw);
+            };
             match self.entry_admitted(
                 world,
                 card,
@@ -2308,8 +2356,14 @@ impl Ruleset {
                 log,
                 0,
                 false,
+                Some(&mut on_trap),
             )? {
-                Admitted::No { .. } => return Ok(Outcome::Done(world.clone(), log.clone())),
+                Admitted::No { .. } => {
+                    return Ok(Outcome::Done(
+                        trap_world.unwrap_or_else(|| world.clone()),
+                        log.clone(),
+                    ))
+                }
                 Admitted::Paused(o) => return Ok(o),
                 Admitted::Yes {
                     next_answer: after,
@@ -2328,8 +2382,26 @@ impl Ruleset {
         // cursor lines up with the body's own prompts. The journal serves the
         // recorded answers, so the replay is side-effect free.
         if matches!(call, Call::Hook { .. }) {
-            match self.declare_after(world, card, entry, player_id, log, 0)? {
-                Admitted::No { .. } => return Ok(Outcome::Done(world.clone(), log.clone())),
+            // The replayed declare can still trap; report it the same way the
+            // initial `run_hook` pass does (DECLARE-TRAP-LOG).
+            let mut trap_world: Option<W> = None;
+            let mut on_trap = |_w: &mut W, _entry: i32, detail: &str| {
+                let mut tw = world.clone();
+                tw.log(
+                    player_id,
+                    crate::Msg::new("log.card_trap")
+                        .card("card", info.id.as_str())
+                        .text("detail", detail),
+                );
+                trap_world = Some(tw);
+            };
+            match self.declare_after(world, card, entry, player_id, log, 0, Some(&mut on_trap))? {
+                Admitted::No { .. } => {
+                    return Ok(Outcome::Done(
+                        trap_world.unwrap_or_else(|| world.clone()),
+                        log.clone(),
+                    ))
+                }
                 Admitted::Paused(o) => return Ok(o),
                 Admitted::Yes {
                     next_answer: after,
@@ -2341,6 +2413,31 @@ impl Ruleset {
             }
         }
         let mut store = self.store_logged(world.clone(), log, next_answer)?;
+        // ENG-COST: charge a declared activation cost once, before the body.
+        // Admissibility (`cant_play` / the press gate) already refused a short
+        // player; a pause carries the charged world, so the body's re-run starts
+        // from the count it already paid.
+        if let Some(name) = self.inner.cards[card as usize]
+            .on
+            .get(entry as usize)
+            .and_then(|e| e.cost.as_deref())
+        {
+            let need = call_card(
+                &self.inner,
+                &mut store,
+                card,
+                entry,
+                export::OP_COST,
+                player_id,
+            )
+            .map_err(trap)? as i32;
+            if need > 0 {
+                store
+                    .data_mut()
+                    .w()
+                    .add_held_by_name(player_id, name, -need, i32::MAX);
+            }
+        }
         if let Some(cb) = on_body.as_deref_mut() {
             cb(store.data_mut().w(), entry);
         }
@@ -2378,12 +2475,21 @@ impl Ruleset {
         log: &game_core::engine::GuestLog,
         start_answer: usize,
         already_admitted: bool,
+        mut on_trap: Option<&mut dyn FnMut(&mut W, i32, &str)>,
     ) -> Result<Admitted<W>, RuleError> {
         // Re-entered after a pause: condition and guard already cleared, and
         // the earlier pass's body writes may now refuse them. Only the declare
         // has to replay (it owns the argument and the answer cursor).
         if already_admitted {
-            return self.declare_after(world, card, entry, player_id, log, start_answer);
+            return self.declare_after(
+                world,
+                card,
+                entry,
+                player_id,
+                log,
+                start_answer,
+                on_trap,
+            );
         }
         let condition = self
             .inner
@@ -2394,7 +2500,15 @@ impl Ruleset {
         if self.guard_is_none(card, entry) {
             return Ok(
                 if crate::condition::admits_condition(condition, scope, cand) {
-                    self.declare_after(world, card, entry, player_id, log, start_answer)?
+                    self.declare_after(
+                        world,
+                        card,
+                        entry,
+                        player_id,
+                        log,
+                        start_answer,
+                        on_trap,
+                    )?
                 } else {
                     Admitted::No {
                         next_answer: start_answer,
@@ -2431,11 +2545,19 @@ impl Ruleset {
                     paused = Some(finish(store, Err(e)));
                     Err(())
                 }
-                Err(_) => {
+                Err(e) => {
                     // Historical dispatch leniency: a trapping guard declines
                     // the entry (probes propagate the trap instead -- see
                     // [`Self::can_counteract_scoped`]). Keep the store so the
-                    // swallow check below still runs.
+                    // swallow check below still runs. Report it (DECLARE-
+                    // TRAP-LOG): the decline must not be silent.
+                    if let Some(cb) = on_trap.as_deref_mut() {
+                        cb(
+                            store.data_mut().w(),
+                            entry,
+                            &format!("guard trapped: {e}"),
+                        );
+                    }
                     store_for_guard = Some(store);
                     Ok(false)
                 }
@@ -2458,7 +2580,15 @@ impl Ruleset {
             ));
         }
         Ok(match asked {
-            Ok(true) => self.declare_after(world, card, entry, player_id, log, st.log.cursor)?,
+            Ok(true) => self.declare_after(
+                world,
+                card,
+                entry,
+                player_id,
+                log,
+                st.log.cursor,
+                on_trap,
+            )?,
             _ => Admitted::No {
                 next_answer: st.log.cursor,
             },
@@ -2480,6 +2610,7 @@ impl Ruleset {
         player_id: i32,
         log: &game_core::engine::GuestLog,
         start_answer: usize,
+        mut on_trap: Option<&mut dyn FnMut(&mut W, i32, &str)>,
     ) -> Result<Admitted<W>, RuleError> {
         if !self.has_declare(card, entry) {
             return Ok(Admitted::Yes {
@@ -2506,17 +2637,33 @@ impl Ruleset {
                     arg: bytes,
                 })
             }
-            Err(e) => match finish(store, Err(e)) {
-                Ok(o) => Ok(Admitted::Paused(o)),
-                // A trapping `OP_DECLARE` never commits and never costs the
-                // card (docs/ACTIVATION.md §2): the collector runs *before*
-                // the point of no return, so there is nothing to graveyard
-                // and the card is still in hand / still in play. Propagating
-                // here would fall into the body-trap arm (`log.card_trap` +
-                // `DEST_GRAVEYARD`) and destroy a card whose body never ran.
-                // Matches the residual guard's own leniency a few lines up.
-                Err(_e2) => Ok(Admitted::No { next_answer: after }),
-            },
+            Err(e) => {
+                // Keep a world for the trap line: `finish` consumes the store
+                // and its `Err` arm leaves no world behind.
+                let mut trap_world = store.data_mut().w().clone();
+                match finish(store, Err(e)) {
+                    Ok(o) => Ok(Admitted::Paused(o)),
+                    // A trapping `OP_DECLARE` never commits and never costs
+                    // the card (docs/ACTIVATION.md §2): the collector runs
+                    // *before* the point of no return, so there is nothing to
+                    // graveyard and the card is still in hand / still in
+                    // play. Propagating here would fall into the body-trap arm
+                    // (`log.card_trap` + `DEST_GRAVEYARD`) and destroy a card
+                    // whose body never ran. Matches the residual guard's own
+                    // leniency a few lines up -- and, like the guard, reports
+                    // the trap (DECLARE-TRAP-LOG) instead of swallowing it.
+                    Err(e2) => {
+                        if let Some(cb) = on_trap.as_deref_mut() {
+                            cb(
+                                &mut trap_world,
+                                entry,
+                                &format!("declare trapped: {}", trap_detail(&e2)),
+                            );
+                        }
+                        Ok(Admitted::No { next_answer: after })
+                    }
+                }
+            }
         }
     }
 
@@ -2598,6 +2745,13 @@ impl Ruleset {
     ///
     /// `On::Gate` entries share this path with `On::Action` (v49): a gate whose
     /// condition rejects does not answer at all.
+    ///
+    /// `on_trap` runs when an entry's residual guard or `OP_DECLARE` collector
+    /// traps -- both are a silent decline otherwise (DECLARE-TRAP-LOG). It
+    /// gets the caller's accumulated world (`cur`, so the line survives even
+    /// when nothing else ran), the entry, and a one-line `guard trapped: …` /
+    /// `declare trapped: …` detail. A trapped entry still declines; the walk
+    /// continues with the next entry.
     pub fn run_hook<W: CardWorld>(
         &self,
         world: &W,
@@ -2605,6 +2759,7 @@ impl Ruleset {
         log: &game_core::engine::GuestLog,
         already_admitted: &[i32],
         mut on_body: Option<&mut dyn FnMut(&mut W, i32)>,
+        mut on_trap: Option<&mut dyn FnMut(&mut W, i32, &str)>,
     ) -> Result<Option<HookRun<W>>, RuleError> {
         let (card, player_id) = (call.card(), call.player_id());
         self.check(card)?;
@@ -2617,17 +2772,11 @@ impl Ruleset {
         // Built only if some entry actually declares a condition: the window
         // snapshot + CEL root are large, and an unconditioned hook must not
         // pay for them (STACK-01's small-thread settle chain has no room).
+        // Later entries see the writes of earlier bodies (`cur`), so the scope
+        // is rebuilt after each executed body (COND-01): a `slot()` condition
+        // must read the same world its body would, not the pre-window snapshot.
         let mut scope: Option<rules_cond::WindowScope> = None;
-        // `card.placed` must answer for the **running instance** (the guest's
-        // `ctx::is_placed()`): a game-start hook also runs for the same id
-        // while it sits in a pile / hand (`uid = -1`).
-        let cand = crate::condition::fill_candidate_uid(
-            world,
-            player_id,
-            &info.id,
-            world.self_uid(),
-            world.is_placed() != 0,
-        );
+        let mut scope_stale = false;
         let mut cur: W = world.clone();
         // One `next_answer` cursor threads the whole call: every guard, every
         // `OP_DECLARE` and every body reads the shared answer log in order, so
@@ -2637,6 +2786,10 @@ impl Ruleset {
         let mut next_answer = log.cursor;
         let mut announced = false;
         let mut ran_any = false;
+        // Did any entry trap? A trap writes its line into `cur`; with nothing
+        // else run we still return that world so the caller commits the line
+        // instead of dropping it with an `Ok(None)`.
+        let mut trapped = false;
         for entry in entries {
             // v49: `On::Action` and `On::Gate` both carry the condition /
             // residual-guard pair; a rejecting entry is skipped (and so never
@@ -2648,13 +2801,43 @@ impl Ruleset {
                 .get(card as usize)
                 .and_then(|r| r.get(entry as usize))
                 .and_then(|p| p.as_ref());
-            if condition.is_some() && scope.is_none() {
+            if condition.is_some() && (scope.is_none() || scope_stale) {
                 scope = Some(crate::condition::window_scope_owned(
-                    crate::condition::fill_window(world),
+                    crate::condition::fill_window(&cur),
                 ));
+                scope_stale = false;
+            }
+            // `card.placed` must answer for the **running instance** (the
+            // guest's `ctx::is_placed()`): a game-start hook also runs for the
+            // same id while it sits in a pile / hand (`uid = -1`). Recomputed
+            // per entry for the same reason as the scope.
+            let cand = crate::condition::fill_candidate_uid(
+                &cur,
+                player_id,
+                &info.id,
+                cur.self_uid(),
+                cur.is_placed() != 0,
+            );
+            // The trap callback writes into the caller's accumulated world,
+            // not the throwaway guard / declare store: an entry that traps
+            // returns `Admitted::No` and its store world is dropped. The trap
+            // is parked in a local and drained after the call, so the closure
+            // never holds a borrow of `cur` the call itself also needs.
+            let mut trap: Option<(i32, String)> = None;
+            let mut trap_into_cur = |_w: &mut W, entry: i32, detail: &str| {
+                trap = Some((entry, detail.to_string()));
+            };
+            if std::env::var("DBG_MC").is_ok() {
+                eprintln!(
+                    "HOOK {} entry={entry} actor={player_id} cond={:?} placed={} guard_none={}",
+                    info.id,
+                    condition.is_some(),
+                    world.is_placed(),
+                    self.guard_is_none(card, entry)
+                );
             }
             let admitted = self.entry_admitted(
-                world,
+                &cur,
                 card,
                 entry,
                 player_id,
@@ -2667,7 +2850,16 @@ impl Ruleset {
                 // have moved what they read (`card.placed` after an
                 // `unplace_self`), so only the declare replays.
                 already_admitted.contains(&entry),
+                Some(&mut trap_into_cur),
             )?;
+            // Drain the park into the accumulated world the caller commits.
+            drop(trap_into_cur);
+            if let Some((entry, detail)) = trap {
+                trapped = true;
+                if let Some(cb) = on_trap.as_deref_mut() {
+                    cb(&mut cur, entry, &detail);
+                }
+            }
             let (arg, after_admit) = match admitted {
                 // A guard / declare prompt is still applicability: the body
                 // has not run and `on_body` has not fired, so `announced`
@@ -2709,6 +2901,7 @@ impl Ruleset {
                 Outcome::Done(w, _) => {
                     // Later entries see earlier writes and earlier answers.
                     cur = w;
+                    scope_stale = true;
                     next_answer = after_body;
                 }
                 paused => {
@@ -2719,7 +2912,7 @@ impl Ruleset {
                 }
             }
         }
-        if !ran_any {
+        if !ran_any && !trapped {
             return Ok(None);
         }
         Ok(Some(HookRun {
@@ -3032,6 +3225,38 @@ impl Ruleset {
                 },
             )?
         };
+        if reason.is_none() {
+            // ENG-COST: the entry's declared activation cost needs enough of
+            // the held token. The amount is guest-side (`OP_COST`) -- run it on
+            // a throwaway store exactly like the gate above; a refusal names
+            // the token and the amount.
+            if let Some(name) = self.inner.cards[card as usize]
+                .on
+                .get(entry as usize)
+                .and_then(|e| e.cost.as_deref())
+            {
+                let mut store = self.store(world.clone(), &[], 0)?;
+                let need = crate::inline::with_no_inline(|| {
+                    call_card(
+                        &self.inner,
+                        &mut store,
+                        card,
+                        entry,
+                        export::OP_COST,
+                        player_id,
+                    )
+                })
+                .map_err(trap)? as i32;
+                let held = world.held_count(player_id, name);
+                if need > 0 && held < need {
+                    return Ok(Some(
+                        crate::Msg::new("err.cost_short")
+                            .text("name", name)
+                            .i("n", need as i64),
+                    ));
+                }
+            }
+        }
         Ok(reason)
     }
 
@@ -3481,6 +3706,7 @@ pub trait CardModules: Clone + Send + Sync + 'static {
         log: &game_core::engine::GuestLog,
         already_admitted: &[i32],
         on_body: Option<&mut dyn FnMut(&mut crate::Run, i32)>,
+        on_trap: Option<&mut dyn FnMut(&mut crate::Run, i32, &str)>,
     ) -> Result<Option<HookRun<crate::Run>>, RuleError>;
     fn can_counteract(
         &self,
@@ -3613,8 +3839,17 @@ impl CardModules for Ruleset {
         log: &game_core::engine::GuestLog,
         already_admitted: &[i32],
         on_body: Option<&mut dyn FnMut(&mut crate::Run, i32)>,
+        on_trap: Option<&mut dyn FnMut(&mut crate::Run, i32, &str)>,
     ) -> Result<Option<HookRun<crate::Run>>, RuleError> {
-        Ruleset::run_hook::<crate::Run>(self, world, call, log, already_admitted, on_body)
+        Ruleset::run_hook::<crate::Run>(
+            self,
+            world,
+            call,
+            log,
+            already_admitted,
+            on_body,
+            on_trap,
+        )
     }
     fn can_counteract(
         &self,
@@ -3710,6 +3945,13 @@ pub trait RulesHandle: Clone + Send + Sync + 'static {
             .and_then(|i| self.card(i))
             .and_then(|c| c.props.get(key).copied())
             .unwrap_or(0)
+    }
+    /// Is the card rule `id` **derived** (`CardInfo::derived`, EVENT-04)?
+    /// `false` for an unknown id.
+    fn card_derived(&self, id: &str) -> bool {
+        self.by_id(id)
+            .and_then(|i| self.card(i))
+            .is_some_and(|c| c.derived)
     }
     /// The compiled condition of card `i`'s `entry` (docs/GUARDS.md G0), if
     /// any. Default `None` (no condition) so a stub handle need not care.
@@ -4192,6 +4434,7 @@ fn inspect(
             gate_skip_msgs: e.gate_skip_msgs,
             exemption_prop: e.exemption_prop,
             rule: e.rule,
+            derived: e.derived,
         })
         .collect();
     if cards.is_empty() {
@@ -4921,6 +5164,34 @@ fn build_linker<W: CardWorld>(engine: &Engine) -> Result<Linker<HostState<W>>, E
         "tile_owner",
         |mut c: C<W>, tile: i32| -> Result<i32, Error> {
             hostfns::tile_owner(&mut c, tile).map_err(HostError::into_err)
+        },
+    )?;
+    l.func_wrap(
+        m,
+        "add_co_owner",
+        |mut c: C<W>, tile: i32, player_id: i32| -> Result<i32, Error> {
+            hostfns::add_co_owner(&mut c, tile, player_id).map_err(HostError::into_err)
+        },
+    )?;
+    l.func_wrap(
+        m,
+        "is_co_owner",
+        |mut c: C<W>, tile: i32, player_id: i32| -> Result<i32, Error> {
+            hostfns::is_co_owner(&mut c, tile, player_id).map_err(HostError::into_err)
+        },
+    )?;
+    l.func_wrap(
+        m,
+        "owns_tile",
+        |mut c: C<W>, tile: i32, player_id: i32| -> Result<i32, Error> {
+            hostfns::owns_tile(&mut c, tile, player_id).map_err(HostError::into_err)
+        },
+    )?;
+    l.func_wrap(
+        m,
+        "mortgaged_for",
+        |mut c: C<W>, tile: i32, player_id: i32| -> Result<i32, Error> {
+            hostfns::mortgaged_for(&mut c, tile, player_id).map_err(HostError::into_err)
         },
     )?;
     l.func_wrap(
@@ -5833,6 +6104,20 @@ fn build_linker<W: CardWorld>(engine: &Engine) -> Result<Linker<HostState<W>>, E
             hostfns::card_prop(&mut c, ip, il, kp, kl).map_err(HostError::into_err)
         },
     )?;
+    l.func_wrap(
+        m,
+        "card_derived",
+        |mut c: C<W>, ip: i32, il: i32| -> Result<i32, Error> {
+            hostfns::card_derived(&mut c, ip, il).map_err(HostError::into_err)
+        },
+    )?;
+    l.func_wrap(
+        m,
+        "event_card_ids",
+        |mut c: C<W>, buf: i32, cap: i32| -> Result<i32, Error> {
+            hostfns::event_card_ids(&mut c, buf, cap).map_err(HostError::into_err)
+        },
+    )?;
     l.func_wrap(m, "is_placed", |mut c: C<W>| -> Result<i32, Error> {
         hostfns::is_placed(&mut c).map_err(HostError::into_err)
     })?;
@@ -5903,6 +6188,13 @@ fn build_linker<W: CardWorld>(engine: &Engine) -> Result<Linker<HostState<W>>, E
     )?;
     l.func_wrap(
         m,
+        "tile_prop_state",
+        |mut c: C<W>, tile: i32, kp: i32, kl: i32| -> Result<i32, Error> {
+            hostfns::tile_prop_state(&mut c, tile, kp, kl).map_err(HostError::into_err)
+        },
+    )?;
+    l.func_wrap(
+        m,
         "prop_at",
         |mut c: C<W>, uid: i32, kp: i32, kl: i32| -> Result<i32, Error> {
             hostfns::prop_at(&mut c, uid, kp, kl).map_err(HostError::into_err)
@@ -5948,6 +6240,14 @@ fn build_linker<W: CardWorld>(engine: &Engine) -> Result<Linker<HostState<W>>, E
         "add_group_pool",
         |mut c: C<W>, player_id: i32, np: i32, nl: i32, n: i32, max: i32| -> Result<i32, Error> {
             hostfns::add_group_pool(&mut c, player_id, np, nl, n, max).map_err(HostError::into_err)
+        },
+    )?;
+    l.func_wrap(
+        m,
+        "add_group_pool_shuffled",
+        |mut c: C<W>, player_id: i32, np: i32, nl: i32, n: i32, max: i32| -> Result<i32, Error> {
+            hostfns::add_group_pool_shuffled(&mut c, player_id, np, nl, n, max)
+                .map_err(HostError::into_err)
         },
     )?;
     l.func_wrap(
@@ -6384,6 +6684,13 @@ fn build_linker<W: CardWorld>(engine: &Engine) -> Result<Linker<HostState<W>>, E
     )?;
     l.func_wrap(
         m,
+        "lost_this_turn",
+        |mut c: C<W>, player_id: i32| -> Result<i32, Error> {
+            hostfns::lost_this_turn(&mut c, player_id).map_err(HostError::into_err)
+        },
+    )?;
+    l.func_wrap(
+        m,
         "designations",
         |mut c: C<W>, player_id: i32, buf: i32, cap: i32| -> Result<i32, Error> {
             hostfns::designations(&mut c, player_id, buf, cap).map_err(HostError::into_err)
@@ -6565,6 +6872,13 @@ fn build_linker<W: CardWorld>(engine: &Engine) -> Result<Linker<HostState<W>>, E
         "trig_cards",
         |mut c: C<W>, buf: i32, cap: i32| -> Result<i32, Error> {
             hostfns::trig_cards(&mut c, buf, cap).map_err(HostError::into_err)
+        },
+    )?;
+    l.func_wrap(
+        m,
+        "trig_card_tags",
+        |mut c: C<W>, buf: i32, cap: i32| -> Result<i32, Error> {
+            hostfns::trig_card_tags(&mut c, buf, cap).map_err(HostError::into_err)
         },
     )?;
     l.func_wrap(m, "opt_int", |mut c: C<W>, v: i32| -> Result<(), Error> {
@@ -6785,6 +7099,13 @@ fn build_linker<W: CardWorld>(engine: &Engine) -> Result<Linker<HostState<W>>, E
         "trig_set_cancelled",
         |mut c: C<W>| -> Result<(), Error> {
             hostfns::trig_set_cancelled(&mut c).map_err(HostError::into_err)
+        },
+    )?;
+    l.func_wrap(
+        m,
+        "trig_set_abnormal_allowed",
+        |mut c: C<W>| -> Result<(), Error> {
+            hostfns::trig_set_abnormal_allowed(&mut c).map_err(HostError::into_err)
         },
     )?;
     l.func_wrap(
@@ -7060,6 +7381,16 @@ fn build_linker<W: CardWorld>(engine: &Engine) -> Result<Linker<HostState<W>>, E
     })?;
     l.func_wrap(
         m,
+        "set_direction_dice",
+        |mut c: C<W>, count: i32, sides: i32| -> Result<(), Error> {
+            hostfns::set_direction_dice(&mut c, count, sides).map_err(HostError::into_err)
+        },
+    )?;
+    l.func_wrap(m, "direction_roll", |mut c: C<W>| -> Result<i32, Error> {
+        hostfns::direction_roll(&mut c).map_err(HostError::into_err)
+    })?;
+    l.func_wrap(
+        m,
         "set_min_roll",
         |mut c: C<W>, v: i32| -> Result<(), Error> {
             hostfns::set_min_roll(&mut c, v).map_err(HostError::into_err)
@@ -7297,6 +7628,13 @@ fn build_linker<W: CardWorld>(engine: &Engine) -> Result<Linker<HostState<W>>, E
         "trigger_pending_negation",
         |mut c: C<W>| -> Result<i32, Error> {
             hostfns::trigger_pending_negation(&mut c).map_err(HostError::into_err)
+        },
+    )?;
+    l.func_wrap(
+        m,
+        "trigger_pay_split_ran",
+        |mut c: C<W>| -> Result<i32, Error> {
+            hostfns::trigger_pay_split_ran(&mut c).map_err(HostError::into_err)
         },
     )?;
     l.func_wrap(
@@ -7627,6 +7965,7 @@ impl CardWorld for NullWorld {
     fn set_trigger_value(&mut self, _: i32) {}
     fn set_trigger_target(&mut self, _: i32) {}
     fn set_trigger_cancelled(&mut self) {}
+    fn set_trigger_abnormal_allowed(&mut self) {}
     fn set_trigger_negate_effect(&mut self) {}
     fn set_trigger_spare(&mut self, _: i32) {}
     fn declare_trigger_effect(&mut self, _: &str, _: i32, _: i32, _: i32, _: i32) {}
@@ -7750,6 +8089,7 @@ mod gate_tests {
             gate_skip_msgs: Default::default(),
             exemption_prop: Default::default(),
             rule: Default::default(),
+            derived: false,
         }
     }
 
@@ -7770,6 +8110,7 @@ mod gate_tests {
             answer_effect: Default::default(),
             all_kinds: false,
             copies_previous: false,
+            cost: None,
         }
     }
 
@@ -7856,6 +8197,7 @@ mod gate_tests {
             answer_effect: Default::default(),
             all_kinds: false,
             copies_previous: false,
+            cost: None,
         }
     }
 

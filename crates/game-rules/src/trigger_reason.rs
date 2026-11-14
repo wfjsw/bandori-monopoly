@@ -97,9 +97,11 @@ pub fn trigger_reason(t: &Trigger) -> Msg {
         }
 
         // ---- turn flow ---------------------------------------------------
-        TriggerKind::TurnStart | TriggerKind::TurnStartBefore | TriggerKind::DeckAtGameStart => {
-            Msg::new("log.reason.turn_start").player_id("who", who)
-        }
+        TriggerKind::TurnStart
+        | TriggerKind::TurnStartBefore
+        | TriggerKind::TurnStartAfter
+        | TriggerKind::DeckAtGameStart => Msg::new("log.reason.turn_start").player_id("who", who),
+        TriggerKind::ManageAfter => Msg::new("log.reason.manage_end").player_id("who", who),
         TriggerKind::TurnEnd
         | TriggerKind::TurnEndBefore
         | TriggerKind::TurnEndAfter
@@ -147,7 +149,10 @@ pub fn trigger_reason(t: &Trigger) -> Msg {
         | TriggerKind::BuyAdd
         | TriggerKind::BuyMul
         | TriggerKind::BuySet
-        | TriggerKind::BuyAssign => Msg::new("log.reason.bought")
+        | TriggerKind::BuyAssign
+        | TriggerKind::ForceBuyAdd
+        | TriggerKind::ForceBuyMul
+        | TriggerKind::ForceBuySet => Msg::new("log.reason.bought")
             .player_id("who", who)
             .tile("tile", tile),
         TriggerKind::BuildBefore | TriggerKind::BuildAfter => Msg::new("log.reason.build")
@@ -191,6 +196,10 @@ pub fn trigger_reason(t: &Trigger) -> Msg {
             .i("value", value),
         TriggerKind::MarkerSpend | TriggerKind::MarkerGain => Msg::new("log.reason.marker")
             .player_id("who", who)
+            .i("value", value),
+        TriggerKind::MarkerChanged => Msg::new("log.reason.marker_changed")
+            .player_id("who", who)
+            .msg("name", counter_name(t.name.as_deref().unwrap_or("")))
             .i("value", value),
 
         // ---- misc ---------------------------------------------------------

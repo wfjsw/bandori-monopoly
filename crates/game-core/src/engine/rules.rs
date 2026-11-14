@@ -398,6 +398,10 @@ pub struct Trigger {
     pub position: i32,
     pub card: Option<String>,
     pub value: i32,
+    /// Did a responder write `value` (`trigger::set_pay_amount`)? The
+    /// `settleBefore` window's answer is read back here so the settle's body
+    /// can tell its declaration was already shaped (`-1` = untouched).
+    pub value_set: bool,
     /// How this stage composes its responders' rewrites ([`Fold`]).
     pub fold: Fold,
     /// The stage input: what every responder reads as `value` while `fold` is
@@ -430,6 +434,9 @@ pub struct Trigger {
     /// Did the abnormal this trigger announces hold the move? Meaningful only on
     /// the `effect` and `abnormal` raises of an abnormal; false elsewhere.
     pub abnormal_blocked: bool,
+    /// The `abnormalChoice` holder let the received movement abnormal land
+    /// (「可选择…效果是否生效」). Meaningful only on that raise; false elsewhere.
+    pub abnormal_allowed: bool,
     /// The move that caused this trigger, when one did. `None` = no move.
     pub mv: Option<TriggerMove>,
     /// The payment a `pay` / `paid` trigger is about. `None` on every other kind.
@@ -599,6 +606,7 @@ impl Trigger {
             position: -1,
             card: None,
             value: 0,
+            value_set: false,
             fold: Fold::Replace,
             fold_input: 0,
             fold_milli: 1_000_000,
@@ -607,6 +615,7 @@ impl Trigger {
             is_main_move: false,
             activation_ordinal: 0,
             abnormal_blocked: false,
+            abnormal_allowed: false,
             mv: None,
             pay: None,
             buy: None,

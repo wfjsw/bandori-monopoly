@@ -45,6 +45,15 @@ pub struct PlanValue {
     pub tag: Option<(MsgKey, i32)>,
     /// Host-supplied recorded roll for this raise (`None` = none).
     pub recorded_roll: Option<i32>,
+    /// A direction die (`count`d`sides`, 「投掷1d2（前后）」). Writing it makes
+    /// the host roll the die as its own recorded face ([`Self::direction_roll`])
+    /// and set the walk's direction from the parity: odd = reverse (C-Q47).
+    /// Unlike [`Self::recorded_roll`] (a fixed d6 peek) this is the card's own
+    /// declared shape, so the printed `1d2` is actually cast.
+    pub direction: Option<Dice>,
+    /// The host-rolled direction face (`PlanValue::direction`), or `None` when
+    /// no direction die was asked for.
+    pub direction_roll: Option<i32>,
 }
 
 /// DiceRollAdd / DiceRollValue -- the face plus host context.
@@ -235,6 +244,7 @@ impl FilterPayload for PlanValue {
         {
             Self {
                 recorded_roll: crate::ctx::plan::recorded_roll(),
+                direction_roll: crate::ctx::plan::direction_roll(),
                 ..Self::default()
             }
         }
@@ -271,6 +281,13 @@ impl FilterPayload for PlanValue {
             if let Some(on) = after.reverse {
                 if before.reverse != Some(on) {
                     plan::set_reverse(on);
+                }
+            }
+            if let Some(d) = after.direction {
+                if before.direction != Some(d) {
+                    // Rolls the face and sets `reverse` from its parity (C-Q47:
+                    // odd = backwards); a later `reverse` in the same body wins.
+                    plan::set_direction_dice(d.count, d.sides);
                 }
             }
             if let Some(k) = after.move_kind {

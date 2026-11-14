@@ -196,6 +196,13 @@ fn typed_engine_consts_have_table_rows() {
         (140, "OpeningHandDealt"),
         (141, "EventResolved"),
         (142, "PayCalcBefore"),
+        (143, "TurnStartAfter"),
+        (144, "ManageAfter"),
+        (145, "MarkerChanged"),
+        (146, "AbnormalChoice"),
+        (147, "ForceBuyAdd"),
+        (148, "ForceBuyMul"),
+        (149, "ForceBuySet"),
     ];
     for (id, name) in named {
         let row =
@@ -215,12 +222,15 @@ fn typed_engine_consts_have_table_rows() {
 /// Kind ids are allocated by the ABI README groups and never reused. The
 /// highest id in the table is the ceiling; the next group takes `ceiling + 1`.
 /// G08 took the free band 113–119, `openingHandDealt` = 140 and
-/// `eventResolved` = 141; HOST-03's 支付阶段 1 takes the next free id
-/// (`payCalcBefore` = 142, design G02 §4.1).
+/// `eventResolved` = 141; HOST-03's 支付阶段 1 took 142 (`payCalcBefore`,
+/// design G02 §4.1) and its 行动阶段 3 / 6 markers took 143 / 144; HAG-01's
+/// held-token change took 145 (`markerChanged`, `ab-held-tokens`); STA-02's
+/// [不可阻挡] opt-in took 146 (`abnormalChoice`); FORCE-WRITE-01's 强制购买
+/// price stages took 147–149 (`forceBuyAdd` / `forceBuyMul` / `forceBuySet`).
 #[test]
-fn kind_id_ceiling_is_142() {
+fn kind_id_ceiling_is_149() {
     let max = ENGINE_KINDS.iter().map(|r| r.id).max().unwrap_or(0);
-    assert_eq!(max, 142, "highest engine kind id");
+    assert_eq!(max, 149, "highest engine kind id");
 }
 
 /// Payload-shape mapping: every engine filter kind's `FilterShape` (from the
@@ -249,6 +259,9 @@ fn filter_payload_shape_mapping() {
         ("BuyAdd", FilterShape::Value),
         ("BuyMul", FilterShape::Value),
         ("BuySet", FilterShape::Value),
+        ("ForceBuyAdd", FilterShape::Value),
+        ("ForceBuyMul", FilterShape::Value),
+        ("ForceBuySet", FilterShape::Value),
         ("BuyAssign", FilterShape::Payload),
         ("PayCombinedAdd", FilterShape::Value),
         ("PayCombinedMul", FilterShape::Value),

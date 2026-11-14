@@ -64,7 +64,6 @@
   "ras_teleport": "你仍在{{tile}}。要传送至你拥有的一个livehouse格子吗？",
   "ras_title": "UNSTOPPABLE",
   "roselia_first": "首个非Live House购买：{{tile}}半价",
-  "skill_band_no_sticker": "使用复制的团卡的主动效果需要支付1个星星贴纸。",
   "skill_blocked": "此处无法使用技能。",
   "sumimi_cleared": "本回合未获得资金：清空团卡",
   "sumimi_crystal": "本回合获得过资金：+1[奇迹水晶]"

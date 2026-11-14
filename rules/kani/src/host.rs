@@ -406,6 +406,10 @@ pub fn dispatch(op: Op, a: Args) -> i64 {
         Op::tile_count => arm_tile_count(a),
         Op::tile_named => arm_tile_named(a),
         Op::tile_owner => arm_tile_owner(a),
+        Op::add_co_owner => arm_add_co_owner(a),
+        Op::is_co_owner => arm_is_co_owner(a),
+        Op::owns_tile => arm_owns_tile(a),
+        Op::mortgaged_for => arm_mortgaged_for(a),
         Op::tile_group => arm_tile_group(a),
         Op::tile_price => arm_tile_price(a),
         Op::buy_price => arm_buy_price(a),
@@ -486,39 +490,7 @@ pub fn dispatch(op: Op, a: Args) -> i64 {
                 }
             }
         }
-        Op::tile_in => {
-            // ABI: tile_in(player_id, tile, class_ptr, class_len)
-            // This model keeps the historical quirks so proofs stay put:
-            // buyable = unowned property; livehouse = tiles 31/50.
-            let class = name_id(a2, a3);
-            if intern::id_eq_str(class, "buyable") {
-                let s = board::tile_slot(a1);
-                if s < 0 {
-                    0
-                } else {
-                    let t = &board::TILES[s as usize];
-                    let owned = world::with_world(|w| w.tiles[tile_idx(a1)].owner);
-                    (board::is_property(t) && owned < 0) as i64
-                }
-            } else if intern::id_eq_str(class, "shop") {
-                let s = board::tile_slot(a1);
-                if s < 0 {
-                    0
-                } else {
-                    board::is_shop(&board::TILES[s as usize]) as i64
-                }
-            } else if intern::id_eq_str(class, "livehouse") {
-                // Live House is board.json index 32 (agent) / 51 (property
-                // Live House Galaxy) → engine positions 31 / 50.
-                let _ = a0;
-                (a1 == 31 || a1 == 50) as i64
-            } else if intern::id_eq_str(class, "color:6") {
-                // Same live-house set for the colour-6 class (this model's quirk).
-                (a1 == 31 || a1 == 50) as i64
-            } else {
-                0
-            }
-        }
+        Op::tile_in => arm_tile_in(a),
         Op::dist | Op::tile_forward => arm_dist(a),
         Op::neighbor => {
             // hostfns `neighbor`: the **next** present player in turn order,
@@ -609,6 +581,7 @@ pub fn dispatch(op: Op, a: Args) -> i64 {
         Op::pay_leg => arm_pay_leg(a),
         Op::can_pay => arm_can_pay(a),
         Op::gains_this_turn => arm_gains_this_turn(a),
+        Op::lost_this_turn => arm_lost_this_turn(a),
         Op::paid_in_settle => 0,
 
         // ---- cards / piles ----
@@ -832,6 +805,16 @@ pub fn dispatch(op: Op, a: Args) -> i64 {
                 0
             }
         }
+        Op::tile_prop_state => {
+            // tile_prop_state(tile, kp, kl) -> [tile, kp, kl, …]; name (a1,a2).
+            // -1 absent / 0 present-and-clear / 1 present-and-non-zero.
+            let key = name_id(a1, a2);
+            world::with_world(|w| match w.tiles[tile_idx(a0)].props.get_opt(key) {
+                None => -1,
+                Some(0) => 0,
+                Some(_) => 1,
+            }) as i64
+        }
         Op::set_self_prop | Op::set_prop_at | Op::set_tile_prop => {
             // hostfns: `set_self_prop(kp, kl, v)` writes the running instance's
             // prop; `set_tile_prop(tile, kp, kl, v)` / `set_prop_at(uid, kp, kl, v)`
@@ -995,6 +978,8 @@ pub fn dispatch(op: Op, a: Args) -> i64 {
         // ---- band / skills ----
         Op::group_pool => arm_band_crystals(a),
         Op::add_group_pool => arm_add_band_crystals(a),
+        // Same write; the reshuffle tag is log-only.
+        Op::add_group_pool_shuffled => arm_add_band_crystals(a),
         Op::group_skill => arm_band_skill(a),
         Op::persona_skill => arm_persona_skill(a),
         Op::persona => arm_persona(a),
@@ -1247,8 +1232,10 @@ pub fn dispatch(op: Op, a: Args) -> i64 {
         | Op::join_joiner_shielded
         | Op::trigger_pending_negation
         | Op::trigger_extreme_armed
+        | Op::trigger_pay_split_ran
         | Op::trigger_chain_depth => 0,
         Op::trig_set_cancelled => arm_trig_set_cancelled(a),
+        Op::trig_set_abnormal_allowed => arm_trig_set_abnormal_allowed(a),
         Op::trig_set_negate_effect => arm_trig_set_negate_effect(a),
         Op::trig_set_reason | Op::trig_set_spare => arm_stub_zero(a),
         Op::trig_seq => 0,
@@ -1262,6 +1249,7 @@ pub fn dispatch(op: Op, a: Args) -> i64 {
         Op::declare_effect => 0,
         Op::trig_card_is => arm_trig_card_is(a),
         Op::trig_cards => arm_trig_cards(a),
+        Op::trig_card_tags => arm_trig_card_tags(a),
 
         // ---- move plan / settle (structure only; engine scheduling is
         //      PROTOCOL-LEVEL and out of Kani scope) ----
@@ -1280,6 +1268,8 @@ pub fn dispatch(op: Op, a: Args) -> i64 {
         | Op::set_base_dice
         | Op::add_base_dice
         | Op::add_extra_dice
+        | Op::set_direction_dice
+        | Op::direction_roll
         | Op::set_min_roll
         | Op::set_extra_steps
         | Op::set_more_steps
@@ -1344,6 +1334,7 @@ pub fn dispatch(op: Op, a: Args) -> i64 {
         | Op::declared_arg
         | Op::card_text_mentions
         | Op::card_prop
+        | Op::card_derived
         | Op::buy
         | Op::acquire
         | Op::agent_offer
@@ -1360,6 +1351,11 @@ pub fn dispatch(op: Op, a: Args) -> i64 {
         | Op::flash_card
         | Op::flash_card_keyed
         | Op::flash_tile => arm_protocol_stub(a),
+
+        // A small non-empty roster: the manifest's event table is out of the
+        // model, and a 「从所有事件中选择3个」 loop needs a pool to pick from.
+        // `card_derived` is a zero stub, so every entry counts as non-derived.
+        Op::event_card_ids => arm_event_card_ids(a),
 
         // A protocol stub, but recorded: a clause can still be held to "it
         // settles here, and nowhere when it is on no square".
@@ -1625,6 +1621,7 @@ pub fn arm_adjust_money(a: Args) -> i64 {
                 } else if cost < 0 {
                     let n = (-cost).min(w.money[p].max(0));
                     w.money[p] -= n;
+                    w.losses_this_turn[p] = w.losses_this_turn[p].saturating_add(n);
                 }
             });
         }
@@ -2641,6 +2638,18 @@ pub fn arm_gain(a: Args) -> i64 {
 
 pub fn arm_gain_marker(a: Args) -> i64 {
     let [a0, a1, a2, a3, a4, a5] = a;
+    // The `markerGain` window opens **before** the markers move
+    // (`hostfns::gain_marker`), with the name as data and delta `+n`; a
+    // non-positive delta opens no window.
+    if a3 > 0 {
+        let name = name_id(a1, a2);
+        #[cfg(kani)]
+        kani::assert(
+            intern::id_eq_str(name, "charge"),
+            "probe: gain_marker arg is charge",
+        );
+        world::with_world_mut(|w| w.push_window(world::WINDOW_GAIN, a0, name, a3));
+    }
     {
         // engine `gain_marker`: uncapped dumb add on the held-token row.
         // Cap / partial-gain policy lives in the rules-layer kernel
@@ -2667,6 +2676,11 @@ pub fn arm_gains_this_turn(a: Args) -> i64 {
     {
         world::with_world(|w| w.gains_this_turn[player_idx(a0)]) as i64
     }
+}
+
+pub fn arm_lost_this_turn(a: Args) -> i64 {
+    let [a0, ..] = a;
+    world::with_world(|w| w.losses_this_turn[player_idx(a0)]) as i64
 }
 
 pub fn arm_gate(a: Args) -> i64 {
@@ -3212,6 +3226,7 @@ pub fn arm_pay(a: Args) -> i64 {
             world::with_world_mut(|w| {
                 let p = player_idx(a0);
                 w.money[p] = (w.money[p] - moved).max(0);
+                w.losses_this_turn[p] = w.losses_this_turn[p].saturating_add(moved);
                 w.push(Effect::PayMoney {
                     player: a0,
                     n: moved,
@@ -3427,6 +3442,26 @@ pub fn arm_placed_cards(a: Args) -> i64 {
     bytes.len() as i64
 }
 
+/// `event_card_ids` -- a fixed four-id roster, postcard `Vec<String>` into the
+/// guest buffer (same shape as `hostfns::event_card_ids`). Used by
+/// 让我来结束一切's 3-pick loop; `card_derived` answers 0 for all of them.
+pub fn arm_event_card_ids(a: Args) -> i64 {
+    let [buf, cap, ..] = a;
+    let ids: Vec<String> = ["event:kani-a", "event:kani-b", "event:kani-c", "event:kani-d"]
+        .iter()
+        .map(|s| (*s).to_string())
+        .collect();
+    let bytes = postcard::to_allocvec(&ids).unwrap_or_default();
+    if buf == 0 {
+        return bytes.len() as i64;
+    }
+    if (bytes.len() as i32) > cap {
+        return -1;
+    }
+    card_sdk::native::write(buf, &bytes);
+    bytes.len() as i64
+}
+
 pub fn arm_player_count(a: Args) -> i64 {
     let _ = a;
     let n = world::with_world(|w| w.n_players) as i64;
@@ -3498,27 +3533,33 @@ pub fn arm_raise(a: Args) -> i64 {
     // payload, install the raise's, run listeners, restore. `arm_trig_value`
     // answers `pay_amount` (the hostfns `trigger().value` twin); `trig_value`
     // is the ir_fill / fixture view of the same number.
-    let kind_sp: &'static str = crate::intern::resolve_str(name_id(kp, kl));
-    let saved = world::with_world(|w| {
-        (
+    let raise_name = name_id(kp, kl);
+    // `resolve_str_trusted`, not `resolve_str`: the UTF-8 validation loop is
+    // ~23 unwind steps over the whole world state on every raise.
+    let kind_sp: &'static str = intern::resolve_str_trusted(raise_name);
+    // One world borrow for the window + the payload swap. Three separate
+    // `with_world` calls re-establish the world facts twice more per raise.
+    let saved = world::with_world_mut(|w| {
+        w.push_window(world::WINDOW_RAISE, player_id, raise_name, value);
+        let saved = (
             w.trig_kind,
             w.trig_player,
             w.trig_value,
             w.pay_amount,
             w.trig_cancelled,
-        )
-    });
-    world::with_world_mut(|w| {
+        );
         w.trig_kind = kind_sp;
         w.trig_player = player_id;
         w.trig_value = value;
         w.pay_amount = value;
         w.trig_cancelled = false;
+        saved
     });
     let mut settled = 1i64;
     #[cfg(all(kani, feature = "skills-groups"))]
     {
-        if kind_sp == "r:bandori:107" {
+        // Byte compare: a `&str` `==` lowers to memcmp (an unwind loop).
+        if intern::id_eq_bytes(raise_name, b"r:bandori:107") {
             settled = arm_raise_fans_flip(player_id, value);
         }
     }
@@ -4088,7 +4129,10 @@ pub fn arm_set_owner(a: Args) -> i64 {
     let [a0, a1, a2, a3, a4, a5] = a;
     {
         world::with_world_mut(|w| {
-            w.tiles[tile_idx(a0)].owner = a1;
+            // `World::set_tile_owner` also keeps the acquisition ledger
+            // (`owned_seq` / `next_owned_seq`, G08 I13) and the previous
+            // owner's `firstTile`, like the engine's `write_owner`.
+            w.set_tile_owner(a0, a1);
             w.push(Effect::SetOwner {
                 tile: a0,
                 player: a1,
@@ -4237,6 +4281,13 @@ pub fn arm_shuffle_into_deck(a: Args) -> i64 {
 
 pub fn arm_spend_marker(a: Args) -> i64 {
     let [a0, a1, a2, a3, a4, a5] = a;
+    // `markerSpend` opens before the write (`hostfns::spend_marker`; user
+    // ruling 2026-10-07), delta `-n`. It opens even when the pool cannot
+    // cover the cost -- the window is the owner's policy, the write refuses.
+    if a3 > 0 {
+        let name = name_id(a1, a2);
+        world::with_world_mut(|w| w.push_window(world::WINDOW_SPEND, a0, name, -a3));
+    }
     {
         // All-or-nothing; returns 1 when the player had enough. No cap
         // consultation -- spending is not the capped direction.
@@ -4614,41 +4665,25 @@ pub fn arm_tile_group(a: Args) -> i64 {
     }
 }
 
-pub fn arm_tile_in(a: Args) -> i64 {
-    let [a0, a1, a2, a3, ..] = a;
-    let _ = a0;
-    let class = name_id(a2, a3);
-    if intern::id_eq_str(class, "buyable") {
-        let s = board::tile_slot(a1);
-        if s < 0 {
-            0
-        } else {
-            let t = &board::TILES[s as usize];
-            let owned = world::with_world(|w| w.tiles[tile_idx(a1)].owner);
-            (board::is_property(t) && owned < 0) as i64
-        }
-    } else if intern::id_eq_str(class, "shop") {
-        let s = board::tile_slot(a1);
-        if s < 0 {
-            0
-        } else {
-            board::is_shop(&board::TILES[s as usize]) as i64
-        }
-    } else if intern::id_eq_str(class, "livehouse") {
-        (a1 == 31 || a1 == 50) as i64
-    } else if intern::id_eq_str(class, "color:6") {
-        (a1 == 31 || a1 == 50) as i64
-    } else if let Some(g) = intern::resolve_str(class)
-        .strip_prefix("color:")
-        .and_then(|g| g.parse::<i32>().ok())
-    {
-        // Generic colour class: the tile's own group (`is_color_lazy`'s first
-        // arm; the `anyColor` / `colorFor` props are not modelled).
-        let s = board::tile_slot(a1);
-        (s >= 0 && board::TILES[s as usize].group as i32 == g) as i64
-    } else {
-        0
+/// Production `tile_class::tile_in` over the model world (G15): the static
+/// class table is [`board::tile_in_class`]. Missing tile → false (production
+/// passes `None`). Class-membership props are not modelled (OPEN `toko-color` /
+/// OQ1); `player` is accepted for that future layer and unused today.
+pub fn tile_in_model(_w: &World, player: i32, tile: i32, class: board::TileClass) -> bool {
+    match board::data_at(tile) {
+        Some(t) => board::tile_in_class(t, player, class),
+        None => false,
     }
+}
+
+pub fn arm_tile_in(a: Args) -> i64 {
+    // ABI: tile_in(player_id, tile, class_ptr, class_len)
+    let [a0, a1, a2, a3, ..] = a;
+    let class = name_id(a2, a3);
+    // Classify the interned bytes, not a `&str`: `resolve_str` runs UTF-8
+    // validation per call and the board-walking bodies call this ~360 times.
+    let class = board::TileClass::from_bytes(intern::resolve(class));
+    world::with_world(|w| tile_in_model(w, a0, a1, class) as i64)
 }
 
 pub fn arm_tile_is(a: Args) -> i64 {
@@ -4701,6 +4736,60 @@ pub fn arm_tile_named(a: Args) -> i64 {
 pub fn arm_tile_owner(a: Args) -> i64 {
     let [a0, a1, a2, a3, a4, a5] = a;
     world::with_world(|w| w.tiles[tile_idx(a0)].owner) as i64
+}
+
+pub fn arm_add_co_owner(a: Args) -> i64 {
+    let [a0, a1, _, _, _, _] = a;
+    world::with_world_mut(|w| {
+        let s = tile_idx(a0);
+        let p = a1;
+        // The row is independent of the primary: the grant lists every holder,
+        // the primary included (World::add_co_owner), so a primary re-add is a
+        // plain idempotent no-op rather than a refusal.
+        if p < 0 || p as usize >= MAX_PLAYERS || w.co_owner[s][p as usize] {
+            0
+        } else {
+            w.co_owner[s][p as usize] = true;
+            1
+        }
+    }) as i64
+}
+
+pub fn arm_is_co_owner(a: Args) -> i64 {
+    let [a0, a1, _, _, _, _] = a;
+    world::with_world(|w| {
+        let p = a1;
+        (p >= 0 && (p as usize) < MAX_PLAYERS && w.co_owner[tile_idx(a0)][p as usize]) as i64
+    })
+}
+
+pub fn arm_owns_tile(a: Args) -> i64 {
+    let [a0, a1, _, _, _, _] = a;
+    world::with_world(|w| {
+        let s = tile_idx(a0);
+        let p = a1;
+        (w.tiles[s].owner == p
+            || (p >= 0 && (p as usize) < MAX_PLAYERS && w.co_owner[s][p as usize])) as i64
+    })
+}
+
+pub fn arm_mortgaged_for(a: Args) -> i64 {
+    let [a0, a1, _, _, _, _] = a;
+    world::with_world(|w| {
+        let s = tile_idx(a0);
+        let p = a1;
+        if p < 0 || p as usize >= MAX_PLAYERS {
+            return 0;
+        }
+        let co = w.co_owner[s];
+        if co.iter().any(|&b| b) {
+            w.co_mortgaged[s][p as usize] as i64
+        } else {
+            // An ordinary deed has one stake: its owner's, and only while the
+            // tile flag is up (World::stake_mortgaged).
+            (w.tiles[s].owner == p && w.tiles[s].mortgaged) as i64
+        }
+    })
 }
 
 pub fn arm_tile_price(a: Args) -> i64 {
@@ -5166,10 +5255,26 @@ pub fn arm_trig_cards(a: Args) -> i64 {
     1
 }
 
+/// `trigger::card_tags(buf, cap)` — tags of the trigger card. The model does
+/// not carry sheet tags, so an empty list (a caller treating "no tags" as no
+/// match is the safe side).
+pub fn arm_trig_card_tags(a: Args) -> i64 {
+    let _ = a;
+    0
+}
+
 pub fn arm_trig_set_cancelled(a: Args) -> i64 {
     let _ = a;
     world::with_world_mut(|w| {
         w.trig_cancelled = true;
+    });
+    0
+}
+
+pub fn arm_trig_set_abnormal_allowed(a: Args) -> i64 {
+    let _ = a;
+    world::with_world_mut(|w| {
+        w.trig_abnormal_allowed = true;
     });
     0
 }
@@ -5239,6 +5344,7 @@ pub fn arm_pay_command(a: Args) -> i64 {
         world::with_world_mut(|w| {
             let f = player_idx(from);
             w.money[f] = (w.money[f] - moved).max(0);
+            w.losses_this_turn[f] = w.losses_this_turn[f].saturating_add(moved);
             if to >= 0 {
                 let t = player_idx(to);
                 w.money[t] = w.money[t].saturating_add(moved);

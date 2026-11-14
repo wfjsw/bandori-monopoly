@@ -13,12 +13,15 @@
 //!
 //! （2） 「将其抵消」 is a [反击]: the effect is named and then voided, which is
 //! `trigger::set_cancelled`. 「使用角色/团技能的[主]效果或使用手牌的[手]效果」
-//! is the `card` chain for a hand play and `skillUsed` for a skill press.
+//! is the `card` chain for a hand play and `cardUsed` for a field-card press;
+//! the guard narrows both to the named effect classes ([手] tag / skill card).
 
 use bandori_std::ctx::{self, state, trigger};
 use bandori_std::kind::Actions;
 use bandori_std::state_key;
-use card_sdk::abi::{prop, roll_source, ActionKind, ChainKind, MarkFilter, RollPurpose};
+use card_sdk::abi::{
+    prop, roll_source, ActionKind, ChainKind, MarkFilter, RollPurpose, TriggerKind,
+};
 use card_sdk::{key, Action, CardDef, Msg, On};
 
 /// The mark kind 「[多惠兔子]」.
@@ -122,14 +125,27 @@ fn on_pass(player_id: i32) -> card_sdk::Asked {
 }
 
 /// （2） 「你可以使用4个[火罐]将其抵消」 -- only against someone else's activation.
-/// The categories do the selecting (`card` = a hand play, `skillUsed` = a skill
-/// press); the guard states the rest of the clause.
+///
+/// The clause names 「角色/团技能的[主]效果」 and 「手牌的[手]效果」, not every
+/// activation: a field-card press (`cardUsed`) counts only when the pressed
+/// card is a skill card -- a skill's press *is* its [主] effect -- and a hand
+/// play (`card`) only when the played card carries the [手] tag, so a [反击] /
+/// [特] card played from hand is not one. The tag read is
+/// `trigger::card_tags`.
 fn can_negate(player_id: i32) -> bool {
-    ctx::is_placed() && trigger::player_id() != player_id && bandori_std::fire::get(player_id) >= 4
-    // TODO(规则书)[judgement]: the clause names 「[主]效果」 and 「[手]效果」, not
-    //   every activation. `skillUsed` is a skill press (the 主 half), but
-    //   `card` admits any hand play -- a [反击] or [特] card included. There is
-    //   no tag query in the ABI to read the card's tags back off the trigger.
+    if !ctx::is_placed()
+        || trigger::player_id() == player_id
+        || bandori_std::fire::get(player_id) < 4
+    {
+        return false;
+    }
+    match trigger::kind() {
+        TriggerKind::Card => trigger::card_tags().iter().any(|t| t.as_str() == "手"),
+        TriggerKind::CardUsed => trigger::cards()
+            .iter()
+            .any(|c| c.as_str().starts_with("skill:")),
+        _ => false,
+    }
 }
 
 /// （2）「将其抵消，然后你获得500资金且被抵消的玩家获得2000资金」.

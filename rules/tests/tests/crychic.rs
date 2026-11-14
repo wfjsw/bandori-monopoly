@@ -350,11 +350,7 @@ fn haruhikage_borrowed_soyo_arms_the_teleport_without_the_skill() {
     t.counteract(0, "CRYCHIC:春日影").unwrap();
     drain(&mut t);
     assert_eq!(t.money(1), 10_000, "the rent was cancelled");
-    assert_eq!(
-        t.state(0, "skill.soyoCrychic.armed"),
-        1,
-        "teleport armed"
-    );
+    assert_eq!(t.state(0, "skill.soyoCrychic.armed"), 1, "teleport armed");
     assert!(
         !t.on_field(0, "skill:长崎素世（CRYCHIC）:雨中祈晴"),
         "no soyo row on the borrower's field: {:?}",
@@ -427,11 +423,7 @@ fn soyo_crychic_owns_the_arm_while_placed() {
     );
     t.counteract(0, "CRYCHIC:春日影").unwrap();
     drain(&mut t);
-    assert_eq!(
-        t.state(0, "skill.soyoCrychic.armed"),
-        1,
-        "teleport armed"
-    );
+    assert_eq!(t.state(0, "skill.soyoCrychic.armed"), 1, "teleport armed");
     assert!(
         t.on_field(0, "skill:长崎素世（CRYCHIC）:雨中祈晴"),
         "the own soyo row is placed: {:?}",

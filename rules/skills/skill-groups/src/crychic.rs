@@ -58,7 +58,11 @@ pub const CRYCHIC: CardDef = CardDef::new(
         // CRYCHIC variants. `value` = the card's owner is the actor's base
         // character; `step` = the owner is the actor's own character.
         On::Filter(Filter::ExclusiveUse(EXCLUSIVE_USE_DENIED, None, refuse)),
-        On::Play("", Some(can_transform), transform_now),
+        // 规则书（`PPP:Returns` [持续]（3））: 「使用因此卡获得的团卡的主动效果时需要
+        // 支付1星星贴纸」 -- declared activation cost (ENG-COST); the host refuses
+        // a short player and charges before the body.
+        On::Play("", Some(can_transform), transform_now)
+            .cost("星星贴纸", crate::copy_sticker_cost),
     ],
 )
 .rule();
@@ -278,11 +282,6 @@ fn force_card(player_id: i32) -> card_sdk::Asked {
 /// can run it out of turn (`mutsumi_never` calls `ctx::invoke_skill` on the id
 /// `ctx::group_skill` names).
 fn can_transform(player_id: i32) -> Option<Msg> {
-    // 规则书（`PPP:Returns` [持续]（3））: 「使用因此卡获得的团卡的主动效果时需要
-    // 支付1星星贴纸」 -- the sticker is a cost of activation on the borrowed copy.
-    if let Some(reason) = crate::copy_sticker_gate(player_id) {
-        return Some(reason);
-    }
     if ctx::deck_count(player_id) > 0 || ctx::discard_size(player_id) > 0 {
         return Some(Msg::new(key!("crychic_not_empty")));
     }
@@ -290,7 +289,6 @@ fn can_transform(player_id: i32) -> Option<Msg> {
 }
 
 fn transform_now(player_id: i32) -> card_sdk::Asked {
-    crate::spend_copy_sticker(player_id)?;
     // No pile re-check: `can_transform` already gated the play on the same
     // condition, and mutsumi's 「立即执行…（2）效果」 runs the effect
     // unconditionally. Re-checking here would re-evaluate a guard inside a

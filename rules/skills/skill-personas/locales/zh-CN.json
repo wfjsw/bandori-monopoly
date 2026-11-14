@@ -191,6 +191,7 @@
   "mutsumi_crychic_no_fire": "你需要 1 个[火罐]。",
   "mutsumi_crychic_option": "{{who}}",
   "mutsumi_crychic_spend": "精致的人偶",
+  "mutsumi_crychic_state": "进入状态{{n}}",
   "mutsumi_crychic_title": "精致的人偶",
   "nanami_ask": "支付 1 个[火罐]，获得该角色的标记？",
   "nanami_cd": "这是很普通的事吧？：冷却还剩 {{n}} 回合",
@@ -260,6 +261,7 @@
   "sakiko_crychic_nudged": "移动终点改为 {{tile}}",
   "sakiko_crychic_pay": "你愿意和我组建乐队吗？",
   "sakiko_crychic_spend": "你愿意和我组建乐队吗？",
+  "sakiko_crychic_state": "进入状态{{n}}",
   "sakiko_crychic_title": "你愿意和我组建乐队吗？",
   "sakiko_auto": "状态2：自动打出抽牌堆顶端的{{card}}",
   "sakiko_bounty": "转移层数：每层 +1500",
@@ -293,6 +295,7 @@
   "soyo_gain": "通透的颜色：+1 [火罐]",
   "soyo_spend": "通透的颜色",
   "soyo_title": "通透的颜色",
+  "soyo_waived": "通透的颜色免除了 {{n}} 支付；下次经过 CiRCLE 不获得火罐",
   "soyo_crychic_ask": "取消 {{tile}} 上的那次支付，下回合传送回该格？",
   "soyo_crychic_cancelled": "取消 {{tile}} 上的支付",
   "soyo_crychic_moved": "[传送]回 {{tile}}",
@@ -363,5 +366,6 @@
   "shifune_title": "尽力了吗",
   "shifune_zero": "移动数变为 0：视为原地进行一次[结算]",
   "rui_hit": "正论暴击：掷出 {{n}} ≤ X={{x}}，X 归零，本次资金翻倍或免除",
+  "rui_lost": "复制者使 X 归零：被复制的角色失去正论暴击",
   "rui_miss": "正论暴击：掷出 {{n}} > X={{x}}，X+1"
 }

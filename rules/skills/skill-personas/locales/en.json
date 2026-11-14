@@ -191,6 +191,7 @@
   "mutsumi_crychic_no_fire": "You need a fire pot.",
   "mutsumi_crychic_option": "{{who}}",
   "mutsumi_crychic_spend": "Exquisite Doll",
+  "mutsumi_crychic_state": "Enter state {{n}}",
   "mutsumi_crychic_title": "Exquisite Doll",
   "nanami_ask": "Pay 1 fire pot for that character's mark?",
   "nanami_cd": "This Is Quite Ordinary: {{n}} turn(s) of cooldown left",
@@ -260,6 +261,7 @@
   "sakiko_crychic_nudged": "Landing moved to {{tile}}",
   "sakiko_crychic_pay": "Will You Form a Band With Me",
   "sakiko_crychic_spend": "Will You Form a Band With Me",
+  "sakiko_crychic_state": "Enter state {{n}}",
   "sakiko_crychic_title": "Will You Form a Band With Me",
   "sakiko_auto": "State 2: auto-playing the deck's top card ({{card}})",
   "sakiko_bounty": "Took the layers: +1500 each",
@@ -293,6 +295,7 @@
   "soyo_gain": "Clear Colours: +1 fire pot",
   "soyo_spend": "Clear Colours",
   "soyo_title": "Clear Colours",
+  "soyo_waived": "Clear Colours waived {{n}} of the payment; no pot on the next CiRCLE pass",
   "soyo_crychic_ask": "Cancel the payment on {{tile}} and teleport back there next turn?",
   "soyo_crychic_cancelled": "Cancelled the payment on {{tile}}",
   "soyo_crychic_moved": "Teleported back to {{tile}}",
@@ -363,5 +366,6 @@
   "shifune_title": "Did Your Best",
   "shifune_zero": "Move became 0: settle in place",
   "rui_hit": "Righteous Crit: rolled {{n}} ≤ X={{x}}; X resets, this money doubles or is voided",
+  "rui_lost": "A copy reset X: the copied skill loses Righteous Crit",
   "rui_miss": "Righteous Crit: rolled {{n}} > X={{x}}; X+1"
 }

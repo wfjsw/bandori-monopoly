@@ -518,6 +518,30 @@ pub enum Op {
     persona_skins = 497,
     // v123: the character-card pile read.
     persona = 498,
+    // STA-02: the [不可阻挡] `abnormalChoice` yes answer.
+    trig_set_abnormal_allowed = 499,
+    // AB payment pipeline: ABI-11 lost-this-turn, NFO-CANCEL-01 split-ran,
+    // ABI-12 the tri-state tile prop.
+    lost_this_turn = 500,
+    trigger_pay_split_ran = 501,
+    tile_prop_state = 502,
+    /// [`Self::add_group_pool`] tagged as a reshuffle-time add (the
+    /// 「只有洗牌时可以…添加奇迹水晶」 carve-out).
+    add_group_pool_shuffled = 503,
+    /// Card tags of the trigger cards ([主] / [手] / …).
+    trig_card_tags = 504,
+    /// Add a co-holder to a tile's deed (「视为同时拥有」).
+    add_co_owner = 505,
+    is_co_owner = 506,
+    owns_tile = 507,
+    /// Is this player's own stake of the tile mortgaged?
+    mortgaged_for = 508,
+    // v124 (W3-KAORU-02): the plan's direction die (own recorded face).
+    set_direction_dice = 509,
+    direction_roll = 510,
+    // v124 (EVENT-04): manifest metadata reads (derived flag, event roster).
+    card_derived = 511,
+    event_card_ids = 512,
 }
 
 /// Six i32 wire slots, matching the ABI's arg convention.

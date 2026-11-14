@@ -435,6 +435,10 @@ pub fn set_tile_prop(tile: i32, kp: i32, kl: i32, v: i32) -> i32 {
     kani_host::call_i32(Op::set_tile_prop, [tile, kp, kl, v, 0, 0])
 }
 
+pub fn tile_prop_state(tile: i32, kp: i32, kl: i32) -> i32 {
+    kani_host::call_i32(Op::tile_prop_state, [tile, kp, kl, 0, 0, 0])
+}
+
 pub fn prop_at(uid: i32, kp: i32, kl: i32) -> i32 {
     kani_host::call_i32(Op::prop_at, [uid, kp, kl, 0, 0, 0])
 }
@@ -645,6 +649,10 @@ pub fn group_pool(player_id: i32, np: i32, nl: i32) -> i32 {
 
 pub fn add_group_pool(player_id: i32, np: i32, nl: i32, n: i32, max: i32) -> i32 {
     kani_host::call_i32(Op::add_group_pool, [player_id, np, nl, n, max, 0])
+}
+
+pub fn add_group_pool_shuffled(player_id: i32, np: i32, nl: i32, n: i32, max: i32) -> i32 {
+    kani_host::call_i32(Op::add_group_pool_shuffled, [player_id, np, nl, n, max, 0])
 }
 
 pub fn group_skill(player_id: i32, buf: i32, cap: i32) -> i32 {
@@ -1021,6 +1029,10 @@ pub fn trig_cards(buf: i32, cap: i32) -> i32 {
     kani_host::call_i32(Op::trig_cards, [buf, cap, 0, 0, 0, 0])
 }
 
+pub fn trig_card_tags(buf: i32, cap: i32) -> i32 {
+    kani_host::call_i32(Op::trig_card_tags, [buf, cap, 0, 0, 0, 0])
+}
+
 pub fn trig_move_roll() -> i32 {
     kani_host::call_i32(Op::trig_move_roll, [0, 0, 0, 0, 0, 0])
 }
@@ -1141,6 +1153,10 @@ pub fn trigger_pending_negation() -> i32 {
     kani_host::call_i32(Op::trigger_pending_negation, [0, 0, 0, 0, 0, 0])
 }
 
+pub fn trigger_pay_split_ran() -> i32 {
+    kani_host::call_i32(Op::trigger_pay_split_ran, [0, 0, 0, 0, 0, 0])
+}
+
 pub fn trigger_extreme_armed() -> i32 {
     kani_host::call_i32(Op::trigger_extreme_armed, [0, 0, 0, 0, 0, 0])
 }
@@ -1175,6 +1191,10 @@ pub fn trig_set_negate_effect() {
 
 pub fn trig_set_spare(seat: i32) {
     kani_host::call_unit(Op::trig_set_spare, [seat, 0, 0, 0, 0, 0]);
+}
+
+pub fn trig_set_abnormal_allowed() {
+    kani_host::call_unit(Op::trig_set_abnormal_allowed, [0, 0, 0, 0, 0, 0]);
 }
 
 pub fn trig_cancelled() -> i32 {
@@ -1348,6 +1368,14 @@ pub fn add_extra_dice(count: i32, sides: i32, ptr: i32, len: i32) {
     kani_host::call_unit(Op::add_extra_dice, [count, sides, ptr, len, 0, 0]);
 }
 
+pub fn set_direction_dice(count: i32, sides: i32) {
+    kani_host::call_unit(Op::set_direction_dice, [count, sides, 0, 0, 0, 0]);
+}
+
+pub fn direction_roll() -> i32 {
+    kani_host::call_i32(Op::direction_roll, [0, 0, 0, 0, 0, 0])
+}
+
 pub fn move_stopped() -> i32 {
     kani_host::call_i32(Op::move_stopped, [0, 0, 0, 0, 0, 0])
 }
@@ -1494,6 +1522,10 @@ pub fn targeted_count(player_id: i32) -> i32 {
 
 pub fn gains_this_turn(player_id: i32) -> i32 {
     kani_host::call_i32(Op::gains_this_turn, [player_id, 0, 0, 0, 0, 0])
+}
+
+pub fn lost_this_turn(player_id: i32) -> i32 {
+    kani_host::call_i32(Op::lost_this_turn, [player_id, 0, 0, 0, 0, 0])
 }
 
 pub fn placed_tile(player_id: i32, ptr: i32, len: i32) -> i32 {
@@ -1644,6 +1676,10 @@ pub fn card_prop(ip: i32, il: i32, kp: i32, kl: i32) -> i32 {
     kani_host::call_i32(Op::card_prop, [ip, il, kp, kl, 0, 0])
 }
 
+pub fn card_derived(ip: i32, il: i32) -> i32 {
+    kani_host::call_i32(Op::card_derived, [ip, il, 0, 0, 0, 0])
+}
+
 pub fn gain_fixed(player_id: i32, amount: i32, ptr: i32, len: i32) -> i32 {
     kani_host::call_i32(Op::gain_fixed, [player_id, amount, ptr, len, 0, 0])
 }
@@ -1706,6 +1742,10 @@ pub fn nearest_with_prop(by: i32, kind: i32, kp: i32, kl: i32, buf: i32, cap: i3
 
 pub fn designations(player_id: i32, buf: i32, cap: i32) -> i32 {
     kani_host::call_i32(Op::designations, [player_id, buf, cap, 0, 0, 0])
+}
+
+pub fn event_card_ids(buf: i32, cap: i32) -> i32 {
+    kani_host::call_i32(Op::event_card_ids, [buf, cap, 0, 0, 0, 0])
 }
 
 pub fn cancel_designation(seat: i32) {
@@ -1896,4 +1936,20 @@ pub fn rehome_card(tile: i32, owner: i32) -> i32 {
 
 pub fn play_hand_card(player_id: i32, ptr: i32, len: i32) -> i32 {
     kani_host::call_i32(Op::play_hand_card, [player_id, ptr, len, 0, 0, 0])
+}
+
+pub fn add_co_owner(tile: i32, player_id: i32) -> i32 {
+    kani_host::call_i32(Op::add_co_owner, [tile, player_id, 0, 0, 0, 0])
+}
+
+pub fn is_co_owner(tile: i32, player_id: i32) -> i32 {
+    kani_host::call_i32(Op::is_co_owner, [tile, player_id, 0, 0, 0, 0])
+}
+
+pub fn owns_tile(tile: i32, player_id: i32) -> i32 {
+    kani_host::call_i32(Op::owns_tile, [tile, player_id, 0, 0, 0, 0])
+}
+
+pub fn mortgaged_for(tile: i32, player_id: i32) -> i32 {
+    kani_host::call_i32(Op::mortgaged_for, [tile, player_id, 0, 0, 0, 0])
 }

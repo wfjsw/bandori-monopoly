@@ -913,6 +913,10 @@ fn saaya_skill_offers_on_big_spend() {
     t.begin_turn(1);
     // P1 pays ≥1000: land on P0's expensive tile.
     t.own(0, &[HILL]);
+    // The band skill grants the co-holder row at game start; `clean()` wipes
+    // every deed row, so put it back -- the split (and the tile body's
+    // stand-down) read it.
+    t.co_own(0, &[HILL]);
     t.set_houses(HILL, 3); // rent 1520
     t.set_pos(1, HILL - 1);
     t.dice(&[1]);
@@ -937,6 +941,7 @@ fn saaya_skill_offers_on_big_spend() {
         }
     }
     eprintln!("money: {} {} fire={}", t.money(0), t.money(1), t.charge(0));
+    eprintln!("keys: {:?}", t.recent_keys(80));
     // 「可让那名玩家获得200资金且自己获得1个saaya标记和1个[火罐]」.
     assert!(
         offered,

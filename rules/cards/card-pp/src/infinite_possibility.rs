@@ -147,3 +147,9 @@ pub fn swap_kani(player_id: i32) -> card_sdk::Asked {
 pub fn draw_after_kani(player_id: i32) -> card_sdk::Asked {
     draw_after(player_id)
 }
+
+#[cfg(kani)]
+#[inline(always)]
+pub fn seen_kani(player_id: i32) -> card_sdk::Asked {
+    seen(player_id)
+}

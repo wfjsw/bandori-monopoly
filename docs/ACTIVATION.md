@@ -218,11 +218,11 @@ ruleset_declared_arg(out_ptr, cap) -> n     // host fills `out_ptr`; n = bytes
   in play (a hook). A trap is therefore a **decline**, not a destroy. The rule
   that lines the sites up:
 
-  | site | on trap | card |
-  |---|---|---|
-  | residual guard (`entry_admitted`) | declines | untouched |
-  | **`OP_DECLARE`** (every entry, both paths) | **declines** | **untouched** |
-  | `OP_RUN` (body) | `log.card_trap` + `DEST_GRAVEYARD` | lost |
+  | site | on trap | card | log |
+  |---|---|---|---|
+  | residual guard (`entry_admitted`) | declines | untouched | `log.card_trap` |
+  | **`OP_DECLARE`** (every entry, both paths) | **declines** | **untouched** | **`log.card_trap`** |
+  | `OP_RUN` (body) | `log.card_trap` + `DEST_GRAVEYARD` | lost | `log.card_trap` |
 
   The body's `DEST_GRAVEYARD` is not a louder severity setting -- it is a
   **post-commit consequence**: the card already left the hand and then blew
@@ -231,45 +231,31 @@ ruleset_declared_arg(out_ptr, cap) -> n     // host fills `out_ptr`; n = bytes
   A declare trap has no such cost to charge. Propagating it into that arm
   destroys a card whose body never ran.
 
-  Visibility is **not** uniform yet, and the split is backwards -- see the
-  follow-up below. The **severity** is what must not vary.
+  Severity (decline, no loss) and visibility (`log.card_trap`) are uniform
+  across every "the entry did not fire" trap.
 
-### Follow-up (tracked): every "the entry did not fire" trap should log
+### Every "the entry did not fire" trap logs
 
-**Not landed** -- deferred rather than widened into the end of the ABI
-delivery. Severity is correct and pinned (`trapping_declare_never_costs_the_card`);
-this is observability only.
+**Landed** (`DECLARE-TRAP-LOG`): `entry_admitted` / `declare_after` take an
+`on_trap: Option<&mut dyn FnMut(&mut W, i32, &str)>` callback mirroring
+`on_body`; the entry index and a `"guard trapped: …"` / `"declare trapped: …"`
+detail are handed to it. `run_hook` supplies one that writes
+`log.card_trap` (card id + detail) into the drive's returned world, and a
+trap-only hook returns `Some(HookRun)` rather than `Ok(None)` so the line is
+not dropped. `run` supplies the same for the replayed declare of a resumed
+hook body and for its own guard admissions.
 
-Today's split:
+This matters most on the hook path: it is the automatic 「可选择」 case -- the
+entire reason `declare` exists for hooks -- and the reference is
+`AG:绯红之魂`'s `pay_offer`. If that collector traps the player is **never
+asked**, the −1000 silently does not apply, and nothing is logged: they are
+looking at a payment that did not get cut, not at a dialog that failed to
+appear. `log.card_trap` naming the card and the detail turns "绯红之魂 didn't
+trigger, with no evidence" into a one-line diagnosis.
 
-| site | logs `log.card_trap`? | the player… |
-|---|---|---|
-| residual guard (`entry_admitted`) | no ("historical dispatch leniency") | — |
-| `OP_DECLARE` on a hook (`declare_after`) | **no** | just clicked nothing; a 「可选择」 silently did not apply |
-| `OP_DECLARE` on a play / [反击] | yes | just clicked something and would notice |
-| `OP_RUN` (body) | yes | — |
-
-That is loudest where the player needs it least and silent where they need it
-most. The hook path is the automatic 「可选择」 case -- the entire reason
-`declare` exists for hooks -- and the reference is `AG:绯红之魂`'s `pay_offer`.
-If that collector traps the player is **never asked**, the −1000 silently does
-not apply, and nothing is logged: they are looking at a payment that did not
-get cut, not at a dialog that failed to appear. `log.card_trap` naming the
-card and the detail turns "绯红之魂 didn't trigger, with no evidence" into a
-one-line diagnosis. The residual guard has the same hole and it is older.
-
-**The shape** (peer-reviewed): an `on_trap: Option<&mut dyn FnMut(&mut W, i32)>`
-callback on `entry_admitted`, mirroring `run_hook`'s existing
-`on_body: Option<&mut dyn FnMut(&mut W, i32)>` -- that callback already exists
-for exactly this ("the host wants to know when a thing happened inside
-`entry_admitted`"). **Do not** put `trapped` on `Admitted::No` / `HookRun`: a
-trapping declare yields `Admitted::No`, which makes `run_hook` return
-`Ok(None)`, so the drive has no channel left to learn "and by the way one of
-them trapped". The callback is the one that survives that.
-
-**Land both arms together** -- the hook `OP_DECLARE` *and* the residual
-guard's trap decline -- or the table above gains a fifth row and we are back
-to a half-fix.
+The verdict itself is **not** on `Admitted::No` / `HookRun`: a trapping
+declare yields `Admitted::No`, which would otherwise make `run_hook` return
+`Ok(None)`, so the callback is the channel that survives it.
 * `Call::{Play, Counteract}` and the chain link carry the arg as `Vec<u8>` (postcard); `resolve_jobs`
   / `drive` pass it into `OP_RUN` exactly the way `COUNTERACT_MOVE_EXTENSION`
   is stamped today, but as a real parameter rather than a move tag. **The
@@ -628,7 +614,7 @@ That is a consequence of switching to `invoke_skill`, not of these two mechanism
 | `crates/card-sdk/src/kani_host.rs` | `Op::declared_arg`, `Op::entry_admits`; Kani passes an unconstrained `T` so a proof sees every pick |
 | `tools/build-ruleset.mjs` | reject `declare` on `On::Filter`; reject a duplicate `id` within a card; **reject a non-slug `id`** (`[A-Za-z0-9_][A-Za-z0-9_.:-]*`) so identity cannot be dressed up as display text |
 | `crates/game-rules/src/hostfns.rs` | `query_guard` host (named-entry lookup + `admits_gate`); `declared_arg` host (serve the stored bytes) |
-| `crates/game-rules/src/host.rs` | `Call::{Play,Counteract}` carry `arg: Vec<u8>`; `entry_admitted` returns `Admitted` with the `next_answer` cursor *after* `admits` + `OP_DECLARE`; `on_trap` follow-up unchanged |
+| `crates/game-rules/src/host.rs` | `Call::{Play,Counteract}` carry `arg: Vec<u8>`; `entry_admitted` returns `Admitted` with the `next_answer` cursor *after* `admits` + `OP_DECLARE`; `entry_admitted` / `declare_after` / `run_hook` carry the `on_trap` callback (landed, `DECLARE-TRAP-LOG`) |
 | `crates/game-rules/src/wasm_rules.rs` | `finish_offer` runs `OP_DECLARE` before `declare_one` commits; `build_round` stores `arg: Vec<u8>` on the chain link; `resolve_jobs` serves it to `OP_RUN`; `play` path runs `OP_DECLARE` before `play_from_hand` |
 | `crates/game-rules/src/native_shims.rs` + `crates/rules-native/src/lib.rs` | `op_entry_admits`, `op_declared_arg`, the `on` mirror |
 | `rules/cards/card-ag/src/detour.rs` | queries the press entry via `entry::PRESS`; `Declared<DetourPick>` carrying at least `plan` (+ `tile`/`seat` as the plan needs); guard / option list via `query_guard(…, entry::PRESS)` |

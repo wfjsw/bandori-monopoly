@@ -368,14 +368,20 @@ pub fn fire_bird_exhausted(crystals: i32) -> bool {
 // 「（1）若你拥有的Livehouse格子多于或等于你拥有的其他格子，获得相当于这些
 // Livehouse格子地契价值20%的资金。」
 // OPEN-ROUND10: rounding of 20% is not stated; the integer case is the pin.
-// 「地契价值」 = printed tile price. No harness yet -- these helpers are
-// spec-only (`proofs/r.rs` has no blue_rose section).
+// 「地契价值」 = printed tile price. Harnessed by G15 in `proofs/r.rs`
+// (iff/no-op/mutant over a world where the player owns printed-price
+// Livehouses; `payout_ceil10` is matched to the body by M6).
 // ===========================================================================
 
 /// Branch predicate: `#(owned Livehouse) ≥ #(owned non-Livehouse)` (0 ≥ 0 takes
 /// (1); the cell states no "at least one" prerequisite).
 pub fn blue_rose_rich(n_live: i32, n_other: i32) -> bool {
     n_live >= n_other
+}
+
+/// MUTANT: strict `>` instead of the book's 「多于或等于」.
+pub fn blue_rose_rich_strict(n_live: i32, n_other: i32) -> bool {
+    n_live > n_other
 }
 
 /// 20% of the sum of those tiles' printed prices (integer pin only).

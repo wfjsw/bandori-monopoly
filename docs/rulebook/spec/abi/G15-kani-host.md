@@ -1,10 +1,11 @@
 # ABI design G15 — Kani verification host support
 
-**Status: draft for user review. Design only — no source edits, no commit.**
+**Status: landed 2026-11-13 (model-only; no wire change, `ABI_VERSION` unaffected
+by this group).** Originally a design-only draft under
+`worktree-card-rulebook-review`; the host, window points and shared `tile_in`
+landed with the A/B close-out.
 
-Worktree `/home/monopoly/web/.claude/worktrees/card-rulebook-review`, branch
-`worktree-card-rulebook-review`. Group G15, family "Kani verification host
-support".
+Group G15, family "Kani verification host support".
 
 **Closed slug and row:**
 

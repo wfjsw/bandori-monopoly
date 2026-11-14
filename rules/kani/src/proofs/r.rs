@@ -17,11 +17,15 @@
 //! `*_kani` body calls keep CBMC's call graph at ONE body (no `call_body_idx`
 //! trampoline IF-chain).
 
+use card_sdk::kani_host::{Args, Op};
+
+use crate::board;
 use crate::harness::{self, SparsePlay};
 use crate::host;
+use crate::intern;
 use crate::invoke;
 use crate::spec::r as spec;
-use crate::world::{self, Effect, MAX_LOG};
+use crate::world::{self, Effect, MAX_LOG, MAX_PLAYERS};
 
 // ---------------------------------------------------------------------------
 // Per-body host-op subsets (outside → loud FAIL).
@@ -985,5 +989,408 @@ pub fn ringing_bloom_place_mutant_is_detected() {
     crate::kassert!(
         !spec::ringing_bloom_place_log_ok_mutant(effects, user),
         "mutant: not a two-PlaceCard body"
+    );
+}
+
+// ===========================================================================
+// C-R-蓝玫瑰的骄傲-01 — 20% of the owned Livehouse deed values
+// 「（1）若你拥有的Livehouse格子多于或等于你拥有的其他格子，获得相当于这些
+//   Livehouse格子地契价值20%的资金。」
+//
+// G15: the Kani host used to answer `buyable` as "unowned property", so every
+// owned deed fell out of `livehouses()` and the clause was vacuous. The model
+// now answers the production class table (`board::tile_in`): `buyable` =
+// `price > 0`, `livehouse` = buyable ∧ group 6. `deed_setup` asserts the
+// capability (IN-1/IN-2/IN-3) on every fixture, so a model regression fails
+// loudly instead of silently proving a 0/0 world.
+//
+// Clause (2) is protocol-level under Kani (move plan), but the not-rich
+// harnesses observe that it ran: narration 1, no gain, frame intact.
+// ===========================================================================
+
+/// Real group-6 **buyable** deeds, engine index (name, printed price):
+/// 50 Live House Galaxy 1400 · 42 Space 1200 · 40 武道馆 3400 · 8 RiNG 1 1000.
+const LIVE: [i32; 4] = [50, 42, 40, 8];
+/// Non-group-6 owned "others": 2 天文馆 2600 · 3 水族馆 3200 · 4 主要街道
+/// agent (price 0, an owned tile that is not buyable at all).
+const OTHER: [i32; 3] = [2, 3, 4];
+
+/// Every host op the unmodified body reaches; anything else is a loud
+/// `outside_subset` FAIL. `tile_group` is `ctx::is_color`'s `cfg(kani)` twin
+/// and `position_of_tile` is the inline board-index identity.
+fn blue_rose_dispatch(op: Op, a: Args) -> i64 {
+    match op {
+        Op::player_pos => host::arm_player_pos(a),
+        Op::tile_count => host::arm_tile_count(a),
+        Op::tile_in => host::arm_tile_in(a),
+        Op::tile_group => host::arm_tile_group(a),
+        Op::tile_price => host::arm_tile_price(a),
+        Op::tile_owner => host::arm_tile_owner(a),
+        Op::tile_forward | Op::dist => host::arm_dist(a),
+        Op::tile_named => host::arm_tile_named(a),
+        Op::owned_count => host::arm_owned_count(a),
+        Op::owned_at => host::arm_owned_at(a),
+        Op::position_of_tile => a[0] as i64,
+        Op::gain | Op::gain_typed | Op::gain_fixed => host::arm_gain(a),
+        Op::log | Op::effect => host::arm_log(a),
+        Op::set_kind | Op::set_settles => host::arm_protocol_stub(a),
+        Op::set_teleport_to => host::arm_set_teleport_to(a),
+        Op::run_planned_move => host::arm_card_move(a),
+        other => host::outside_subset(other),
+    }
+}
+
+/// `world.narration_n` (the non-frame log counter).
+fn narration_n() -> usize {
+    world::with_world(|w| w.narration_n)
+}
+
+/// The fixture's printed prices through the same `tile_price` host the body
+/// uses.
+fn prices_of(live: &[i32]) -> Vec<i32> {
+    live.iter().map(|&t| card_sdk::ctx::tile_price(t)).collect()
+}
+
+/// G15 invariant over the installed world: every **owned** tile answers
+/// `livehouse` iff it answers `buyable ∧ color:6`, in the body's own filter
+/// order. Returns the owned Livehouse count.
+fn assert_owned_livehouse(user: i32, live: &[i32], other: &[i32]) -> i32 {
+    // Only the fixture tiles are owned (IN-3 asserts that), so walk the
+    // fixture instead of rescanning all 60 tiles: the same IN-1 obligation on
+    // the same set, one scan fewer per proof.
+    let mut n = 0;
+    for &t in live.iter().chain(other.iter()) {
+        let buy = card_sdk::ctx::tile_in(-1, t, "buyable");
+        let color = bandori_std::ctx::is_color(user, t, 6);
+        let is_live = card_sdk::ctx::tile_in(user, t, "livehouse");
+        crate::kassert!(is_live == (buy && color), "IN-1: livehouse == buyable ∧ color:6");
+        crate::kassert!(
+            buy == (board::TILES[t as usize].price > 0),
+            "IN-1: buyable == price > 0 (ownership-independent)"
+        );
+        if is_live {
+            n += 1;
+        }
+    }
+    n
+}
+
+/// Install the sparse 2-seat backend world, clear every tile, put `user`'s
+/// owners on the concrete fixtures, set concrete money, then run IN-2/IN-3.
+fn deed_setup(user: i32, live: &[i32], other: &[i32]) {
+    debug_assert!(user == 0 || user == 1);
+    crate::kassert!(
+        live.len() + other.len() <= 8,
+        "IN-3: fixture fits the 8-deed `owned_tiles` cap"
+    );
+    host::install_backend(blue_rose_dispatch);
+    // `World::new()` (the `WORLD` initializer) plus the ownership fixture, not
+    // `sparse_r_world`: the card reads no fan counter and the fixture overwrites
+    // money concretely, so the symbolic fan / `key_set` props are pure symex
+    // cost on this 3×60-tile walk.
+    world::with_world_mut(|w| {
+        w.trig_player = user;
+        w.symbolic_answers = true;
+        w.pos = [10, 20, 0, 0];
+        let mut t = 0;
+        while t < 60 {
+            w.tiles[t].owner = -1;
+            t += 1;
+        }
+        for &t in live {
+            w.tiles[t as usize].owner = user;
+        }
+        for &t in other {
+            w.tiles[t as usize].owner = user;
+        }
+        // Concrete so the gain can never saturate (payout <= 1200 here).
+        w.money = [10_000; MAX_PLAYERS];
+    });
+    let mut owned = 0;
+    let mut t = 0;
+    while t < 60 {
+        if world::with_world(|w| w.tiles[t].owner == user) {
+            owned += 1;
+        }
+        t += 1;
+    }
+    crate::kassert!(
+        owned == (live.len() + other.len()) as i32,
+        "IN-3: the world owns exactly the fixture"
+    );
+    crate::kassert!(
+        assert_owned_livehouse(user, live, other) == live.len() as i32,
+        "IN-2: the fixture's Livehouses pass the card's own filter"
+    );
+}
+
+/// Frame after clause (1): positions / fire / stay / hand / discard unchanged.
+fn assert_rose_frame(condition: &world::Snapshot, post: &world::Snapshot) {
+    crate::kassert!(world::arr4_eq(post.pos, condition.pos), "frame: pos");
+    crate::kassert!(world::arr4_eq(post.charge, condition.charge), "frame: fire");
+    crate::kassert!(world::arr4_eq(post.stay, condition.stay), "frame: stay");
+    crate::kassert!(world::arr8b_eq(post.hand, condition.hand), "frame: hand");
+    crate::kassert!(
+        world::arr8b_eq(post.discard, condition.discard),
+        "frame: discard"
+    );
+}
+
+/// Shared clause-(1) iff at a concrete seat over a rich fixture.
+fn blue_rose_payout_iff_at(user: i32, live: &[i32], other: &[i32]) {
+    deed_setup(user, live, other);
+    let condition = world::snapshot();
+    let pre_pos = world::with_world(|w| w.pos);
+    invoke::unwrap_done(card_roselia::blue_rose::play_kani(user));
+    let post = world::snapshot();
+    let (logbuf, log_n) = log_slice();
+    let effects = effects_of(&logbuf, log_n);
+    let amount = spec::blue_rose_payout(&prices_of(live));
+
+    // The fixture is concrete, so only the reachable half gets a cover; a
+    // `cover!` that no path can satisfy would fail verification.
+    if live.is_empty() {
+        kani::cover!(log_n == 0, "zero payout (0/0 world)");
+    } else {
+        kani::cover!(log_n == 1, "one payout effect");
+    }
+    crate::kassert!(
+        spec::blue_rose_rich(live.len() as i32, other.len() as i32),
+        "C-R-蓝玫瑰的骄傲-01: the rich predicate holds"
+    );
+    if amount > 0 {
+        crate::kassert!(
+            spec::blue_rose_payout_log_ok(effects, user, amount),
+            "C-R-蓝玫瑰的骄傲-01: exactly GainMoney 20% of the Livehouse prices"
+        );
+        crate::kassert!(
+            spec::only_player_money_delta(&condition, &post, user, amount, 1),
+            "C-R-蓝玫瑰的骄傲-01: only the user's money moves, by the payout"
+        );
+    } else {
+        // `gain(0)` logs no effect: the 0/0 world asserts emptiness instead.
+        crate::kassert!(effects.is_empty(), "zero payout logs no effect");
+        for p in 0..MAX_PLAYERS {
+            crate::kassert!(post.money[p] == condition.money[p], "0/0 frame: money");
+        }
+    }
+    crate::kassert!(world::with_world(|w| w.pos) == pre_pos, "frame: pos (read)");
+    assert_rose_frame(&condition, &post);
+    crate::kassert!(narration_n() == 0, "clause (1) does not log a move");
+    // A payout never rewrites ownership.
+    for &t in live.iter().chain(other.iter()) {
+        crate::kassert!(
+            world::with_world(|w| w.tiles[t as usize].owner) == user,
+            "frame: fixture owners unchanged"
+        );
+    }
+}
+
+/// Shared clause-(2) no-op: not rich ⇒ no gain, one teleport narration, frame.
+fn blue_rose_not_rich_noop_at(user: i32, live: &[i32], other: &[i32]) {
+    deed_setup(user, live, other);
+    let condition = world::snapshot();
+    invoke::unwrap_done(card_roselia::blue_rose::play_kani(user));
+    let post = world::snapshot();
+    let (logbuf, log_n) = log_slice();
+    let effects = effects_of(&logbuf, log_n);
+
+    crate::kassert!(
+        !spec::blue_rose_rich(live.len() as i32, other.len() as i32),
+        "C-R-蓝玫瑰的骄傲-01: the rich predicate is false"
+    );
+    crate::kassert!(effects.is_empty(), "not rich: no gain effect");
+    for p in 0..MAX_PLAYERS {
+        crate::kassert!(post.money[p] == condition.money[p], "noop frame: money");
+    }
+    crate::kassert!(narration_n() == 1, "clause (2) is logged (it ran)");
+    assert_rose_frame(&condition, &post);
+    let _ = &logbuf;
+}
+
+/// B1 — equality boundary (1 live, 1 other): 1400 · 20% = 280.
+#[kani::proof]
+#[kani::use_stub_set(crate::kani_stubs::LIB_COST_NOFMT)]
+#[kani::unwind(80)]
+pub fn blue_rose_payout_equality_iff() {
+    blue_rose_payout_iff_at(0, &LIVE[..1], &OTHER[..1]);
+}
+
+/// B1 at seat 1.
+#[kani::proof]
+#[kani::use_stub_set(crate::kani_stubs::LIB_COST_NOFMT)]
+#[kani::unwind(80)]
+pub fn blue_rose_payout_equality_user1_iff() {
+    blue_rose_payout_iff_at(1, &LIVE[..1], &OTHER[..1]);
+}
+
+/// B2 — majority (2 live, 1 other): (1400+1200) · 20% = 520.
+#[kani::proof]
+#[kani::use_stub_set(crate::kani_stubs::LIB_COST_NOFMT)]
+#[kani::unwind(80)]
+pub fn blue_rose_payout_majority_iff() {
+    blue_rose_payout_iff_at(0, &LIVE[..2], &OTHER[..1]);
+}
+
+/// B2 at seat 1.
+#[kani::proof]
+#[kani::use_stub_set(crate::kani_stubs::LIB_COST_NOFMT)]
+#[kani::unwind(80)]
+pub fn blue_rose_payout_majority_user1_iff() {
+    blue_rose_payout_iff_at(1, &LIVE[..2], &OTHER[..1]);
+}
+
+/// B3 — the sum spans three deeds (3 live, 2 other): 6000 · 20% = 1200.
+#[kani::proof]
+#[kani::use_stub_set(crate::kani_stubs::LIB_COST_NOFMT)]
+#[kani::unwind(80)]
+pub fn blue_rose_payout_sum_iff() {
+    blue_rose_payout_iff_at(0, &LIVE[..3], &OTHER[..2]);
+}
+
+/// B3 at seat 1.
+#[kani::proof]
+#[kani::use_stub_set(crate::kani_stubs::LIB_COST_NOFMT)]
+#[kani::unwind(80)]
+pub fn blue_rose_payout_sum_user1_iff() {
+    blue_rose_payout_iff_at(1, &LIVE[..3], &OTHER[..2]);
+}
+
+/// B4 — no deeds at all (0, 0): the book's 0 ≥ 0 takes clause (1), pays 0,
+/// and must not take the teleport.
+#[kani::proof]
+#[kani::use_stub_set(crate::kani_stubs::LIB_COST_NOFMT)]
+#[kani::unwind(80)]
+pub fn blue_rose_zero_deed_iff() {
+    blue_rose_payout_iff_at(0, &[], &[]);
+}
+
+/// B4 at seat 1.
+#[kani::proof]
+#[kani::use_stub_set(crate::kani_stubs::LIB_COST_NOFMT)]
+#[kani::unwind(80)]
+pub fn blue_rose_zero_deed_user1_iff() {
+    blue_rose_payout_iff_at(1, &[], &[]);
+}
+
+/// B5 — not rich, zero live (0 live, 2 other).
+#[kani::proof]
+#[kani::use_stub_set(crate::kani_stubs::LIB_COST_NOFMT)]
+#[kani::unwind(80)]
+pub fn blue_rose_not_rich_noop() {
+    blue_rose_not_rich_noop_at(0, &[], &OTHER[..2]);
+}
+
+/// B5 at seat 1.
+#[kani::proof]
+#[kani::use_stub_set(crate::kani_stubs::LIB_COST_NOFMT)]
+#[kani::unwind(80)]
+pub fn blue_rose_not_rich_user1_noop() {
+    blue_rose_not_rich_noop_at(1, &[], &OTHER[..2]);
+}
+
+/// B6 — below the threshold (1 live, 2 other): strict majority fails.
+#[kani::proof]
+#[kani::use_stub_set(crate::kani_stubs::LIB_COST_NOFMT)]
+#[kani::unwind(80)]
+pub fn blue_rose_payout_below_threshold_noop() {
+    blue_rose_not_rich_noop_at(0, &LIVE[..1], &OTHER[..2]);
+}
+
+/// B6 at seat 1.
+#[kani::proof]
+#[kani::use_stub_set(crate::kani_stubs::LIB_COST_NOFMT)]
+#[kani::unwind(80)]
+pub fn blue_rose_payout_below_threshold_user1_noop() {
+    blue_rose_not_rich_noop_at(1, &LIVE[..1], &OTHER[..2]);
+}
+
+/// B7 — `payout_log_ok` exactness (pure): true only for exactly one
+/// `GainMoney{p, n}`; false for n ± 1, for the other seat, and when an extra
+/// `PayMoney` rides along.
+#[kani::proof]
+#[kani::use_stub_set(crate::kani_stubs::LIB_COST_NOFMT)]
+#[kani::unwind(12)]
+pub fn blue_rose_payout_log_ok_is_exact() {
+    let n: i32 = kani::any();
+    kani::assume(n > 0 && n <= 10_000);
+    let good = [Effect::GainMoney { player: 0, n }];
+    crate::kassert!(
+        spec::blue_rose_payout_log_ok(&good, 0, n),
+        "the exact one-effect log matches"
+    );
+    let low = [Effect::GainMoney { player: 0, n: n - 1 }];
+    crate::kassert!(!spec::blue_rose_payout_log_ok(&low, 0, n), "n − 1 differs");
+    let high = [Effect::GainMoney { player: 0, n: n + 1 }];
+    crate::kassert!(!spec::blue_rose_payout_log_ok(&high, 0, n), "n + 1 differs");
+    let seat = [Effect::GainMoney { player: 1, n }];
+    crate::kassert!(!spec::blue_rose_payout_log_ok(&seat, 0, n), "the other seat differs");
+    let extra = [
+        Effect::PayMoney { player: 0, n: 1 },
+        Effect::GainMoney { player: 0, n },
+    ];
+    crate::kassert!(!spec::blue_rose_payout_log_ok(&extra, 0, n), "an extra effect differs");
+    kani::cover!(n == 280, "the equality-fitfixture payout");
+}
+
+/// X1 — the 25% mutant is detected: [50] pays 280 while the mutant says 350,
+/// and the money delta is not 350.
+#[kani::proof]
+#[kani::use_stub_set(crate::kani_stubs::LIB_COST_NOFMT)]
+#[kani::unwind(80)]
+pub fn blue_rose_payout_mutant_is_detected() {
+    let user = 0i32;
+    blue_rose_payout_iff_at(user, &LIVE[..1], &OTHER[..1]);
+    // Re-run the fixture to read the body's own answer against the mutant.
+    deed_setup(user, &LIVE[..1], &OTHER[..1]);
+    let condition = world::snapshot();
+    invoke::unwrap_done(card_roselia::blue_rose::play_kani(user));
+    let post = world::snapshot();
+    let (logbuf, log_n) = log_slice();
+    let effects = effects_of(&logbuf, log_n);
+    let mutant = spec::blue_rose_payout_mutant(&[1400]);
+    kani::cover!(mutant == 350, "the mutant wants 25%");
+    crate::kassert!(
+        !spec::blue_rose_payout_log_ok(effects, user, mutant),
+        "X1: the 25% amount does not match the logged gain"
+    );
+    crate::kassert!(
+        post.money[user as usize] != condition.money[user as usize].saturating_add(mutant),
+        "X1: the money delta is not 350"
+    );
+}
+
+/// X2 — a strict `>` predicate is detected at the equality boundary: the body
+/// logs the gain, the mutant predicate says no.
+#[kani::proof]
+#[kani::use_stub_set(crate::kani_stubs::LIB_COST_NOFMT)]
+#[kani::unwind(80)]
+pub fn blue_rose_rich_strict_mutant_is_detected() {
+    let user = 0i32;
+    deed_setup(user, &LIVE[..1], &OTHER[..1]);
+    invoke::unwrap_done(card_roselia::blue_rose::play_kani(user));
+    let (logbuf, log_n) = log_slice();
+    let effects = effects_of(&logbuf, log_n);
+    crate::kassert!(!spec::blue_rose_rich_strict(1, 1), "strict mutant rejects equality");
+    crate::kassert!(
+        spec::blue_rose_payout_log_ok(effects, user, spec::blue_rose_payout(&[1400])),
+        "the body still logs the equality-boundary gain"
+    );
+}
+
+/// X3 — asserting the 25% spec against the body must FAIL.
+#[kani::proof]
+#[kani::use_stub_set(crate::kani_stubs::LIB_COST_NOFMT)]
+#[kani::unwind(80)]
+#[kani::should_panic]
+pub fn blue_rose_payout_mutant_350() {
+    let user = 0i32;
+    deed_setup(user, &LIVE[..1], &OTHER[..1]);
+    invoke::unwrap_done(card_roselia::blue_rose::play_kani(user));
+    let (logbuf, log_n) = log_slice();
+    let effects = effects_of(&logbuf, log_n);
+    crate::kassert!(
+        spec::blue_rose_payout_log_ok(effects, user, 350),
+        "mutant: the body pays 350 (25%)"
     );
 }

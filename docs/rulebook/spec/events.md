@@ -287,17 +287,22 @@ A discrepancy is a plain failing test. No `#[ignore]`.
 * **ID:** `E-circle-rebuild-05`
 * **Effect:** CiRCLE's original effects move to CiRCLE 咖啡厅 and override its
   own. (The [经过] reward rides that migration.)
-* **Status:** the [经过] reward half is now pinned directly, and it runs as
-  `tile:circle` via the cross-card `"settleReward"` message rather than a call
-  into that module (`docs/CARDS.md`). The veto that suppresses the reward on
-  the real CiRCLE dies with the event. What is still open is the *rest* of
-  「所有效果」 riding along automatically -- that needs a real tile-rule swap,
-  BACKLOG **ABI-13**. A card keyed *on* CiRCLE (charge replenish) must not
-  ride the migration; see the constraint on ABI-13.
+* **Status:** implemented as a **rule swap** (`ctx::tile_swap_rules`,
+  `docs/rulebook/spec/abi/ab-tile-swap.md`): the whole `tile:circle` instance
+  governs the cafe until the event expires, so every effect and every piece of
+  instance state rides the migration instead of being re-implemented. A card
+  keyed *on* CiRCLE (charge replenish) does not ride it -- the square's
+  identity stays put -- which is pinned by
+  `circle_rebuild_leaves_charge_replenish_on_the_real_circle`. The charge
+  replenish stays on the real CiRCLE.
 * **Executable:** `circle_rebuild_pays_the_reward_on_a_cafe_pass`,
   `circle_rebuild_moves_the_pass_reward_off_circle`,
   `circle_rebuild_restores_the_reward_after_it_expires`,
-  `circle_rebuild_leaves_charge_replenish_on_the_real_circle`.
+  `circle_rebuild_leaves_charge_replenish_on_the_real_circle`; the swap
+  mechanics in `ab_tile_swap.rs`
+  (`circle_rebuild_swap_binds_both_squares`,
+  `rule_swap_moves_the_settle_body_and_keeps_identity`,
+  `rule_swap_composes_tile_text`, `rule_swap_rides_save_and_restore`).
 
 ---
 

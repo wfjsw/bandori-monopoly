@@ -277,6 +277,9 @@ pub fn c_mygo_anon_tokyo_link_frame(step: &Step<'_>) -> Result<(), String> {
             &format!("hand_n:P{who}"),
             &format!("discard_pub:P{who}"),
             "marks:",
+            // ABI v124 designation: the branch records the designated tile as
+            // an instance frame property.
+            &format!("fprop:P{who}"),
         ],
     )
 }
@@ -357,6 +360,9 @@ fn anon_tokyo_limit_and_link_pay() {
                 "field:P0",
                 "crystals:P0",
                 "state:P0",
+                // ABI v124 designation: the branch records the designated
+                // tile as an instance frame property.
+                "fprop:P0",
             ],
         )
     })

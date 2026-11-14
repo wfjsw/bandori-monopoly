@@ -1181,6 +1181,89 @@ fn pay_calc_w5(player_id: i32) -> card_sdk::Asked {
     Ok(())
 }
 
+/// COND-01 probe: the first `rollPlan` entry writes a slot, the second is
+/// gated on `slot('cond.live') >= 1` and logs. Both fire on the same roll, so
+/// the second only runs when the condition sees the first body's write.
+const COND_LIVE_PROBE: CardDef = CardDef::new(
+    "TEST:condLiveProbe",
+    &[
+        On::Play("", None, cond_live_place),
+        On::Filter(Filter::DiceRollPlan(
+            "actor == owner && card.placed",
+            None,
+            cond_live_bump,
+        )),
+        On::Filter(Filter::DiceRollPlan(
+            "actor == owner && card.placed && slot('cond.live') >= 1",
+            None,
+            cond_live_see,
+        )),
+    ],
+);
+
+/// HOST-03 行动阶段 3 / 6 probe: logs the `turnStart` window and the
+/// 「回合开始后」 stage marker (`turnStartAfter`) with distinct keys, so a test
+/// can pin that the marker fires once, after the window. The manage-phase
+/// marker is its own card below.
+const TURN_START_AFTER_PROBE: CardDef = CardDef::new(
+    "TEST:turnStartAfterProbe",
+    &[
+        On::Action(Action::TurnStart("actor == owner", None, turn_start_window)),
+        On::Action(Action::TurnStartAfter(
+            "actor == owner",
+            None,
+            turn_start_after,
+        )),
+    ],
+);
+
+fn cond_live_place(player_id: i32) -> card_sdk::Asked {
+    ctx::set_dest(ctx::Dest::Field, card_sdk::abi::ZoneChangeCause::Play);
+    ctx::place_card(
+        player_id,
+        "TEST:condLiveProbe",
+        &Msg::new(key!("cond_live_note")),
+    );
+    Ok(())
+}
+
+fn cond_live_bump(player_id: i32, v: PlanValue) -> PlanValue {
+    ctx::set_slot(player_id, "cond.live", 1);
+    ctx::log(player_id, &Msg::new(key!("cond_live_bump")));
+    v
+}
+
+fn cond_live_see(player_id: i32, v: PlanValue) -> PlanValue {
+    ctx::log(player_id, &Msg::new(key!("cond_live_see")));
+    v
+}
+
+fn turn_start_window(player_id: i32) -> card_sdk::Asked {
+    ctx::log(player_id, &Msg::new(key!("turn_start_window")));
+    Ok(())
+}
+
+fn turn_start_after(player_id: i32) -> card_sdk::Asked {
+    ctx::log(player_id, &Msg::new(key!("turn_start_after")));
+    Ok(())
+}
+
+/// HOST-03 行动阶段 6 probe: logs `manage_after` at 「经营/出牌阶段后」, the
+/// boundary into the main-move phase (or on an end-turn from 运营).
+const MANAGE_AFTER_PROBE: CardDef = CardDef::new(
+    "TEST:manageAfterProbe",
+    &[On::Action(Action::ManageAfter(
+        "actor == owner",
+        None,
+        manage_after,
+    ))],
+);
+
+fn manage_after(player_id: i32) -> card_sdk::Asked {
+    ctx::log(player_id, &Msg::new(key!("manage_after")));
+    Ok(())
+}
+
 /// HOST-03 window 7 probe: logs the settled `paid` figure with the payer's
 /// seat (-1 for a print), so a test can pin that a receipt fires it too.
 const PAID_PROBE: CardDef = CardDef::new(
@@ -1504,6 +1587,54 @@ const LOSE_1000: CardDef = CardDef::new("TEST:lose1000", &[On::Play("", None, lo
 fn lose_1000(player_id: i32) -> card_sdk::Asked {
     ctx::pay(player_id, 1000, &Msg::new(key!("lose_1000_reason")))?;
     Ok(())
+}
+
+/// A bank payment of the player state var `TEST.pay.amount` (ABI-11's window
+/// tests need many different figures). Unset / `0` pays nothing.
+const PAY_AMOUNT: CardDef = CardDef::new("TEST:payAmount", &[On::Play("", None, pay_amount)]);
+
+fn pay_amount(player_id: i32) -> card_sdk::Asked {
+    let n = ctx::state::get(player_id, "TEST.pay.amount");
+    ctx::log(
+        player_id,
+        &Msg::new(key!("pay_amount_reason")).n("n", n as i64),
+    );
+    ctx::pay(player_id, n, &Msg::new(key!("pay_amount_reason")))?;
+    Ok(())
+}
+
+/// FORCE-WRITE-01: a placed generic `BuyMul` hook (halves every non-Force buy
+/// price) -- the control that must NOT retune a 强制购买 quote.
+const BUY_MUL_HALF: CardDef = CardDef::new(
+    "TEST:buyMulHalf",
+    &[On::Filter(Filter::BuyMul(
+        "actor == owner && card.placed",
+        None,
+        buy_mul_half,
+    ))],
+);
+
+fn buy_mul_half(_player_id: i32, value: i32) -> i32 {
+    value / 2
+}
+
+/// FORCE-WRITE-01: a placed 强制购买 price hook (`ForceBuyAdd` +1500) -- the
+/// spelling that opts an entry into retuning a Force quote.
+const FORCE_BUY_ADD: CardDef = CardDef::new(
+    "TEST:forceBuyAdd",
+    &[On::Filter(Filter::ForceBuyAdd(
+        "actor == owner && card.placed",
+        None,
+        force_buy_add,
+    ))],
+);
+
+fn force_buy_add(_player_id: i32, value: i32) -> i32 {
+    ctx::log(
+        _player_id,
+        &Msg::new(key!("force_buy_add_reason")).n("from", value as i64),
+    );
+    value + 1500
 }
 
 /// Marker window (user ruling 2026-10-07): a [反击] that answers `markerSpend`
@@ -2997,6 +3128,112 @@ fn trap_declare_body(player_id: i32) -> card_sdk::Asked {
     Ok(())
 }
 
+/// A placed card whose **residual guard** traps under the `trapGuard` fixture
+/// prop. A trapping guard declines the entry (docs/ACTIVATION.md §2 "Every
+/// 'the entry did not fire' trap logs") and must log one `log.card_trap` line;
+/// the card stays untouched. `TEST:trap_guard_ok` is the same card with the
+/// switch off, proving the line is the trap's and not the entry's.
+const TRAP_GUARD: CardDef = CardDef::new(
+    "TEST:trap_guard",
+    &[
+        On::Play("", None, trap_guard_play),
+        On::Action(Action::TurnEnd(
+            "card.placed",
+            Some(trap_guard_guard),
+            trap_guard_body,
+        )),
+    ],
+)
+.props(&[("trapGuard", 1)]);
+
+const TRAP_GUARD_OK: CardDef = CardDef::new(
+    "TEST:trap_guard_ok",
+    &[
+        On::Play("", None, trap_guard_ok_play),
+        On::Action(Action::TurnEnd(
+            "card.placed",
+            Some(trap_guard_guard),
+            trap_guard_body,
+        )),
+    ],
+)
+.props(&[("trapGuard", 0)]);
+
+fn trap_guard_play(player_id: i32) -> card_sdk::Asked {
+    ctx::set_dest(ctx::Dest::Field, card_sdk::abi::ZoneChangeCause::Play);
+    ctx::place_card(
+        player_id,
+        "TEST:trap_guard",
+        &Msg::new(key!("trap_guard_note")),
+    );
+    Ok(())
+}
+
+fn trap_guard_ok_play(player_id: i32) -> card_sdk::Asked {
+    ctx::set_dest(ctx::Dest::Field, card_sdk::abi::ZoneChangeCause::Play);
+    ctx::place_card(
+        player_id,
+        "TEST:trap_guard_ok",
+        &Msg::new(key!("trap_guard_note")),
+    );
+    Ok(())
+}
+
+/// The fixture switch: `trapGuard` off admits, on panics into a wasm trap.
+fn trap_guard_guard(_player_id: i32) -> bool {
+    if ctx::prop("trapGuard") == 0 {
+        return true;
+    }
+    panic!("TEST:trap_guard guard trapped");
+}
+
+fn trap_guard_body(player_id: i32) -> card_sdk::Asked {
+    ctx::log(player_id, &Msg::new(key!("trap_guard_body")));
+    Ok(())
+}
+
+/// A **hand** card whose `On::Play` declare traps. The collector runs before
+/// the point of no return (docs/ACTIVATION.md §2): the play declines, the card
+/// stays in hand, and one `log.card_trap` line lands.
+const TRAP_PLAY_DECLARE: CardDef = CardDef::new(
+    "TEST:trap_play_declare",
+    &[On::Play("", None, trap_play_body).declare(trap_play_collect)],
+);
+
+fn trap_play_collect(_player_id: i32) -> card_sdk::Declared {
+    panic!("TEST:trap_play_declare collector trapped");
+}
+
+fn trap_play_body(player_id: i32) -> card_sdk::Asked {
+    ctx::log(player_id, &Msg::new(key!("trap_play_body")));
+    Ok(())
+}
+
+/// Transfers the user's whole 可乐饼 holding to the other seat -- the
+/// `markerChanged` write `hagumi`'s overflow handler listens for.
+const HAGUMI_GIVE: CardDef = CardDef::new("TEST:hagumiGive", &[On::Play("", None, hagumi_give)]);
+
+fn hagumi_give(player_id: i32) -> card_sdk::Asked {
+    let other = if player_id == 0 { 1 } else { 0 };
+    let n = ctx::held_count(player_id, "可乐饼");
+    ctx::add_held_by_name(player_id, "可乐饼", -n, 10)?;
+    ctx::add_held_by_name(other, "可乐饼", n, 10)?;
+    ctx::log(
+        player_id,
+        &Msg::new(key!("hagumi_give_done")).n("n", n as i64),
+    );
+    Ok(())
+}
+
+/// Gains 4 可乐饼 on the playing seat -- the owner's own write, which must
+/// not trip `hagumi`'s overflow handler.
+const HAGUMI_GAIN: CardDef = CardDef::new("TEST:hagumiGain", &[On::Play("", None, hagumi_gain)]);
+
+fn hagumi_gain(player_id: i32) -> card_sdk::Asked {
+    ctx::add_held_by_name(player_id, "可乐饼", 4, 10)?;
+    Ok(())
+}
+
 // ---------------------------------------------------------------------------
 // Rev-2: a card-authored struct arg, and named entry ids for `query_guard`.
 // ---------------------------------------------------------------------------
@@ -3791,6 +4028,78 @@ fn swap_probe(player_id: i32) -> card_sdk::Asked {
     Ok(())
 }
 
+/// Plays itself onto the caller's current tile and binds a **rule** swap
+/// between that square and CiRCLE (`ctx::tile_swap_rules`, ABI-13): CiRCLE's
+/// rule instances govern this square and this square's rule instances govern
+/// CiRCLE until this instance leaves play. The squares keep their identity.
+const RULE_SWAP: CardDef = CardDef::new("TEST:rule_swap", &[On::Play("", None, rule_swap)]);
+
+fn rule_swap(player_id: i32) -> card_sdk::Asked {
+    let here = ctx::tile_at(ctx::player_pos(player_id));
+    let circle = ctx::tile_named("CiRCLE");
+    if here < 0 || circle < 0 {
+        return Ok(());
+    }
+    ctx::set_dest(ctx::Dest::Field, card_sdk::abi::ZoneChangeCause::Play);
+    ctx::place_card_on(
+        player_id,
+        here,
+        "TEST:rule_swap",
+        &Msg::new(key!("rule_swap_note")),
+    );
+    ctx::tile_swap_rules(here, circle);
+    Ok(())
+}
+
+/// Takes the `TEST:rule_swap` instance off the field -- the binding rides it
+/// and must die with it.
+const RULE_SWAP_OFF: CardDef =
+    CardDef::new("TEST:rule_swap_off", &[On::Play("", None, rule_swap_off)]);
+
+fn rule_swap_off(player_id: i32) -> card_sdk::Asked {
+    ctx::unplace_card_named(player_id, "TEST:rule_swap");
+    Ok(())
+}
+
+/// Logs each settle's trigger tile and what the **static board** says about it
+/// (`ctx::tile_is` / `ctx::is_start`): under a rule swap the body follows the
+/// partner, the identity must not.
+const RULE_IDENTITY_PROBE: CardDef = CardDef::new(
+    "TEST:rule_identity_probe",
+    &[
+        On::Play("", None, rule_identity_probe_play),
+        On::Action(Action::Settle("", None, rule_identity_probe)),
+    ],
+);
+
+fn rule_identity_probe_play(player_id: i32) -> card_sdk::Asked {
+    let here = ctx::tile_at(ctx::player_pos(player_id));
+    if here < 0 {
+        return Ok(());
+    }
+    ctx::set_dest(ctx::Dest::Field, card_sdk::abi::ZoneChangeCause::Play);
+    ctx::place_card_on(
+        player_id,
+        here,
+        "TEST:rule_identity_probe",
+        &Msg::new(key!("rule_identity_probe_note")),
+    );
+    Ok(())
+}
+
+fn rule_identity_probe(player_id: i32) -> card_sdk::Asked {
+    let t = trigger::tile();
+    ctx::log(
+        player_id,
+        &Msg::new(key!("rule_identity_seen"))
+            .tile("tile", t)
+            .i("is_circle", ctx::tile_is(t, "circle") as i64)
+            .i("is_start", ctx::is_start(t) as i64)
+            .i("position", trigger::position() as i64),
+    );
+    Ok(())
+}
+
 /// Logs the settle's governing tile and physical slot (dispatch check).
 const TILE_ID_PROBE: CardDef = CardDef::new(
     "TEST:tile_id_probe",
@@ -4493,7 +4802,13 @@ card_sdk::ruleset!(&[
     XFER_1000,
     GAIN_1000,
     LOSE_1000,
+    PAY_AMOUNT,
+    BUY_MUL_HALF,
+    FORCE_BUY_ADD,
     PAY_CALC_PROBE,
+    COND_LIVE_PROBE,
+    TURN_START_AFTER_PROBE,
+    MANAGE_AFTER_PROBE,
     PAID_PROBE,
     MARKER_DENY,
     MARKER_SPEND,
@@ -4560,6 +4875,11 @@ card_sdk::ruleset!(&[
     PICK_COUNTER,
     TRIGGER_SEEN,
     TRAP_DECLARE,
+    TRAP_GUARD,
+    TRAP_GUARD_OK,
+    TRAP_PLAY_DECLARE,
+    HAGUMI_GIVE,
+    HAGUMI_GAIN,
     STRUCT_ARG,
     NAMED_OPEN,
     NAMED_SHUT,
@@ -4598,6 +4918,9 @@ card_sdk::ruleset!(&[
     TILE_SWAP_COUNTER,
     SETTLE_HERE,
     SWAP_PROBE,
+    RULE_SWAP,
+    RULE_SWAP_OFF,
+    RULE_IDENTITY_PROBE,
     TILE_ID_PROBE,
     PATH_PROBE,
     HOUSE_SET,

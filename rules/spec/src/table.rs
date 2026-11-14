@@ -670,6 +670,8 @@ impl Table {
         }
         let n = w.st.owners.len();
         w.st.owners = vec![-1; n];
+        w.st.co_owners = vec![Vec::new(); n];
+        w.st.co_mortgaged = vec![Vec::new(); n];
         w.st.houses = vec![0; n];
         w.st.mortgaged = vec![false; n];
         w.st.embers = vec![0; n];
@@ -699,6 +701,25 @@ impl Table {
     pub fn own(&mut self, who: usize, tiles: &[usize]) {
         for &t in tiles {
             self.set_owner(t, Some(who));
+        }
+    }
+
+    /// A 「视为同时拥有」 stake (the deed's co-holder row). [`Table::clean`]
+    /// wipes every deed row including these, so a test that relies on a
+    /// start-time grant (the Poppin' Party hill) must put the row back.
+    pub fn co_own(&mut self, who: usize, tiles: &[usize]) {
+        for &t in tiles {
+            self.m.world_mut().st.co_owners[t].push(who as i32);
+        }
+    }
+
+    /// Drop a co-holder row again. A seat the start grant made a co-holder
+    /// (every Poppin' Party character on the hill) lands as an owner and is
+    /// offered a build instead of paying rent; a test that wants the rent
+    /// path takes the row away from the payer.
+    pub fn co_disown(&mut self, who: usize, tiles: &[usize]) {
+        for &t in tiles {
+            self.m.world_mut().st.co_owners[t].retain(|c| *c != who as i32);
         }
     }
 

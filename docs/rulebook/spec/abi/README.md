@@ -6,8 +6,8 @@ a generic capability, an exact ABI surface, engine wiring, card usage,
 save/record impact, versioning, tests/Kani obligations, alternatives and open
 questions.
 
-G01–G14 have landed (the G08 `cardplayed-payload` residual closed last). G15 is
-the only group still design-only.
+G01–G15 have all landed (the G08 `cardplayed-payload` residual closed last;
+G15 landed with the 2026-11-13 A/B close-out).
 
 **The group is the unit of review.** Approve, reject or reshape a whole group —
 not individual cards. An item is fixed only after its group is approved and
@@ -26,7 +26,7 @@ the whole table.
 
 | group | `ABI_VERSION` | `SAVE_VERSION` | engine kinds | Kani `Op` |
 |---|---|---|---|---|
-| G15 | — | 12 | — | — |
+| G15 | — | 12 | — | — (model-only) |
 | G01 | 104→105 | 12 | 111–112 | 341–346 |
 | G08 | 117→118 | 19→20 | 113–119, 140 | 467–486 |
 | G02 | 106→107 | 13 | 122 | 370–378 |
@@ -58,6 +58,16 @@ G02 on shifts eleven; kind 121 stays free, which costs nothing. `SAVE_VERSION`
 stays at the value G08 landed (13) — the base column above
 records the *pre-landing* value each document was written against, which is
 why G15/G01 say 12.
+
+**2026-11-13 amendment.** The A/B backlog close-out landed the remaining B
+items that were not grouped drafts (plus G15). Allocation, in landing order:
+engine kinds 143–149 (`turnStartAfter`, `manageAfter`, `markerChanged`,
+`abnormalChoice`, then the three force-buy price stages 147–149); Kani `Op` /
+imports 499–512 (`trig_set_abnormal_allowed`, `lost_this_turn`,
+`trigger_pay_split_ran`, `tile_prop_state`, `add_group_pool_shuffled`,
+`trig_card_tags`, the four co-holder reads, `set_direction_dice`,
+`direction_roll`, `card_derived`, `event_card_ids`); `SAVE_VERSION` 22 → 23.
+The batch documents sit beside their groups below.
 
 **2026-10-31 second amendment (G03).** The G03 review found the draft asked
 for eight roll imports plus `trig_roll` while its Op row was still `—`. G03
@@ -170,7 +180,7 @@ hook-only. `ABI_VERSION` is 120; no import and no `SAVE_VERSION` change. The
 
 Recommended landing order (foundation → dependent):
 
-1. **G15** Kani host — model-only, no version change.
+1. **G15** Kani host — model-only, no version change. *(landed 2026-11-13)*
 2. **G01** instance identity — the uid/trigger payload other groups build on.
 3. **G08** zone lifecycle — the single zone writer, instance state, leave hooks.
 4. **G02** pay pipeline — payload/stage seams consumed by G09/G10/G12.
@@ -231,6 +241,13 @@ Couplings a reviewer must keep in one head:
 The item slugs, severities and sheet rows are listed under each group in
 `docs/rulebook/BACKLOG.md` section B. Each document's header repeats its own
 slug/row table.
+
+Follow-on items written after their group landed live beside it:
+[`ab-unstoppable-choice.md`](ab-unstoppable-choice.md) (STA-02, on G12's
+`abnormalGate`), [`ab-payment.md`](ab-payment.md) (ABI-11 / ABI-12 /
+FORCE-WRITE-01 / NFO-CANCEL-01, on G02's pipeline), [`ab-held-tokens.md`](ab-held-tokens.md)
+(HAG-01), [`ab-skill-vocabulary.md`](ab-skill-vocabulary.md) (SKILL-06) and
+[`ab-tile-swap.md`](ab-tile-swap.md) (ABI-13, on G09's tile rules).
 
 ## Conventions every design follows
 

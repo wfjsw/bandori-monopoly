@@ -637,6 +637,9 @@ filter_kinds! {
     BuyAdd => value;
     BuyMul => value;
     BuySet => value;
+    ForceBuyAdd => value;
+    ForceBuyMul => value;
+    ForceBuySet => value;
     BuyAssign => payload(crate::payload::DealValue);
     PayCombinedAdd => value;
     PayCombinedMul => value;
@@ -748,7 +751,11 @@ action_kinds! {
     CardAttached;
     CardDetached;
     OpeningHandDealt;
+    TurnStartAfter;
+    ManageAfter;
     DiceRollPlan @ dual;
+    MarkerChanged;
+    AbnormalChoice;
 }
 
 #[cfg(test)]
@@ -771,7 +778,7 @@ mod tests {
 
     #[test]
     fn filter_kinds_registry_matches_table() {
-        assert_eq!(Filter::KINDS.len(), 35);
+        assert_eq!(Filter::KINDS.len(), 38);
         assert!(Filter::KINDS.iter().all(|k| k.is_filter));
         for k in Filter::KINDS {
             assert_eq!(k.kind.is_filter(), true, "{}", k.name);
@@ -805,9 +812,10 @@ mod tests {
         // `diceRollPlan` (ABI v111) = 77, plus G11's `inspected` / `drawAfter`
         // (ABI v114) = 79, plus G08's zone / attachment family (ABI v118)
         // = 89, plus G10's `eventResolved` (ABI v119) = 90, plus HOST-03's
-        // `payCalcBefore` (ABI v120) = 91. The marker row `on Action;` is part
-        // of `KINDS`, so the pin sits one above the entry count.
-        assert_eq!(Action::KINDS.len(), 91);
+        // `payCalcBefore` (ABI v120) = 91, plus HOST-03's `turnStartAfter` /
+        // `manageAfter` (ABI v124) = 93, plus HAG-01's `markerChanged` (ABI
+        // v124) = 94, plus STA-02's `abnormalChoice` (ABI v124) = 95.
+        assert_eq!(Action::KINDS.len(), 95);
         // A dual kind is filter-shaped but still an action entry.
         assert!(Action::KINDS
             .iter()

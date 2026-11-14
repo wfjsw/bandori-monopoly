@@ -741,7 +741,10 @@ fn believe_discard_one_iff_at(user: i32) {
     );
     // The single hand card is the played copy's counterpart; it must leave the
     // hand bitset and not be replaced in this world.
-    crate::kassert!(!post.hand[2], "C-HHW-believe-03: the hand card left the hand");
+    crate::kassert!(
+        !post.hand[2],
+        "C-HHW-believe-03: the hand card left the hand"
+    );
     crate::kassert!(world::arr4_eq(post.pos, condition.pos), "frame: pos");
 }
 

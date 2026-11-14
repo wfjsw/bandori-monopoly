@@ -412,7 +412,8 @@ the generic mechanics (`purchase.rs`):
 
 * **Quote.** `CardRules::buy_quote(w, data, q)` returns `base_quote` (land +
   houses; 2× for `Force`) for `StubRules`. `WasmRules` overrides it and runs the
-  `BuyGate` / `BuyAdd` → `BuyMul` → `BuySet` hooks in **pure guard mode**
+  `BuyGate` / `BuyAdd` → `BuyMul` → `BuySet` hooks (a `Force` quote:
+  `BuyGate` / `ForceBuyAdd` → `ForceBuyMul` → `ForceBuySet`) in **pure guard mode**
   against a world copy -- the `cant_play` shape, so a quote never mutates the
   match and never prompts -- but only when a hooking instance exists. The
   commit re-quotes, so quote == charge. It takes the world by reference, so
@@ -628,7 +629,9 @@ rarely go broke, so bot-only games mostly end by `finish()` (human games end by 
 (world, pending routine + answer log, clocks, vote, deferred host actions) to JSON;
 `Match::restore(data, rules, json)` rebuilds it. A restored match continues
 identically (`tests/engine.rs::save_and_restore_continue_identically`). The format
-is versioned (`SAVE_VERSION`); older saves are rejected rather than misread. The
+is versioned (`SAVE_VERSION`); anything older than one version is rejected rather
+than misread (the immediately preceding version loads as a one-step migration
+source -- v22's keyed fire state folds into held-token rows, see `fold_legacy_fire`). The
 web client uses it for solo refresh recovery (`SoloMatch.save` / `SoloMatch.restore`).
 
 A field added under `#[serde(default)]` does **not** bump `SAVE_VERSION`: the

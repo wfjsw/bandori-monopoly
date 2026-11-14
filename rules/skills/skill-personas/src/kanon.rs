@@ -48,15 +48,10 @@ pub const KANON: CardDef = CardDef::new(
             at_turn_end,
         ))
         .silent(),
-        // TODO(bug): possible engine issue — a `slot()` condition on a
-        // FilterValue at DiceRollPlan did not observe a state write made
-        // earlier in the same roll (seen while splitting eve: the
-        // condition evaluated before the mid-roll stash was visible, while
-        // `state::get` inside the body saw it). This entry's gate is exactly
-        // that pattern (`slot('skill.kanonLost.silent')` counting up during
-        // the roll). Verify whether the gate ever mis-fires here; if it does,
-        // fix the condition evaluation snapshot (or move the gate into the
-        // body) and re-run the kanon tests + a two-roll scenario.
+        // A `slot()` condition on a FilterValue at DiceRollPlan reads live
+        // world state (COND-01): a write an earlier entry of the same window
+        // makes is visible to this gate, exactly as `state::get` inside the
+        // body would see it.
         On::Filter(Filter::DiceRollPlan(
             "actor == owner && slot('skill.kanonLost.silent') >= 3",
             None,

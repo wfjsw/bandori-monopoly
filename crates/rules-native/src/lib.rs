@@ -145,6 +145,10 @@ impl NativeRulesHandle {
                         answer_effect: o.answer_effect(),
                         all_kinds: o.all_kinds(),
                         copies_previous: o.copies_previous_entry(),
+                        cost: match o {
+                            On::PlayBody(e) => e.cost.map(|(name, _)| String::from(name)),
+                            _ => None,
+                        },
                     })
                     .collect();
                 // Same bitset the sandbox builds (): trigger
@@ -226,6 +230,7 @@ impl NativeRulesHandle {
                         .collect(),
                     exemption_prop: card.exemption_prop.to_string(),
                     rule: card.rule,
+                    derived: card.meta.is_some_and(|m| m.derived),
                 });
             }
         }
@@ -681,6 +686,7 @@ impl NativeModules {
         scope: &game_rules::condition::WindowScope,
         cand: &game_rules::condition::CandidateCtx,
         log: &game_core::engine::GuestLog,
+        mut on_trap: Option<&mut dyn FnMut(&mut Run, i32, &str)>,
     ) -> bool {
         let condition = self.index.condition(card, entry);
         if self.entry_guard_is_none(card, entry) {
@@ -714,7 +720,24 @@ impl NativeModules {
                 Ok(match res {
                     Ok(CallOut::Code(0)) => false,
                     Ok(_) => true,
-                    Err(_) => false,
+                    Err(e) => {
+                        // Historical dispatch leniency: a trapping guard
+                        // declines the entry, but must not do so silently
+                        // (DECLARE-TRAP-LOG). The callback (from `run_hook`)
+                        // writes the `log.card_trap` line.
+                        if let Some(cb) = on_trap.as_deref_mut() {
+                            let detail = match &e {
+                                HostError::Trap(m) => m.clone(),
+                                HostError::NeedInput => "need input".into(),
+                            };
+                            cb(
+                                state.as_mut().expect("host state present").w(),
+                                entry,
+                                &format!("guard trapped: {detail}"),
+                            );
+                        }
+                        false
+                    }
                 })
             });
         matches!(asked, Ok(true))
@@ -818,11 +841,45 @@ impl CardModules for NativeModules {
                 &info.id,
                 world.is_placed() != 0,
             );
-            if !self.entry_admitted(world, card, entry, player_id, &scope, &cand, log) {
+            if !self.entry_admitted(world, card, entry, player_id, &scope, &cand, log, None) {
                 return Ok(Outcome::Done(world.clone(), log.clone()));
             }
         }
         let mut state = HostState::new(self.index.clone(), world.clone(), log.clone(), 0);
+        // ENG-COST: charge a declared activation cost once, before the body
+        // (mirrors `Ruleset::run`). Admissibility already refused a short
+        // player; a pause carries the charged world, so the body's re-run
+        // starts from the count it already paid.
+        if let Some(name) = info
+            .on
+            .get(entry as usize)
+            .and_then(|e| e.cost.as_deref())
+        {
+            let (res, after, _fuel) = run_on(
+                state,
+                card,
+                entry,
+                export::OP_COST,
+                player_id,
+                &[],
+                false,
+                DEFAULT_FUEL,
+            );
+            state = after;
+            let need = match res {
+                Ok(CallOut::Code(v)) => v as i32,
+                Ok(CallOut::Msg(_)) => 0,
+                Err(HostError::Trap(m)) => return Err(RuleError::Trap(m)),
+                Err(HostError::NeedInput) => {
+                    return Err(RuleError::Trap("cost probe paused".into()))
+                }
+            };
+            if need > 0 {
+                state
+                    .w()
+                    .add_held_by_name(player_id, name, -need, i32::MAX);
+            }
+        }
         // Body entry: the activation announcement goes here (mirrors
         // `Ruleset::run`), never for a bodyless drive.
         if let Some(cb) = on_body.as_deref_mut() {
@@ -848,6 +905,7 @@ impl CardModules for NativeModules {
         log: &game_core::engine::GuestLog,
         already_admitted: &[i32],
         mut on_body: Option<&mut dyn FnMut(&mut Run, i32)>,
+        mut on_trap: Option<&mut dyn FnMut(&mut Run, i32, &str)>,
     ) -> Result<Option<HookRun<Run>>, RuleError> {
         let (card, player_id) = (call.card(), call.player_id());
         let kind = world.trigger().kind;
@@ -869,6 +927,10 @@ impl CardModules for NativeModules {
         let mut cur = world.clone();
         let mut announced = false;
         let mut ran_any = false;
+        // A trapped entry wrote a `log.card_trap` line into `cur`; with no
+        // other entry run we still return that world so the line commits
+        // (mirrors `Ruleset::run_hook`), never a bare `Ok(None)`.
+        let mut trapped = false;
         // One cursor threads the whole `run_hook` call, mirrors
         // `Ruleset::run_hook` (`Admitted`): every guard, declare and body
         // reads the shared answer log in order, so an answer one entry's
@@ -919,7 +981,22 @@ impl CardModules for NativeModules {
                             Ok(match res {
                                 Ok(CallOut::Code(0)) => false,
                                 Ok(_) => true,
-                                Err(_) => false,
+                                Err(e) => {
+                                    // Historical dispatch leniency: a
+                                    // trapping guard declines the entry, but
+                                    // must not do so silently (DECLARE-
+                                    // TRAP-LOG). Write into `cur`: the guard
+                                    // store world is a throwaway clone.
+                                    trapped = true;
+                                    if let Some(cb) = on_trap.as_deref_mut() {
+                                        let detail = match &e {
+                                            HostError::Trap(m) => m.clone(),
+                                            HostError::NeedInput => "need input".into(),
+                                        };
+                                        cb(&mut cur, entry, &format!("guard trapped: {detail}"));
+                                    }
+                                    false
+                                }
                             })
                         });
                     matches!(asked, Ok(true))
@@ -963,7 +1040,7 @@ impl CardModules for NativeModules {
                 }
             }
         }
-        if !ran_any {
+        if !ran_any && !trapped {
             return Ok(None);
         }
         Ok(Some(HookRun {
@@ -1052,7 +1129,7 @@ impl CardModules for NativeModules {
             None
         };
         let cand = game_rules::condition::fill_candidate(world, player_id, &info.id, false);
-        game_rules::condition::admits_gate(
+        let reason = game_rules::condition::admits_gate(
             condition,
             scope,
             &cand,
@@ -1080,7 +1157,43 @@ impl CardModules for NativeModules {
                     Err(HostError::Trap(m)) => Err(RuleError::Trap(m)),
                 }
             },
-        )
+        )?;
+        if reason.is_none() {
+            // ENG-COST: the entry's declared activation cost needs enough of
+            // the held token (mirrors `Ruleset::cant_play`). The amount is
+            // guest-side (`OP_COST`), run on a throwaway state.
+            if let Some(name) = info.on.get(entry as usize).and_then(|e| e.cost.as_deref()) {
+                let state =
+                    HostState::new(self.index.clone(), world.clone(), Default::default(), 0);
+                let (res, _state, _fuel) = game_rules::inline::with_no_inline(|| {
+                    run_on(
+                        state,
+                        card,
+                        entry,
+                        export::OP_COST,
+                        player_id,
+                        &[],
+                        true,
+                        DEFAULT_FUEL,
+                    )
+                });
+                let need = match res {
+                    Ok(CallOut::Code(v)) => v as i32,
+                    Ok(CallOut::Msg(_)) => 0,
+                    Err(HostError::NeedInput) => return Err(RuleError::GuardPrompted),
+                    Err(HostError::Trap(m)) => return Err(RuleError::Trap(m)),
+                };
+                let held = world.held_count(player_id, name);
+                if need > 0 && held < need {
+                    return Ok(Some(
+                        Msg::new("err.cost_short")
+                            .text("name", name)
+                            .i("n", need as i64),
+                    ));
+                }
+            }
+        }
+        Ok(reason)
     }
 
     fn declare_entry(

@@ -523,6 +523,8 @@ impl PlayCtx<'_> {
         let st = &mut self.w.st;
         st.phase = "play".into();
         st.owners = vec![-1; n];
+        st.co_owners = vec![Vec::new(); n];
+        st.co_mortgaged = vec![Vec::new(); n];
         st.houses = vec![0; n];
         st.mortgaged = vec![false; n];
         st.embers = vec![0; n];
@@ -819,6 +821,12 @@ impl PlayCtx<'_> {
         if let Some(n) = self.w.targeted.get_mut(i) {
             *n = 0;
         }
+        // 「本回合开始后…失去资金的总额」 (NOW SUMIMI) is per **own** turn: the
+        // running loss total starts fresh at the seat's own turn start and
+        // spans the other seats' turns in between.
+        if let Some(n) = self.w.losses.get_mut(i) {
+            *n = 0;
+        }
         // 「当前回合内你每获得过一次资金」 is per **turn**, not per own-turn:
         // a counteraction read at a turn's end (HHW:（育美）(2), 「你回合外收到资金的回合
         // 结束时」) sees just that turn's credits. Everyone's counter starts
@@ -883,6 +891,8 @@ impl PlayCtx<'_> {
                 state: p.state.iter().map(|(k, v)| (k.clone(), v.value)).collect(),
                 money: p.money,
                 owners: self.w.st.owners.clone(),
+                co_owners: self.w.st.co_owners.clone(),
+                co_mortgaged: self.w.st.co_mortgaged.clone(),
                 houses: self.w.st.houses.clone(),
                 mortgaged: self.w.st.mortgaged.clone(),
             })
@@ -899,6 +909,16 @@ impl PlayCtx<'_> {
             self.wait(1.0);
             return self.end_turn(i);
         }
+        // 行动阶段 3 「回合开始后」 -- the turn-start handling (status tick, the
+        // two start windows, the deferred-event release) is complete. Hook-only
+        // stage marker; 「此阶段之后的阶段也视为回合开始后」, so an effect
+        // keyed to it may also fire at any later phase.
+        raise!(
+            self,
+            "turnStartAfter",
+            i,
+            position = self.w.st.players[i].pos
+        )?;
         // The turn clock is a modifier point: hooks rewrite the 免费时间
         // refill and the 恢复时间 (seconds) before the host applies them.
         // `turnBaseTime`'s default is the match's per-turn base refill
@@ -963,6 +983,18 @@ impl PlayCtx<'_> {
         Ok(())
     }
 
+    /// 行动阶段 6 「经营/出牌阶段后」: raised once at the moment 运营 ends --
+    /// entering the main move, or ending the turn from 运营. A 眩晕-skipped
+    /// turn never reaches 运营 (stage 4 skips 5 and 6 together), so the raise
+    /// is gated on the stage still being 运营.
+    fn manage_after(&mut self, i: usize) -> Flow<()> {
+        if self.w.st.step != stage::OPS {
+            return Ok(());
+        }
+        raise!(self, "manageAfter", i)?;
+        Ok(())
+    }
+
     /// The player's "end turn" command.
     pub(crate) fn end_turn_cmd(&mut self, i: usize) -> Flow<()> {
         // The turn end is a phase, not an edge: once it is up (结束 after
@@ -975,6 +1007,12 @@ impl PlayCtx<'_> {
         // so a replay must fold them here too. `do_act` already folds at the
         // gate; this catches a routine that was in flight.
         if self.w.end_already_queued() {
+            return Ok(());
+        }
+        // Ending from 运营 closes the manage phase first: 行动阶段 6
+        // (「经营/出牌阶段后」) precedes the end phase.
+        self.manage_after(i)?;
+        if self.out(i) || !self.playing() {
             return Ok(());
         }
         // `endTurnBefore` -- the player chose to end the turn. (Auto-skips --
@@ -1213,6 +1251,13 @@ impl PlayCtx<'_> {
         self.stamp_move_identity(&mut m, i, roller, is_main_move);
         // Only the turn player's *main* move drives the stage machine.
         if is_main_move {
+            // A card-forced main move during 运营 closes the manage phase too
+            // (the ordinary path already raised it in `main_move`; the stage
+            // check keeps it once per turn).
+            self.manage_after(i)?;
+            if self.out(i) || !self.playing() {
+                return Ok(false);
+            }
             self.w.st.step = stage::MOVE;
             // A stored step count (`next_steps`) is consumed here, before any
             // window, so the windows see the length the walk will take
@@ -1825,7 +1870,7 @@ impl PlayCtx<'_> {
         if self.out(player_id) || !self.playing() {
             return Ok(false);
         }
-        if self.w.st.owners.get(tile).copied().unwrap_or(-1) != from as i32 {
+        if !self.w.owns(tile as i32, from as i32) {
             return Ok(false);
         }
         // `BuyGate` -- the same gate every other buy kind runs.
@@ -2023,6 +2068,11 @@ impl PlayCtx<'_> {
     /// The turn's main roll-and-move. Opens a Main frame on the staging plan
     /// and runs the shared body; a spent slot leaves staging untouched.
     pub(crate) fn main_move(&mut self, i: usize, roller: usize) -> Flow<()> {
+        // 行动阶段 6 「经营/出牌阶段后」 precedes 7 「主要移动阶段前」.
+        self.manage_after(i)?;
+        if self.out(i) || !self.playing() {
+            return Ok(());
+        }
         self.w.st.step = stage::MOVE;
         if self.w.turn.main_moved {
             self.w.log(
@@ -2303,7 +2353,15 @@ impl PlayCtx<'_> {
                 seg.value += m.dir();
                 seg.ahead = remaining as i32;
             }
-            if last || self.w.tile_prop(step_tile, crate::state::prop::START) != 0 {
+            // `prop::START` is stamped on the start square's own rule instance
+            // and is a square fact; a rule swap moves the reward off the square
+            // without rewriting the prop, so the governing square is read too
+            // -- the prompt must be flushed wherever it can appear.
+            let starts_here = |w: &crate::engine::World, t: i32| {
+                w.tile_prop(t, crate::state::prop::START) != 0
+                    || w.tile_prop(w.governing_square(t), crate::state::prop::START) != 0
+            };
+            if last || starts_here(&self.w, step_tile) {
                 // Publish the approach before `passTile` on the start square
                 // (the pass-reward prompt) or the walk's last step. The client
                 // must walk to the tile before showing that choice, then
@@ -2701,12 +2759,17 @@ impl PlayCtx<'_> {
         // `settleBody` / `settleAfter` does **not** re-target -- the landed
         // tile finishes (`settle_at` threads one `at`).
         let mut redirects = 0;
+        // `trigger::set_pay_amount` in the (last, non-redirecting)
+        // `settleBefore` window shapes the settle that follows: it is carried
+        // onto the settle entry so the tile body's own trigger starts at it.
+        let mut seed: Option<i32> = None;
         loop {
             let at = self.w.st.players[i].pos as usize;
             // `at` is re-read each redirect, so resolve with it (the move's
             // last path entry is the pre-redirect landing).
             let tile = self.w.tile_standing_at(at as i32);
-            raise!(self, "settleBefore", i, @m m, position = at as i32, tile = tile)?;
+            let t = raise!(self, "settleBefore", i, @m m, position = at as i32, tile = tile)?;
+            seed = t.value_set.then_some(t.value);
             if self.out(i) || !self.playing() {
                 return Ok(());
             }
@@ -2733,6 +2796,7 @@ impl PlayCtx<'_> {
             // else: the new tile gets its own `settleBefore` window
         }
         if !self.out(i) && self.playing() {
+            self.w.turn.settle_seed = seed;
             self.settle(i, m)?;
         }
         Ok(())
@@ -2831,6 +2895,7 @@ impl PlayCtx<'_> {
                     .expect("planted by `with_move`"),
                 is_main_move: frame.m.is_main_move,
                 no_buy: frame.no_buy,
+                seed: self.w.turn.settle_seed.take(),
             });
             frame.stack_idx = self.settle_stack.len() - 1;
             // The guest factor API reads the product and the innermost base
@@ -3158,14 +3223,15 @@ impl PlayCtx<'_> {
         let t = tile.max(0) as usize;
         if self.tile(t).is_buyable() {
             let owner = self.w.st.owners.get(t).copied().unwrap_or(-1);
-            if owner < 0 {
+            // A co-holder lands as an owner (「视为同时拥有」).
+            if self.w.owns(t as i32, i as i32) {
+                self.offer_build(i, t)?;
+            } else if owner < 0 {
                 // The settle of an unowned buyable IS the optional buy
                 // (规则书 「可选择[消耗]…获得格子地契和拥有权」).
                 self.offer_buy(i, t)?;
-            } else if owner as usize != i {
-                self.pay_rent(i, t, false)?;
             } else {
-                self.offer_build(i, t)?;
+                self.pay_rent(i, t, false)?;
             }
             return Ok(());
         }
@@ -3223,7 +3289,7 @@ impl PlayCtx<'_> {
         by_card: Option<i32>,
     ) -> Flow<i32> {
         let owner = self.w.st.owners[t];
-        if owner < 0 || owner as usize == i || self.out(i) || self.out(owner as usize) {
+        if owner < 0 || self.w.owns(t as i32, i as i32) || self.out(i) || self.out(owner as usize) {
             return Ok(0);
         }
         let owner = owner as usize;
@@ -3296,7 +3362,7 @@ impl PlayCtx<'_> {
 
     fn pay_rent(&mut self, i: usize, t: usize, half: bool) -> Flow<()> {
         let owner = self.w.st.owners[t];
-        if owner < 0 || owner as usize == i || self.out(i) || self.out(owner as usize) {
+        if owner < 0 || self.w.owns(t as i32, i as i32) || self.out(i) || self.out(owner as usize) {
             return Ok(());
         }
         let owner = owner as usize;
@@ -3532,7 +3598,7 @@ impl PlayCtx<'_> {
         let mut ask = ask;
         ask.view.price = price;
         if self.ask(ask)?.of(i) == 0
-            && self.w.st.owners[t] == owner as i32
+            && self.w.owns(t as i32, owner as i32)
             && !self.out(owner)
             && !self.out(i)
             && self.w.st.players[i].money >= price
@@ -3540,12 +3606,18 @@ impl PlayCtx<'_> {
             // Direct transfer: 「此次购买的价格不受任何资金变动效果影响，收款方
             // 无论处于何种状态都可正常收款」. The pay pipeline does not see it.
             self.w.st.players[i].money -= price;
+            self.w.bump_loss(i as i32, price);
             self.w.credit(owner as i32, price);
             // The deal: `BuyAssign` rewrites owner / houses / mortgage before
             // the one ownership write (`docs/PURCHASE.md`). The rulebook default
-            // is 「获得的地契仍为抵押状态」; TODO(规则书): `FORCE_STAYS_MORTGAGED`
-            // (`= 0` clears) is not distinguishable from "absent" through
-            // `tile_prop`, so the native default holds unconditionally.
+            // is 「获得的地契仍为抵押状态」; a tile rule that writes
+            // `prop::FORCE_STAYS_MORTGAGED` overrides it -- an explicit `0`
+            // clears the mortgage, a non-zero value keeps it, and an absent
+            // key keeps the rulebook default (the tri-state read).
+            let stays_mortgaged = self
+                .w
+                .tile_prop_state(t as i32, crate::state::prop::FORCE_STAYS_MORTGAGED)
+                != 0;
             let mut deal = purchase::default_deal(
                 self.data,
                 &self.w.st,
@@ -3553,7 +3625,7 @@ impl PlayCtx<'_> {
                 i,
                 purchase::BuyKind::Force,
                 price,
-                true,
+                stays_mortgaged,
             );
             let at = raise!(
                 self,
@@ -3712,10 +3784,9 @@ impl PlayCtx<'_> {
     pub(crate) fn mortgageable(&self, player_id: usize) -> Vec<usize> {
         (0..self.data.tiles.len())
             .filter(|&t| {
-                self.w.st.owners[t] == player_id as i32
-                    && self.tile(t).is_buyable()
+                self.tile(t).is_buyable()
                     && self.w.tile_prop(t as i32, crate::state::prop::NO_MORTGAGE) == 0
-                    && !self.w.st.mortgaged[t]
+                    && self.w.stake_can_mortgage(t as i32, player_id as i32)
             })
             .collect()
     }
@@ -4014,10 +4085,10 @@ impl PlayCtx<'_> {
             cost = paid.loss;
         }
         let full = self.tile(t).rent.len().saturating_sub(1) as i32;
-        if (owner_required && self.w.st.owners[t] != i as i32) || self.w.st.houses[t] >= full {
+        if (owner_required && !self.w.owns(t as i32, i as i32)) || self.w.st.houses[t] >= full {
             if cost > 0 && !self.out(i) {
                 self.w.credit(i as i32, cost);
-                let key = if self.w.st.owners[t] != i as i32 {
+                let key = if !self.w.owns(t as i32, i as i32) {
                     "log.build_refund_not_owned"
                 } else {
                     "log.build_refund_full"
@@ -4094,13 +4165,13 @@ impl PlayCtx<'_> {
             return Some(Msg::new("err.not_your_deed"));
         };
         let t = t as usize;
-        if !tile.is_buyable() || st.owners[t] != i as i32 {
+        if !tile.is_buyable() || !self.w.owns(t as i32, i as i32) {
             return Some(Msg::new("err.not_your_deed"));
         }
         if self.w.tile_prop(t as i32, crate::state::prop::NO_MORTGAGE) > 0 {
             return Some(Msg::new("err.no_mortgage"));
         }
-        if st.mortgaged[t] {
+        if !self.w.stake_can_mortgage(t as i32, i as i32) {
             return Some(Msg::new("err.already_mortgaged"));
         }
         if st.turn != i as i32 {
@@ -4130,10 +4201,10 @@ impl PlayCtx<'_> {
             return Some(Msg::new("err.not_your_deed"));
         };
         let t = t as usize;
-        if !tile.is_buyable() || st.owners[t] != i as i32 {
+        if !tile.is_buyable() || !self.w.owns(t as i32, i as i32) {
             return Some(Msg::new("err.not_your_deed"));
         }
-        if !st.mortgaged[t] {
+        if !self.w.stake_mortgaged(t as i32, i as i32) {
             return Some(Msg::new("err.not_mortgaged"));
         }
         if st.turn != i as i32 || st.step != stage::OPS {
@@ -4153,10 +4224,12 @@ impl PlayCtx<'_> {
     /// and the amount (`ctx::commit_mortgage`). Raises the mortgage hooks so
     /// 「当你抵押…时」 listeners (and their counteractions) still fire.
     pub fn commit_mortgage(&mut self, i: usize, t: usize, amount: i32) -> Flow<i32> {
-        if t >= self.w.st.mortgaged.len() || self.w.st.mortgaged[t] {
+        if t >= self.w.st.mortgaged.len() {
             return Ok(0);
         }
-        if self.w.st.owners.get(t).copied().unwrap_or(-1) != i as i32 {
+        // A co-held deed mortgages per holder; an ordinary one is a single
+        // (tile-flag) stake.
+        if !self.w.stake_can_mortgage(t as i32, i as i32) {
             return Ok(0);
         }
         let v = amount.max(0);
@@ -4182,15 +4255,16 @@ impl PlayCtx<'_> {
         amount: i32,
         by_card: Option<i32>,
     ) -> Flow<i32> {
-        if t >= self.w.st.mortgaged.len() || !self.w.st.mortgaged[t] {
+        if t >= self.w.st.mortgaged.len() {
             return Ok(0);
         }
-        if self.w.st.owners.get(t).copied().unwrap_or(-1) != i as i32 {
+        if !self.w.stake_mortgaged(t as i32, i as i32) {
             return Ok(0);
         }
         let cost = self.spend_before(i, t as i32, amount, by_card)?;
-        self.w.st.mortgaged[t] = false;
+        self.w.set_co_mortgaged(t as i32, i as i32, false);
         self.w.st.players[i].money -= cost;
+        self.w.bump_loss(i as i32, cost);
         // 「本回合进行过赎回操作」 -- same record, same timing.
         {
             let s = &mut self.w.st.players[i];
@@ -4214,7 +4288,7 @@ impl PlayCtx<'_> {
         let s = &mut self.w.st.players[i];
         s.state_set(key::MORTGAGED, 1);
         s.state_set_expires(key::MORTGAGED, Some(Tick::TurnEnd));
-        self.w.st.mortgaged[t] = true;
+        self.w.set_co_mortgaged(t as i32, i as i32, true);
         self.w.credit(i as i32, v);
         let text = Msg::new("log.mortgage")
             .player_id("who", i)
@@ -4270,7 +4344,7 @@ impl PlayCtx<'_> {
         if self.out(i) || !self.playing() {
             return Ok(false);
         }
-        if self.w.st.owners[t] == i as i32 && !self.w.st.mortgaged[t] {
+        if self.w.stake_can_mortgage(t as i32, i as i32) {
             let v = self.mortgage_value(t);
             self.do_mortgage(i, t, v, reason);
             raise!(self, "mortgage", i, tile = t as i32)?;
@@ -4348,7 +4422,14 @@ impl PlayCtx<'_> {
     pub fn money(&mut self, p: Pay) -> Flow<Paid> {
         let depth = self.money_depth;
         self.money_depth = depth + 1;
+        // `trigger::pay_split_ran` (NFO-CANCEL-01) is **per payment**: it starts
+        // clear here and is set once the leg reaches `paySplitAt`. The outer
+        // bit is restored afterwards (a nested payment from a later stage's
+        // body must not clear the outer leg's answer for its `payAfter`).
+        let outer_split_ran = self.w.pay_split_ran;
+        self.w.pay_split_ran = false;
         let r = self.money_inner(p, depth);
+        self.w.pay_split_ran = outer_split_ran;
         self.money_depth = depth;
         r
     }
@@ -4763,6 +4844,12 @@ impl PlayCtx<'_> {
                         to = Some(ask.target as usize);
                     }
                 }
+                // The stage **ran** -- NFO-CANCEL-01's bit. Set before the
+                // body so a `PayAfter` guard can tell this payment from one
+                // cancelled at an earlier window (which never reaches here).
+                if kind == "paySplitAt" {
+                    self.w.pay_split_ran = true;
+                }
                 let before = amount;
                 let t = raise!(
                     self,
@@ -5027,6 +5114,9 @@ impl PlayCtx<'_> {
                 }
             }
             self.w.st.players[f].money -= loss;
+            // 「失去资金」 (NOW SUMIMI): the **actual** figure that left the
+            // payer; a cancelled or shaved-to-0 leg passes 0 here.
+            self.w.bump_loss(f as i32, loss);
         }
         // The payee is credited what the payer actually paid.
         let gain = if p.from.is_some() { loss } else { amount };
@@ -5415,8 +5505,7 @@ impl PlayCtx<'_> {
         }
         for id in &reply.answered.picked {
             if let Ok(t) = id.parse::<usize>() {
-                if deeds.contains(&t) && self.w.st.owners[t] == i as i32 && !self.w.st.mortgaged[t]
-                {
+                if deeds.contains(&t) && self.w.stake_can_mortgage(t as i32, i as i32) {
                     self.deed_mortgage(i, t, 2)?;
                 }
             }
@@ -5453,10 +5542,7 @@ impl PlayCtx<'_> {
         let reply = self.ask(Ask::mortgage(i, need, text, &deeds, ai))?;
         for id in &reply.answered.picked {
             if let Ok(t) = id.parse::<usize>() {
-                if t < self.data.tiles.len()
-                    && self.w.st.owners[t] == i as i32
-                    && !self.w.st.mortgaged[t]
-                {
+                if t < self.data.tiles.len() && self.w.stake_can_mortgage(t as i32, i as i32) {
                     self.deed_mortgage(i, t, 1)?;
                 }
             }
@@ -5662,14 +5748,14 @@ impl PlayCtx<'_> {
         self.w.extra_turns.retain(|&x| x != i);
         self.purge_markers_owned_by(&owned_rules);
         let deeds: Vec<usize> = (0..self.data.tiles.len())
-            .filter(|&t| self.w.st.owners[t] == i as i32)
+            .filter(|&t| self.w.owns(t as i32, i as i32))
             .collect();
         for &t in &deeds {
-            // The one ownership write: it clears the tile's acquisition
-            // sequence too, so a later re-buy cannot inherit this seat's stale
-            // ordering (design G08 §7.7).
-            self.w.set_tile_owner(t as i32, -1);
-            self.w.st.mortgaged[t] = false;
+            // Drop this seat's stake. A co-held deed survives while a living
+            // co-holder remains (「只有全部Poppin' Party角色破产后才可被正常
+            // 购买」); the last stake clears the tile and its acquisition
+            // sequence (design G08 §7.7).
+            self.w.release_deed(t as i32, i as i32);
         }
         if !deeds.is_empty() {
             let houses = deeds.iter().any(|&t| self.w.st.houses[t] > 0);
@@ -5879,6 +5965,7 @@ impl PlayCtx<'_> {
         }
         // Money remains direct until ruling 7 (TODO(规则书) ruling 7).
         self.w.st.players[b].money -= cost;
+        self.w.bump_loss(b as i32, cost);
         // The deal: `BuyAssign` rewrites owner / houses / mortgage before the
         // one ownership write (`docs/PURCHASE.md`).
         let mut deal = purchase::default_deal(
@@ -6790,6 +6877,8 @@ impl PlayCtx<'_> {
                 })
                 .collect(),
             owners: self.w.st.owners.clone(),
+            co_owners: self.w.st.co_owners.clone(),
+            co_mortgaged: self.w.st.co_mortgaged.clone(),
             houses: self.w.st.houses.clone(),
             mortgaged: self.w.st.mortgaged.clone(),
         };
@@ -6847,6 +6936,8 @@ impl PlayCtx<'_> {
             self.w.bind_skills(self.data, self.rules, i as i32);
         }
         self.w.st.owners = snap.owners;
+        self.w.st.co_owners = snap.co_owners;
+        self.w.st.co_mortgaged = snap.co_mortgaged;
         self.w.st.houses = snap.houses;
         self.w.st.mortgaged = snap.mortgaged;
         true
@@ -6963,7 +7054,9 @@ impl PlayCtx<'_> {
         for i in 0..n {
             let (mut land, mut houses) = (0, 0);
             for (t, tile) in self.data.tiles.iter().enumerate() {
-                if st.owners[t] == i as i32 {
+                let co = st.co_owners.get(t).is_some_and(|r| r.contains(&(i as i32)));
+                if st.owners[t] == i as i32 || co {
+                    // 「视为同时拥有」 -- a co-held deed scores as a holding.
                     land += if st.mortgaged[t] {
                         tile.price / 2
                     } else {

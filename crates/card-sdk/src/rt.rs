@@ -75,6 +75,10 @@ pub fn manifest(bands: &'static [&'static [CardDef]]) -> i64 {
                     // every kind.
                     all_kinds: matches!(o, On::CounteractBody(e) if e.links.is_empty()),
                     copies_previous: matches!(o, On::CounteractBody(e) if e.copies_previous),
+                    cost: match o {
+                        On::PlayBody(e) => e.cost.map(|(name, _)| String::from(name)),
+                        _ => None,
+                    },
                 })
                 .collect(),
             // Sorted by key so the wire bytes are deterministic regardless of
@@ -122,6 +126,9 @@ pub fn manifest(bands: &'static [&'static [CardDef]]) -> i64 {
                 .map(|(g, k)| (*g, String::from(*k)))
                 .collect(),
             rule: c.rule,
+            // `CardMeta::derived` is the only home of the flag (no `CardDef`
+            // duplicate); a card without metadata is non-derived.
+            derived: c.meta.is_some_and(|m| m.derived),
         })
         .collect();
     // Leak justified by [`leak`]: the host reads the manifest bytes after this
@@ -286,6 +293,13 @@ pub fn on(
             },
             None => 0,
         },
+        // ENG-COST: the entry's activation-cost amount for this player. Pure
+        // and promptless (`fn(i32) -> i32`); the host refuses the press when
+        // the player holds fewer and charges the amount before `OP_RUN`.
+        (On::PlayBody(PlayEntry { cost: Some((_, amount)), .. }), export::OP_COST) => {
+            amount(player_id) as i64
+        }
+        (_, export::OP_COST) => 0,
         // Activation-argument collector (docs/ACTIVATION.md §2). Runs before
         // the point of no return; the host stores the postcard bytes and
         // serves them back to the body via `ctx::declared_arg`.

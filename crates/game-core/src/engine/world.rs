@@ -237,6 +237,10 @@ pub struct TurnSnapshot {
     pub state: std::collections::BTreeMap<String, i32>,
     pub money: i32,
     pub owners: Vec<i32>,
+    #[serde(default)]
+    pub co_owners: Vec<Vec<i32>>,
+    #[serde(default)]
+    pub co_mortgaged: Vec<Vec<i32>>,
     pub houses: Vec<i32>,
     pub mortgaged: Vec<bool>,
 }
@@ -430,6 +434,12 @@ pub struct TurnCtx {
     /// way.
     #[serde(default)]
     pub next_settle_pay_add: i32,
+    /// The last `settleBefore` window's `trigger::set_pay_amount` value for
+    /// the settle about to open, moved into the settle entry (`None` = the
+    /// window left the declaration alone). The tile body's trigger starts at
+    /// it, so a pre-stage that paid the settle itself can be seen there.
+    #[serde(default)]
+    pub settle_seed: Option<i32>,
     /// A move is in flight (walk / teleport through its tail). The `thisMove`
     /// factor scope is open while this holds.
     #[serde(default)]
@@ -564,6 +574,7 @@ impl Default for TurnCtx {
             next_move_pay_factor: milli_one(),
             next_settle_pay_factor: milli_one(),
             next_settle_pay_add: 0,
+            settle_seed: None,
             move_open: false,
             settle_open: 0,
             settle_pay_factor: one(),
@@ -1037,6 +1048,12 @@ pub struct World {
     /// DiceRollValue Filter raise so the body can read it without calling `roll`.
     #[serde(default)]
     pub recorded_roll: Option<i32>,
+    /// W3-KAORU-02: the face of the plan's **direction** die (「投掷1d2
+    /// （前后）」), `None` when no direction die was asked for. Its own face, not
+    /// a second read of `recorded_roll` (which is a fixed d6 peek). Rolled from
+    /// this world's RNG in `roll_direction_dice`; C-Q47: odd = reverse.
+    #[serde(default)]
+    pub direction_roll: Option<i32>,
     pub ask_seq: i32,
     /// The open roll transaction stack (a roll can nest: an effect roll inside
     /// a move window, a recast inside a counteraction).
@@ -1061,6 +1078,13 @@ pub struct World {
     /// field stand-in (HHW:（育美）(2)).
     #[serde(default)]
     pub gains: Vec<i32>,
+    /// 「本回合开始后…失去资金的总额」 (NOW SUMIMI) -- per player, money actually
+    /// lost since that player's **own** turn last started. Covers every loss
+    /// (a settled payment, a spend, a buy, a build, a redeem, a forced buy);
+    /// a cancelled or zeroed payment adds nothing. Zeroed for the starting
+    /// player at their own turn start (「本回合开始后…到下回合开始前」).
+    #[serde(default)]
+    pub losses: Vec<i32>,
     /// [反击] declarations made this turn, in declaration order. Cleared at
     /// each turn start (design G06 §6.5).
     #[serde(default)]
@@ -1098,6 +1122,14 @@ pub struct World {
     /// live run and the action replays from its pre-action state.
     #[serde(skip)]
     pub mark_log: Vec<MarkLog>,
+    /// The in-flight payment reached its `PaySplitAt` stage (NFO-CANCEL-01).
+    /// Cleared at each payment start, set when the stage runs, read by a
+    /// `PayAfter` hook through `trigger::pay_split_ran()`: a cancelled /
+    /// negated payment never got there, a shave-to-0 did. A per-payment
+    /// save/restore bracket keeps a nested payment from eating the outer
+    /// payment's bit.
+    #[serde(default)]
+    pub pay_split_ran: bool,
     /// When set, `log` does not push an event (the caller posts write-through).
     #[serde(skip)]
     pub skip_log: bool,
@@ -1384,6 +1416,7 @@ impl World {
             rule_params: Default::default(),
             board: None,
             recorded_roll: None,
+            direction_roll: None,
             ask_seq: 0,
             open_rolls: Vec::new(),
             next_roll_id: 1,
@@ -1391,12 +1424,14 @@ impl World {
             scheduled: vec![],
             targeted: vec![],
             gains: vec![],
+            losses: vec![],
             countered_this_turn: vec![],
             played_cards: vec![],
             marker_owner: std::collections::BTreeMap::new(),
             rule_ids: Default::default(),
             walk_flush: WalkFlush::default(),
             mark_log: Vec::new(),
+            pay_split_ran: false,
             skip_log: false,
             stub: MatchEvent::default(),
             flash: SharedFlash::default(),
@@ -1427,6 +1462,30 @@ impl World {
         usize::try_from(player_id)
             .ok()
             .and_then(|s| self.gains.get(s).copied())
+            .unwrap_or(0)
+    }
+
+    /// 「本回合开始后…失去资金的总额」 -- count an actual money loss for
+    /// `player_id` (only positive figures; a cancelled payment adds 0).
+    /// Every real debit funnels through here.
+    pub fn bump_loss(&mut self, player_id: i32, amount: i32) {
+        let Ok(s) = usize::try_from(player_id) else {
+            return;
+        };
+        if amount <= 0 {
+            return;
+        }
+        if self.losses.len() <= s {
+            self.losses.resize(s + 1, 0);
+        }
+        self.losses[s] = self.losses[s].saturating_add(amount);
+    }
+
+    /// The money `player_id` has lost since their own turn started.
+    pub fn losses_this_turn(&self, player_id: i32) -> i32 {
+        usize::try_from(player_id)
+            .ok()
+            .and_then(|s| self.losses.get(s).copied())
             .unwrap_or(0)
     }
 

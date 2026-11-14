@@ -91,7 +91,18 @@ fn counteract_cancelling(t: &mut Table, who: usize, card: &str, cancel: i32) {
                 let Some(_) = t.prompt() else { break };
                 eprintln!("after {card} declare: {}", t.dump_prompt());
                 if offers_player(t, cancel) {
-                    answer_player(t, who, cancel);
+                    // The cancel prompt belongs to the counteractor; a body
+                    // re-ask after the drop (`jennifer` names its target in
+                    // the body) belongs to the play's user.
+                    let asked = t.asked();
+                    let seat = if asked == [who] {
+                        who
+                    } else if let [only] = asked[..] {
+                        only
+                    } else {
+                        break;
+                    };
+                    answer_player(t, seat, cancel);
                 } else {
                     break;
                 }

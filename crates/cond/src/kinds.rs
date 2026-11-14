@@ -83,6 +83,13 @@ pub mod trig {
     /// v43: the move head / move-tail pair (`SETTLE-STAGES.md` §7).
     pub const MoveBefore: &str = "moveBefore";
     pub const MoveAfter: &str = "moveAfter";
+    /// 行动阶段 3 「回合开始后」 -- after the turn-start handling.
+    pub const TurnStartAfter: &str = "turnStartAfter";
+    /// 行动阶段 6 「经营/出牌阶段后」 -- 运营 ends, before the main move.
+    pub const ManageAfter: &str = "manageAfter";
+    /// Engine namespace (`ActionKind::MarkerChanged`). A held counter (a
+    /// player token of a creating instance) is written.
+    pub const MarkerChanged: &str = "markerChanged";
 }
 
 /// MoveKind values. `Walk` / `Teleport` are what `move.kind ==` compares.
@@ -144,6 +151,9 @@ pub fn engine_str_constants() -> &'static [(&'static str, &'static str)] {
         ("HouseAdded", trig::HouseAdded),
         ("MoveBefore", trig::MoveBefore),
         ("MoveAfter", trig::MoveAfter),
+        ("TurnStartAfter", trig::TurnStartAfter),
+        ("ManageAfter", trig::ManageAfter),
+        ("MarkerChanged", trig::MarkerChanged),
     ]
 }
 
