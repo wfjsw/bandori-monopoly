@@ -916,7 +916,8 @@ impl SoloMatch {
     /// tileQuotes, inspection}` -- the same shape as the server's `match` frame.
     /// `aiAnswer` / `playable` are the per-viewer extras from
     /// [`Match::view_extras`] (the 托管 autopilot's inputs); `tileQuotes` is
-    /// the per-viewer board caption data ([`Match::tile_quotes`]).
+    /// the board caption data ([`Match::tile_quotes`]), keyed on the current
+    /// turn's seat.
     pub fn view(&self, member: i32) -> String {
         let m = self.m.inner();
         json(&frame(m, member, &m.state()))
@@ -1081,8 +1082,8 @@ impl ReplayMatch {
     }
 
     /// The same frame shape as [`SoloMatch::view`]. `member` 0 is the
-    /// spectator: no hand, no draw, no per-viewer extras. `tileQuotes` is
-    /// still filled -- the seat-independent reading.
+    /// spectator: no hand, no draw, no per-viewer extras. `tileQuotes` still
+    /// follows the recorded turn (the seat-independent reading before one).
     ///
     /// The spectator branch is an explicit special case and must not go
     /// through [`frame`]: `view_extras_typed` on an unknown member returns

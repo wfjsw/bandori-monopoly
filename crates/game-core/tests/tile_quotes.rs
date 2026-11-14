@@ -1,7 +1,10 @@
-//! `Match::tile_quotes` -- the per-viewer board-caption figures.
+//! `Match::tile_quotes` -- the board-caption figures.
 //!
-//! One quote per buyable tile, from the viewer's seat (or the seat-independent
-//! reading for a spectator / unknown member). See `purchase::tile_quotes`.
+//! One quote per buyable tile, from the **current turn player's** seat: the
+//! acting player's own tiles quote the next build stage, every other owned
+//! tile the income it generates. The viewer's seat only fills in before the
+//! first turn, and with no seat either the seat-independent reading applies.
+//! See `purchase::tile_quotes`.
 
 use std::sync::Arc;
 
@@ -94,7 +97,12 @@ fn flat_deed_tile() -> usize {
     first_tile(|t| t.is_buyable() && t.rent.len() < 2)
 }
 
-/// Tile `t`'s quote for `member`, or panic with the whole vector for debugging.
+/// Put the turn on `seat` -- the quotes follow it.
+fn turn_to(m: &mut Match, seat: i32) {
+    m.world_mut().st.turn = seat;
+}
+
+/// Tile `t`'s quote, or panic with the whole vector for debugging.
 fn q(m: &Match, member: i32, t: usize) -> TileQuote {
     let qs = m.tile_quotes(member);
     qs.get(t)
@@ -104,9 +112,11 @@ fn q(m: &Match, member: i32, t: usize) -> TileQuote {
 
 #[test]
 fn unowned_shows_the_buy_price() {
-    let m = stub(1);
+    let mut m = stub(1);
     let t = prop_tile();
     let tile = &data().tiles[t];
+    let me = seat(&m, 1);
+    turn_to(&mut m, me);
     let qq = q(&m, 1, t);
     assert_eq!(qq.kind, TileQuoteKind::Buy);
     assert_eq!(qq.flow, MoneyFlow::MayPay);
@@ -119,6 +129,7 @@ fn mine_with_a_next_building_shows_the_build_cost() {
     let mut m = stub(2);
     let t = prop_tile();
     let me = seat(&m, 1);
+    turn_to(&mut m, me);
     m.world_mut().st.owners[t] = me;
     let house = data().tiles[t].house;
     let qq = q(&m, 1, t);
@@ -134,6 +145,7 @@ fn mine_at_the_build_cap_shows_own_rent() {
     let tile = &data().tiles[t];
     let cap = tile.rent.len() - 1;
     let me = seat(&m, 1);
+    turn_to(&mut m, me);
     m.world_mut().st.owners[t] = me;
     m.world_mut().st.houses[t] = cap as i32;
     let qq = q(&m, 1, t);
@@ -148,6 +160,7 @@ fn mine_on_a_flat_deed_shows_own_rent_because_it_cannot_upgrade() {
     let mut m = stub(4);
     let t = flat_deed_tile();
     let me = seat(&m, 1);
+    turn_to(&mut m, me);
     m.world_mut().st.owners[t] = me;
     let qq = q(&m, 1, t);
     assert_eq!(qq.kind, TileQuoteKind::OwnRent);
@@ -160,16 +173,18 @@ fn mine_on_a_flat_deed_shows_own_rent_because_it_cannot_upgrade() {
 }
 
 #[test]
-fn others_tile_shows_the_rent_id_pay() {
+fn others_tile_shows_the_income_it_generates() {
     let mut m = stub(5);
     let t = prop_tile();
     let tile = &data().tiles[t];
+    let me = seat(&m, 1);
+    turn_to(&mut m, me);
     let other = seat(&m, other_member(&m, 1));
     m.world_mut().st.owners[t] = other;
     m.world_mut().st.houses[t] = 1;
     let qq = q(&m, 1, t);
     assert_eq!(qq.kind, TileQuoteKind::Rent);
-    assert_eq!(qq.flow, MoneyFlow::MustPay);
+    assert_eq!(qq.flow, MoneyFlow::Receive, "the owner's income");
     assert_eq!(qq.value, tile.rent[1]);
 }
 
@@ -178,6 +193,8 @@ fn rent_houses_override_is_honoured() {
     let mut m = stub(6);
     let t = prop_tile();
     let tile = &data().tiles[t];
+    let me = seat(&m, 1);
+    turn_to(&mut m, me);
     let other_member = other_member(&m, 1);
     let other = seat(&m, other_member);
     m.world_mut().st.owners[t] = other;
@@ -197,14 +214,16 @@ fn rent_houses_override_is_honoured() {
 }
 
 #[test]
-fn others_flat_deed_shows_the_rent_id_pay() {
+fn others_flat_deed_shows_the_income_it_generates() {
     let mut m = stub(7);
     let t = flat_deed_tile();
+    let me = seat(&m, 1);
+    turn_to(&mut m, me);
     let other = seat(&m, other_member(&m, 1));
     m.world_mut().st.owners[t] = other;
     let qq = q(&m, 1, t);
     assert_eq!(qq.kind, TileQuoteKind::Rent);
-    assert_eq!(qq.flow, MoneyFlow::MustPay);
+    assert_eq!(qq.flow, MoneyFlow::Receive);
     let tile = &data().tiles[t];
     let rent = tile.rent.first().copied().unwrap_or(0);
     assert_eq!(qq.value, rent);
@@ -216,6 +235,8 @@ fn mortgaged_others_shows_the_force_buy_price() {
     let mut m = stub(8);
     let t = prop_tile();
     let tile = &data().tiles[t];
+    let me = seat(&m, 1);
+    turn_to(&mut m, me);
     let other = seat(&m, other_member(&m, 1));
     m.world_mut().st.owners[t] = other;
     m.world_mut().st.mortgaged[t] = true;
@@ -233,6 +254,7 @@ fn mortgaged_mine_shows_the_redeem_price() {
     let t = prop_tile();
     let tile = &data().tiles[t];
     let me = seat(&m, 1);
+    turn_to(&mut m, me);
     m.world_mut().st.owners[t] = me;
     m.world_mut().st.mortgaged[t] = true;
     let qq = q(&m, 1, t);
@@ -242,21 +264,80 @@ fn mortgaged_mine_shows_the_redeem_price() {
 }
 
 #[test]
-fn spectator_sees_the_seat_independent_reading() {
+fn the_turn_seat_wins_over_the_viewing_member() {
+    // The same tile, the same viewer: only the turn seat changes, and the
+    // quote must follow it instead of the viewer.
     let mut m = stub(10);
     let t = prop_tile();
     let tile = &data().tiles[t];
+    let mine = seat(&m, 1);
+    let other = seat(&m, other_member(&m, 1));
+    m.world_mut().st.owners[t] = other;
+
+    // The other player's turn: their own tile quotes the next build stage
+    // even though member 1 is the viewer.
+    turn_to(&mut m, other);
+    let qq = q(&m, 1, t);
+    assert_eq!(qq.kind, TileQuoteKind::Build, "the actor's own tile");
+    assert_eq!(qq.value, tile.house);
+
+    // Member 1's turn: the same tile is someone else's and quotes income.
+    turn_to(&mut m, mine);
+    let qq = q(&m, 1, t);
+    assert_eq!(qq.kind, TileQuoteKind::Rent);
+    assert_eq!(qq.flow, MoneyFlow::Receive);
+}
+
+#[test]
+fn a_spectator_follows_the_turn_seat() {
+    let mut m = stub(11);
+    let t = prop_tile();
+    let tile = &data().tiles[t];
+    let actor = seat(&m, other_member(&m, 1));
+    turn_to(&mut m, actor);
+
+    // Unowned: the buy price.
+    let qq = q(&m, 99, t);
+    assert_eq!(qq.kind, TileQuoteKind::Buy);
+    assert_eq!(qq.value, tile.price);
+
+    // Owned by the actor: the actor's build cost.
+    m.world_mut().st.owners[t] = actor;
+    let qq = q(&m, 99, t);
+    assert_eq!(qq.kind, TileQuoteKind::Build);
+
+    // Owned by someone else: the tile's income.
+    let other = seat(&m, 1);
+    m.world_mut().st.owners[t] = other;
+    let qq = q(&m, 99, t);
+    assert_eq!(qq.kind, TileQuoteKind::Rent);
+    assert_eq!(qq.flow, MoneyFlow::Receive);
+
+    // Mortgaged: the actor's force-buy price.
+    m.world_mut().st.mortgaged[t] = true;
+    let qq = q(&m, 99, t);
+    assert_eq!(qq.kind, TileQuoteKind::ForceBuy);
+    assert_eq!(qq.value, 2 * tile.price);
+}
+
+#[test]
+fn no_turn_and_no_seat_is_the_seat_independent_reading() {
+    let mut m = stub(12);
+    let t = prop_tile();
+    let tile = &data().tiles[t];
+    m.world_mut().st.turn = -1;
+
     // Unowned: base land price, no player-scoped modifiers.
     let qq = q(&m, 99, t);
     assert_eq!(qq.kind, TileQuoteKind::Buy);
     assert_eq!(qq.value, tile.price);
 
-    // Owned by someone: the rent a visitor would pay (MustPay).
+    // Owned by someone: the income the tile generates.
     let other = seat(&m, other_member(&m, 1));
     m.world_mut().st.owners[t] = other;
     let qq = q(&m, 99, t);
     assert_eq!(qq.kind, TileQuoteKind::Rent);
-    assert_eq!(qq.flow, MoneyFlow::MustPay);
+    assert_eq!(qq.flow, MoneyFlow::Receive);
 
     // Mortgaged: the force-buy list price.
     m.world_mut().st.mortgaged[t] = true;
@@ -302,15 +383,19 @@ fn a_buy_price_modifier_is_reflected() {
         }
     }
 
-    let m = solo(11, Arc::new(DiscountRules));
+    let mut m = solo(13, Arc::new(DiscountRules));
     let t = prop_tile();
     let tile = &data().tiles[t];
+    let me = seat(&m, 1);
+    turn_to(&mut m, me);
     let qq = q(&m, 1, t);
     assert_eq!(qq.kind, TileQuoteKind::Buy);
     assert_eq!(qq.value, tile.price - 1000, "BuyAdd-style discount lands");
 
     // Force-buy goes through the same quote path.
-    let mut m = solo(11, Arc::new(DiscountRules));
+    let mut m = solo(13, Arc::new(DiscountRules));
+    let me = seat(&m, 1);
+    turn_to(&mut m, me);
     let other = seat(&m, other_member(&m, 1));
     m.world_mut().st.owners[t] = other;
     m.world_mut().st.mortgaged[t] = true;
@@ -321,7 +406,7 @@ fn a_buy_price_modifier_is_reflected() {
 
 #[test]
 fn non_buyable_tiles_carry_no_quote() {
-    let m = stub(12);
+    let m = stub(14);
     let d = data();
     let qs = m.tile_quotes(1);
     for (i, tile) in d.tiles.iter().enumerate() {

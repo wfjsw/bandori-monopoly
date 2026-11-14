@@ -35,21 +35,21 @@ test("force-buy is twice the land + standing houses", () => {
 
 test("other's mortgaged deed quotes the force-buy price", () => {
   assert.deepEqual(
-    deedStandingCost(null, { owner: 2, playerId: 1, price: 1000, house: 500, houses: 2 }),
+    deedStandingCost(null, { owner: 2, actor: 1, price: 1000, house: 500, houses: 2 }),
     { kind: "forceBuy", value: 4000 },
   );
 });
 
 test("my mortgaged deed quotes the redeem price (force-buy never applies)", () => {
   assert.deepEqual(
-    deedStandingCost(null, { owner: 1, playerId: 1, price: 1000, house: 500, houses: 2 }),
+    deedStandingCost(null, { owner: 1, actor: 1, price: 1000, house: 500, houses: 2 }),
     { kind: "redeem", value: 600 },
   );
 });
 
 test("a spectator's seat-independent reading is the force-buy list price", () => {
   assert.deepEqual(
-    deedStandingCost(null, { owner: 0, playerId: -1, price: 1000, house: 500, houses: 0 }),
+    deedStandingCost(null, { owner: 0, actor: -1, price: 1000, house: 500, houses: 0 }),
     { kind: "forceBuy", value: 2000 },
   );
 });
@@ -57,13 +57,13 @@ test("a spectator's seat-independent reading is the force-buy list price", () =>
 test("a live tileQuotes entry wins, so the popup cannot drift from the board", () => {
   const q: TileQuote = { kind: "forceBuy", flow: "mayPay", value: 4000 };
   assert.deepEqual(
-    deedStandingCost(q, { owner: 2, playerId: 1, price: 1000, house: 500, houses: 0 }),
+    deedStandingCost(q, { owner: 2, actor: 1, price: 1000, house: 500, houses: 0 }),
     { kind: "forceBuy", value: 4000 },
     "the quote's figure is printed even when the fallback formula would differ",
   );
   const r: TileQuote = { kind: "redeem", flow: "mayPay", value: 600 };
   assert.deepEqual(
-    deedStandingCost(r, { owner: 1, playerId: 1, price: 1000, house: 500, houses: 0 }),
+    deedStandingCost(r, { owner: 1, actor: 1, price: 1000, house: 500, houses: 0 }),
     { kind: "redeem", value: 600 },
   );
 });
@@ -71,7 +71,7 @@ test("a live tileQuotes entry wins, so the popup cannot drift from the board", (
 test("an unrelated quote kind falls back to the rulebook formulas", () => {
   const rent: TileQuote = { kind: "rent", flow: "mustPay", value: 200 };
   assert.deepEqual(
-    deedStandingCost(rent, { owner: 2, playerId: 1, price: 1000, house: 500, houses: 1 }),
+    deedStandingCost(rent, { owner: 2, actor: 1, price: 1000, house: 500, houses: 1 }),
     { kind: "forceBuy", value: 3000 },
   );
 });

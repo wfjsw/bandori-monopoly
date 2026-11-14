@@ -584,9 +584,10 @@ pub struct MatchView {
     pub draw: Vec<String>,
     pub you: i32,
     pub player_id: i32,
-    /// Per-tile board captions from this member's seat
-    /// ([`game_core::engine::Match::tile_quotes`]). Optional so a frame from
-    /// an older worker still deserializes.
+    /// Per-tile board captions keyed on the **current turn's seat**
+    /// ([`game_core::engine::Match::tile_quotes`]; the viewer's seat only
+    /// before the first turn). Optional so a frame from an older worker still
+    /// deserializes.
     ///
     /// NB: the worker's `aiAnswer` / `playable` / `estCost` / `skills` extras
     /// are **not** re-typed here and are dropped on the online path. A human

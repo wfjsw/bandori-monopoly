@@ -64,17 +64,19 @@ pub mod stage {
     pub const END: i32 = 4;
 }
 
-/// Which way money flows for the viewer of a [`TileQuote`]. The UI's colour
-/// channel (`--money-pay` / `--money-optional` / `--money-receive`); `kind`
-/// carries the tooltip wording, `flow` the direction.
+/// Which way money flows for the acting player of a [`TileQuote`]. The UI's
+/// colour channel (`--money-pay` / `--money-optional` / `--money-receive`);
+/// `kind` carries the tooltip wording, `flow` the direction.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub enum MoneyFlow {
-    /// Forced payment out of the viewer (rent on someone else's tile).
+    /// Forced payment out of the acting player. No current quote kind emits
+    /// it -- rent is the owner's income ([`MoneyFlow::Receive`]) -- but old
+    /// frames carry it and later kinds may.
     MustPay,
-    /// Optional spend the viewer may choose (buy / build / force-buy / redeem).
+    /// Optional spend the acting player may choose (buy / build / force-buy / redeem).
     MayPay,
-    /// Income the viewer would collect (rent on their own tile).
+    /// Income a tile generates for its owner (rent).
     Receive,
 }
 
@@ -84,20 +86,22 @@ pub enum MoneyFlow {
 pub enum TileQuoteKind {
     /// Unowned land: the price to buy it.
     Buy,
-    /// Mine, next building available: its construction cost.
+    /// The acting player's, next building available: its construction cost.
     Build,
-    /// Someone else's: the rent I would pay on stepping onto it.
+    /// Another player's: the income its owner generates when it is stepped on.
     Rent,
-    /// Mine, no next building: the rent I would collect (build cap / unbuildable).
+    /// The acting player's, no next building: the income it generates
+    /// (build cap / unbuildable).
     OwnRent,
-    /// Mortgaged, someone else's: the force-buy price (「强行购买」).
+    /// Mortgaged, another player's: the force-buy price (「强行购买」).
     ForceBuy,
-    /// Mortgaged, mine: the redeem price. (Force-buy does not apply to one's
-    /// own deed; redeeming is the natural cost to clear the mortgage.)
+    /// Mortgaged, the acting player's: the redeem price. (Force-buy does not
+    /// apply to one's own deed; redeeming is the natural cost to clear the
+    /// mortgage.)
     Redeem,
 }
 
-/// One tile's "what to expect" number, from a viewer's seat.
+/// One tile's "what to expect" number, from the current turn player's seat.
 /// Parallel to the board's tiles in [`MatchView`] (`tileQuotes[i]`).
 /// `value` is the figure; `max` is the upper bound of a dice range (the flat deed
 /// rent is `deed-level × rent_unit_mult × 1d20`, so `value` is the minimum).

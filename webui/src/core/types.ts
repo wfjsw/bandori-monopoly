@@ -270,16 +270,19 @@ export interface MatchState {
   endReason: string; winner: number; scoreMoney: number; scoreProperty: number; scoreHouses: number;
 }
 /**
- * Which way money flows for the viewer of a {@link TileQuote}. The UI's colour
- * channel (`--money-pay` / `--money-optional` / `--money-receive`); `kind`
- * carries the tooltip wording.
+ * Which way money flows for the acting player of a {@link TileQuote}. The UI's
+ * colour channel (`--money-pay` / `--money-optional` / `--money-receive`);
+ * `kind` carries the tooltip wording. `mustPay` has no current producer (rent
+ * is the owner's income, `receive`) but old frames still carry it.
  */
 export type MoneyFlow = "mustPay" | "mayPay" | "receive";
 /** What a {@link TileQuote}'s number means. See `purchase::tile_quotes`. */
 export type TileQuoteKind = "buy" | "build" | "rent" | "ownRent" | "forceBuy" | "redeem";
 /**
- * One tile's "what to expect" number, from the viewer's seat. `value` is the
- * figure; `max` is the upper bound of a dice range (RiNG rent).
+ * One tile's "what to expect" number, from the **current turn player**'s
+ * seat: the acting player's own tiles quote their next build stage, every
+ * other owned tile the income it generates. `value` is the figure; `max` is
+ * the upper bound of a dice range (RiNG rent).
  */
 export interface TileQuote {
   kind: TileQuoteKind;

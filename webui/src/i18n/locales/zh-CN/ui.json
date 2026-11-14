@@ -786,7 +786,7 @@
   "tileQuote.buy": "购买价",
   "tileQuote.build": "建造费",
   "tileQuote.rent": "地租",
-  "tileQuote.ownRent": "本人地租",
+  "tileQuote.ownRent": "自有地租",
   "tileQuote.forceBuy": "强制购买价",
   "tileQuote.redeem": "赎回价",
   "topbar.createSave": "回到主界面创建存档",

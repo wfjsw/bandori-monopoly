@@ -1467,18 +1467,22 @@ impl Match {
             .collect()
     }
 
-    /// Per-tile "what to expect" quotes from `member`'s seat
+    /// Per-tile "what to expect" quotes for the board captions
     /// ([`purchase::tile_quotes`]), parallel to the board's tiles.
     ///
-    /// An unknown member (or a spectator / replay viewer with no seat) gets
-    /// the seat-independent reading: base price, base rent, force-buy.
+    /// The figures follow the **current turn's seat**, never the viewer: a
+    /// tile the acting player owns reads as its next-stage build cost, every
+    /// other owned tile as the income it generates when stepped on. The tag
+    /// therefore means one thing per turn instead of flipping with whoever is
+    /// looking. Before the first turn `member`'s seat is used instead, and
+    /// with neither (spectator / replay with no seat) the seat-independent
+    /// reading: base price, base rent, force-buy.
     pub fn tile_quotes(&self, member: i32) -> Vec<Option<crate::state::TileQuote>> {
-        purchase::tile_quotes(
-            &self.data,
-            &self.world,
-            &*self.rules,
-            self.player_index(member),
-        )
+        let actor = usize::try_from(self.world.st.turn)
+            .ok()
+            .filter(|s| *s < self.world.st.players.len())
+            .or_else(|| self.player_index(member));
+        purchase::tile_quotes(&self.data, &self.world, &*self.rules, actor)
     }
 
     /// Per-viewer extras the client's 托管 autopilot reads on top of [`Match::state`].
