@@ -152,8 +152,9 @@ fn no_shipped_outcome_renders_an_internal_key_as_text() {
     check_events(&t.events_since(mark), "shipped-game");
 }
 /// Every trigger-kind wire name the chain start can show has an
-/// `anim.chainKind.*` label, and every counter name a `log.counter.*` phrase,
-/// in both locales -- otherwise the player reads the raw key (`moveBefore`).
+/// `anim.chainKind.*` label, every kind with only the generic why has a
+/// `log.kind.*` phrase, and every counter name a `log.counter.*` phrase, in
+/// both locales -- otherwise the player reads the raw key (`moveBefore`).
 #[test]
 fn chain_kinds_and_counters_have_locale_text() {
     let dir = concat!(env!("CARGO_MANIFEST_DIR"), "/../../webui/src/i18n/locales");
@@ -174,16 +175,32 @@ fn chain_kinds_and_counters_have_locale_text() {
                 missing.push(format!("{loc}: {key}"));
             }
         }
-        // Kinds with no dedicated `log.reason.*` phrase, named in the fallback
-        // (`kind_name` always builds `log.kind.{spelling}`).
+        // Kinds with no dedicated `log.reason.*` phrase fall through to the
+        // generic why, whose nested arg is `log.kind.{spelling}` (`kind_name`).
+        // Walk the reason table rather than a hand list: a kind added without a
+        // reason arm would otherwise ship its raw key (`diceRollCast` once did).
+        for id in 1..=400 {
+            let kind = game_rules::TriggerKind::engine(id);
+            if kind.spelling().is_empty() {
+                continue;
+            }
+            let reason = game_rules::trigger_reason(&game_rules::Trigger::new(kind, 0));
+            if reason.key() != "log.reason.generic" {
+                continue;
+            }
+            let Some(Arg::Msg(named)) = reason.args.get("kind") else {
+                missing.push(format!("{loc}: engine id {id} generic why has no kind arg"));
+                continue;
+            };
+            let key = named.key();
+            if game.get(key).is_none() {
+                missing.push(format!("{loc}: {key}"));
+            }
+        }
+        // Ruleset-declared ids carry no engine spelling; `TriggerKind::engine`
+        // cannot see them, so name them here. A ruleset raise supplies its own
+        // Msg, but a body may still read the fallback.
         for k in [
-            "diceRollPlan",
-            "playGate",
-            "onBoardGate",
-            "targetableGate",
-            "markerSpent",
-            "cardUsed",
-            "houseAdded",
             "r:bandori:21",
             "r:bandori:26",
             "r:bandori:78",
