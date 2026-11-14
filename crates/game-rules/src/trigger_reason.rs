@@ -48,7 +48,9 @@ pub fn trigger_reason(t: &Trigger) -> Msg {
         TriggerKind::DiceRollBefore
         | TriggerKind::DiceRollResult
         | TriggerKind::DiceRollAfter
-        | TriggerKind::DiceRollValue => Msg::new("log.reason.roll")
+        | TriggerKind::DiceRollValue
+        | TriggerKind::DiceRollCast
+        | TriggerKind::DiceRollSettled => Msg::new("log.reason.roll")
             .player_id("who", who)
             .i("value", value),
         TriggerKind::Teleported => Msg::new("log.reason.teleport")

@@ -178,6 +178,8 @@ fn every_listened_trigger_kind_has_a_real_why() {
         TriggerKind::DiceRollBefore,
         TriggerKind::DiceRollResult,
         TriggerKind::DiceRollAfter,
+        TriggerKind::DiceRollCast,
+        TriggerKind::DiceRollSettled,
         TriggerKind::TurnStart,
         TriggerKind::TurnStartBefore,
         TriggerKind::TurnEnd,
