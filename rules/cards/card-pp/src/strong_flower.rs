@@ -27,8 +27,14 @@ pub const STRONG_FLOWER: CardDef = CardDef::new(
     "PP:可爱又强壮的花朵",
     &[
         On::Play("", Some(cant_play), strong_flower),
-        // 规则书[持续]: 「[使用者][经过]此卡所在格子时」
-        On::Action(Action::PassTile("actor == owner", None, pass_tile)),
+        // 规则书[持续]: 「[使用者][经过]此卡所在格子时」 -- 「此卡所在格子」 is
+        // the applicability, not a body-top branch: the pass hook otherwise
+        // announces 「效果适用 …（无事发生）」 on every step of every walk.
+        On::Action(Action::PassTile(
+            "actor == owner && tile.id == card.tile",
+            None,
+            pass_tile,
+        )),
     ],
 )
 // 规则书[手]: 「[指定][使用者]拥有的一个格子」 -- the tile goes through

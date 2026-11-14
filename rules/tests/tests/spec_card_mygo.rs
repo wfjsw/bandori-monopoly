@@ -2312,6 +2312,43 @@ fn rana_skill_fire_cap_and_initial() {
     assert_eq!(t.charge_max(0), 3, "C-MYGO-rana-skill-01: cap 3");
 }
 
+/// C-MYGO-rana-skill-01: [经过] a tile that has nothing for （1）/（3）
+/// (neither CiRCLE nor a RiNG with a held 抹茶芭菲) must not announce the
+/// hook -- no 「效果适用…（无事发生）」 line. The trigger determination is the
+/// entry's condition.
+#[test]
+fn rana_skill_pass_is_silent_on_irrelevant_tiles() {
+    let mut t = Table::new(&["要乐奈", "高松灯"]);
+    t.clean();
+    t.begin_turn(0);
+    t.set_pos(0, 19); // 白雪学园; 20..23 are plain properties, no RiNG
+    let skill = t.skill_id(0, "投币式停车场的猫");
+    let mark = t.mark();
+    t.dice(&[4]); // 19 -> 23, passing 20, 21, 22
+    t.roll(0).unwrap();
+    rest(&mut t);
+    drain(&mut t);
+    assert_eq!(t.pos(0), 23, "the walk crossed the plain tiles");
+    let keys = t.keys_since(mark);
+    let headers: Vec<_> = t
+        .events_since(mark)
+        .into_iter()
+        .filter(|e| e.card == skill && e.msg.key() == "log.effect_applied")
+        .collect();
+    assert!(
+        headers.is_empty(),
+        "the pass hook announced on a tile with nothing to do: {keys:?} / {:?}",
+        headers
+            .iter()
+            .map(|e| format!("{} {} {:?}", e.card, e.kind, e.msg))
+            .collect::<Vec<_>>()
+    );
+    assert!(
+        !keys.iter().any(|k| k == "log.effect_nothing"),
+        "no 「（无事发生）」 for the pass: {keys:?}"
+    );
+}
+
 /// C-MYGO-rana-skill-02/03/04/06: Space teleport, foreign-owner settle,
 /// own-space parfait, overlap 800.
 #[test]

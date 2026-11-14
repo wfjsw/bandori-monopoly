@@ -41,8 +41,8 @@ pub const SAKIKO: CardDef = CardDef::new(
         // M4): the step onto a tile another player stands on, not the end-tile
         // [重叠]. The "other player" is read off the tile, not `target`.
         On::Action(Action::PassTile(
-            "actor == owner && move.is_main_move && slot('skillState') != 2",
-            None,
+            "actor == owner && move.is_main_move && slot('skillState') != 2 && players_on(tile.id, owner) > 0",
+            Some(first_afflicted_on_tile),
             on_pass_player,
         )),
         // 「每次受到停留，眩晕，除外影响（并结算其影响），获得一个火罐」 -- the
@@ -126,6 +126,17 @@ fn at_turn_start(player_id: i32) -> card_sdk::Asked {
 /// `passPlayer` and read `trigger::player_id()` as "the other", which is the
 /// mover -- the guard already pinned that to `player_id`, so the body bailed at
 /// its own first line and the clause never fired.)
+///
+/// Residual guard for the pass entry: the player the body would read (the
+/// first other player on the entered tile) carries a [停留] or [眩晕]. The
+/// pass hook otherwise announces 「效果适用 …（无事发生）」 on every step.
+fn first_afflicted_on_tile(player_id: i32) -> bool {
+    let Some(&other) = ctx::players_on(ctx::trigger::tile(), player_id).first() else {
+        return false;
+    };
+    rules_status::stay::get(other) + rules_status::stun::get(other) > 0
+}
+
 fn on_pass_player(player_id: i32) -> card_sdk::Asked {
     let at = ctx::trigger::tile();
     let Some(&other) = ctx::players_on(at, player_id).first() else {

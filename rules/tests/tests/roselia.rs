@@ -1048,3 +1048,57 @@ fn fire_bird_shortfall_is_wasted() {
     assert!(t.discard(0).contains(&"R:Fire bird".to_string()));
     assert_eq!(t.hand(0).len(), 0, "the card was spent");
 }
+
+/// 「任何时刻当你不位于RiNG时，失去所有的火罐」 is a pass clause: a plain step
+/// with no 火罐 has nothing for the hook, so it must stay silent (no
+/// 「效果适用 …（无事发生）」 per walked step); a held 火罐 makes the same step
+/// announce the loss.
+#[test]
+fn yukina_pass_hook_is_silent_without_a_pot() {
+    let mut t = Table::new(&["凑友希那", "户山香澄"]);
+    t.begin_turn(0);
+    drain(&mut t);
+    t.set_pos(0, 20); // 20..22 are plain properties, no RiNG
+    let mark = t.mark();
+    t.dice(&[2]);
+    t.roll(0).unwrap();
+    drain(&mut t);
+    let keys = t.keys_since(mark);
+    let announced = t
+        .events_since(mark)
+        .into_iter()
+        .filter(|e| {
+            e.card == "skill:凑友希那:来练习吧"
+                && e.msg.key() == "log.effect_applied"
+                && format!("{:?}", e.msg.args.get("reason")).contains("log.reason.pass")
+        })
+        .count();
+    assert_eq!(announced, 0, "pass activity with no pot: {keys:?}");
+    assert!(
+        !keys.iter().any(|k| k == "log.effect_nothing"),
+        "no 「（无事发生）」: {keys:?}"
+    );
+}
+
+/// The same plain step while holding a 火罐 announces the loss.
+#[test]
+fn yukina_pass_hook_announces_the_pot_loss() {
+    let mut t = Table::new(&["凑友希那", "户山香澄"]);
+    t.begin_turn(0);
+    drain(&mut t);
+    t.set_fire(0, 1, 1);
+    t.set_pos(0, 20);
+    let mark = t.mark();
+    t.dice(&[2]);
+    t.roll(0).unwrap();
+    drain(&mut t);
+    let keys = t.keys_since(mark);
+    assert!(
+        keys.iter().any(|k| k.contains("yukina_lost")),
+        "the loss is announced: {keys:?}"
+    );
+    assert!(
+        !keys.iter().any(|k| k == "log.effect_nothing"),
+        "no 「（无事发生）」: {keys:?}"
+    );
+}

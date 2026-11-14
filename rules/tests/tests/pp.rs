@@ -2676,3 +2676,37 @@ fn maya_rest_shuffle_returns_the_unpicked_cards() {
         assert!(deck.contains(&c.to_string()), "{c} missing: {deck:?}");
     }
 }
+
+/// `PP:可爱又强壮的花朵`'s [持续] fires only on 「此卡所在格子」. The pass hook
+/// must stay silent elsewhere -- no 「效果适用 …（无事发生）」 per walked step.
+#[test]
+fn strong_flower_pass_hook_is_silent_off_its_tile() {
+    let mut t = Table::vanilla(2);
+    t.own(0, &[7]);
+    t.begin_turn(0);
+    drain(&mut t);
+    t.give_play(0, "PP:可爱又强壮的花朵").unwrap();
+    t.answer_tile(0, 7).unwrap();
+    drain(&mut t);
+    assert!(t.on_field(0, "PP:可爱又强壮的花朵"), "placed on 7");
+    let mark = t.mark();
+    t.set_pos(0, 20); // 20..22 are plain properties, not the flower's tile
+    t.dice(&[2]);
+    t.roll(0).unwrap();
+    drain(&mut t);
+    let keys = t.keys_since(mark);
+    let announced = t
+        .events_since(mark)
+        .into_iter()
+        .filter(|e| {
+            e.card == "PP:可爱又强壮的花朵"
+                && e.msg.key() == "log.effect_applied"
+                && format!("{:?}", e.msg.args.get("reason")).contains("log.reason.pass")
+        })
+        .count();
+    assert_eq!(announced, 0, "pass activity off the flower's tile: {keys:?}");
+    assert!(
+        !keys.iter().any(|k| k == "log.effect_nothing"),
+        "no 「（无事发生）」: {keys:?}"
+    );
+}

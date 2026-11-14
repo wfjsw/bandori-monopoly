@@ -19,8 +19,11 @@ pub const SAAYA_SKY: CardDef = CardDef::new(
     "PPP:（沙绫）总有一天要给这片天空命名",
     &[
         On::Play("", None, play),
+        // 「[使用者][经过]此卡后」 -- this card's own tile, once (the record
+        // counter). The pass hook fires on every step, so the applicability is
+        // the condition; a body-top tile check would announce on every step.
         On::Action(Action::PassTile(
-            "actor == owner && card.placed",
+            "actor == owner && card.placed && tile.id == card.tile && card.counter('saaya_sky_passed') == 0",
             None,
             pass_tile)).silent(),
         // 规则书: 「[使用者][经过]此卡后在回合结束后获得1个[火罐]」 -- a scheduled

@@ -440,6 +440,17 @@ body-top, or a guard that already returned `err.play_pre`) may live in the `cond
 Counteract / hook residuals are unaffected (they are a plain admit/reject with
 no message).
 
+**Pass-hook applicability is the condition (2026-11-14).** A `Pass` /
+`PassTile` hook fires on every step of every walk. A branch at the body top
+that returns early does not suppress the activation: the drive still completes
+with no visible outcome and the log reads 「效果适用 …（无事发生）」 for a tile
+the clause had nothing to do with. Put the whole applicability in the
+`condition` (`tile_is(tile.id, 'circle')`, `tile.id == card.tile`,
+`players_on(tile.id, owner) > 0`, a `slot`/`tok`/`card.counter` predicate …);
+the residual guard then only carries what the CEL schema cannot express. Only
+an entry whose body always produces something (an unconditional gain, a
+`silent` bookkeeping write) may keep a bare `actor == owner` / `card.placed`.
+
 ### 4.5 Window algorithm (2026-10-08) — valid-option-first + processed set
 
 The [反击] window (`hand_counteractions` / `build_round` / `declare_one`,

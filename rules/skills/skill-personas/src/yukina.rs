@@ -36,7 +36,19 @@ pub const YUKINA: CardDef = CardDef::new(
         // （1）'s starting square and deed: the before-match-start point decides
         // start positions.
         On::Action(Action::DeckBeforeGame("", None, at_start)),
-        On::Action(Action::Pass(card_sdk::condition::MINE, None, on_pass)),
+        // The body has three branches, and their union is the pass hook's
+        // applicability -- every other step would only announce
+        // 「效果适用 …（无事发生）」:
+        // * （1）'s waived first CiRCLE pass -- gated by the waiver latch
+        //   (set on that pass, so it cannot re-fire);
+        // * （2）'s RiNG stop offer -- only with movement left;
+        // * （3）'s 「任何时刻当你不位于RiNG时，失去所有的火罐」 -- any
+        //   non-RiNG step while a pot is held.
+        On::Action(Action::Pass(
+            "actor == owner && ((tile_is(tile.id, \"circle\") && state(owner, 'skill.kokoroPractice.waived') == 0) || (tile_is(tile.id, \"ring\") && move.remaining > 0) || (!tile_is(tile.id, \"ring\") && charge(owner) > 0))",
+            None,
+            on_pass,
+        )),
         // （3）「当其他玩家移动[经过]您时」 -- 行动阶段 12 [经过], per step
         // (`SETTLE-STAGES.md` §4 M4), not the end-tile [重叠]. The guard reads
         // the mover and the tile being entered, so it is `passed_by`, not `mine`.
@@ -104,6 +116,9 @@ fn on_pass(player_id: i32) -> card_sdk::Asked {
     if ctx::is_start(t) && state::get(player_id, WAIVED) == 0 {
         state::set(player_id, WAIVED, 1);
         ctx::set_prop(card_sdk::abi::prop::NO_REWARD, 0);
+        // The waiver itself is the observable outcome of this pass (the
+        // suppressed reward is the tile's, not this card's line).
+        ctx::log(player_id, &Msg::new(key!("yukina_waived")));
     }
     // （2） 「可以在[经过]的第一个RiNG停止移动」 -- offered on the first RiNG
     // the walk passes.
