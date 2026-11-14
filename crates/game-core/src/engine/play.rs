@@ -1770,7 +1770,13 @@ impl PlayCtx<'_> {
             return Ok(false);
         }
         let kind = purchase::BuyKind::from_i32(kind).unwrap_or(purchase::BuyKind::Card);
-        self.deed_buy(player_id, tile, kind, 1)
+        let bought = self.deed_buy(player_id, tile, kind, 1)?;
+        if bought {
+            // A forced buy in a settle counts as the settle's one operation
+            // (基础[结算] item 8), so no ordinary build follows it.
+            self.note_settle_operation(super::cx::SettleOperation::Bought(tile));
+        }
+        Ok(bought)
     }
 
     /// A card handed a deed over outside the buy routine (tomoe_savior's
@@ -2895,6 +2901,7 @@ impl PlayCtx<'_> {
                     .expect("planted by `with_move`"),
                 is_main_move: frame.m.is_main_move,
                 no_buy: frame.no_buy,
+                operation: super::cx::SettleOperation::None,
                 seed: self.w.turn.settle_seed.take(),
             });
             frame.stack_idx = self.settle_stack.len() - 1;
@@ -3672,6 +3679,11 @@ impl PlayCtx<'_> {
     /// the ONE offer site for a normal land buy (规则书 「无主的[可购买格子]的
     /// [结算]是：可选择[消耗]…获得格子地契和拥有权」).
     fn offer_buy(&mut self, i: usize, t: usize) -> Flow<()> {
+        // 基础[结算] item 8: the settle's one normal operation is already
+        // spent on this tile (e.g. a card built here before the body ran).
+        if self.settle_operated_on(t) {
+            return Ok(());
+        }
         // Never prompt for an offer `buy` would refuse: the plan bars a buy,
         // this settle is a forced one, or a `BuyGate` hook vetoes it.
         if self.w.plan().no_buy
@@ -3716,15 +3728,48 @@ impl PlayCtx<'_> {
         .with_tile(self.w.position_of_tile(t as i32) as usize);
         ask.view.price = price;
         if self.ask(ask)?.of(i) == 0 && self.w.st.owners[t] < 0 && !self.out(i) {
-            self.deed_buy(i, t, purchase::BuyKind::Land, 0)?;
+            if self.deed_buy(i, t, purchase::BuyKind::Land, 0)? {
+                self.note_settle_operation(super::cx::SettleOperation::Bought(t));
+            }
         }
         Ok(())
+    }
+
+    /// Has the running settle already spent its one (normal) operation on `t`?
+    ///
+    /// 基础[结算] item 8: 「购买与建造二选一，购买后不可立即在同一格建造。」
+    /// The settle body is re-run after every answer, so without this a re-run
+    /// would offer the second operation in the same settle.
+    fn settle_operated_on(&self, t: usize) -> bool {
+        self.settle_stack.last().is_some_and(|e| match e.operation {
+            super::cx::SettleOperation::Bought(at) | super::cx::SettleOperation::Built(at) => {
+                at == t
+            }
+            super::cx::SettleOperation::None => false,
+        })
+    }
+
+    /// Spend the running settle's one (normal) operation. Buys from the
+    /// operating phase have no settle frame and mark nothing.
+    fn note_settle_operation(&mut self, op: super::cx::SettleOperation) {
+        if let Some(e) = self.settle_stack.last_mut() {
+            e.operation = op;
+        }
     }
 
     /// Offer a build on own land. The tile settle body calls this -- it is
     /// the ONE offer site for a normal build (规则书 「玩家拥有的[可购买格子]的
     /// [结算]是：…可选择[消耗]…进行升级建造」).
     fn offer_build(&mut self, i: usize, t: usize) -> Flow<()> {
+        // 基础[结算] item 8 「购买与建造二选一，购买后不可立即在同一格建造」:
+        // this settle's one normal operation is already spent on `t` (it was
+        // the buy, or an earlier build), so no second offer. The settle body's
+        // re-run after each answer is what would otherwise land here. A card's
+        // own `ctx::card_offer_build` is not the settle's normal operation and
+        // is not affected.
+        if self.settle_operated_on(t) {
+            return Ok(());
+        }
         if self.cant_build_on(i, t).is_some()
             || self.w.purchase_funds(self.data, i, Some(t)) < self.build_price(t)
         {
@@ -3754,8 +3799,11 @@ impl PlayCtx<'_> {
         )
         .with_ai(|_| if wants { 0 } else { 1 })
         .with_tile(t);
-        if self.ask(ask)?.of(i) == 0 && self.cant_build_on(i, t).is_none() {
-            self.deed_build(i, t)?;
+        if self.ask(ask)?.of(i) == 0
+            && self.cant_build_on(i, t).is_none()
+            && self.deed_build(i, t)?
+        {
+            self.note_settle_operation(super::cx::SettleOperation::Built(t));
         }
         Ok(())
     }

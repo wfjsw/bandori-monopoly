@@ -71,7 +71,10 @@ pub(crate) fn settle(player_id: i32) -> card_sdk::Asked {
     }
     // The settle IS the optional buy / build (规则书 「无主的[可购买格子]的[结算]
     // 是：可选择[消耗]…获得格子地契和拥有权」) -- offered as part of the settle,
-    // not deferred to the end phase.
+    // not deferred to the end phase. 基础[结算] item 8 (「购买与建造二选一，
+    // 购买后不可立即在同一格建造」) is the engine's: the settle entry's one
+    // operation slot is spent by the first offer, so this body's re-run after
+    // the answer does not offer the other operation.
     let owner = ctx::tile_owner(at);
     // A co-holder (「视为同时拥有」) lands as an owner.
     if ctx::owns_tile(at, player_id) {

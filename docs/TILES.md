@@ -331,7 +331,10 @@ performs them (规则书 「无主的[可购买格子]的[结算]是：可选择
 END-step buy/build act: net `buy`/`build` are rejected with
 `err.buy_build_at_settle`. A settle offers exactly one of buy XOR build
 depending on the owner, so 规则书 基础[结算] item 8 (「购买与建造二选一」) is
-structural -- the `land_acted` flag is gone.
+structural -- the `land_acted` flag is gone. The settle entry's operation slot
+(`SettleOperation::Bought` / `Built`) is spent by the first offer, which stops
+the guest body's post-answer re-run from offering the second operation;
+card-driven builds (`ctx::card_offer_build`) bypass it.
 
 The tile rule decides *whether they are allowed and the price* through its
 props (`price`, `house`, `buildMax`, `noBuild`) and the quote pipeline

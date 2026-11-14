@@ -32,6 +32,7 @@ pub const CLAUSES: &[Clause] = &[
     G_SETTLE_12,
     G_SETTLE_13,
     G_SETTLE_14,
+    G_SETTLE_15,
 ];
 
 // ---------------------------------------------------------------------------
@@ -1149,6 +1150,55 @@ pub fn g_settle_14(step: &Step<'_>) -> Result<(), String> {
                 "agent choose-one branch settled other-owned tile {t} (owner {o})"
             ));
         }
+    }
+    Ok(())
+}
+
+/// Item 8: one (normal) operation per tile per settle -- buy XOR build, and a
+/// build never repeats.
+///
+/// * **ID:** G-SETTLE-15
+/// * **Source:** `rulebook-doc.md:163`
+/// * **Quote:** 「一个回合内，对一块地及其上的建筑只能进行一次（常规）操作：购买与建造二选一，购买后不可立即在同一格建造。」
+/// * **Trigger:** a window with a `buy`, a `build`, or both.
+/// * **Condition:** no card activation (a card's own
+///   `ctx::card_offer_build` is not the settle's normal operation and may add
+///   a build).
+/// * **Effect:** at most one normal operation per tile in the window: no
+///   `build` on a tile already bought, and no second `build` on a tile.
+/// * **Frame:** n/a.
+const G_SETTLE_15: Clause = Clause::new(
+    "G-SETTLE-15",
+    "rulebook-doc.md:163",
+    "一个回合内，对一块地及其上的建筑只能进行一次（常规）操作：购买与建造二选一，购买后不可立即在同一格建造。",
+    g_settle_15,
+);
+
+/// Executable form of [`G_SETTLE_15`].
+pub fn g_settle_15(step: &Step<'_>) -> Result<(), String> {
+    if has_card_activation(step) {
+        return Ok(());
+    }
+    // Auction wins log as `buy` too, and the auction settle is its own window.
+    if has_funding_or_auction(step) {
+        return Ok(());
+    }
+    let mut operated: Vec<i32> = Vec::new();
+    for e in step.events {
+        if !matches!(e.r#type.as_str(), "buy" | "build") {
+            continue;
+        }
+        let t = e.to;
+        if t < 0 {
+            continue;
+        }
+        if operated.contains(&t) {
+            return Err(format!(
+                "{} on tile {t} is a second normal operation in one settle (item 8)",
+                e.r#type
+            ));
+        }
+        operated.push(t);
     }
     Ok(())
 }

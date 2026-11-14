@@ -10,7 +10,9 @@ The END-step `act buy` / `act build` re-offer is gone (net acts are rejected
 with `err.buy_build_at_settle`); `st.buy_price` / `build_cost` /
 `can_buy_here` / `can_build_here` and the `land_acted` flag are removed. A
 settle offers exactly one of buy XOR build depending on owner, so
-「购买与建造二选一」 (基础[结算] item 8) is structural. Mortgage / redeem
+「购买与建造二选一」 (基础[结算] item 8) is structural: the settle entry's
+one-operation slot (`SettleOperation::Bought` / `Built`) is spent by the first
+offer and makes the body's re-run after the answer stand down. Mortgage / redeem
 live in `rules/tiles/src/deed.rs` + `On::Mortgage` / `On::Redeem` (ABI v73).
 
 **2026-10-16 (later): the perform sequence lives in `On::Buy` / `On::Build`**
