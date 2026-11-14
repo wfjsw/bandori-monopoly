@@ -18,6 +18,7 @@ import { Icon } from "../../ui/Icon";
 import { showCard } from "../../ui/Card";
 import { stickCard } from "../../ui/CardPreview";
 import type { LogLine } from "./anim";
+import { copiedLogText } from "./logCopy";
 import type { Model } from "./model";
 import type { MatchPlayer } from "../../core/types";
 import s from "./Players.module.css";
@@ -331,12 +332,16 @@ export const Log = memo(function Log({ lines, colorOf, children, titled = true }
   const onLeave = useCallback(() => undefined, []);
   const rows = useMemo(() => logRows(lines, colorOf), [lines, colorOf]);
   const keys = useMemo(() => rows.map((r) => r.key), [rows]);
-  // Only the window is in the DOM, so a copy would take just the visible rows.
-  // A selection inside the log therefore copies the whole log's text.
+  // Copy the user's selection, not the log: selecting a phrase inside the log
+  // must copy that phrase. Only a collapsed caret (which natively copies
+  // nothing, and whose windowed DOM holds just the visible rows) falls back to
+  // the whole log's text.
   const onCopy = useCallback((e: ClipboardEvent<HTMLDivElement>) => {
     const sel = document.getSelection();
-    if (!sel?.anchorNode || !ref.current?.contains(sel.anchorNode)) return;
-    e.clipboardData.setData("text/plain", rows.map((r) => r.line.text).join("\n"));
+    const inside = (n: Node | null) => !!n && !!ref.current?.contains(n);
+    if (!inside(sel?.anchorNode ?? null) && !inside(sel?.focusNode ?? null)) return;
+    const selected = sel && !sel.isCollapsed ? sel.toString() : null;
+    e.clipboardData.setData("text/plain", copiedLogText(rows.map((r) => r.line.text).join("\n"), selected));
     e.preventDefault();
   }, [rows]);
   // Only the rows around the viewport are in the DOM; the spacers keep the
