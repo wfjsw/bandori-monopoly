@@ -229,9 +229,10 @@ function quoteTip(q: TileQuote): string {
  *  texture. The `#index` chip is the colour band (top), the name sits in the
  *  middle (≤ 2 pre-split lines), and the caption (the standing quote / dealer
  *  / draw / corner event) is centred on a common bottom baseline. The quote
- *  is keyed on the current turn's seat (`purchase::tile_quotes`): the acting
- *  player's own tiles show the next stage's build cost, every other owned
- *  tile the income it generates. CiRCLE carries its pass / stop notes in
+ *  reads from the viewer's seat (`purchase::tile_quotes`): the viewing
+ *  player's own tiles show the next stage's build cost on their turn and the
+ *  income they generate otherwise; every other owned tile the rent it costs
+ *  (`-`). CiRCLE carries its pass / stop notes in
  *  place of the caption. Sizes are fractions of the measured cell
  *  (`--cell-h` / `--cell-w` on `.ring`), so the scale holds from the narrow
  *  1366 cells up to the wide 2560 ones. */

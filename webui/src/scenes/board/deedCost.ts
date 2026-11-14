@@ -25,12 +25,11 @@ export const forceBuyCost = (price: number, house: number, houses: number) =>
  * The one standing cost the deed popup must print for a **mortgaged** deed --
  * the same figure the tile face caption and the tile tooltip quote.
  *
- * The perspective is the **current turn's seat** (`tileQuotes` follows it),
- * falling back to the viewer when there is no turn:
+ * The perspective is the **viewer's seat** (`tileQuotes` follows it):
  * - another player's (or a frame with no quote at all, whose reading is
  *   seat-independent) → force-buy (「可选择[支付]…两倍…强行购买」; force-buy
- *   never applies to the actor's own deed);
- * - the actor's → redeem (the natural cost to clear the mortgage).
+ *   never applies to the viewer's own deed);
+ * - the viewer's → redeem (the natural cost to clear the mortgage).
  *
  * Prefers the engine's `tileQuotes` entry so the popup cannot drift from the
  * board (hook-aware, quote == charge). Falls back to the rulebook formulas
@@ -38,12 +37,12 @@ export const forceBuyCost = (price: number, house: number, houses: number) =>
  */
 export function deedStandingCost(
   quote: TileQuote | null | undefined,
-  o: { owner: number; actor: number; price: number; house: number; houses: number },
+  o: { owner: number; viewer: number; price: number; house: number; houses: number },
 ): { kind: "forceBuy" | "redeem"; value: number } {
   if (quote && (quote.kind === "forceBuy" || quote.kind === "redeem")) {
     return { kind: quote.kind, value: quote.value };
   }
-  const mine = o.owner >= 0 && o.owner === o.actor;
+  const mine = o.owner >= 0 && o.owner === o.viewer;
   return mine
     ? { kind: "redeem", value: redeemCost(o.price) }
     : { kind: "forceBuy", value: forceBuyCost(o.price, o.house, o.houses) };

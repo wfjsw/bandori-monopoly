@@ -500,8 +500,8 @@ pinned by the same test under `cargo test --release -p game-core --test debug`.
   seat), `you` is the spectator's room member id, and `hand` / `handNotes` /
   `draw` are empty. The per-viewer extras (`aiAnswer` / `playable` / `estCost` /
   `skills`) are absent on the online path for everyone; a spectator has no
-  seat to derive them from either. `tileQuotes` follows the current turn's
-  seat (the seat-independent reading before the first turn). See §Spectating.
+  seat to derive them from either. `tileQuotes` is the seat-independent
+  reading. See §Spectating.
 * Only `event` frames carry ids. On reconnect the browser sends the last one as
   `Last-Event-ID` and the stream resumes right after it. A new match (new `matchId`)
   starts from its first event.
