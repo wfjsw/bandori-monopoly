@@ -109,11 +109,11 @@ const Deed = memo(function Deed({ sess, i, close }: { sess: GameSession; i: numb
   const head = deedKind || t.kind === "agent" ? t.color : "#ED4E76";
   // The mortgage row prints the same standing cost the tile face caption and
   // the tile tooltip quote (`MatchView.tileQuotes` / `deedCost`), so the three
-  // surfaces cannot disagree about the mortgage force-buy price. Those quotes
-  // are keyed on the current turn's seat; fall back to the viewer pre-turn.
+  // surfaces cannot disagree about the mortgage force-buy price. Both read
+  // from the viewer's seat.
   const standing = deedStandingCost(m.v.tileQuotes?.[i], {
     owner,
-    actor: S.turn >= 0 ? S.turn : m.playerId,
+    viewer: m.playerId,
     price: t.price,
     house: t.house,
     houses,

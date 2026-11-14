@@ -374,24 +374,23 @@ pub fn default_deal(
 use crate::state::{MoneyFlow, TileQuote, TileQuoteKind};
 
 /// The standing "what to expect" figure for every board tile, from the
-/// **current turn player**'s seat. `actor = None` (no turn yet: setup, a
-/// spectator with no seat) is the seat-independent reading: base price /
-/// base rent / force-buy.
+/// **viewer's** seat. `viewer = None` (spectator / replay with no seat) is
+/// the seat-independent reading: base price / base rent / force-buy.
 ///
-/// The tag is turn-scoped on purpose: a tile means one thing for as long as
-/// its turn lasts, instead of switching between "next stage" and "income"
-/// with whoever happens to be viewing. The tile captions run on it.
-///
-/// Per-actor rules (`webui` tile captions):
-/// * unowned → [`TileQuoteKind::Buy`] (what buying would cost the actor);
-/// * the actor's, next building available → [`TileQuoteKind::Build`];
-/// * the actor's, no next building (build cap, the flat deed 「unupgradeable」, `NO_BUILD`) →
-///   [`TileQuoteKind::OwnRent`] (income the actor generates);
-/// * the actor's, mortgaged → [`TileQuoteKind::Redeem`] (force-buy does not apply to
-///   one's own deed; redeeming is the natural cost to clear the mortgage);
-/// * another player's → [`TileQuoteKind::Rent`] (the income the owner
-///   generates when stepped on, `flow: Receive`);
-/// * another player's, mortgaged → [`TileQuoteKind::ForceBuy`].
+/// Every tile reads relative to the player looking at it, so the tag stays
+/// meaningful while other seats act:
+/// * unowned → [`TileQuoteKind::Buy`] (what buying would cost the viewer);
+/// * another player's → [`TileQuoteKind::Rent`] (the rent the viewer pays on
+///   stepping onto it, `flow: MustPay`, captioned `-`);
+/// * another player's, mortgaged → [`TileQuoteKind::ForceBuy`];
+/// * the viewer's own, on the viewer's turn, next building available →
+///   [`TileQuoteKind::Build`] (the next stage's construction cost);
+/// * the viewer's own, off-turn or with no next building (build cap, the flat
+///   deed 「unupgradeable」, `NO_BUILD`) → [`TileQuoteKind::OwnRent`] (income
+///   the viewer generates, `flow: Receive`);
+/// * the viewer's own, mortgaged → [`TileQuoteKind::Redeem`] (force-buy does
+///   not apply to one's own deed; redeeming is the natural cost to clear the
+///   mortgage).
 ///
 /// Buy / force-buy go through [`quote_for`] so the rules crate's `BuyAdd` /
 /// `BuyMul` / `BuySet` stages are included (quote == charge). Rent is the
@@ -410,9 +409,13 @@ pub fn tile_quotes(
     data: &crate::data::GameData,
     w: &World,
     rules: &dyn crate::engine::rules::CardRules,
-    actor: Option<usize>,
+    viewer: Option<usize>,
 ) -> Vec<Option<TileQuote>> {
     let st = &w.st;
+    // `st.turn` is `-1` outside a turn; never a seat then.
+    let turn = usize::try_from(st.turn)
+        .ok()
+        .filter(|s| *s < st.players.len());
     let n = data.tiles.len().max(st.owners.len());
     let mut out: Vec<Option<TileQuote>> = vec![None; n];
     // Batch the bank-sold Land quotes (seller is always the bank). Force
@@ -427,7 +430,7 @@ pub fn tile_quotes(
         }
         let owner = st.owners.get(t).copied().unwrap_or(-1);
         let mortgaged = w.any_mortgaged(t as i32);
-        match actor {
+        match viewer {
             Some(me) if w.owns(t as i32, me as i32) => {
                 if w.stake_mortgaged(t as i32, me as i32) {
                     // Mortgaged-mine: redeem (see the doc comment above).
@@ -437,7 +440,8 @@ pub fn tile_quotes(
                         value: redeem_cost(data, t),
                         max: None,
                     });
-                } else if w.cant_build_on(data, me as i32, t as i32).is_none()
+                } else if turn == Some(me)
+                    && w.cant_build_on(data, me as i32, t as i32).is_none()
                     && w.gate_open(rules, crate::engine::Gate::Pay, me)
                     && !st.players.get(me).is_some_and(|p| p.out())
                 {
@@ -448,8 +452,8 @@ pub fn tile_quotes(
                         max: None,
                     });
                 } else {
-                    // Build cap / the flat deed / `NO_BUILD`: the income the
-                    // actor's tile generates.
+                    // Off-turn, build cap, the flat deed / `NO_BUILD`: the
+                    // income the viewer's tile generates.
                     let (value, max) = rent_quote(data, w, t, Some(me));
                     out[t] = Some(TileQuote {
                         kind: TileQuoteKind::OwnRent,
@@ -476,12 +480,12 @@ pub fn tile_quotes(
                         });
                     }
                 } else {
-                    // Money moves out of a step, but the tile's standing
-                    // reading is the income its owner generates.
-                    let (value, max) = rent_quote(data, w, t, actor);
+                    // Someone else's land: the rent the viewer pays on a
+                    // landing, `-`-captioned.
+                    let (value, max) = rent_quote(data, w, t, viewer);
                     out[t] = Some(TileQuote {
                         kind: TileQuoteKind::Rent,
-                        flow: MoneyFlow::Receive,
+                        flow: MoneyFlow::MustPay,
                         value,
                         max,
                     });
@@ -511,7 +515,7 @@ pub fn tile_quotes(
                     let (value, max) = rent_quote(data, w, t, None);
                     out[t] = Some(TileQuote {
                         kind: TileQuoteKind::Rent,
-                        flow: MoneyFlow::Receive,
+                        flow: MoneyFlow::MustPay,
                         value,
                         max,
                     });
@@ -519,7 +523,7 @@ pub fn tile_quotes(
             }
         }
     }
-    if let Some(me) = actor {
+    if let Some(me) = viewer {
         if !land.is_empty() {
             let qs: Vec<(usize, i32)> = land.iter().map(|&t| (t, -1)).collect();
             let quoted = quote_for(rules, w, data, me, BuyKind::Land, &qs);
@@ -543,12 +547,12 @@ pub fn tile_quotes(
 ///
 /// Dice rent always counts the **owner's** tiles of the same kind (`pay_rent`),
 /// which is public state -- so Rent, OwnRent and the seat-independent quote
-/// share one figure. `_actor` is reserved for future payer-scoped scalars.
+/// share one figure. `_viewer` is reserved for future payer-scoped scalars.
 fn rent_quote(
     data: &crate::data::GameData,
     w: &World,
     t: usize,
-    _actor: Option<usize>,
+    _viewer: Option<usize>,
 ) -> (i32, Option<i32>) {
     let Some(tile) = data.tiles.get(t) else {
         return (0, None);
