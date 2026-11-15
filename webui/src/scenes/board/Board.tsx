@@ -211,9 +211,21 @@ export const Board = memo(function Board({ sess }: { sess: GameSession }) {
   // `memo(RightTabs)`) then actually skip, instead of re-rendering on a fresh
   // element identity every 500ms.
   const settle = useMemo(() => (m ? <SettleVote m={m} sess={sess} /> : null), [m, sess]);
+  // Ctrl-F opens the log's own find. The listener is on the bubble phase so an
+  // open console (capture, stops immediate propagation) outranks it.
+  const [findRequest, setFindRequest] = useState(0);
+  useEffect(() => {
+    const onKey = (e: KeyboardEvent) => {
+      if (!(e.ctrlKey || e.metaKey) || e.altKey || e.key.toLowerCase() !== "f") return;
+      e.preventDefault();
+      setFindRequest((n) => n + 1);
+    };
+    window.addEventListener("keydown", onKey);
+    return () => window.removeEventListener("keydown", onKey);
+  }, []);
   const logNode = useMemo(
-    () => (m ? <Log lines={anim.log} colorOf={m.colorOf} titled={false}>{settle}</Log> : null),
-    [anim.log, m, settle],
+    () => (m ? <Log lines={anim.log} colorOf={m.colorOf} titled={false} findRequest={findRequest}>{settle}</Log> : null),
+    [anim.log, m, settle, findRequest],
   );
   // The title bar's props, memoized so its own `memo` can skip a board tick.
   const titleRight = useMemo(() => <TitleToggles sess={sess} auto={!compact} />, [sess, compact]);
@@ -356,6 +368,7 @@ export const Board = memo(function Board({ sess }: { sess: GameSession }) {
             <RightTabs
               flash={anim.flash?.card}
               log={logNode}
+              findRequest={findRequest}
             />
           ) : (
             <>
@@ -363,7 +376,7 @@ export const Board = memo(function Board({ sess }: { sess: GameSession }) {
                 <CardStand flash={anim.flash?.card} />
               </div>
               <div className={s.logSlot}>
-                <Log lines={anim.log} colorOf={m.colorOf}>{settle}</Log>
+                <Log lines={anim.log} colorOf={m.colorOf} findRequest={findRequest}>{settle}</Log>
               </div>
             </>
           )}

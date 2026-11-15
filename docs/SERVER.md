@@ -483,6 +483,15 @@ its rows at render, so a long session keeps searching and exporting without
 mounting the whole list. Neither logs nor history write to the profile or
 match save.
 
+Ctrl-F (Command-F) opens an in-pane find over the **whole** log -- the browser's
+native find only sees the rows in the window. The same find serves the match
+record on the board (the phone card tab switches back to the log to show it).
+It matches case-insensitively, marks every hit on rendered rows, jumps the
+window to each one as Enter / Shift-Enter cycles, and closes with Escape
+without closing the console or changing the record's filter. Small controls
+carry their own `aria-label` for the count and the previous / next / close
+buttons.
+
 Run the console unit tests with `npm --prefix webui run test:console` (Node 24+).
 The keyboard, command validation and browser log capture tests use Node's
 built-in test runner. Engine cheat persistence and replay checks run with

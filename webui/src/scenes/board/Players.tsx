@@ -15,6 +15,7 @@ import { useSecondBoundary } from "../../hooks/timers";
 import { Avatar } from "../../ui/Character";
 import { PanelTab } from "../../ui/Chips";
 import { Icon } from "../../ui/Icon";
+import { FindBar, findSegments, useFind } from "../../ui/FindBar";
 import { showCard } from "../../ui/Card";
 import { stickCard } from "../../ui/CardPreview";
 import type { LogLine } from "./anim";
@@ -322,7 +323,7 @@ function logRows(lines: LogLine[], colorOf?: (playerId: number) => string): LogR
   return rows;
 }
 
-export const Log = memo(function Log({ lines, colorOf, children, titled = true }: { lines: LogLine[]; colorOf?: (playerId: number) => string; children?: ReactNode; titled?: boolean }) {
+export const Log = memo(function Log({ lines, colorOf, children, titled = true, findRequest = 0 }: { lines: LogLine[]; colorOf?: (playerId: number) => string; children?: ReactNode; titled?: boolean; /** Bumped by the board's Ctrl-F; opens the find bar. */ findRequest?: number }) {
   const ref = useRef<HTMLDivElement>(null);
   const compact = useCompactValue();
   // Hovered card reference: the standing card panel (right sidebar) shows it.
@@ -347,13 +348,18 @@ export const Log = memo(function Log({ lines, colorOf, children, titled = true }
   // Only the rows around the viewport are in the DOM; the spacers keep the
   // scrollbar honest for the whole match. The hook also owns the tail follow.
   const win = useWindowedList(ref, keys, { estimate: compact ? 18 : 22 });
+  // Ctrl-F searches the whole record; the native find only sees the window.
+  const findTexts = useMemo(() => rows.map((r) => r.line.text), [rows]);
+  const find = useFind(findTexts, win.scrollTo);
+  useEffect(() => { if (findRequest) find.show(); }, [findRequest, find.show]);
   return (
     <div className={s.log}>
       {titled && <PanelTab><Icon name="history" />{tr("menu.history")}</PanelTab>}
       {children}
+      <FindBar find={find} />
       <div className={s.lines} ref={ref} onCopy={onCopy}>
         <div className={s.spacer} style={{ height: win.top }} aria-hidden />
-        {rows.slice(win.start, win.end).map((r) => (
+        {rows.slice(win.start, win.end).map((r, offset) => (
           <div
             key={r.key}
             ref={win.row(r.key)}
@@ -361,7 +367,7 @@ export const Log = memo(function Log({ lines, colorOf, children, titled = true }
             style={r.group && r.bar ? { ["--bar" as string]: r.bar } : undefined}
           >
             {r.head ? (
-              <div className={s.groupHead}>{r.line.text}</div>
+              <div className={s.groupHead}>{findSegments(find, r.line.text, win.start + offset)}</div>
             ) : r.line.parts?.length ? (
               r.line.parts.map((p, i) =>
                 typeof p === "string" ? (
@@ -370,7 +376,7 @@ export const Log = memo(function Log({ lines, colorOf, children, titled = true }
                   <CardRef key={i} card={p.card} text={p.text} onHover={onHover} onLeave={onLeave} />
                 ))
             ) : (
-              r.line.text
+              findSegments(find, r.line.text, win.start + offset)
             )}
           </div>
         ))}

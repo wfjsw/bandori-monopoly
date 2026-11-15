@@ -28,6 +28,8 @@ export interface RowWindow {
   /** Rows in the windowed list and its total (estimated) height. */
   count: number;
   total: number;
+  /** Scroll the row at `index` into view (clamped to the scroller). */
+  scrollTo(index: number): void;
 }
 
 export interface WindowOptions {
@@ -214,12 +216,18 @@ export function useWindowedList(
   // One stable ref callback per row key: a fresh closure per render would make
   // React detach and re-attach every rendered row on every frame.
   const callbacks = useRef(new Map<string, (el: HTMLElement | null) => void>());
+  const rowEls = useRef(new Map<string, HTMLElement>());
   const row = useCallback(
     (key: string) => {
       const cached = callbacks.current.get(key);
       if (cached) return cached;
       const cb = (el: HTMLElement | null) => {
-        if (el) measure(el, key);
+        if (el) {
+          rowEls.current.set(key, el);
+          measure(el, key);
+        } else {
+          rowEls.current.delete(key);
+        }
       };
       callbacks.current.set(key, cb);
       return cb;
@@ -240,8 +248,67 @@ export function useWindowedList(
   win.current = range;
   const top = offsetsNow[range.start] ?? 0;
   const bottom = (offsetsNow[offsetsNow.length - 1] ?? 0) - (offsetsNow[range.end] ?? 0);
+  const offsetsRef = useLatestRef(offsetsNow);
+  const keysRef = useLatestRef(keys);
+  // A jump in flight: the row to land, and how many corrections it has taken.
+  // The first move is by the estimates alone; rows it puts in the window are
+  // then measured for real, which shifts the content under the jump. The
+  // effect below re-aims on the mounted row until it is actually on screen.
+  const pending = useRef<{ key: string; tries: number } | null>(null);
+  const jump = useCallback((el: HTMLElement, wanted: number) => {
+    const pos = Math.max(0, Math.min(wanted, el.scrollHeight - el.clientHeight));
+    el.scrollTop = pos;
+    // The property write may not echo a scroll event in the same frame; move
+    // the window now so the target row renders without waiting.
+    setView((v) => (v.scrollTop === pos ? v : { ...v, scrollTop: pos }));
+  }, []);
+  const scrollTo = useCallback((index: number) => {
+    const el = scroller.current;
+    if (!el) return;
+    const at = Math.max(0, index);
+    const key = keysRef.current[at];
+    pending.current = key === undefined ? null : { key, tries: 0 };
+    jump(el, offsetsRef.current[at] ?? 0);
+    // Navigation is not the tail: a later pin must not drag the reader back.
+    follow.current = { atEnd: false, pinned: null };
+  }, [scroller, offsetsRef, keysRef, jump]);
+  // Finish a jump: if the row is not rendered yet, re-aim by the estimates so
+  // it enters the window; once it is there, scroll the box under the viewport
+  // to it. Bounded, so a row that never mounts cannot loop.
+  const JUMP_TRIES = 8;
+  useLayoutEffect(() => {
+    const p = pending.current;
+    const sc = scroller.current;
+    if (!p || !sc || view.viewport <= 0) return;
+    if (p.tries > JUMP_TRIES) {
+      pending.current = null;
+      return;
+    }
+    p.tries++;
+    const target = rowEls.current.get(p.key);
+    if (!target) {
+      const idx = present.current.get(p.key);
+      if (idx === undefined) {
+        pending.current = null;
+        return;
+      }
+      jump(sc, offsetsRef.current[idx] ?? 0);
+      return;
+    }
+    const box = target.getBoundingClientRect();
+    const frameBox = sc.getBoundingClientRect();
+    if (!frameBox.height) return;
+    // rects are screen px; scrollTop is layout px -- convert through the box.
+    const k = sc.clientHeight / frameBox.height;
+    const top = (box.top - frameBox.top) * k;
+    if (top >= 0 && top + box.height * k <= sc.clientHeight) {
+      pending.current = null;
+      return;
+    }
+    jump(sc, sc.scrollTop + top - Math.max(0, (sc.clientHeight - box.height * k) / 2));
+  });
   return {
     ...range, top, bottom, viewport: view.viewport, scrollTop: view.scrollTop,
-    count: keys.length, total: offsetsNow[offsetsNow.length - 1] ?? 0, row,
+    count: keys.length, total: offsetsNow[offsetsNow.length - 1] ?? 0, row, scrollTo,
   };
 }

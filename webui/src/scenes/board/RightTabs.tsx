@@ -18,7 +18,7 @@ import s from "./RightTabs.module.css";
  * 500ms tick leaves it (and the mounted log / stand) alone, as long as the
  * caller hands in a stable `log` element (see Board's `logNode`).
  */
-export const RightTabs = memo(function RightTabs({ flash, log }: { flash?: string; log: ReactNode }) {
+export const RightTabs = memo(function RightTabs({ flash, log, findRequest = 0 }: { flash?: string; log: ReactNode; /** Bumped by the board's Ctrl-F; the log owns the find itself. */ findRequest?: number }) {
   const [tab, setTab] = useState<"card" | "log">("log");
   // A user pick opens the card stand; a hover / flash never does.
   const pick = useCardPick();
@@ -28,6 +28,8 @@ export const RightTabs = memo(function RightTabs({ flash, log }: { flash?: strin
     seen.current = pick;
     setTab("card");
   }, [pick]);
+  // Ctrl-F is asking for the log even when the card tab covers it.
+  useEffect(() => { if (findRequest) setTab("log"); }, [findRequest]);
   return (
     <div className={s.slot}>
       <div className={s.tabs} role="tablist">

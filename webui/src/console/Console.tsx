@@ -3,6 +3,7 @@ import { useLangVersion } from "../core/hooks";
 import { useAutoFocus, useEventListener } from "../hooks/dom";
 import { useWindowedList } from "../hooks/window";
 import { copiedLogText } from "../scenes/board/logCopy";
+import { FindBar, findSegments, useFind } from "../ui/FindBar";
 import { t as tr } from "../i18n/t";
 import { acceptsInputKey, completeCommand, isConsoleShortcut, recallCommand, rememberCommand } from "./input";
 import { getLogs, subscribeLogs, clearLogs, type LogEntry, type LogSource } from "./log";
@@ -29,17 +30,6 @@ export function Console() {
   const outputRef = useRef<HTMLDivElement>(null);
   const historyIndex = useRef(history.length);
   const draft = useRef("");
-
-  // The console's own shortcut, on the capture phase so it outranks the scene
-  // hotkeys behind it.
-  useEventListener(window, "keydown", (e) => {
-    const ev = e as KeyboardEvent;
-    if (isConsoleShortcut(ev, open, ev.target as HTMLElement | null)) {
-      ev.preventDefault();
-      ev.stopImmediatePropagation();
-      setOpen((v) => !v);
-    }
-  }, { capture: true });
 
   // The input takes over while the panel is open; focus returns on close.
   useAutoFocus(open, inputRef, () => {
@@ -101,6 +91,32 @@ export function Console() {
     e.clipboardData.setData("text/plain", copiedLogText(filtered.map((l) => l.text).join("\n"), selected));
     e.preventDefault();
   }, [filtered]);
+  const findTexts = useMemo(() => filtered.map((e) => e.text), [filtered]);
+  const find = useFind(findTexts, win.scrollTo);
+
+  // Ctrl-F searches the whole log -- the native find would only see the rows
+  // in the DOM. Capture phase so it outranks the scene hotkeys behind it, and
+  // Escape closes the find before it reaches the panel.
+  useEventListener(window, "keydown", (e) => {
+    const ev = e as KeyboardEvent;
+    if (open && (ev.ctrlKey || ev.metaKey) && !ev.altKey && ev.key.toLowerCase() === "f") {
+      ev.preventDefault();
+      ev.stopImmediatePropagation();
+      find.show();
+      return;
+    }
+    if (open && find.open && ev.key === "Escape") {
+      ev.preventDefault();
+      ev.stopImmediatePropagation();
+      find.close();
+      return;
+    }
+    if (isConsoleShortcut(ev, open, ev.target as HTMLElement | null)) {
+      ev.preventDefault();
+      ev.stopImmediatePropagation();
+      setOpen((v) => !v);
+    }
+  }, { capture: true });
 
   if (!open) return null;
   return (
@@ -123,14 +139,15 @@ export function Console() {
         <button type="button" onClick={clearLogs}>{tr("console.clear")}</button>
         <button type="button" onClick={download}>{tr("console.export")}</button>
       </div>
+      <FindBar find={find} />
       <div className={s.output} ref={outputRef} tabIndex={0} aria-label={tr("console.output")} onCopy={onCopy} data-window={`${win.start}-${win.end}`} data-count={win.count} data-viewport={win.viewport} data-scrolltop={win.scrollTop} data-total={win.total}>
         {filtered.length === 0 && <p className={s.empty}>{tr("console.empty")}</p>}
         <div className={s.spacer} style={{ height: win.top }} aria-hidden />
-        {filtered.slice(win.start, win.end).map((entry) => (
+        {filtered.slice(win.start, win.end).map((entry, offset) => (
           <div key={entry.id} ref={win.row(String(entry.id))} className={`${s.line} ${s[entry.level]}`}>
             <time>{new Date(entry.time).toLocaleTimeString([], { hour12: false })}</time>
             <span className={s.source}>{entry.source}</span>
-            <pre>{entry.text}</pre>
+            <pre>{findSegments(find, entry.text, win.start + offset)}</pre>
           </div>
         ))}
         <div className={s.spacer} style={{ height: win.bottom }} aria-hidden />

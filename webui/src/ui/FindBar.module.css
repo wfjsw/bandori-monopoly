@@ -1,0 +1,12 @@
+/* Shared in-surface find bar (console output, match log). Neutral enough to
+   sit on both the dark console and the light log panel. */
+.bar { display: flex; align-items: center; gap: 6px; align-self: stretch; margin-top: 8px; padding: 3px 6px; border-radius: 6px; background: #00000014; font-size: 12px; color: inherit; }
+:global(:root[data-compact]) .bar { margin-top: 4px; font-size: 11px; }
+.bar input { flex: 1; min-width: 0; padding: 2px 6px; border: 1px solid #8886; border-radius: 4px; background: transparent; color: inherit; font: inherit; }
+.bar input::placeholder { color: inherit; opacity: .55; }
+.bar input:focus-visible, .bar button:focus-visible { outline: 2px solid #ff8aad; outline-offset: 1px; }
+.bar button { padding: 0 4px; font-size: 13px; line-height: 1.4; color: inherit; }
+.bar button:disabled { opacity: .35; }
+.count { min-width: 4em; text-align: right; opacity: .75; font-variant-numeric: tabular-nums; white-space: nowrap; }
+.hit { background: #ffd54a99; color: #241a20; border-radius: 2px; }
+.hitCurrent { background: #ff8aad; color: #241a20; border-radius: 2px; }
