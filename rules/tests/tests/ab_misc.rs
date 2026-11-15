@@ -372,3 +372,29 @@ fn eng_cost_owner_own_band_is_free() {
         .unwrap_or(0);
     assert_eq!(crystals, 1, "the exchange ran without a tax");
 }
+
+// A group skill card played from hand runs its body against the row the play
+// just placed, not a void `current_uid = -1`: the body's writes land on the
+// instance (the exchange's crystal) instead of being dropped.
+#[test]
+fn group_skill_played_from_hand_binds_its_new_instance() {
+    let mut t = Table::new(&["户山香澄", "高松灯"]);
+    t.begin_turn(0);
+    drain(&mut t);
+    let sid = t.skill_id(0, "星之鼓动");
+    // Strip the match-start placement: the copy must come from the hand.
+    t.m.world_mut().st.players[0]
+        .field
+        .retain(|f| f.card != sid);
+    give_stickers(&mut t, 0, 2);
+    t.give_play(0, &sid)
+        .expect("the skill card is playable from hand");
+    drain(&mut t);
+    assert!(t.on_field(0, &sid), "the played skill was not placed");
+    assert_eq!(
+        t.crystals(0, &sid),
+        Some(1),
+        "the body wrote to -1: {:?}",
+        t.recent_keys(10)
+    );
+}

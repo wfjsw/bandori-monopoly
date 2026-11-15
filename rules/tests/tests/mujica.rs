@@ -1582,6 +1582,44 @@ fn umiri_two_copies_keep_their_own_user() {
     );
 }
 
+/// 规则书（3）: 「将此卡与使用者拿取的所有乐队技能卡置入弃牌堆」 -- a band skill
+/// card is a card, so the discard keeps both names (the `err.non_card_in_*`
+/// removal report is for rule instances with no card behind them).
+#[test]
+fn umiri_turn_end_files_the_taken_band_skill_card() {
+    let mut t = Table::vanilla(2);
+    // 停留 closes the move gate, so the turn may end without spending the
+    // main move. It must be in place before the turn opens (the gate latches).
+    t.set_state(0, bandori_std::state_key::STAY, 1);
+    t.begin_turn(0);
+    let card = t.place_raw(0, "Mujica:（海铃）");
+    t.m.world_mut().set_counter_at(card, "umiri_user", 1);
+    let band = t.m.world_mut().add_group_skill(
+        &data(),
+        0,
+        "skill:Poppin' Party:星之鼓动",
+        true,
+        Default::default(),
+    );
+    assert!(band >= 0, "band skill attached");
+    // Four cards: the draw takes one, the two filed names then leave the deck
+    // non-empty, so `refill_after_pile_write` does not shuffle them straight
+    // back and the assert can read the discard.
+    t.set_draw(0, &["TEST:drop", "TEST:drop", "TEST:drop", "TEST:drop"]);
+    drain(&mut t);
+    t.end(0).unwrap();
+    drain(&mut t);
+    let pile = t.discard(0);
+    assert!(
+        pile.iter().any(|c| c == "skill:Poppin' Party:星之鼓动"),
+        "band skill card not filed: {pile:?}"
+    );
+    assert!(
+        pile.iter().any(|c| c == "Mujica:（海铃）"),
+        "the card itself not filed: {pile:?}"
+    );
+}
+
 // =====================================================================
 // Cross-group interactions
 // =====================================================================

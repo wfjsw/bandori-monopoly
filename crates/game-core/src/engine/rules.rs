@@ -928,7 +928,9 @@ pub trait CardRules: Send + Sync {
         None
     }
 
-    /// May be played from hand in the operation phase.
+    /// May be played from hand in the operation phase. A group skill card is
+    /// exempt: `Match::cant_play` admits it even when this answers `false`,
+    /// because a hand play places it on the field instead of spending it.
     fn normal(&self, _card: &str) -> bool {
         true
     }
@@ -1048,7 +1050,9 @@ pub trait CardRules: Send + Sync {
     }
 
     /// Every **rule entity** id (`CardInfo::rule`, ABI v119): names that are
-    /// rules, not cards. A card area drops them (`World::note_non_card`).
+    /// rules, not cards. A card area drops them (`World::note_non_card`),
+    /// except a group skill card (`GameData::is_group_skill`), which is a
+    /// card and is kept.
     fn rule_ids(&self) -> Vec<String> {
         Vec::new()
     }

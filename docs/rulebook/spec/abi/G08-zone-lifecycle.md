@@ -837,16 +837,24 @@ Each is handled in `apply_host_request` (`wasm_rules.rs:4501`) exactly like
   instead of player 0's graveyard. Player 0 is not a part of the board, and its
   reshuffle would otherwise deal rule names back as dead hand cards (review
   finding 4).
-* A **card area** (`Graveyard` / `Hand` / draw pile) stores card ids only. A
-  row whose name is a **rule entity** (`CardDef::rule`, on the ruleset's
-  `CardRules::rule_ids` table) is removed: the row is gone either way, but the
-  name stops at the pile and `World::note_non_card` reports
-  `err.non_card_in_graveyard` / `_in_hand` / `_in_deck` (the row itself is
-  removed either way; nothing is filed, not even the neutral `board_discard`).
-  A hand or draw-pile landing is a `debug_assert!` too (every hand card must
-  be playable). A name a card **injects** through `add_to_hand` /
-  `add_to_deck` / `to_discard` is kept (it is borrowed for an immediate
-  attach, e.g. AG:「ONE OF US」) and only logged.
+* A **card area** (`Graveyard` / `Hand` / draw pile) keeps ids that can live
+  there. A row whose name is a **rule entity** (`CardDef::rule`, on the
+  ruleset's `CardRules::rule_ids` table) usually cannot: the engine made the
+  instance from nothing (a character skill is text on the character card, and
+  tile / event / mark / status rules are not cards), so it is removed and
+  `World::note_non_card` reports `err.non_card_in_graveyard` / `_in_hand` /
+  `_in_deck` (nothing is filed, not even the neutral `board_discard`). A
+  dropped name landing in a hand or draw pile is a `debug_assert!` too (a
+  dropped hand card is unplayable dead weight). The exception is a **group
+  skill card** (`skill:<group>:<skill>`, `GameData::is_group_skill`): the book
+  calls it 「团技能卡」 and gives it a pile destination (海铃 (3) 「置入弃牌堆」),
+  so a card area files it like a card and does not report. A hand copy is not
+  dead either: playing it from hand **places** it on the field (the body's
+  `current_uid` binds the new row; the card is not spent to the discard), and
+  a passive skill with no `On::Play` places just the same. A name a card
+  **injects** through `add_to_hand` / `add_to_deck` is kept and logged as
+  `log.rule_to_hand` / `log.rule_to_deck` (it is borrowed for an immediate
+  attach, e.g. AG:「ONE OF US」).
 * Attachment chain depth is unbounded but cycle-free (I6); `attached_cards`
   answers direct children in creation order.
 

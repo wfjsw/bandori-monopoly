@@ -1587,7 +1587,15 @@ impl World {
     /// Move a card id between zones (hand / draw pile / discard).
     pub fn add_to_hand(&mut self, player_id: i32, card: &str) {
         if let Ok(i) = usize::try_from(player_id) {
-            self.note_non_card(player_id, "hand", card, false);
+            // Injected through the hand and kept, so this is a filing note, not
+            // the dropped-entity report (`note_non_card`).
+            if self.is_rule(card) {
+                self.log(
+                    "text",
+                    player_id,
+                    Msg::new("log.rule_to_hand").card("card", card),
+                );
+            }
             if let Some(h) = self.hidden.get_mut(i) {
                 h.hand.push(card.to_string());
             }
@@ -1596,7 +1604,13 @@ impl World {
 
     pub fn add_to_deck(&mut self, player_id: i32, card: &str, shuffle: bool) {
         if let Ok(i) = usize::try_from(player_id) {
-            self.note_non_card(player_id, "deck", card, false);
+            if self.is_rule(card) {
+                self.log(
+                    "text",
+                    player_id,
+                    Msg::new("log.rule_to_deck").card("card", card),
+                );
+            }
             if let Some(h) = self.hidden.get_mut(i) {
                 h.deck.push(card.to_string());
                 if shuffle {
@@ -1608,10 +1622,12 @@ impl World {
 
     pub fn to_discard(&mut self, player_id: i32, card: &str) -> bool {
         if let Ok(i) = usize::try_from(player_id) {
-            // A rule name is reported and then dropped (`note_non_card`); the
-            // pile keeps card ids only.
-            let keep = !self.is_rule(card);
-            self.note_non_card(player_id, "graveyard", card, false);
+            // A rule name is dropped and reported (`note_non_card`), except a
+            // group skill card, which is a card and joins the pile.
+            let keep = self.keep_in_pile(card);
+            if !keep {
+                self.note_non_card(player_id, "graveyard", card, false);
+            }
             if let Some(h) = self.hidden.get_mut(i) {
                 if let Some(k) = h.hand.iter().position(|c| c == card) {
                     h.hand.remove(k);
@@ -2801,27 +2817,43 @@ impl World {
         self.rule_ids.contains(id)
     }
 
-    /// Report `name` reaching a **card area** (a rule entity, [`Self::is_rule`])
-    /// and let the caller drop it.
+    /// Is `id` a **group skill card** (`skill:<group>:<skill>`,
+    /// [`crate::data::GameData::is_group_skill`])? The book calls it 「团技能卡」
+    /// and gives it a pile destination (海铃 (3) 「置入弃牌堆」), so it is the one
+    /// rule entity a card area keeps. A character skill, in contrast, is text on
+    /// the character card: an instance created from nothing and gone with it.
+    pub fn is_group_skill(&self, id: &str) -> bool {
+        self.group_skill_ids.contains(id)
+    }
+
+    /// May a **card area** keep `name`? Cards and group skill cards, yes; every
+    /// other rule entity is dropped ([`Self::note_non_card`]).
+    fn keep_in_pile(&self, name: &str) -> bool {
+        !self.is_rule(name) || self.is_group_skill(name)
+    }
+
+    /// Report `name` reaching a **card area** and let the caller drop it: a rule
+    /// entity the card area does not keep ([`Self::keep_in_pile`]).
     ///
     /// A card area stores card ids and everything downstream assumes it: the
     /// draw deals the entry back, the client offers it to be played, the deck
-    /// tricks move it around. A rule entity filed there -- `tile:*`, `event:*`,
-    /// `skill:*`, `mark:*`, `status:*` -- is invisible dead weight in a hand for
-    /// the rest of the match (it is in no deck and `CardRules::normal` rejects
-    /// it), so it is not kept: the entity is **removed**, not exiled
-    /// (`Dest::Banished` is the book's 「[移除]」, a different thing) and not
-    /// filed as a pseudo-card.
+    /// tricks move it around. A **character skill / tile / event / mark /
+    /// status** has no card behind it -- the engine made the instance from
+    /// nothing -- so it is **removed** (not exiled: `Dest::Banished` is the
+    /// book's 「[移除]」, a different thing) and the name stops here. A **group
+    /// skill card** is a card (「团技能卡」, 海铃 (3) 「置入弃牌堆」), so it is
+    /// kept instead and does not come through here.
     ///
-    /// `hard` marks a destination a rule name can never mean anything in --
-    /// a hand (every hand card must be playable) or a draw pile, so those trip
-    /// `debug_assert!`. A Graveyard landing is the ordinary removal
-    /// destination and only reports.
+    /// `hard` marks a destination a dropped rule name can never mean anything
+    /// in -- a hand (a dropped hand card is unplayable dead weight) or a draw
+    /// pile, so those trip `debug_assert!`. A Graveyard landing is the ordinary
+    /// removal destination and only reports. A kept group skill card never
+    /// comes through here; a hand copy is playable (it places itself).
     ///
-    /// A name a card **injects** by hand (`add_to_hand` / `add_to_deck` /
-    /// `to_discard`) is a different case and is *kept*: `AG:ONE OF US` borrows
-    /// a `tile:property` name through the hand and attaches it in the same
-    /// body, so `add_to_dest` still writes the name and only reports here.
+    /// A name a card **injects** by hand (`add_to_hand` / `add_to_deck`) is a
+    /// different case and is *kept*: `AG:ONE OF US` borrows a `tile:property`
+    /// name through the hand and attaches it in the same body, so it logs
+    /// `log.rule_to_hand` / `log.rule_to_deck` instead.
     pub fn note_non_card(&mut self, seat: i32, zone: &str, name: &str, hard: bool) {
         if !self.is_rule(name) {
             return;
@@ -2851,28 +2883,28 @@ impl World {
         if let Some(id) = name.strip_prefix("event:") {
             self.st.event_active.retain(|e| e.id != id);
         }
-        // A **card area** keeps card ids only, so a rule entity is dropped
-        // instead of filed -- see [`Self::note_non_card`]. The row itself is
-        // gone either way; only the name stops at the pile.
-        let card = !self.is_rule(&name);
+        // A **card area** keeps cards and group skill cards ([`Self::keep_in_pile`]);
+        // every other rule entity is dropped and reported (`note_non_card`). The
+        // row itself is gone either way; only the name may stop at the pile.
+        let keep = self.keep_in_pile(&name);
         match t.to {
-            Zone::Graveyard if !card => self.note_non_card(t.holder, "graveyard", &name, false),
-            // A board-owned **card** row (no seat) files into the neutral board
-            // discard; `max(0)` would put it into player 0's pile.
-            Zone::Graveyard if t.holder < 0 => self.st.board_discard.push(name),
-            Zone::Graveyard => {
-                if let Some(h) = self.hidden.get_mut(holder) {
+            Zone::Graveyard if keep => {
+                // A board-owned row (no seat) files into the neutral board
+                // discard; `max(0)` would put it into player 0's pile.
+                if t.holder < 0 {
+                    self.st.board_discard.push(name);
+                } else if let Some(h) = self.hidden.get_mut(holder) {
                     h.graveyard.push(name);
                 }
             }
-            Zone::Hand if !card => self.note_non_card(t.holder, "hand", &name, true),
-            Zone::Hand => {
+            Zone::Graveyard => self.note_non_card(t.holder, "graveyard", &name, false),
+            Zone::Hand if keep => {
                 if let Some(h) = self.hidden.get_mut(holder) {
                     h.hand.push(name);
                 }
             }
-            Zone::Deck if !card => self.note_non_card(t.holder, "deck", &name, true),
-            Zone::Deck => {
+            Zone::Hand => self.note_non_card(t.holder, "hand", &name, true),
+            Zone::Deck if keep => {
                 if let Some(h) = self.hidden.get_mut(holder) {
                     match t.deck {
                         crate::engine::DeckPlacement::Top => h.deck.push(name),
@@ -2888,6 +2920,7 @@ impl World {
                     }
                 }
             }
+            Zone::Deck => self.note_non_card(t.holder, "deck", &name, true),
             Zone::EventDeck => self.st.event_top.push(name),
             Zone::EventDiscard => self.st.event_discard.push(name),
             Zone::EventRemoved => self.st.event_removed.push(name),

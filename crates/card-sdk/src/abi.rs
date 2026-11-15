@@ -871,7 +871,10 @@ use crate::intern::NameId;
 /// v119: **rule entities vs cards** (`CardDef::rule`). `ManifestEntry.rule`
 ///    tells the engine the def's name is a rule, not a card, so a card area
 ///    (hand / draw pile / discard) drops the name instead of filing it
-///    (`CardRules::rule_ids`, `World::note_non_card`).
+///    (`CardRules::rule_ids`, `World::note_non_card`). A **group skill card**
+///    is the exception: the book calls it 「团技能卡」 and gives it a pile
+///    destination, so `World::is_group_skill` keeps it in the pile, and a hand
+///    play places it on the field instead of spending it.
 /// v120: **支付阶段 1 「支付计算前」**. New hook-only (no counteraction
 ///    window) Action / Trigger kind `PayCalcBefore = engine(142)` (wire
 ///    `payCalcBefore`), raised on the **declared** figure immediately before

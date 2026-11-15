@@ -14340,7 +14340,8 @@ impl<M: CardModules> CardRules for RulesBridge<M> {
 
     /// [`game_core::engine::CardRules::normal`] -- a card with a rule but no
     /// `On::Play` entry (a pure counteraction / hook card) is not a normal hand card
-    /// and cannot be played from hand. A card without a rule keeps the default.
+    /// and cannot be played from hand (a group skill card is exempt: a hand
+    /// play places it). A card without a rule keeps the default.
     fn normal(&self, card: &str) -> bool {
         self.ruleset
             .card(card)

@@ -1108,11 +1108,20 @@ pub struct World {
     pub marker_owner: std::collections::BTreeMap<String, String>,
     /// Rule-entity ids (`CardRules::rule_ids`, ABI v119): names that are
     /// rules, not cards, so a card area drops them instead of filing them
-    /// ([`Self::note_non_card`]). Derived from the ruleset at build / restore,
+    /// ([`Self::note_non_card`]) -- except a group skill card, which is a card
+    /// ([`Self::is_group_skill`]). Derived from the ruleset at build / restore,
     /// so it is not state: skipped by serde (a save is byte-identical) and an
     /// empty set simply files everything.
     #[serde(skip)]
     pub rule_ids: std::sync::Arc<std::collections::HashSet<String>>,
+    /// Group-skill ids (`GameData::is_group_skill`, `skill:<group>:<skill>`):
+    /// the one rule entity the book calls a **card** (「团技能卡」), so a card
+    /// area keeps the name while every other rule name stops at the pile
+    /// ([`Self::note_non_card`]). Derived like [`Self::rule_ids`] -- that same
+    /// id list filtered through `GameData::is_group_skill` -- at build /
+    /// restore, so it is not state.
+    #[serde(skip)]
+    pub group_skill_ids: std::sync::Arc<std::collections::HashSet<String>>,
     /// Pending walk segments + flush pacing (see [`WalkSeg`]). Transient: not
     /// serialized, not compared.
     #[serde(skip)]
@@ -1429,6 +1438,7 @@ impl World {
             played_cards: vec![],
             marker_owner: std::collections::BTreeMap::new(),
             rule_ids: Default::default(),
+            group_skill_ids: Default::default(),
             walk_flush: WalkFlush::default(),
             mark_log: Vec::new(),
             pay_split_ran: false,

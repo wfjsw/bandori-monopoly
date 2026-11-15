@@ -482,6 +482,21 @@ fn fold_legacy_fire(world: &mut World) {
     }
 }
 
+/// Fill the two serde-skipped rule-id tables (`World::rule_ids` and its
+/// group-skill subset). Both are derived state: the ruleset is asked **once**
+/// and the subset is a filter over that answer, so a build and a restore can
+/// never disagree about which names a card area keeps.
+fn bind_rule_ids(world: &mut World, data: &crate::data::GameData, rules: &dyn CardRules) {
+    let ids = rules.rule_ids();
+    world.group_skill_ids = std::sync::Arc::new(
+        ids.iter()
+            .filter(|id| data.is_group_skill(id))
+            .cloned()
+            .collect(),
+    );
+    world.rule_ids = std::sync::Arc::new(ids.into_iter().collect());
+}
+
 /// Is the money-pipeline stage tracing on? `STAGE_DBG` is an environment
 /// variable, which wasm32 always answers `None` for: the browser build turns
 /// the same lines on with the `stage-dbg` cargo feature instead.
@@ -624,8 +639,9 @@ impl Match {
         if s.version < SAVE_VERSION {
             fold_legacy_fire(&mut world);
         }
-        // Serde-skipped: re-derive the rule-entity ids from the ruleset.
-        world.rule_ids = std::sync::Arc::new(rules.rule_ids().into_iter().collect());
+        // Serde-skipped: re-derive the rule-entity ids from the ruleset (with
+        // the group-skill subset) once the board that classifies them is in
+        // hand, below.
         // Same-version saves could predate the field (a hand-built v13 blob);
         // a short vector would index-panic on the first ack.
         let mut order_ready = s.order_ready;
@@ -645,6 +661,7 @@ impl Match {
             }
             None => data,
         };
+        bind_rule_ids(&mut world, &data, &*rules);
         Ok(Self {
             data,
             rules,
@@ -887,7 +904,7 @@ impl Match {
         };
         let n = st.players.len();
         let mut world = World::new(st, n, world_rng);
-        world.rule_ids = std::sync::Arc::new(rules.rule_ids().into_iter().collect());
+        bind_rule_ids(&mut world, &data, &*rules);
         world.clock = clock;
         world.legacy_clock = legacy_clock;
         let mut m = Self {
