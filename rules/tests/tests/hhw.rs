@@ -563,6 +563,60 @@ fn smile_patrol_builds_a_house_and_may_build_another() {
     );
 }
 
+#[test]
+fn smile_patrol_free_half_builds_on_unowned_land() {
+    // 规则书（free half）: 「在投掷结果数字对应的格子额外免费加盖一层房屋（若为可建造格子）」
+    // -- the clause does not say 「自己的」 here (the paid half does), so a
+    // buildable unowned tile takes the house too. The deed quote carries it
+    // (`quote_native`: price + standing houses), so a later buyer pays for it.
+    // User ruling 2026-11-15: no ownership restriction at all (see the
+    // another-player test below).
+    let mut t = vanilla2();
+    let mine = tile("江户川公园");
+    let free = tile("天文馆"); // board index 2 -> 3d20 sum 3
+    t.own(0, &[mine]);
+    t.set_houses(mine, 0);
+    t.dice(&[1, 1, 1]);
+    t.give(0, &["HHW:微笑巡逻队"]);
+    t.play(0, "HHW:微笑巡逻队").unwrap();
+    while t.prompt().is_some() {
+        if t.expect_prompt().kind == "tile" {
+            let _ = t.answer_tile(0, mine);
+        } else {
+            t.decline();
+        }
+    }
+    // The paid half built on the own tile; the free half on the unowned one.
+    assert_eq!(t.houses(mine), 1, "paid half");
+    assert_eq!(t.owner(free), None, "the free half did not assign an owner");
+    assert_eq!(t.houses(free), 1, "the free half built on unowned land");
+}
+
+#[test]
+fn smile_patrol_free_half_builds_on_another_players_land() {
+    // 规则书（free half）: the free house has no ownership restriction -- a
+    // foreign, unmortgaged, not-full tile takes it as readily as an unowned
+    // one. Only the tile-level vetoes (`guard_buildable`) can refuse.
+    let mut t = vanilla2();
+    let mine = tile("江户川公园");
+    let foreign = tile("偶像经纪公司"); // board index 5 -> 3d20 sum 6
+    t.own(0, &[mine]);
+    t.own(1, &[foreign]);
+    t.dice(&[2, 2, 2]);
+    t.give(0, &["HHW:微笑巡逻队"]);
+    t.play(0, "HHW:微笑巡逻队").unwrap();
+    while t.prompt().is_some() {
+        if t.expect_prompt().kind == "tile" {
+            let _ = t.answer_tile(0, mine);
+        } else {
+            t.decline();
+        }
+    }
+    assert_eq!(t.houses(mine), 1, "paid half");
+    assert_eq!(t.owner(foreign), Some(1), "the free half assigns no owner");
+    assert_eq!(t.houses(foreign), 1, "the free half built on foreign land");
+}
+
 // ----- HHW:Happy, Lucky, Smile, Yeah！
 
 #[test]

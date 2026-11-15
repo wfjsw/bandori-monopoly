@@ -107,13 +107,19 @@ Rulings that this unit leans on (TEST-FINDINGS §6 / sheet):
   「投掷3d20并在投掷结果数字对应的格子额外免费加盖一层房屋（若为可建造格子）」
   **Effect:** one 3d20 is rolled; the tile whose 序号 equals the sum (or the
   three faces? OPEN-HHW-PATROL-3D20) gains +1 house **for free** when it is
-  可建造 (per 「[可购买格子]」 plus build caps -- the exact 「可建造」 set is
-  OPEN-HHW-BUILDABLE).
+  可建造. **User ruling 2026-11-15: 「可建造」 carries no ownership
+  restriction** -- an unowned tile or another player's tile takes the free
+  house; only the tile-level vetoes (`guard_buildable`: buyable kind,
+  NO_BUILD, NO_BUILD_ABOVE, mortgage, cap) refuse it. The paid half above
+  stays on one's own tile. Pinned by
+  `rules/tests/tests/hhw.rs::smile_patrol_free_half_builds_on_unowned_land`
+  and `..._on_another_players_land`.
 * **Executable:** `patrol_paid_build` / `patrol_frame`. The free 3d20 house is **not scripted**.
 * **OPEN-HHW-PATROL-PRICE:** what 「付款」 amounts to.
 * **OPEN-HHW-PATROL-3D20:** 3d20 as sum vs three separate tiles.
-* **OPEN-HHW-BUILDABLE:** 「可建造格子」 is not defined; the book's nearest
-  defined set is 「[可购买格子]」 (rulebook-doc.md:65).
+* ~~**OPEN-HHW-BUILDABLE**~~: **resolved 2026-11-15 (user ruling)** --
+  「可建造格子」 is the 「[可购买格子]」 kind (rulebook-doc.md:65) minus the
+  tile-level vetoes; ownership is irrelevant.
 
 ### HHW:梦幻的回礼
 
