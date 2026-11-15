@@ -334,6 +334,15 @@ fn sample_opponent(
         for k in deck::derived(data, c) {
             allowed.push(k.id.clone());
         }
+        // The seat's own band skill card is a real card (「团技能卡」) and can
+        // sit in a hand or the draw pile, but no deck rule pools it -- add it
+        // so a held copy is not sampled away. A copy on their field is already
+        // a sighting and drops out below.
+        for id in data.skill_rules_of(&p.persona) {
+            if data.is_group_skill(&id) {
+                allowed.push(id);
+            }
+        }
     }
     let seen = sightings(st, seat);
     allowed.retain(|id| !seen.contains(id));

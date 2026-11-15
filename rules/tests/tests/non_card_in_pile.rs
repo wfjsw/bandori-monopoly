@@ -127,3 +127,67 @@ fn a_group_skill_card_filed_to_a_hand_is_kept() {
         t.hand(0)
     );
 }
+
+/// A group skill card in hand is not dead weight: playing it places it (the
+/// instance is the card), so it does not stay a hand entry or go to the pile.
+#[test]
+fn a_group_skill_card_in_hand_is_played_onto_the_field() {
+    let mut t = Table::vanilla(2);
+    // A skill with no `On::Play` at all -- the `normal` gate must not refuse it.
+    const PASSIVE: &str = "skill:Hello, Happy World!:传播笑容";
+    t.set_draw(0, &["TEST:drop"]);
+    t.give_play(0, PASSIVE)
+        .expect("a skill card is playable from hand");
+    assert!(t.on_field(0, PASSIVE), "the played skill was not placed");
+    assert!(!t.hand(0).iter().any(|c| c == PASSIVE), "still in hand");
+    assert!(
+        !t.discard(0).iter().any(|c| c == PASSIVE),
+        "wrongly discarded"
+    );
+}
+
+/// The injection primitives treat a group skill card as a card: the hand and
+/// deck writes log the rule entity but keep the name, and `to_discard` files
+/// it instead of reporting a drop.
+#[test]
+fn injected_group_skill_cards_are_kept_and_logged() {
+    let mut t = Table::vanilla(2);
+    // A non-empty draw pile, so the discard write is not refilled at once.
+    t.set_draw(0, &["TEST:drop"]);
+    let mark = t.mark();
+    t.m.world_mut().add_to_hand(0, GROUP_SKILL);
+    assert!(
+        t.hand(0).iter().any(|c| c == GROUP_SKILL),
+        "hand injection dropped the card"
+    );
+    // `to_discard` answers "the deck refilled", not success: a non-empty deck
+    // makes it `false` even though the card was filed.
+    t.m.world_mut().to_discard(0, GROUP_SKILL);
+    assert!(
+        !t.hand(0).iter().any(|c| c == GROUP_SKILL),
+        "to_discard left the hand entry"
+    );
+    assert!(
+        t.discard(0).iter().any(|c| c == GROUP_SKILL),
+        "to_discard dropped a card: {:?}",
+        t.discard(0)
+    );
+    t.m.world_mut().add_to_deck(0, GROUP_SKILL, false);
+    assert!(
+        t.m.world().hidden[0].deck.iter().any(|c| c == GROUP_SKILL),
+        "deck injection dropped the card"
+    );
+    let keys = t.keys_since(mark);
+    assert!(
+        keys.iter().any(|k| k == "log.rule_to_hand"),
+        "hand injection not logged: {keys:?}"
+    );
+    assert!(
+        keys.iter().any(|k| k == "log.rule_to_deck"),
+        "deck injection not logged: {keys:?}"
+    );
+    assert!(
+        !keys.iter().any(|k| k.starts_with("err.non_card")),
+        "a kept card was reported: {keys:?}"
+    );
+}

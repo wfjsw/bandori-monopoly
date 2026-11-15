@@ -928,7 +928,9 @@ pub trait CardRules: Send + Sync {
         None
     }
 
-    /// May be played from hand in the operation phase.
+    /// May be played from hand in the operation phase. A group skill card is
+    /// exempt: `Match::cant_play` admits it even when this answers `false`,
+    /// because a hand play places it on the field instead of spending it.
     fn normal(&self, _card: &str) -> bool {
         true
     }

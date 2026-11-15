@@ -2844,10 +2844,11 @@ impl World {
     /// skill card** is a card (「团技能卡」, 海铃 (3) 「置入弃牌堆」), so it is
     /// kept instead and does not come through here.
     ///
-    /// `hard` marks a destination a rule name can never mean anything in --
-    /// a hand (every hand card must be playable) or a draw pile, so those trip
-    /// `debug_assert!`. A Graveyard landing is the ordinary removal
-    /// destination and only reports.
+    /// `hard` marks a destination a dropped rule name can never mean anything
+    /// in -- a hand (a dropped hand card is unplayable dead weight) or a draw
+    /// pile, so those trip `debug_assert!`. A Graveyard landing is the ordinary
+    /// removal destination and only reports. A kept group skill card never
+    /// comes through here; a hand copy is playable (it places itself).
     ///
     /// A name a card **injects** by hand (`add_to_hand` / `add_to_deck`) is a
     /// different case and is *kept*: `AG:ONE OF US` borrows a `tile:property`

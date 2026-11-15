@@ -6364,6 +6364,15 @@ impl PlayCtx<'_> {
         if let Some(reason) = self.cannot_play(i, id) {
             return Some(reason);
         }
+        // A group skill card has no `[手]` effect; it lives on the field as a
+        // 「团技能卡」. Playing it from hand therefore only **places** it, and
+        // none of the hand-play gates apply: not the owner check (it is never
+        // played from another band's deck), not `normal` (「has a Play entry」),
+        // and not the ruleset's `cant_play` either (that gates the *press*, and
+        // a blocked / unaffordable skill can still be put onto the field).
+        if self.w.is_group_skill(id) {
+            return None;
+        }
         if let Some(card) = self.data.card(id) {
             if card.exclusive() {
                 if let Some(reason) = self.exclusive_play(i, id, card) {
@@ -6394,6 +6403,27 @@ impl PlayCtx<'_> {
         self.w.turn.play_arg = arg;
         self.w.hidden[i].hand.remove(k);
         self.w.settle_over_hand_allowance(i);
+        // A group skill card played from hand enters the field: the instance is
+        // the card, and a press (`use_skill`) runs its body there. Place it
+        // **before** the play so the host's play binder (`CardRules::play`)
+        // finds the row and the body's `current_uid` is not -1. A copy with
+        // the same id already placed keeps that row; the hand copy is then an
+        // ordinary spent card.
+        let placed = if self.w.is_group_skill(id)
+            && !self.w.placed_cards(i as i32).iter().any(|c| c == id)
+        {
+            let props = self.rules.card_props(id);
+            let ok = self
+                .w
+                .place_card(&self.data, i as i32, id, Msg::default(), props)
+                >= 0;
+            if ok {
+                self.w.turn.placed_during_play = true;
+            }
+            ok
+        } else {
+            false
+        };
         // `play_from_hand` -- this one came out of the hand. **Scoped to the
         // play**: raised for the duration of this resolution and restored when
         // it ends, so a later play (or a skill press, which is not a hand press
@@ -6516,6 +6546,10 @@ impl PlayCtx<'_> {
         } else {
             rules.play(self, i, id)?
         };
+        // A placed skill card stays where it was just put: the row is the card,
+        // whether or not its body ran (a negation negates the body, not the
+        // placement). Every other card lands on the `Dest` its body named.
+        let dest = if placed { Dest::Field } else { dest };
         // The played hand card has no instance, so its own arrival is filed by
         // name here; the zone-family hooks still fire with the play's
         // `ZoneChange` (`from` = the hand it left).
@@ -6524,6 +6558,7 @@ impl PlayCtx<'_> {
             to: match dest {
                 Dest::Hand => game_kinds::Zone::Hand,
                 Dest::Banished => game_kinds::Zone::Banished,
+                Dest::Field => game_kinds::Zone::Field,
                 _ => game_kinds::Zone::Graveyard,
             },
             cause: game_kinds::ZoneChangeCause::Play,

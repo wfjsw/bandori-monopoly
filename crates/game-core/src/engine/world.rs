@@ -1117,8 +1117,9 @@ pub struct World {
     /// Group-skill ids (`GameData::is_group_skill`, `skill:<group>:<skill>`):
     /// the one rule entity the book calls a **card** (「团技能卡」), so a card
     /// area keeps the name while every other rule name stops at the pile
-    /// ([`Self::note_non_card`]). Derived from the roster at build / restore
-    /// like [`Self::rule_ids`], so it is not state.
+    /// ([`Self::note_non_card`]). Derived like [`Self::rule_ids`] -- that same
+    /// id list filtered through `GameData::is_group_skill` -- at build /
+    /// restore, so it is not state.
     #[serde(skip)]
     pub group_skill_ids: std::sync::Arc<std::collections::HashSet<String>>,
     /// Pending walk segments + flush pacing (see [`WalkSeg`]). Transient: not
