@@ -4,6 +4,7 @@ import { useEffect } from "react";
 import type { GameSession } from "../game/session";
 import { namesOf } from "../core/names";
 import { fmtMsg } from "../i18n/msg";
+import { cardDebugLine, hasCardDebug } from "./cardDebug";
 import { appendLog } from "./log";
 
 let active: GameSession | null = null;
@@ -13,7 +14,9 @@ export const consoleSession = () => active;
 export function bindConsoleSession(sess: GameSession): () => void {
   active = sess;
   const off = sess.subscribe(() => {}, (e) => {
-    appendLog("info", "game", `#${e.id} ${e.type}`, fmtMsg(e.msg, namesOf(sess.view?.state)));
+    const names = namesOf(sess.view?.state);
+    appendLog("info", "game", `#${e.id} ${e.type}`, fmtMsg(e.msg, names));
+    if (hasCardDebug(e)) appendLog("log", "game", cardDebugLine(e, (m) => fmtMsg(m, names)));
   });
   return () => {
     off();

@@ -1,7 +1,8 @@
-import { type FormEvent, type KeyboardEvent as ReactKeyboardEvent, useRef, useState, useSyncExternalStore } from "react";
+import { type ClipboardEvent, type FormEvent, type KeyboardEvent as ReactKeyboardEvent, useCallback, useMemo, useRef, useState, useSyncExternalStore } from "react";
 import { useLangVersion } from "../core/hooks";
 import { useAutoFocus, useEventListener } from "../hooks/dom";
-import { useScrollFollow } from "../hooks/measure";
+import { useWindowedList } from "../hooks/window";
+import { copiedLogText } from "../scenes/board/logCopy";
 import { t as tr } from "../i18n/t";
 import { acceptsInputKey, completeCommand, isConsoleShortcut, recallCommand, rememberCommand } from "./input";
 import { getLogs, subscribeLogs, clearLogs, type LogEntry, type LogSource } from "./log";
@@ -44,8 +45,6 @@ export function Console() {
   useAutoFocus(open, inputRef, () => {
     historyIndex.current = history.length;
   });
-  // The output stays pinned to the newest line while following.
-  useScrollFollow(outputRef, [open, lines, follow, source, errors, search], open && follow);
 
   const submit = async (e: FormEvent) => {
     e.preventDefault();
@@ -84,9 +83,24 @@ export function Console() {
     a.click();
     window.setTimeout(() => URL.revokeObjectURL(url), 1000);
   };
-  const filtered = lines.filter((e) => (source === "all" || e.source === source)
+  const filtered = useMemo(() => lines.filter((e) => (source === "all" || e.source === source)
     && (!errors || e.level === "warn" || e.level === "error")
-    && (!search || e.text.toLowerCase().includes(search.toLowerCase())));
+    && (!search || e.text.toLowerCase().includes(search.toLowerCase()))), [lines, source, errors, search]);
+  const keys = useMemo(() => filtered.map((e) => String(e.id)), [filtered]);
+  // Only the rows around the viewport are in the DOM; the spacers keep the
+  // scrollbar honest for the whole (unbounded) log, and the hook owns the
+  // tail follow.
+  const win = useWindowedList(outputRef, keys, { estimate: 26, follow, active: open, scaled: false });
+  // A collapsed caret natively copies nothing from the windowed DOM, so it
+  // falls back to the whole filtered log.
+  const onCopy = useCallback((e: ClipboardEvent<HTMLDivElement>) => {
+    const sel = document.getSelection();
+    const inside = (n: Node | null) => !!n && !!outputRef.current?.contains(n);
+    if (!inside(sel?.anchorNode ?? null) && !inside(sel?.focusNode ?? null)) return;
+    const selected = sel && !sel.isCollapsed ? sel.toString() : null;
+    e.clipboardData.setData("text/plain", copiedLogText(filtered.map((l) => l.text).join("\n"), selected));
+    e.preventDefault();
+  }, [filtered]);
 
   if (!open) return null;
   return (
@@ -109,15 +123,17 @@ export function Console() {
         <button type="button" onClick={clearLogs}>{tr("console.clear")}</button>
         <button type="button" onClick={download}>{tr("console.export")}</button>
       </div>
-      <div className={s.output} ref={outputRef} tabIndex={0} aria-label={tr("console.output")}>
+      <div className={s.output} ref={outputRef} tabIndex={0} aria-label={tr("console.output")} onCopy={onCopy} data-window={`${win.start}-${win.end}`} data-count={win.count} data-viewport={win.viewport} data-scrolltop={win.scrollTop} data-total={win.total}>
         {filtered.length === 0 && <p className={s.empty}>{tr("console.empty")}</p>}
-        {filtered.map((entry) => (
-          <div key={entry.id} className={`${s.line} ${s[entry.level]}`}>
+        <div className={s.spacer} style={{ height: win.top }} aria-hidden />
+        {filtered.slice(win.start, win.end).map((entry) => (
+          <div key={entry.id} ref={win.row(String(entry.id))} className={`${s.line} ${s[entry.level]}`}>
             <time>{new Date(entry.time).toLocaleTimeString([], { hour12: false })}</time>
             <span className={s.source}>{entry.source}</span>
             <pre>{entry.text}</pre>
           </div>
         ))}
+        <div className={s.spacer} style={{ height: win.bottom }} aria-hidden />
       </div>
       <form className={s.commandBar} onSubmit={(e) => void submit(e)}>
         <span className={s.symbol}>&gt;</span>
