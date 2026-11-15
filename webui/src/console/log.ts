@@ -1,10 +1,15 @@
-// A bounded in-memory log, independent of React and game initialization.
+// An unbounded in-memory log, independent of React and game initialization.
+// The panel windows it at render (`useWindowedList`), so the whole session's
+// log exists for search / export without a per-entry or per-text cap.
 export type LogLevel = "log" | "info" | "warn" | "error" | "command" | "result";
 export type LogSource = "browser" | "game" | "console";
 export interface LogEntry { id: number; time: number; level: LogLevel; source: LogSource; text: string }
-export const LOG_LIMIT = 500;
-const TEXT_LIMIT = 12_000;
 let entries: LogEntry[] = [];
+// `useSyncExternalStore` compares snapshots by identity, so readers get a new
+// frozen array per change. Copying on read (not on every append) coalesces a
+// burst of logs into one copy.
+let snapshot: readonly LogEntry[] = entries;
+let stale = false;
 let nextId = 0;
 const listeners = new Set<() => void>();
 let queued = false;
@@ -39,18 +44,25 @@ export function formatValue(value: unknown): string {
 
 export function appendLog(level: LogLevel, source: LogSource, ...values: unknown[]): void {
   const text = values.map(formatValue).join(" ");
-  entries = [...entries.slice(-(LOG_LIMIT - 1)), {
-    id: ++nextId, time: Date.now(), level, source,
-    text: text.length > TEXT_LIMIT ? text.slice(0, TEXT_LIMIT) + "\n…" : text,
-  }];
+  entries.push({ id: ++nextId, time: Date.now(), level, source, text });
+  stale = true;
   emit();
 }
 
 export function clearLogs(): void {
   entries = [];
+  stale = true;
   emit();
 }
-export const getLogs = () => entries;
+
+/** The current log, as a snapshot that only changes when the log does. */
+export function getLogs(): readonly LogEntry[] {
+  if (stale) {
+    snapshot = entries.slice();
+    stale = false;
+  }
+  return snapshot;
+}
 export function subscribeLogs(cb: () => void): () => void {
   listeners.add(cb);
   return () => { listeners.delete(cb); };

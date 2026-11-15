@@ -21,6 +21,13 @@ export interface RowWindow {
   end: number;
   top: number;
   bottom: number;
+  /** The scroller's measured viewport height (0 while hidden). */
+  viewport: number;
+  /** The `scrollTop` the window was computed from. */
+  scrollTop: number;
+  /** Rows in the windowed list and its total (estimated) height. */
+  count: number;
+  total: number;
 }
 
 export interface WindowOptions {
@@ -28,6 +35,15 @@ export interface WindowOptions {
   estimate: number;
   /** px of overscan rendered above and below the viewport. */
   overscan?: number;
+  /** Pin the tail on new content while true (default). Turning it back on
+   *  snaps to the end; turning it off leaves the reader where they are. */
+  follow?: boolean;
+  /** Whether the scroller can be seen. A pane that mounts hidden has no box
+   *  until it is shown; pass the visibility so it is observed on show. */
+  active?: boolean;
+  /** Measure in design px through the stage scale (default). Pass `false` for
+   *  a surface outside the stage (the console), whose scroll px are raw. */
+  scaled?: boolean;
 }
 
 /** A window that is rendered while the pane has no height (hidden behind a
@@ -94,11 +110,15 @@ export function useWindowedList(
 ): RowWindow & { row(key: string): (el: HTMLElement | null) => void } {
   const { estimate } = opts;
   const overscan = opts.overscan ?? 12;
+  const followTail = opts.follow ?? true;
+  const active = opts.active ?? true;
+  const scaled = opts.scaled ?? true;
   const [version, setVersion] = useState(0);
   const [view, setView] = useState({ scrollTop: 0, viewport: 0 });
   const heights = useRef(new Map<string, number>());
   const present = useRef(new Map<string, number>());
   const follow = useRef<ScrollFollow>({ atEnd: true, pinned: null });
+  const wasFollowing = useRef(followTail);
   const win = useRef({ start: 0, end: 0 });
   const estimateRef = useLatestRef(estimate);
   const frame = useRef(0);
@@ -107,15 +127,29 @@ export function useWindowedList(
   // sits (and whether it is above the viewport).
   present.current = useMemo(() => new Map(keys.map((k, i) => [k, i])), [keys]);
 
+  // Re-enabling the follow drops straight to the tail; disabling leaves the
+  // reader's position alone until they turn it back on.
+  useLayoutEffect(() => {
+    if (followTail && !wasFollowing.current) follow.current = { atEnd: true, pinned: null };
+    wasFollowing.current = followTail;
+  }, [followTail]);
+
   // Watch the scroller's own box: a hidden pane (display: none) has none, and
-  // showing it must size the window afresh.
+  // showing it must size the window afresh. `active` re-runs this when the
+  // pane mounts visible through a conditional render.
   useEffect(() => {
+    if (!active) return;
     const el = scroller.current;
     if (!el) return;
-    return observeSize(el, () => setView((v) => (v.viewport === el.clientHeight ? v : { ...v, viewport: el.clientHeight })));
-  }, [scroller]);
+    // Also resync `scrollTop`: a pane that just appeared starts at 0 (or
+    // wherever the browser clamped it), not at the last shown position.
+    return observeSize(el, () => setView((v) => (
+      v.viewport === el.clientHeight && v.scrollTop === el.scrollTop ? v : { scrollTop: el.scrollTop, viewport: el.clientHeight }
+    )));
+  }, [scroller, active]);
 
   useEffect(() => {
+    if (!active) return;
     const el = scroller.current;
     if (!el) return;
     const onScroll = () => {
@@ -137,7 +171,7 @@ export function useWindowedList(
       if (frame.current) cancelAnimationFrame(frame.current);
       frame.current = 0;
     };
-  }, [scroller]);
+  }, [scroller, active]);
 
   const offsets = useMemo(() => {
     const hs = keys.map((k) => heights.current.get(k));
@@ -151,14 +185,16 @@ export function useWindowedList(
   useLayoutEffect(() => {
     const el = scroller.current;
     if (!el || view.viewport <= 0) return;
+    if (!followTail) return;
     if (!shouldPinToBottom(follow.current, el.scrollHeight - el.scrollTop - el.clientHeight, true)) return;
     el.scrollTop = el.scrollHeight;
     follow.current = { atEnd: true, pinned: el.scrollTop };
   });
 
   const measure = useCallback((el: HTMLElement, key: string) => {
-    // Design px: the stage is transform-scaled, and `scrollTop` is layout px.
-    const h = designBox(el).height;
+    // Design px inside the stage (transform-scaled, scroll px are layout px);
+    // raw layout px for a surface outside it (the console is viewport-fixed).
+    const h = scaled ? designBox(el).height : el.getBoundingClientRect().height;
     // A hidden pane (`display: none`) measures every row at 0; keep the real
     // heights the list had, or the offsets would collapse while it is hidden.
     if (h === 0) return;
@@ -173,7 +209,7 @@ export function useWindowedList(
       sc.scrollTop += h - (prev ?? estimateRef.current);
     }
     setVersion((v) => v + 1);
-  }, [scroller, estimateRef]);
+  }, [scroller, estimateRef, scaled]);
 
   // One stable ref callback per row key: a fresh closure per render would make
   // React detach and re-attach every rendered row on every frame.
@@ -204,5 +240,8 @@ export function useWindowedList(
   win.current = range;
   const top = offsetsNow[range.start] ?? 0;
   const bottom = (offsetsNow[offsetsNow.length - 1] ?? 0) - (offsetsNow[range.end] ?? 0);
-  return { ...range, top, bottom, row };
+  return {
+    ...range, top, bottom, viewport: view.viewport, scrollTop: view.scrollTop,
+    count: keys.length, total: offsetsNow[offsetsNow.length - 1] ?? 0, row,
+  };
 }

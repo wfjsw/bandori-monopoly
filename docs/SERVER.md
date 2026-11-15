@@ -475,9 +475,13 @@ whose `cheats_enabled()` is true or whose `engine_id.json` says `profile:
 
 The console captures browser logs, uncaught errors, rejected promises and
 live match events. Filter by source, warnings/errors or text, toggle scrolling,
-clear the display or export a `.log` file. The in-memory tail holds 500 entries,
-with each entry capped at 12,000 characters; neither logs nor history write to
-the profile or match save.
+clear the display or export a `.log` file. Card activations also post a
+machine-readable `[card]` debug line (card, trigger kind, seat, field instance,
+target, negation, results) above the prose copy. The in-memory log is
+unbounded and neither entries nor text are truncated; the output pane windows
+its rows at render, so a long session keeps searching and exporting without
+mounting the whole list. Neither logs nor history write to the profile or
+match save.
 
 Run the console unit tests with `npm --prefix webui run test:console` (Node 24+).
 The keyboard, command validation and browser log capture tests use Node's
