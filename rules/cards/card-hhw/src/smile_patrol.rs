@@ -58,6 +58,11 @@ fn play(player_id: i32) -> card_sdk::Asked {
     // nothing and `owner_required = false` lets an unowned / foreign tile take
     // the house, while `guard_buildable` still applies the tile-level vetoes
     // (`prop::NO_BUILD`, `prop::NO_BUILD_ABOVE`, the cap, mortgage, ...).
+    // User ruling 2026-11-15: the free house has **no ownership restriction**
+    // -- unowned land and other players' land both take it; the paid half
+    // stays on one's own tile. Pinned by `rules/tests/tests/hhw.rs`
+    // (`smile_patrol_free_half_builds_on_unowned_land` /
+    // `..._on_another_players_land`).
     let before = ctx::houses_of(tile);
     if ctx::card_build_as(player_id, tile, BuildCharge::Free, 0, 0, 0, false) {
         ctx::log(
