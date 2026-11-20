@@ -674,16 +674,6 @@ A circle-tile case (remove every 育美标记 and gain 1,000 per mark 「经过�
 **C-Q37 (SKILL-10, misaki).**
 「下次经过"弦卷集团"前可将"弦卷集团"格子额外视为CiRCLE」: what does 「额外视为CiRCLE」 pay on top of the tile's own effect? And is the override per-player tile-kind (not colour)?
 
-**C-Q38 (EVENT-01, habinel) — ruled 2026-11-20: after the [除外] wears off.**
-「结束后传送到微笑号」: the return is the status's own end-of-exile clause, not
-part of the event body. rules.txt 50 already fixes the moment -- 「获得该状态的
-效果会写明状态结束后在玩家回合开始时要[传送]到的格子」 -- and an immediate
-teleport would leave `exileTo` with nothing left to do. The teleport therefore
-fires in the exile turn-start tick at the start where the last layer peels, and
-the 「不触发场地效果」 rider keeps the landing bare (`send_bare` / `exileBare`;
-`rules/status/src/exile.rs`). Pinned by `habinel_teleports_to_smile_ship` and
-`habinel_return_does_not_settle_smile_ship`.
-
 **C-Q39 (EVENT-02, asukayama).**
 「所有玩家[传送]到飞鸟山公园。然后抽到此卡的玩家移动1d20」 — is the walk also settle-free? (Engine now: settle-on-land.)
 
@@ -1020,6 +1010,7 @@ noted where it is known; all of these are closed in the tree.
 - **STA-02** — closed (ABI v124): `AbnormalChoice` action kind raised at the abnormal gate; `status:unstoppable` answers `ask_yes`, journaled, AI defaults to refuse. Cited: `rules/tests/tests/g12_status.rs`, `rules/tests/tests/ab_unstoppable_choice.rs`, `rules/cards/card-ppp/src/rimi_choco.rs`.
 - **W3-KAORU-02** — closed (ABI v124): `PlanValue.direction` + `direction_roll` give the real 1d2 with an explicit direction. Cited: `rules/tests/tests/ab_misc.rs`, `rules/cards/card-hhw/src/kaoru_thief.rs`, `crates/card-sdk/src/kani_host.rs`.
 - **W3-KAORU-03 / C-Q48** — ruled (2026-11-20): 「所有在薰所在格子的人」 includes 薰 himself, so the unprinted `actor != owner` conjunct is gone. Cited: `rules/cards/card-hhw/src/kaoru_thief.rs`, `rules/tests/tests/spec_card_hhw.rs`.
+- **EVENT-01 / C-Q38** — ruled (2026-11-20): 「结束后传送到微笑号」 fires when the [除外] ends (the turn start where the last layer peels), and the 「不触发场地效果」 rider keeps the return bare; OPEN-habinel-end closed. Cited: `rules/status/src/exile.rs`, `rules/events/src/habinel.rs`, `rules/tests/tests/events.rs`.
 - **G15** — closed: the Kani verification host (model-only, no wire change). Cited: `rules/kani/src/spec/r.rs`, `rules/kani/src/proofs/hostops_smoke.rs`, `rules/kani/src/proofs/r.rs`.
 - **DECLARE-TRAP-LOG** — closed: `entry_admitted` takes `on_trap`, landing with both trap arms. Cited: `rules/tests/tests/ab_tokens_trap.rs`, `crates/rules-native/src/lib.rs`, `crates/card-sdk/src/abi.rs`.
 - **ENG-COST** — closed: `PlayEntry.cost` + `On::Play(..).cost`, the press gate refuses / charges before the body. Cited: `rules/tests/tests/ab_misc.rs`, `rules/skills/skill-groups/src/crychic.rs`, `rules/skills/skill-groups/src/ave_mujica.rs`.
