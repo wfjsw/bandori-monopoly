@@ -244,15 +244,24 @@
   animation: flash 0.3s ease-out;
   transition: opacity 0.25s, transform 0.25s;
 }
-/* The face fills the frame (its `big` size would leave a strip on the right). */
-.flashFace > :first-child { --card-w: 100%; }
+/* The face is an ordinary card (hand / field style), ringed in the owner's
+   colour and blinking with the field card's 「效果适用」 halo. */
 .flashFace {
   position: relative;
-  width: 300px;
-  box-shadow: 0 16px 40px rgba(0, 0, 0, 0.3);
-  border-radius: var(--r-lg);
-  border: 3px solid var(--owner, var(--pink));
-  background: var(--surface);
+  width: 200px;
+  --card-w: 100%;
+}
+.flashCard {
+  box-shadow: 0 0 0 2.5px var(--owner, var(--pink)), var(--card-shadow);
+  background: color-mix(in srgb, var(--owner, var(--white)) 12%, var(--white));
+  animation: flashGlow 0.48s ease-in-out 0.3s 1 both;
+}
+@keyframes flashGlow {
+  0%, 100% { filter: brightness(1); }
+  50% {
+    filter: brightness(1.45);
+    box-shadow: 0 0 0 3px #fff, 0 0 18px 6px var(--owner, #fff), 0 0 34px 10px rgba(255, 255, 255, 0.7);
+  }
 }
 .flashCaption {
   margin-top: -2px;
@@ -302,16 +311,12 @@
 /* Phone canvas: the activation flash is a glance, not a poster -- a smaller face
    (so it fits the 540px stage) and a caption that wraps instead of clipping. */
 :global(:root[data-compact]) .flash { top: 50%; max-width: 70%; }
-:global(:root[data-compact]) .flashFace { width: 170px; border-width: 2px; }
+:global(:root[data-compact]) .flashFace { width: 170px; }
 :global(:root[data-compact]) .flashCaption { padding: 4px 8px 6px; font-size: var(--fs-sm); overflow-wrap: anywhere; }
 :global(:root[data-compact]) .flashDetail { font-size: var(--fs-xs); line-height: 1.35; }
 :global(:root[data-compact]) .flashNegated span { font-size: 26px; border-width: 4px; padding: 2px 10px; }
 :global(:root[data-compact]) .banner { min-width: 0; max-width: 90%; padding: var(--sp-2) 18px; }
 :global(:root[data-compact]) .banner b { font-size: var(--fs-2xl); }
-/* ... and its art cropped to 16:9 around the centre, like the preview panel (the face
-   would otherwise reserve a 2:3 box around a 4:3 picture). */
-:global(:root[data-compact]) .flashFace > :first-child { min-height: 0; }
-:global(:root[data-compact]) .flashFace > :first-child > :first-child { aspect-ratio: 16 / 9; }
 /* [反击] chain (Master Duel style): the linked cards come to the centre, big
    and tilted, joined by a chain, each with a large cyan link number. A big
    italic title ("CHAIN" / "RESOLVE") spells itself in letter by letter. On
@@ -341,23 +346,6 @@
 .chainMine { align-self: flex-start; rotate: -5deg; }
 .chainTheirs { align-self: flex-end; rotate: 5deg; }
 .chainTheirs .chainNo { left: auto; right: calc(-18px * var(--k, 1)); }
-.chainOrigin {
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  border-radius: var(--r-lg);
-  box-shadow: 0 0 0 3px var(--owner, var(--pink));
-  background: color-mix(in srgb, var(--owner, var(--white)) 14%, var(--white));
-  color: var(--ink);
-  flex-direction: column;
-  gap: 3px;
-  padding: 6px;
-  box-sizing: border-box;
-  text-align: center;
-}
-.chainOrigin b { font-weight: 800; }
-.chainOrigin span { font-weight: 600; opacity: 0.85; line-height: 1.25; }
-.chainDice { display: block; filter: drop-shadow(0 2px 4px rgba(0, 0, 0, 0.3)); }
 .chainNo {
   position: absolute;
   left: calc(-18px * var(--k, 1));
