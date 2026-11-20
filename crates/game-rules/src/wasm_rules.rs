@@ -5290,6 +5290,11 @@ impl<M: CardModules> RulesBridge<M> {
         // raw `cx_ptr` write-through).
         let header_mode = std::cell::Cell::new(card_sdk::abi::Presentation::Silent);
         let silent_body = std::cell::Cell::new(false);
+        // The commit's guard flag: `silent_body` is per entry (the last one
+        // wins), while `check_silent_body` inspects the whole drive. A mixed
+        // drive (an Action + a passive Filter at one plan pass) is not
+        // bookkeeping and must not be checked as if it were.
+        let drive_all_silent = std::cell::Cell::new(true);
         let quiet_when_empty = std::cell::Cell::new(false);
         // Declarative flash policy (v55) rides across passes like silent_body:
         // the commit pass's announce is a no-op and must not lose it.
@@ -5469,6 +5474,10 @@ impl<M: CardModules> RulesBridge<M> {
             // The drive's kind, read once so the `announce` closure can ask
             // [`Self::is_passive_plan`] while `trigger` is borrowed elsewhere.
             let drive_kind = trigger.kind;
+            // A copied entry presents the **source** entry's policy (design
+            // G06 §2.15), so the predicate and `announce_drive` must agree on
+            // `copied`.
+            let entry_card = trigger.copied.as_deref().unwrap_or(card_id);
             let mut announce = |w: &mut crate::Run, entry: i32| {
                 if !announced.insert(entry) {
                     // A multi-pass re-run. The learn pass either flushed the
@@ -5496,7 +5505,10 @@ impl<M: CardModules> RulesBridge<M> {
                     // not copied across.
                     let folded_hdr = header_mode.get();
                     w.silent_body = folded_hdr == card_sdk::abi::Presentation::Silent
-                        || self.is_passive_plan(card_id, entry, drive_kind);
+                        || self.is_passive_plan(entry_card, entry, drive_kind);
+                    if w.silent_body {
+                        unsafe { (*cx_ptr).silent_drive += 1 };
+                    }
                     w.quiet_when_empty = folded_hdr == card_sdk::abi::Presentation::QuietWhenEmpty;
                     w.flash_cued = flash_cued_cell.get();
                     return;
@@ -5515,10 +5527,17 @@ impl<M: CardModules> RulesBridge<M> {
                 let folded_hdr = fold_header(header_mode.get(), pres.header);
                 header_mode.set(folded_hdr);
                 let is_silent = folded_hdr == card_sdk::abi::Presentation::Silent
-                    || self.is_passive_plan(card_id, entry, drive_kind);
+                    || self.is_passive_plan(entry_card, entry, drive_kind);
                 let is_quiet = folded_hdr == card_sdk::abi::Presentation::QuietWhenEmpty;
                 silent_body.set(is_silent);
                 w.silent_body = is_silent;
+                drive_all_silent.set(drive_all_silent.get() && is_silent);
+                if is_silent {
+                    // The money lines are written on the live context, not
+                    // through this `Run`; the depth hides them too (restored
+                    // after the pass below).
+                    unsafe { (*cx_ptr).silent_drive += 1 };
+                }
                 quiet_when_empty.set(is_quiet);
                 w.quiet_when_empty = is_quiet;
                 // Declarative flash policy (v55) rides on the Run so the
@@ -5630,10 +5649,14 @@ impl<M: CardModules> RulesBridge<M> {
             // `run_hook` cannot actually fail here (its `Err` arm above is
             // unreachable in practice); the double `Result` is so the closure
             // remains a plain `FnOnce` over the borrows it needs.
+            let silent_before = cx.silent_drive;
             let wrapped = match inline.as_mut() {
                 Some(h) => crate::inline::with_inline_host(h, guest),
                 None => guest(),
             };
+            // The body is done: its silent depth ends here (a halt, a throw
+            // and a commit all take this line).
+            cx.silent_drive = silent_before;
             // Harvest the log the guest pass left in the store. It also stays
             // on the context: the answer log is routine-wide (one routine, one
             // positional answer list), and the next drive of the same routine
@@ -5748,7 +5771,7 @@ impl<M: CardModules> RulesBridge<M> {
                                 call,
                                 card_id,
                                 trigger,
-                                silent_body.get(),
+                                drive_all_silent.get(),
                                 quiet_when_empty.get(),
                                 hdr,
                                 overlay_base,
@@ -6236,7 +6259,7 @@ impl<M: CardModules> RulesBridge<M> {
                     // Debug guard: a silent entry must not produce a visible
                     // effect through the host either (`ctx::gain` and kin are
                     // host requests, not Run-local logs).
-                    if silent_body.get() {
+                    if silent_body.get() && !is_per_step_kind(trigger.kind) {
                         if let Some(what) = req_is_visible {
                             record_silent_visible(card_id, what);
                             debug_assert!(
