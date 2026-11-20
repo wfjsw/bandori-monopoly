@@ -1372,7 +1372,11 @@ fn kaoru_own_main_move_on_his_tile_keeps_the_d20() {
 
     // A d20 walk consumes only the first loaded face; the second one (12)
     // stays in the queue and becomes the rival's direction face below.
-    assert_eq!(t.dice_left(), 1, "the first half must leave exactly one face");
+    assert_eq!(
+        t.dice_left(),
+        1,
+        "the first half must leave exactly one face"
+    );
 
     // Second half (guards over-correction): another player on the tile still
     // gets the rewrite -- the leftover direction face 12 (even = forward)

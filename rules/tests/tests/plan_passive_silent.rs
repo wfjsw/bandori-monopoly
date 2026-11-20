@@ -85,10 +85,7 @@ fn tsugumi_owed_plan_reshape_is_silent() {
     t.clean();
     t.begin_turn(0);
     t.set_pos(0, 4);
-    t.m.world_mut()
-        .st
-        .players[0]
-        .state_set("skill.tsugumiPlain.owed", 1);
+    t.m.world_mut().st.players[0].state_set("skill.tsugumiPlain.owed", 1);
     let mark = t.mark();
     t.dice(&[3, 3]);
     t.roll(0).unwrap();
@@ -118,11 +115,7 @@ fn action_plan_offer_still_announces() {
     drain(&mut t);
     let mark = t.mark();
     t.roll(0).unwrap();
-    assert!(
-        t.prompt().is_some(),
-        "the offer asks: {}",
-        t.dump_prompt()
-    );
+    assert!(t.prompt().is_some(), "the offer asks: {}", t.dump_prompt());
     t.answer_one(0).unwrap(); // yes
     drain(&mut t);
     let cards = card_events(&t, mark, "TEST:planOffer");

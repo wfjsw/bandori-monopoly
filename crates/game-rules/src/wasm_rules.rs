@@ -4948,12 +4948,7 @@ impl<M: CardModules> RulesBridge<M> {
     ///
     /// An `Action` entry at the same kind is different: it *is* an activation
     /// (an offer, an armed teleport consumed here), so it announces.
-    fn is_passive_plan(
-        &self,
-        card_id: &str,
-        entry: i32,
-        kind: card_sdk::abi::TriggerKind,
-    ) -> bool {
+    fn is_passive_plan(&self, card_id: &str, entry: i32, kind: card_sdk::abi::TriggerKind) -> bool {
         if kind != card_sdk::abi::TriggerKind::DiceRollPlan {
             return false;
         }

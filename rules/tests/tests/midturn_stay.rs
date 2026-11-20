@@ -113,7 +113,11 @@ fn settle_answer_settle_keeps_the_stop_settle_once() {
     assert_eq!(t.money(0), 10_000 - 260, "the answer keeps the settle here");
     t.end(0).unwrap();
     drain(&mut t);
-    assert_eq!(t.money(0), 10_000 - 260, "and the turn end must not repeat it");
+    assert_eq!(
+        t.money(0),
+        10_000 - 260,
+        "and the turn end must not repeat it"
+    );
 }
 
 #[test]
@@ -155,6 +159,14 @@ fn a_follower_still_settles_when_the_mover_stops() {
     // 6 is the mover's: the follower pays its rent (160, halved by the card to
     // 80). Had the mover's settle run at 2 as well, tile 2 would have charged
     // one of them on top.
-    assert_eq!(t.money(1), 10_000 - 80, "the follower still settles its landing");
-    assert_eq!(t.money(0), 10_000 + 80, "the mover's own settle stayed withheld");
+    assert_eq!(
+        t.money(1),
+        10_000 - 80,
+        "the follower still settles its landing"
+    );
+    assert_eq!(
+        t.money(0),
+        10_000 + 80,
+        "the mover's own settle stayed withheld"
+    );
 }

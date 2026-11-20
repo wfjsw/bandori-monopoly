@@ -95,7 +95,9 @@ fn tomorrows_door_hop_is_silent() {
     t.roll(0).unwrap();
     drain(&mut t);
     assert!(
-        !t.keys_since(mark).iter().any(|k| k.contains("tomorrows_door")),
+        !t.keys_since(mark)
+            .iter()
+            .any(|k| k.contains("tomorrows_door")),
         "no hop line: {:?}",
         t.recent_keys(20)
     );
@@ -104,11 +106,7 @@ fn tomorrows_door_hop_is_silent() {
         .iter()
         .find(|f| f.card.contains("Tomorrow's Door"))
         .expect("door still on the field");
-    assert_eq!(
-        f.tile,
-        tile("花咲川女子学院") as i32,
-        "the door still hops"
-    );
+    assert_eq!(f.tile, tile("花咲川女子学院") as i32, "the door still hops");
 }
 
 /// A per-step entry narrowed to its own tile still announces.

@@ -405,7 +405,11 @@ fn habinel_teleports_to_smile_ship() {
     draw_event_quiet(&mut t, 0, "前往哈比内尔王国旅游", &[1, 1]);
     let start = t.pos(0);
     assert_eq!(t.pos(0), start, "no immediate teleport: {}", t.pos(0));
-    assert_eq!(t.state(0, "exileTo"), tile("微笑号") as i32, "aimed at 微笑号");
+    assert_eq!(
+        t.state(0, "exileTo"),
+        tile("微笑号") as i32,
+        "aimed at 微笑号"
+    );
     // P1's start peels P1's only layer: P1 returns bare.
     until_turn(&mut t, 1);
     assert_eq!(t.pos(1), tile("微笑号"), "P1 returned at the exile end");
