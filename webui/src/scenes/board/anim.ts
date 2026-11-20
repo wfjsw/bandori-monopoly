@@ -4,7 +4,7 @@
 import { useEffect, useReducer, useRef, useState } from "react";
 import { sfx } from "../../core/audio";
 import { namesOf, turnNamesOf } from "../../core/names";
-import { D, cardTitle } from "../../core/data";
+import { D, cardTitle, isCardFaceId } from "../../core/data";
 import { fmtMsg, fmtMsgParts, partsText, type LogPart, type Names, type Msg } from "../../i18n/msg";
 import type { MatchEvent, MatchView } from "../../core/types";
 import { showEffect } from "./Popups";
@@ -738,9 +738,9 @@ export class Animator {
     if (seq <= 1 || !this.chain) {
       this.chain = { links: [], shown: false, resolving: false, active: 0, done: [] };
     }
-    // A timing with no card of its own (a roll, a payment, a landing ...) has
-    // no face to show on the chain overlay.
-    if (!e.card) return;
+    // A timing with no card of its own (a roll, a payment, a landing, a
+    // status / tile rule ...) has no face to show on the chain overlay.
+    if (!isCardFaceId(e.card)) return;
     const link = { seq, card: e.card, owner: e.playerId, fresh: ++this.seq };
     if (!quiet) {
       await this.cardFlash({ ...e, kind: "counter", msg: e.msg, results: [], negated: false }, false);

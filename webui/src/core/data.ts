@@ -612,6 +612,14 @@ async function doSwitch(change: SourceChange): Promise<void> {
  *  roster (the data set is Chinese), not display text. */
 export const GENERAL_GROUP = "通用";
 
+/** Does `id` name something with a card face? Board-rule instances --
+ *  statuses, tile rules and mark owners (`status:*`, `tile:*`, `mark:*`) --
+ *  have no face; cards, skills and events do. Used where only cards belong,
+ *  e.g. the chain overlay. */
+export function isCardFaceId(id: string): boolean {
+  return !!id && !id.startsWith("status:") && !id.startsWith("tile:") && !id.startsWith("mark:");
+}
+
 export function cardTitle(id: string): string {
   // A prompt can render before `load_data` has filled `D` (or during a module
   // hot-reload): never read through it unguarded, or the whole board blanks.

@@ -447,6 +447,26 @@ test("chain: a non-card link 1 joins no overlay; the first card stays a lone fla
   assert.equal(anim.chain?.done.length, 0);
 });
 
+test("chain: a status / tile / mark link 1 has no face and is dropped", async () => {
+  for (const [i, id] of ["status:no_hand", "tile:circle", "mark:cp"].entries()) {
+    const { anim, shots } = await chainShots([
+      frame({ id: 120 + i * 2, type: "chain", card: id, value: 1, msg: { k: "log.chain_link_trigger" } }),
+      frame({ id: 121 + i * 2, type: "chain", card: "TEST:counter", value: 2, msg: { k: "log.chain_link" } }),
+    ]);
+    assert.deepEqual(anim.chain?.links.map((l) => l.card), ["TEST:counter"], id);
+    assert.equal(shots.some((s) => s.shown), false, id);
+  }
+});
+
+test("chain: an event still counts as a card link", async () => {
+  const { anim, shots } = await chainShots([
+    frame({ id: 130, type: "chain", card: "event:some_event", value: 1, msg: { k: "log.chain_link" } }),
+    frame({ id: 131, type: "chain", card: "TEST:counter", value: 2, msg: { k: "log.chain_link" } }),
+  ]);
+  assert.deepEqual(anim.chain?.links.map((l) => l.card), ["event:some_event", "TEST:counter"]);
+  assert.ok(shots.some((s) => s.shown), "two card faces raise the overlay");
+});
+
 test("chain: two cards show the overlay with both", async () => {
   const { anim, shots } = await chainShots([
     frame({ id: 111, type: "chain", card: "TEST:a", value: 1, msg: { k: "log.chain_link" } }),
