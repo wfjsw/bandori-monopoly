@@ -185,7 +185,8 @@ counted under the first tag; the dual is named in the row.)
 
 `docs/rulebook/TEST-FINDINGS.md` / `docs/rulebook/BACKLOG.md` still name
 engine gaps encoded only in the older black-box suite (`#[ignore = "DISCREPANCY"]`):
-multi-activation first-`On::Play`-only (C-Q6), mid-turn [停留] (C-Q7 /
+multi-activation (C-Q6, ruled 2026-11-20: the player picks; both cards merge
+the choice into one `On::Play` body, tests un-ignored), mid-turn [停留] (C-Q7 /
 OPEN-停留-中途), 安可 vs 重叠的声音, 笑容大游行 stack overflow, fuzz latent
 shapes, and several `gap_*` / `cross_*` items. Those stay in TEST-FINDINGS /
 BACKLOG unless a `spec_*` red or Kani FAILS row also names them.

@@ -1239,7 +1239,8 @@ Source: `data/bands.json#MyGO!!!!!`.
 * **Effect:** the owner moves exactly 1 tile (no dice), and exactly one
   crystal is removed.
 * **Frame:** only `pos` / band crystals move.
-* **Rulings & OPEN:** none.
+* **Rulings & OPEN:** Ruled (C-Q6, 2026-11-20): when both press halves are
+  available the player picks this one or the draw; see band-05.
 * **Executable:** `test band_crystals_move_and_draw`.
 
 ### C-MYGO-band-04
@@ -1266,9 +1267,10 @@ Source: `data/bands.json#MyGO!!!!!`.
 * **Effect:** exactly two crystals are removed; the owner draws exactly
   one card.
 * **Frame:** only band crystals / hand-draw zones move.
-* **Rulings & OPEN:** OPEN-multi-activation (TEST-FINDINGS §6 #8) -- the
-  engine may merge (2)'s move half and (3)'s draw half into one press
-  entry. The clause checks the draw half's numbers whenever it runs.
+* **Rulings & OPEN:** Ruled (C-Q6, 2026-11-20): with both halves
+  available the press asks which one fires; the other stays reachable on
+  the next press while its crystal cost can still be paid. The clause
+  checks the draw half's numbers whenever it runs.
 * **Executable:** `test band_crystals_move_and_draw`.
 
 ---

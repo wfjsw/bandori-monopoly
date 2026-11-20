@@ -3065,11 +3065,13 @@ impl Ruleset {
     /// alternative activations, each with its own gate): the first **gated**
     /// entry whose gate admits; failing that, the first ungated entry. `None`
     /// when the card has no Play entry. [`Self::run`] (Play) picks through
-    /// here. [`Self::cant_play`] does **not** -- it evaluates only the first
-    /// declared Play entry (see the note there: play-mode merges are a
-    /// per-card problem, not a dispatch one), so on a card whose first Play
-    /// gate is closed and whose second would admit, the two disagree until
-    /// those merges land.
+    /// here. Ruled (C-Q6, 2026-11-20): a press with several *simultaneously*
+    /// available effects offers all of them and the player picks; cards with
+    /// such a shape merge the choices into one entry's body (MyGO band, NNM),
+    /// so this walk is the fallback for gated alternatives, not the chooser.
+    /// [`Self::cant_play`] does **not** walk -- it evaluates only the first
+    /// declared Play entry, so a card whose first Play gate is closed and whose
+    /// second would admit still needs the merge.
     fn play_entry_for<W: CardWorld>(
         &self,
         world: &W,

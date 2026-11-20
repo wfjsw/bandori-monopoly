@@ -1402,8 +1402,8 @@ pub fn starry_05_noop_user1() {
 //
 // BLOCKED-HOST: `Op::held_names` returns 0 (empty name list) so the hand-play
 // path always refuses; `Op::placed_cards` returns a raw count (not a name
-// list) so the (3) press cannot find a bound skill. The multi-branch pick is
-// OPEN-多分支选择 (engine runs the first Play only).
+// list) so the (3) press cannot find a bound skill. The branch pick is ruled
+// (C-Q6, 2026-11-20: the player picks; only that branch runs).
 //
 // C-MOR-nnm-05 is a state clause (「当奇迹水晶耗尽时」) and lives on the
 // CounterChanged hook (`on_crystals_changed` → `set_dest(Graveyard)`), same

@@ -76,8 +76,8 @@ pub fn band_02_log_ok_mutant(effects: &[Effect], owner: i32) -> bool {
 // Press half: spend 2 crystals, draw exactly 1 card.
 // Effect: AddCounter(-2) then Draw 1.
 // Frame: only band crystals / hand-draw zones move.
-// OPEN-multi-activation: the engine may merge (2)'s move half and (3)'s draw
-// half into one press; this clause checks the draw half's numbers.
+// Ruled (C-Q6, 2026-11-20): the press offers both halves and the player picks;
+// this clause checks the draw half's numbers when it runs.
 // ===========================================================================
 
 pub fn band_05_log_ok(effects: &[Effect], owner: i32) -> bool {

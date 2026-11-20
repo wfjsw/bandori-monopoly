@@ -101,9 +101,9 @@ Card unit rows cover every clause id in `mygo.md`. Skill rows cover
 |---|---|---|---|---|---|---|
 | `C-MYGO-band-01` | 「开局时投掷3d20，并取出目作为你本局游戏的起始点」 | **PROTOCOL-LEVEL** | — | — | game-start window (`DeckBeforeGame`) | — |
 | `C-MYGO-band-02` | 「若移动掷骰出目为16及以上，为此卡添加一个[奇迹水晶]（上限1）」 | **PROVEN** | `band_02_crystal_on_16_iff`, `band_02_mutant_is_detected` | pending | — | — |
-| `C-MYGO-band-03` | 「可于移动掷骰前选择移动1格以替代移动掷骰并移除一个[奇迹水晶]」 | **PROTOCOL-LEVEL** | — | — | press shapes a 1-step move via `plan::*` stubs | OPEN-multi-activation |
+| `C-MYGO-band-03` | 「可于移动掷骰前选择移动1格以替代移动掷骰并移除一个[奇迹水晶]」 | **PROTOCOL-LEVEL** | — | — | press shapes a 1-step move via `plan::*` stubs; ruled pick (C-Q6) | — |
 | `C-MYGO-band-04` | 「每次你的卡在未生效的情况下进入弃牌堆时…可超出上限的[奇迹水晶]（最多超出2个）」 | **FAILS (LESS)** | `band_04_ineffective_overcap_iff`, `band_04_mutant_is_detected` | pending | black-box LESS: over-cap crystal does not land when the band card is already at the roll cap of 1 | — |
-| `C-MYGO-band-05` | 「可移除此卡的两个[奇迹水晶]以抽一张卡」 | **PROVEN** (spec+proof landed) | (spec in skills_mygo.rs; press body is a combined entry) | not run this pass | OPEN-multi-activation: press may merge (2)+(3) | OPEN-multi-activation |
+| `C-MYGO-band-05` | 「可移除此卡的两个[奇迹水晶]以抽一张卡」 | **PROVEN** (spec+proof landed) | (spec in skills_mygo.rs; press body is a combined entry) | not run this pass | ruled pick (C-Q6): the press asks when both halves are available | — |
 | `C-MYGO-tomori-skill-01` | 「（1）每次[经过]任意RiNG时获得一个[火罐]（初始4，上限4）」 | **PROTOCOL-LEVEL** | — | — | pass-of-tile is a move pipeline | — |
 | `C-MYGO-tomori-skill-02` | 「（2）…使用4个火罐…强制将该玩家[传送]至自己所在的格子」 | **PROTOCOL-LEVEL** | — | — | before-settle window + fire spend | — |
 | `C-MYGO-tomori-skill-03` | 「然后使其投掷1d20，若出目小于等于6则获得一层[停留]…支付价格变为原本的一半」 | **PROTOCOL-LEVEL** | — | — | chained after -02; half-pay is a settle factor | — |
@@ -170,7 +170,6 @@ Card unit rows cover every clause id in `mygo.md`. Skill rows cover
 * OPEN-miracle-pct — miracle-03
 * OPEN-乐队卡 — miracle-01
 * OPEN-强制停下 — rana-fun-03/04
-* OPEN-multi-activation — band-03/05
 
 ## What we tried for TIMEOUT/OOM / blocked items
 

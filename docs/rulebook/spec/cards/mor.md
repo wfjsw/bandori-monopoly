@@ -488,9 +488,8 @@ Card text (cards.json#Mor:（NNM）稍微努力了一下):
 * **Frame:** the chosen branch's paths only.
 * **Rulings & OPEN:** OPEN-角色标记 -- the mark namespace is engine-side
   (`角色标记:<skill id>`); the book does not define the token shape.
-  OPEN-多分支选择 -- TEST-FINDINGS §6 item 8: the engine's multi-activation
-  dispatch runs the first `On::Play` entry only, so a hand play can be
-  refused. Genuine discrepancy.
+  Ruled (C-Q6, 2026-11-20): the play offers （1）（2）（3） and the player
+  picks which one fires; only that branch runs.
 * **Executable:** [`c_mor_nnm_choice`].
 
 #### C-MOR-nnm-02
@@ -976,9 +975,8 @@ Source: `data/bands.json#Morfonica`.
 * **OPEN-触发结算** -- 「触发结算」 as a forced re-settle (高贵的微蓝,
   迷茫的庭园). The OPEN index names [触发结算].
 * **OPEN-角色标记** -- the 角色标记 namespace / shape (NNM, 广町七深).
-* **OPEN-多分支选择** -- NNM's 「发动以下效果中的一个」 vs the engine's
-  multi-activation dispatch (TEST-FINDINGS §6 item 8). Genuine
-  discrepancy.
+* ~~**OPEN-多分支选择**~~ -- ruled (C-Q6, 2026-11-20): the player picks
+  the branch.
 * **OPEN-借用技能** -- 「你的（2）技能」 / 「视为使用该角色的技能」.
 * **OPEN-地租档** -- which rent step counts as 「此地的地租」 in 桐谷透子
   (2).

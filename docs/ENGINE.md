@@ -9,6 +9,12 @@ Runs natively (server) and in wasm32 (browser).
   invariants instead.
 * **Determinism is still required**: the same seed and the same inputs give the same
   game on server and browser. Replay depends on it.
+* **Multi-activation is a player choice.** A press with several effects available offers
+  all of them and the player picks; only the chosen branch runs (C-Q6, 2026-11-20).
+  Cards shape this as one `On::Play` body that asks (MyGO band (2)/(3), NNM (1)/(2)/(3));
+  the host's play-gate walk only chooses between gated alternative *modes* (a hand play vs
+  a placed press), never between simultaneously available effects.
+
 Here flow is straight-line Rust over a `PlayCtx`. `PlayCtx::ask` returns the logged answer, or halts the
 routine; the host shows the prompt and later re-runs the routine from its starting snapshot with the
 answer appended. Card effects (`ruleset.wasm`) use the same model, so engine prompts and card

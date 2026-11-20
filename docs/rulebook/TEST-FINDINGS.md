@@ -318,10 +318,10 @@ either no test or a green one (see §7 and [COVERAGE.md](COVERAGE.md)).
     **Fixed 2026-10-13** (it did prompt; the owner, not the roller, pays.
     DRAW-02).
   * 纯真振翅 never rolls after the teleport.
-  * （NNM）稍微努力了一下 is a **card bug**: its CardDef declares two
-    `On::Play` entries and the host dispatches only the first, so a hand
-    play is refused (`nanami_effort_not_placed`). Two tests. See §6
-    multi-activation.
+  * ~~（NNM）稍微努力了一下 declares two `On::Play` entries and the host
+    dispatches only the first, so a hand play is refused
+    (`nanami_effort_not_placed`).~~ **Fixed**: one entry; the body offers
+    (1)/(2)/(3) as a player choice (C-Q6). See §6 item 8.
 * **ras** (2)
   * ~~游击演出 lands one tile past the chosen one.~~ **Fixed 2026-10-09**
     (`settle_tile_at` no longer inherits the turn's walk).
@@ -337,9 +337,10 @@ either no test or a green one (see §7 and [COVERAGE.md](COVERAGE.md)).
   * A mid-turn [停留] doesn't stop the move (also an ambiguity -- §6).
   * ~~要乐奈's Space teleport spends the 3 fire but leaves the piece at the
     origin.~~ **Fixed 2026-10-09** (`run_planned_move` now runs the plan).
-  * MyGO band (2)'s 2-crystal **draw** half is unreachable: the band skill
+  * ~~MyGO band (2)'s 2-crystal **draw** half is unreachable: the band skill
     declares two `On::Play` activations and `use_skill` runs only the first
-    (the move-1 half). See §6 multi-activation.
+    (the move-1 half).~~ **Fixed 2026-10-13**: one entry; both halves are
+    offered behind one prompt (C-Q6). See §6 item 8.
 * **mujica** (0)
 * **sumimi** (1)
   * ~~Sweet Escape's 「收费标价」 gate is a ruling (§6).~~ **Fixed
@@ -530,15 +531,13 @@ rulings above.
    2026-10-10**, green (pins the engine's capture-before-auto-play
    order). Still a live ruling question if the book wants auto-play
    first; the green test is the current recorded choice.
-8. **Multi-activation selection.** A card with several `On::Play` entries
-   (MyGO band (2)/(3), Mor:（NNM）稍微努力了一下): `use_skill` runs the first
-   entry only, so a later activation is unreachable and a hand play can be
-   refused. Ruling: one entry that branches on `is_placed()`, or a real
-   selection prompt? Engine now: the first entry only.
-   Tests: `mygo::band_draw_for_two_crystals`,
-   `morfonica::nnm_discard_marks_draw_x` (both DISCREPANCY).
-   NNM (2)'s new 「x次经过CiRCLE时的资金奖励」 waits on this. Sheet NOT FOUND
-   (NNM's 「发动以下效果中的一个」 is a choice *inside* one entry).
+8. **Multi-activation selection.** A card with several effects available
+   (MyGO band (2)/(3), Mor:（NNM）稍微努力了一下) asks the player which one
+   fires; only the chosen branch runs (C-Q6, ruled 2026-11-20). Both cards
+   merge the choice into one `On::Play` body with an `ask_choice`; the
+   unchosen branch stays reachable while its cost is payable.
+   Tests: `mygo::band_press_offers_both_effects_when_both_are_available`,
+   `spec_card_mor::nnm_offers_every_branch_and_runs_only_the_pick`.
 9. **[晕眩] vs a card's own follow-on gain.** Does rulebook 49
    「无法收付款」 block a card's own 「获得」 to a player that the same card
    body just stunned?
@@ -1210,9 +1209,9 @@ or A/B items that need a wider surface than this batch:
 * **C:** everything whose `#[ignore]` says `RULING` / `CROSS-AGENT`, plus the
   §6 open list and the Timing / order block. Collected as numbered questions
   in the report.
-* **B, wider:** NNM (2) / MyGO band (2) multi-activation (§6 item 8 -- MyGO
-  half **fixed 2026-10-13** in `closeout-2-movement`, one `On::Play` with a
-  which-effect prompt);
+* **B, wider:** ~~NNM (2) / MyGO band (2) multi-activation~~ **ruled
+  2026-11-20 (C-Q6): the player picks; both cards ask the choice in one
+  `On::Play` body, NNM pinned by `nnm_offers_every_branch_and_runs_only_the_pick`**;
   笑容大游行 stack overflow; 网络链接异常 drop-one (c05 un-ignored
   2026-10-10; g19 still sees the whole-card negate on the join path);
   花园多惠 (2) cancel window; 骰子已经掷下 shut-window; the remaining

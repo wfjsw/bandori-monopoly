@@ -272,7 +272,7 @@ Grouped by band. Shared concepts (触发结算 / 分摊 / 场上 / 强制停下 
 | **OPEN-重骰次数** | second result final? | starry | — |
 | **OPEN-三全音收款人** | payee (bank vs original) | tritone-02 | — |
 | **OPEN-角色标记 / OPEN-X标记** | mark namespace | NNM, 筑紫 | — |
-| **OPEN-多分支选择** | NNM 「发动以下效果中的一个」 vs multi-activation | NNM-01 (TEST-FINDINGS §6.8 / C-Q6) | Must exactly one branch fire? |
+| ~~**OPEN-多分支选择**~~ | NNM 「发动以下效果中的一个」 vs multi-activation | NNM-01 (TEST-FINDINGS §6.8 / C-Q6) | Ruled 2026-11-20: the player picks; the unchosen branch does not run |
 | **OPEN-借用技能** | 「你的（2）技能」 / 「视为使用该角色的技能」 | nanami / rui | — |
 | **OPEN-地租档** | 「此地的地租」 | 桐谷透子 (2) | Which rent step? |
 | **OPEN-被动CD** | 3-turn CD of passive-skill mark claim | nanami | — |

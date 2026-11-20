@@ -845,10 +845,10 @@ prefix dropped).
 * **Effect:** that skill is treated as used once (its press / activation runs
   as if the user had used the skill).
 * **Frame:** the skill's own contract.
-* **Rulings & OPEN:** which skill entry fires when a character has several is
-  the multi-activation question (TEST-FINDINGS §6 #8). Spec documents the
-  clause; a scenario needs a skill whose use is directly observable and is
-  optional (see Findings if the engine does not run it).
+* **Rulings & OPEN:** C-Q6 (2026-11-20) rules that a multi-entry skill
+  press asks the player which activation fires, so (2) vs (3) is a choice,
+  not a fixed order. Spec documents the clause; a scenario needs a skill
+  whose use is directly observable and is optional.
 * **Executable:** `sayo_play_skill` (scenario).
 
 ---

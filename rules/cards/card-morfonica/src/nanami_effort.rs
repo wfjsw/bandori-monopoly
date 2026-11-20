@@ -105,7 +105,8 @@ fn nanami_effort(player_id: i32) -> card_sdk::Asked {
             left -= take;
         }
     }
-    // 「发动以下效果中的一个」
+    // 「发动以下效果中的一个」 -- ruled (C-Q6, 2026-11-20): the player picks
+    // one of the three; only that branch runs.
     let k = ctx::ask_choice(
         player_id,
         &Msg::new(key!("nanami_effort_pick_title")),

@@ -69,7 +69,7 @@ verdict is CBMC's `VERIFICATION:- …` line.
 | C-MOR-tritone-02 | 「三回合后…弃置此卡并支付由此卡获得的资金」 | PROVEN (tick) + PROTOCOL (schedule) | `tritone_02_tick_iff`, `tritone_02_mutant_is_detected` | **SUCCESSFUL 335/351 s** (batch-12 B: owed=0) | 3-turn schedule is engine; `owed==0` pays nothing | OPEN-三全音收款人 |
 | C-MOR-noble-01 | 「位于一块地契价值大于等于2200的地块时」 | BLOCKED-HOST | — | — | `tile_price` 0/1-based split | — |
 | C-MOR-noble-02 | 「立刻进行一次触发结算。2.放置一个标记」 | PROVEN (mark) | `noble_02_mark_iff`, `noble_02_mark_user1_iff`, `noble_02_not_yours_noop`, `noble_02_not_yours_noop_user1`, `noble_02_mutant_is_detected` | **SUCCESSFUL 604/618 s** (both seats, unwind 32) · **noop pair 523 s** (one invocation, minimal concrete world, unwind 16) · **mutant 520 s** (closure batch) | settle (1) undefined | OPEN-触发结算, OPEN-指定 |
-| C-MOR-nnm-01 | 「弃置手中x枚角色标记，发动以下效果中的一个」 | BLOCKED-HOST + OPEN | — | — | `held_names` empty; engine multi-activation gap | OPEN-角色标记, OPEN-多分支选择 |
+| C-MOR-nnm-01 | 「弃置手中x枚角色标记，发动以下效果中的一个」 | BLOCKED-HOST | — | — | `held_names` empty; the (1)/(2)/(3) pick is ruled (C-Q6, player picks) | OPEN-角色标记 |
 | C-MOR-nnm-02 | 「抽x张卡…回合结束后将手牌弃置到五张」 | BLOCKED-HOST | — (spec ready) | — | hand-play unreachable without `held_names` | — |
 | C-MOR-nnm-03 | 「获得x次经过CiRCLE时的资金奖励」 | PROVEN (formula) | `nnm_03_amount_iff`, `nnm_03_mutant_is_detected` | **SUCCESSFUL 0.3/0.6 s** (batch-12 B) | body raises `PassRewardAffected`; Morfonica listener scales 1000/1500/2000 (CRYSTAL-04). Stale `x*2000` model retired | — |
 | C-MOR-nnm-04 | 「放置x个奇迹水晶…视为发动你的（2）技能」 | BLOCKED-HOST | — (spec ready) | — | `placed_cards` is a count, not a name list | OPEN-借用技能 |
@@ -246,7 +246,7 @@ Genuine D in this unit remains the rainbow-01/02 CeilTo-10 rows (keep FAILING).
 See the clause tables. Full list in `docs/rulebook/spec/cards/mor.md` § Open
 questions: OPEN-移动起点, OPEN-取消范围, OPEN-指定, OPEN-无效化, OPEN-X,
 OPEN-场地中央, OPEN-重骰次数, OPEN-三全音收款人, OPEN-触发结算,
-OPEN-角色标记, OPEN-多分支选择, OPEN-借用技能, OPEN-地租档, OPEN-被动CD,
+OPEN-角色标记, OPEN-借用技能, OPEN-地租档, OPEN-被动CD,
 OPEN-行动条, OPEN-异常移动, OPEN-X标记, OPEN-复制, OPEN-双方影响,
 OPEN-主动移动.
 

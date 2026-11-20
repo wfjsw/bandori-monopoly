@@ -38,13 +38,13 @@ pub const MYGO: CardDef = CardDef::new(
             Some(wasted),
             on_discarded,
         )),
-        // One Play entry for both press effects (the engine dispatches only
-        // the first). 规则书（2）/（3） give two independent 「可」 abilities
-        // (move-1 before the move roll for 1 crystal; draw 1 for 2 crystals)
-        // rather than one press with two modes, so each press activates one of
-        // them and the player presses again for the other. The gate admits
-        // whenever either is available; the body lists the available options
-        // and skips the prompt when only one is.
+        // One Play entry for both press effects. 规则书（2）/（3） give two
+        // independent 「可」 abilities (move-1 before the move roll for 1
+        // crystal; draw 1 for 2 crystals) rather than one press with two modes,
+        // so each press activates one of them. Ruled (C-Q6, 2026-11-20): when
+        // both are available the body offers both and the player picks; the
+        // player presses again for the other. The gate admits whenever either
+        // is available and the prompt is skipped when only one is.
         // 规则书（`PPP:Returns` [持续]（3））: 「使用因此卡获得的团卡的主动效果时需要
         // 支付1星星贴纸」 -- declared activation cost (ENG-COST); the host refuses
         // a short player and charges before the body.

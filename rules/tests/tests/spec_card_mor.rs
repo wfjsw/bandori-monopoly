@@ -2538,6 +2538,47 @@ fn nnm_hand_play_spends_marks_and_draws() {
     .expect("C-MOR-nnm-01/02 contract");
 }
 
+/// C-Q6 ruling (2026-11-20): a multi-activation press offers every available
+/// effect and the player picks which one fires -- the unchosen branches must
+/// not run. NNM prints 「发动以下效果中的一个」; the merged Play body asks the
+/// three-way choice, and branch (2) must pay money without drawing or placing.
+#[test]
+fn nnm_offers_every_branch_and_runs_only_the_pick() {
+    let mut t = Table::new(&["广町七深", "户山香澄"]);
+    t.clean();
+    t.begin_turn(0);
+    give_hand_mark(&mut t, 0, "这是很普通的事吧？");
+    t.set_draw(0, &["R:[衍生] 压", "R:[衍生] 压"]);
+    t.give(0, &[NNM]);
+    t.play(0, NNM).expect("hand play accepted");
+    t.answer_one(0).expect("x = 1 for the one mark");
+    let p = t.expect_prompt();
+    assert_eq!(p.kind, "choice", "{}", t.dump_prompt());
+    assert_eq!(p.options.len(), 3, "{}", t.dump_prompt());
+    for key in [
+        "nanami_effort_effect_1",
+        "nanami_effort_effect_2",
+        "nanami_effort_effect_3",
+    ] {
+        assert!(t.option(key).is_some(), "{key}: {}", t.dump_prompt());
+    }
+    let money = t.money(0);
+    let k = t.option("nanami_effort_effect_2").expect("branch (2)");
+    t.answer(0, k).expect("branch (2) accepted");
+    decline_all(&mut t);
+    assert_eq!(
+        t.money(0) - money,
+        1000,
+        "branch (2) pays one CiRCLE reward"
+    );
+    assert!(
+        t.hand(0).is_empty(),
+        "branch (1) must not draw: {:?}",
+        t.hand(0)
+    );
+    assert!(!t.on_field(0, NNM), "branch (3) must not place the card");
+}
+
 /// Play NNM from hand with `x` marks and take branch (3), placing the card with
 /// `x` crystals; the (3) offer's yes/no is left open to the caller.
 fn play_nnm_branch_three(t: &mut Table, x: i32) -> Result<(), String> {

@@ -589,9 +589,6 @@ AG:（巴）商店街的救世主 「立刻支付常规收购价一半的价格�
 (4b) Is 「收购」 a 「购买」 for 「购买…时」 listeners? *(implemented reading: yes)*
 (4c) Does the mortgage stay on the hand-over? *(implemented reading: no — this port clears it so Afterglow's 「自动免费在上面加盖一栋房子」 can fire)*
 
-**C-Q6 (MOVE-03, multi-activation).** *(updated)*
-A card / band skill with several press effects (MyGO band (2)/(3), Mor:（NNM）稍微努力了一下): should the player pick which activation fires, or should one `On::Play` entry branch? The engine now uses **one entry with an in-body branch** (placed vs hand) for MyGO and NNM. Is that the model for all of them?
-
 **C-Q10 (SETTLE-05, no_breakup R3).**
 Sumimi:no_breakup 「若传送并触发结算后未能使资金变为拥有相同数字，回到原处并取消所有受到的效果」: is 「触发结算后」 `settleAfter` or the `tileResolved` terminal? And does 「取消所有受到的效果」 undo money as well (「不进行任何结算」 scopes to the return)?
 
@@ -1008,6 +1005,7 @@ noted where it is known; all of these are closed in the tree.
 - **W3-KAORU-02** — closed (ABI v124): `PlanValue.direction` + `direction_roll` give the real 1d2 with an explicit direction. Cited: `rules/tests/tests/ab_misc.rs`, `rules/cards/card-hhw/src/kaoru_thief.rs`, `crates/card-sdk/src/kani_host.rs`.
 - **W3-KAORU-03 / C-Q48** — ruled (2026-11-20): 「所有在薰所在格子的人」 includes 薰 himself, so the unprinted `actor != owner` conjunct is gone. Cited: `rules/cards/card-hhw/src/kaoru_thief.rs`, `rules/tests/tests/spec_card_hhw.rs`.
 - **EVENT-01 / C-Q38** — ruled (2026-11-20): 「结束后传送到微笑号」 fires when the [除外] ends (the turn start where the last layer peels), and the 「不触发场地效果」 rider keeps the return bare; OPEN-habinel-end closed. Cited: `rules/status/src/exile.rs`, `rules/events/src/habinel.rs`, `rules/tests/tests/events.rs`.
+- **C-Q6 / MOVE-03** — ruled (2026-11-20): when a press has several effects available it offers all of them and the player picks which activation fires; the unchosen halves do not run. The model is one `On::Play` entry whose body asks (MyGO band (2)/(3), NNM (1)/(2)/(3)); OPEN-多分支选择 / OPEN-multi-activation closed. Cited: `rules/skills/skill-groups/src/mygo.rs`, `rules/cards/card-morfonica/src/nanami_effort.rs`, `rules/tests/tests/mygo.rs`, `rules/tests/tests/spec_card_mor.rs`.
 - **G15** — closed: the Kani verification host (model-only, no wire change). Cited: `rules/kani/src/spec/r.rs`, `rules/kani/src/proofs/hostops_smoke.rs`, `rules/kani/src/proofs/r.rs`.
 - **DECLARE-TRAP-LOG** — closed: `entry_admitted` takes `on_trap`, landing with both trap arms. Cited: `rules/tests/tests/ab_tokens_trap.rs`, `crates/rules-native/src/lib.rs`, `crates/card-sdk/src/abi.rs`.
 - **ENG-COST** — closed: `PlayEntry.cost` + `On::Play(..).cost`, the press gate refuses / charges before the body. Cited: `rules/tests/tests/ab_misc.rs`, `rules/skills/skill-groups/src/crychic.rs`, `rules/skills/skill-groups/src/ave_mujica.rs`.
