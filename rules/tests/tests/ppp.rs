@@ -1226,6 +1226,8 @@ fn ix_star_beat_counts_the_fives() {
 #[test]
 fn saaya_sky_pass_hook_is_silent_off_its_tile() {
     let mut t = Table::vanilla(2);
+    // The card is 沙绫's persona exclusive -- vanilla seats 香澄 / 多惠.
+    t.set_character_raw(0, "山吹沙绫");
     let sky = tile("山吹面包房"); // where the play places the card
     t.begin_turn(0);
     skip_all(&mut t);
