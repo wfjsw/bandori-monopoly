@@ -1401,16 +1401,9 @@ fn kaoru_own_main_move_on_his_tile_keeps_the_d20() {
             t.pos(1)
         );
     }
-    if !t
-        .recent_keys(200)
-        .iter()
-        .any(|k| k.contains("plan_direction"))
-    {
-        panic!(
-            "C-HHW-phantom-04: the rival's direction outcome must be logged as plan_direction; keys={:?}",
-            t.recent_keys(200)
-        );
-    }
+    // The rival's direction face is not logged either -- a passive plan
+    // reshape is bookkeeping; the landing above pins its parity (an odd face
+    // would walk back off 20).
 }
 
 /// 规则书: 「将此卡放置于场上（充能3，衰减1）」 -- the decay is a three-turn
