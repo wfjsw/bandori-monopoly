@@ -3,10 +3,12 @@
 // stack at the right end of the hand -- the mirror of the skill stack on its
 // left -- and rise / retract with the hand, never in the cards-in-play row.
 //
-// Everywhere else's face-down convention holds: everyone but the owner sees the
-// card back; the owner keeps the face, the 盖着 tag and a back that blends over
-// it now and then. Hover / focus shows the shared preview; a press-and-hold on
-// one that binds tiles lights them; a click opens its detail sheet.
+// The stack shows the viewer's own parked cards only: they are hand cards, and
+// a seat's hand is its own business. (A spectator has no seat, so it keeps
+// seeing every one -- as the back.) The owner keeps the face, the 盖着 tag and
+// a back that blends over its top half now and then. Hover / focus shows the
+// shared preview; a press-and-hold on one that binds tiles lights them; a click
+// opens its detail sheet.
 
 import { memo, useCallback, useState, type CSSProperties } from "react";
 import { sceneImg } from "../../core/assets";
@@ -40,6 +42,17 @@ export const downStep = (n: number) => (n > 1 ? Math.min(DOWN_STEP_MAX, (DOWN_MA
 /** The width the stack takes for `n` cards, for the hand's spread budget. */
 export const downStackWidth = (n: number) => (n ? SKILL_CARD_W + (n - 1) * downStep(n) + SKILL_FAN_GAP : 0);
 
+/** The cards the stack holds: the viewer's own parked ones. An attachment
+ *  (`on >= 0`) rides its host in the cards-in-play row, so it is never here.
+ *  A viewer without a seat (a replay spectator, `playerId` -1) has nothing of
+ *  its own to show, so it keeps seeing every parked card as the back. */
+export const downCardsOf = (S: Model["S"], viewer: number) =>
+  S.players.flatMap((x, seat) =>
+    (x.field ?? [])
+      .filter((fc) => fc.faceDown && (fc.on ?? -1) < 0 && (viewer < 0 || (fc.owner >= 0 ? fc.owner : seat) === viewer))
+      .map((fc) => ({ seat, fc })),
+  );
+
 export const FaceDownStack = memo(function FaceDownStack({ m, pulse }: { m: Model; pulse?: { uid: number; id: number; ms: number } | null }) {
   const S = m.S;
   const names = namesOf(S);
@@ -53,9 +66,8 @@ export const FaceDownStack = memo(function FaceDownStack({ m, pulse }: { m: Mode
   }, []);
   const dismiss = useCallback(() => setPicked(null), []);
   const mine = (ownerSeat: number) => ownerSeat >= 0 && ownerSeat === m.playerId;
-  // An attachment (`on >= 0`) is shown on its host in the cards-in-play row,
-  // not here, even when it is face down.
-  const down = S.players.flatMap((x, seat) => (x.field ?? []).filter((fc) => fc.faceDown && (fc.on ?? -1) < 0).map((fc) => ({ seat, fc })));
+  // Own parked cards only (see `downCardsOf`); an attachment is on its host.
+  const down = downCardsOf(S, m.playerId);
   if (!down.length) return null;
   const step = downStep(down.length);
   return (
@@ -71,8 +83,8 @@ export const FaceDownStack = memo(function FaceDownStack({ m, pulse }: { m: Mode
         const tiles = designatedTiles(S.marks, fieldCardTiles(fc.uid));
         const key = `c${fc.uid}`;
         const name = D.card(fc.card)?.name;
-        // Only the viewer's own parked card can be lit: everyone else's is the
-        // back, and the engine flashes those in the centre instead.
+        // A spectator's seatless view is the only one that reaches the back
+        // branch, and the engine flashes those in the centre instead.
         const lit = own && pulse?.uid === fc.uid;
         const litStyle = lit && pulse ? { ["--pulse-ms" as string]: `${pulse.ms}ms` } : {};
         return (
@@ -99,7 +111,7 @@ export const FaceDownStack = memo(function FaceDownStack({ m, pulse }: { m: Mode
                   present={present}
                   dismiss={dismiss}
                 />
-                <div className={fd.blend} title={tr("board.faceDown")}><img src={sceneImg("card_back")} alt="" /></div>
+                <div className={cx(fd.blend, s.downBlend)} title={tr("board.faceDown")}><img src={sceneImg("card_back")} alt="" /></div>
               </>
             ) : (
               <div className={s.downBack} title={`${m.nameOf(seat)} · ${tr("board.faceDown")}`}><img src={sceneImg("card_back")} alt="" /></div>

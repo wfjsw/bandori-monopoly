@@ -270,7 +270,7 @@
 }
 
 .attachBlend {
-  inset: 0;
+  inset: 0 0 auto 0;
 }
 
 /* The owner's face-down treatment (back blend, 盖着 tag) is shared with the

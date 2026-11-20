@@ -23,7 +23,7 @@ import { useStandingMode, stickCard } from "../../ui/CardPreview";
 import { SkillBody } from "../../ui/SkillBody";
 import { act, type Model } from "./model";
 import { byTitle, cardKeys, showDeck, showDeedList } from "./Popups";
-import { downStackWidth, FaceDownStack } from "./FaceDownStack";
+import { downCardsOf, downStackWidth, FaceDownStack } from "./FaceDownStack";
 import { fieldMarkers, type Marker } from "./markers";
 import { MarkerChip } from "./MarkerChip";
 import { useCompactValue } from "../../app/Stage";
@@ -432,8 +432,9 @@ export const Hand = memo(function Hand({ m, sess, busy, pulse }: { m: Model; ses
     return () => ro.disconnect();
   }, []);
   // The face-down stack holds the same right-hand space as the skill stack does
-  // on the left, so the fan's budget counts it out on both sides too.
-  const downN = S.players.reduce((n, x) => n + (x.field ?? []).filter((fc) => fc.faceDown).length, 0);
+  // on the left, so the fan's budget counts it out on both sides too -- with
+  // the same cards the stack actually draws (`downCardsOf`).
+  const downN = downCardsOf(S, m.playerId).length;
   const downW = downStackWidth(downN);
   const fanSpread = Math.min(660, Math.max(0, midW - 2 * (skillW + downW) - 120));
   // The preview is `pointer-events: none` (it sits above the hand, not under

@@ -465,9 +465,10 @@
    the skill stack, retracted and raised with the hand's own top strip
    (`--hand-peek`), click-through except for the cards themselves. The newest
    card is the last child and so paints on top; hovering one lifts it clear.
-   It carries the other surfaces' face-down conventions: the back for everyone
-   but the owner, and the owner's face with the back blended over it now and
-   then under a 盖着 tag (both shared via `FaceDown.module.css`). */
+   It draws the viewer's own parked cards only, under the shared face-down
+   treatment: the face with the back blended over its top half, under a 盖着
+   tag (`FaceDown.module.css`). A seatless spectator sees every card as the
+   bare back instead. */
 .downStack {
   position: absolute;
   /* Clear of the column edge: the 盖着 tag hangs 4px past the card and would
@@ -498,6 +499,10 @@
   /* Pinned: the shrink-to-fit stack otherwise sizes a slot to the art's
      intrinsic width, not the face's. The step below assumes this width. */
   width: var(--card-w, 120px);
+  /* One card height for the slot whatever it holds: a known card's face and a
+     bare back must sit level in the stack -- `Card.module.css`'s `.mini`
+     floor, so the two branches cannot drift. */
+  height: calc(var(--card-w, 120px) * 1.5);
   pointer-events: auto;
   user-select: none;
   -webkit-user-select: none;
@@ -566,13 +571,18 @@
     filter: brightness(1);
   }
 }
-/* The owner's colour on the frame, like every field instance's. */
+/* The owner's colour on the frame, like every field instance's. The child
+   fills the slot's pinned height, so the face and the bare back stay level;
+   the blend keeps the shared top-half box (`FaceDown.module.css`). */
 .downSlot > div {
+  height: 100%;
   box-shadow: 0 0 0 2.5px var(--own, var(--line)), var(--card-shadow);
+}
+.downSlot > .downBlend {
+  height: 50%;
 }
 .downBack {
   width: var(--card-w, 120px);
-  aspect-ratio: 3 / 4;
   border-radius: var(--r-sm);
   overflow: hidden;
 }
