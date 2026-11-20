@@ -19,10 +19,13 @@ const DICE_ROLL_MS = 10 * 55;
 /** How long the effect popup stays up: just longer than the dice roll it
  *  follows, but never under 1.5s -- long enough to read which branch landed. */
 const EFFECT_HOLD_MS = Math.max(DICE_ROLL_MS + 300, 1500);
-/** How long a card activation's face stays up, fade-out included. */
+/** How long a card activation's face stays up, fade-out included. The length
+ *  is fixed per activation, not keyed to the queue: online delivers a whole
+ *  resolution in one batch, so a queue-depth test made the same flash play
+ *  ~3x shorter there than in solo. */
 const CARD_FLASH_MS = 1200;
-/** A deep backlog of activations still shows each card, just briefly. */
-const CARD_FLASH_FAST_MS = 350;
+/** How long the face then fades out. */
+const CARD_FLASH_FADE_MS = 250;
 import type { GameSession } from "../../game/session";
 import { t as tr } from "../../i18n/t";
 import { FlashOnce, flashPlay } from "./presentation.ts";
@@ -307,7 +310,7 @@ export class Animator {
         && this.flash.detail.length < 2 && line) {
       const f = this.flash;
       this.flash = { ...f, detail: [...f.detail, line], out: false };
-      this.armFlash(f.id, this.fast());
+      this.armFlash(f.id);
     }
     // History rows have already been shown (or were never animated): seal
     // their flash identity so a reconnect / seek cannot play them now.
@@ -432,19 +435,19 @@ export class Animator {
     this.bump();
   }
 
-  /** The card activation flash: the face up for ~1.2s (briefly when the queue
-   *  is deep), barred in the owner's colour with a short caption, and marked
-   *  无效 when a counteraction negated it. The queue plays simultaneous
-   *  activations one after another, so none is lost -- a new face waits for
-   *  the previous one to fade. The hold is a timer, not a queue pause: the
-   *  activation's own follow-ups (its roll, its effect lines) land on the face
-   *  instead of waiting it out. */
+  /** The card activation flash: the face up for ~1.2s, barred in the owner's
+   *  colour with a short caption, and marked 无效 when a counteraction negated
+   *  it. The queue plays simultaneous activations one after another, so none
+   *  is lost -- a new face waits for the previous one to fade. The hold is a
+   *  timer, not a queue pause: the activation's own follow-ups (its roll, its
+   *  effect lines) land on the face instead of waiting it out. */
   private async cardFlash(e: MatchEvent, fast: boolean): Promise<void> {
     // Ruling 1 + pulse reconciliation + once-per-flash: see [`flashPlay`].
     const p = flashPlay(this.flashOnce, e);
     if (p === "none") return;
     // An in-play card's 「效果适用」 lights its slot in the field row instead
-    // of bringing the face to the centre.
+    // of bringing the face to the centre. The pulse keeps its deep-queue
+    // variant; the centre face (below) has one fixed length.
     if (p === "pulse") {
       const uid = this.fieldUid(e.uid ?? -1);
       if (uid !== null) {
@@ -477,11 +480,11 @@ export class Animator {
     } else {
       caption = tr("board.cardEffect", { card: cardTitle(e.card) });
     }
-    if (!fast) sfx(e.negated ? "prompt" : "card_play");
+    sfx(e.negated ? "prompt" : "card_play");
     // A negated activation's `results` name what negated it; a live one's
     // outcome lines ride the face as they arrive (`addLog`).
     const detail = (e.results ?? []).map((r) => fmtMsg(r, this.names())).filter(Boolean);
-    this.showFlash(e.card, e.playerId, caption, !!e.negated, kind, detail, fast, e.id);
+    this.showFlash(e.card, e.playerId, caption, !!e.negated, kind, detail, e.id);
   }
 
   /** `uid` when that field instance is still face-up to the viewer (the event
@@ -522,26 +525,24 @@ export class Animator {
   }
 
   /** Put a card face up; `armFlash` starts its hold. */
-  private showFlash(card: string, owner: number, caption: string, negated: boolean, kind: string, detail: string[], fast: boolean, actId = -1): void {
+  private showFlash(card: string, owner: number, caption: string, negated: boolean, kind: string, detail: string[], actId = -1): void {
     const id = ++this.seq;
     this.flash = { card, owner, caption, negated, out: false, id, detail, kind, actId };
-    this.armFlash(id, fast);
+    this.armFlash(id);
     this.bump();
   }
 
   /** Start (or re-arm) the flash's hold, then its fade. One timer slot: an
-   *  effect line that lands on the face re-arms it before the fade eats it. */
-  private armFlash(id: number, fast: boolean): void {
-    const hold = (fast ? CARD_FLASH_FAST_MS : CARD_FLASH_MS) / Math.max(1, this.speed);
-    const fade = (fast ? 0 : 250) / Math.max(1, this.speed);
+   *  effect line that lands on the face re-arms it before the fade eats it.
+   *  A deep queue never shortens this -- only the explicit speed setting does
+   *  (scaled below), so live online and solo play the same length. */
+  private armFlash(id: number): void {
+    const hold = CARD_FLASH_MS / Math.max(1, this.speed);
+    // Always positive (speed never drops below 1): every flash has a fade.
+    const fade = CARD_FLASH_FADE_MS / Math.max(1, this.speed);
     clearTimeout(this.flashTimer);
     this.flashTimer = setTimeout(() => {
       if (this.flash?.id !== id) return;
-      if (fade <= 0) {
-        this.flash = null;
-        this.bump();
-        return;
-      }
       this.flash = { ...this.flash, out: true };
       this.bump();
       this.flashTimer = setTimeout(() => {
@@ -556,7 +557,7 @@ export class Animator {
    *  same 「<卡名> 的效果：…」 wording the log keeps) instead of popping the
    *  effect modal -- 正论暴击 and every other `ctx::effect` land here. With no
    *  flash up the card's face comes back, line attached. */
-  private async rideEffect(card: string, owner: number, text: string, fast: boolean): Promise<void> {
+  private async rideEffect(card: string, owner: number, text: string): Promise<void> {
     // The card is lit in the field row: its effect lines stay in the log.
     if (this.pulse && !this.flash && this.pulseCard === card) return;
     const f = this.flash;
@@ -565,13 +566,13 @@ export class Animator {
       // drop it and let the line speak. A named trigger keeps its caption.
       const caption = KIND_KEY[f.kind] ? f.caption : "";
       this.flash = { ...f, caption, detail: [...f.detail, text], out: false };
-      this.armFlash(f.id, fast);
+      this.armFlash(f.id);
       this.bump();
       return;
     }
     while (this.flash && !this.disposed) await sleep(30 / Math.max(1, this.speed));
     if (this.disposed) return;
-    this.showFlash(card, owner, "", false, "", [text], fast);
+    this.showFlash(card, owner, "", false, "", [text]);
   }
 
   private showTurn(label: string): void {
@@ -856,7 +857,7 @@ export class Animator {
         // unattributed one keeps the popup window.
         if (this.noFlash()) break;
         if (e.card) {
-          await this.rideEffect(e.card, playerId, body, fast);
+          await this.rideEffect(e.card, playerId, body);
           await wait(fast ? 0 : 250);
           break;
         }

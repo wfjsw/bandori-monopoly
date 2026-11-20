@@ -530,3 +530,38 @@ test("Animator: mergeHistory seals the flash ids it seeds", async () => {
   assert.equal(anim.flash, null);
   assert.equal(anim.log.length, 1);
 });
+
+// -- flash length is transport-independent ----------------------------------
+
+/** Mount a centre-face flash with `backlog` trivial events behind it and
+ *  return how long the face stayed up. */
+async function flashHold(backlog: number): Promise<number> {
+  const anim = new Animator(() => {}, () => null, false);
+  // A leading pass keeps the loop busy (250ms) while the card and its backlog
+  // queue up, so the animator reaches the card with the queue already deep --
+  // the same shape as an SSE batch, where `push` runs for every frame before
+  // the loop takes the next item. Pushing the card alone would let it start
+  // against an empty queue and never exercise the fast path.
+  anim.push(frame({ id: 300 + backlog, type: "pass", msg: { k: "log.x" } }));
+  const card = frame({ id: 90 + backlog, type: "card", card: "TEST:hold", kind: "play", uid: -1, msg: { k: "log.played" }, flash: true });
+  anim.push(card);
+  // Behind the card, like a batched online resolution: the queue stays deep
+  // for the whole flash.
+  for (let i = 0; i < backlog; i++) anim.push(frame({ id: 200 + backlog * 20 + i, type: "pass", msg: { k: "log.x" } }));
+  for (let i = 0; i < 100 && !anim.flash; i++) await sleep(5);
+  assert.ok(anim.flash, "flash must show");
+  const t0 = Date.now();
+  for (let i = 0; i < 600 && anim.flash; i++) await sleep(5);
+  assert.equal(anim.flash, null);
+  return Date.now() - t0;
+}
+
+test("Animator: a deep queue does not shorten the card flash", async () => {
+  const shallow = await flashHold(0);
+  const deep = await flashHold(12); // > FAST_QUEUE
+  // Both run the full CARD_FLASH_MS (~1.2s, fade included); the deep queue's
+  // fast path used to cut it to 350ms with no fade.
+  assert.ok(shallow > 800, `shallow flash too short: ${shallow}ms`);
+  assert.ok(deep > 800, `deep flash shorter than solo: ${deep}ms`);
+  assert.ok(Math.abs(deep - shallow) < 450, `flash length not parity: ${shallow} vs ${deep}`);
+});
