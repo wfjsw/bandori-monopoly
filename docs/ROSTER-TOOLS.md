@@ -1,9 +1,9 @@
 # Roster tools (post-JSON)
 
-`data/{cards,characters,bands}.json` are **gone**. Card / character / band
-metadata is defined in the Rust rule code and exported from the ruleset
-(ABI v63 `ruleset_metadata`). Tools that need JSON rows read a dump of that
-export instead.
+`data/{cards,personas,groups,events}.json` are **gone** (and ignored under
+`data/`). Card / character / band / event metadata is defined in the Rust rule
+code and exported from the ruleset (ABI v63 `ruleset_metadata`). Tools that
+need JSON rows read a dump of that export instead.
 
 ## Produce the dump
 
@@ -19,9 +19,9 @@ This wraps:
 cargo run -p rules-native --example dump_roster -- <dir>
 ```
 
-which writes `cards.json` / `characters.json` / `bands.json` in the exact JSON
-shape / key order / formatting of the retired `data/*.json` files (including
-the flat arrays under the `"cards"` / `"characters"` / `"bands"` keys).
+which writes `cards.json` / `personas.json` / `groups.json` / `events.json`
+with the flat arrays under the matching `"cards"` / `"personas"` / `"groups"` /
+`"events"` keys.
 
 Do **not** set `CARGO_TARGET_DIR` for this (or `tools/build-ruleset.mjs`) -- an
 externally set one stages stale artifacts.

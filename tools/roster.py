@@ -32,8 +32,10 @@ ROOT = Path(__file__).resolve().parents[1]
 DEFAULT_DUMP = ROOT / "target" / "roster-dump"
 _FILES = {
     "cards": ("cards.json", "cards"),
-    "characters": ("characters.json", "characters"),
-    "bands": ("bands.json", "bands"),
+    # The dump uses the engine's roster names; the loader keeps the historical
+    # API names (`load_characters` / `load_bands`) its callers use.
+    "characters": ("personas.json", "personas"),
+    "bands": ("groups.json", "groups"),
 }
 
 

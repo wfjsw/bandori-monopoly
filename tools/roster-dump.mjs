@@ -22,7 +22,7 @@ import { dirname, join, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 
 const ROOT = resolve(dirname(fileURLToPath(import.meta.url)), "..");
-const FILES = ["cards.json", "characters.json", "bands.json"];
+const FILES = ["cards.json", "personas.json", "groups.json", "events.json"];
 
 const args = process.argv.slice(2);
 let out = process.env.ROSTER_DIR || join(ROOT, "target", "roster-dump");
