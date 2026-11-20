@@ -18,7 +18,7 @@ file was flattened and re-verified against master `77d56311` on 2026-11-13,
 and the A/B sweep landed as ABI v124.
 
 Sources (re-counted 2026-11-13):
-- **268** `TODO(规则书)` tags in `rules/` + `crates/`. Some are convention
+- **265** `TODO(规则书)` tags in `rules/` + `crates/`. Some are convention
   markers (a module doc naming the policy, not a gap); the convention-marker
   list is at the end.
 - **8** live `#[ignore = "RULING: …"]` rulebook tests in
@@ -95,17 +95,6 @@ questions are in the appendix.
 - **current**: force-buy sum moved outside the pipeline entirely (no pay hook, even one that 「写明改动强制购买」); auction money direct; `bought` fires on auction but `buyAfter` does not; force-buy fires neither.
 - **expected**: decide (a) whether 「不受…影响」 also bars 「写明」 exceptions, (b) whether 强制购买 is a 「购买」 for 「购买…时」 listeners, (c) whether auction is a 「购买格子」 and whether auction [消耗] runs the pipeline.
 - **question**: C-Q3 (three sub-parts).
-
-## W3-KAORU-03 — 「所有在薰所在格子的人」 excludes 薰 himself
-- **kind**: rulebook divergence
-- **class**: C
-- **severity**: medium
-- **rule text**: 「此卡在场上时所有在薰所在格子的人如果可以移动，则主要移动改为投掷1d2（前后）和1d10（距离）进行结算。」
-- **code**: `rules/cards/card-hhw/src/kaoru_thief.rs:26-30` — the TODO ends
-  "W3-KAORU-03 / C-Q48, OPEN"; the filter is
-  `actor != owner && pos(actor) == owner.pos && …`.
-- **gap**: 「所有」 reads as every piece sharing 薰's tile, including 薰.
-- **question**: see C-Q48.
 
 ## SKILL-04 — 状态2 exit conditions missing (umiri; nyamu carved)
 - **kind**: rulebook divergence
@@ -720,9 +709,6 @@ When a deed is co-owned (星之鼓动山丘 is 「所有Poppin' Party角色视�
 **C-Q47 (1d2 polarity).**
 `HHW:（薰）怪盗hello happy`「投掷1d2（前后）」: for the direction die, is 前/后 **face 1 / face 2**, or **odd / even**? The port reads odd = reverse. The die-vs-d6-parity half closed as W3-KAORU-02 (ABI v124, `PlanValue.direction` + `direction_roll` roll a real 1d2), so only the polarity mapping is left.
 
-**C-Q48 (W3-KAORU-03, 「所有在薰所在格子的人」).**
-Does 「所有在薰所在格子的人」 include 薰 himself? If 薰's own main move is also meant to become 1d2+1d10, the `turn_player != owner` conjunct is an unprinted extra gate. A plausible design reading is that the effect weirdifies *other* pieces standing with 薰.
-
 **C-Q51 (clear-cp-spread-window).** *(filed 2026-10-28; rows 1507; `rules/cards/card-general/src/clear_cp.rs`)*
 [使用者]使用此卡后的下2回合开始时
 
@@ -1023,6 +1009,7 @@ noted where it is known; all of these are closed in the tree.
 - **NFO-CANCEL-01** — closed (ABI v124): the `pay_split_ran` bit splits a pre-`PaySplitAt` cancel from a shave. Cited: `rules/tests/tests/ab_payment.rs`, `rules/cards/card-roselia/src/nfo.rs`, `crates/card-sdk/src/kani_host.rs`.
 - **STA-02** — closed (ABI v124): `AbnormalChoice` action kind raised at the abnormal gate; `status:unstoppable` answers `ask_yes`, journaled, AI defaults to refuse. Cited: `rules/tests/tests/g12_status.rs`, `rules/tests/tests/ab_unstoppable_choice.rs`, `rules/cards/card-ppp/src/rimi_choco.rs`.
 - **W3-KAORU-02** — closed (ABI v124): `PlanValue.direction` + `direction_roll` give the real 1d2 with an explicit direction. Cited: `rules/tests/tests/ab_misc.rs`, `rules/cards/card-hhw/src/kaoru_thief.rs`, `crates/card-sdk/src/kani_host.rs`.
+- **W3-KAORU-03 / C-Q48** — ruled (2026-11-20): 「所有在薰所在格子的人」 includes 薰 himself, so the unprinted `actor != owner` conjunct is gone. Cited: `rules/cards/card-hhw/src/kaoru_thief.rs`, `rules/tests/tests/spec_card_hhw.rs`.
 - **G15** — closed: the Kani verification host (model-only, no wire change). Cited: `rules/kani/src/spec/r.rs`, `rules/kani/src/proofs/hostops_smoke.rs`, `rules/kani/src/proofs/r.rs`.
 - **DECLARE-TRAP-LOG** — closed: `entry_admitted` takes `on_trap`, landing with both trap arms. Cited: `rules/tests/tests/ab_tokens_trap.rs`, `crates/rules-native/src/lib.rs`, `crates/card-sdk/src/abi.rs`.
 - **ENG-COST** — closed: `PlayEntry.cost` + `On::Play(..).cost`, the press gate refuses / charges before the body. Cited: `rules/tests/tests/ab_misc.rs`, `rules/skills/skill-groups/src/crychic.rs`, `rules/skills/skill-groups/src/ave_mujica.rs`.
