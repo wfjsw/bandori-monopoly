@@ -1238,6 +1238,7 @@ impl PlayCtx<'_> {
         m.remaining = 0;
         m.passed_players.clear();
         m.stopped = false;
+        m.stopped_by_gate = false;
         m.cancelled = false;
     }
 
@@ -1583,6 +1584,10 @@ impl PlayCtx<'_> {
             fm.remaining = 0;
             fm.passed_players.clear();
             fm.stopped = false;
+            // A follower's own gate decides its settle; the mover's stop must
+            // not silence it. A card's 「不[结算]」 on the shared move still rides.
+            fm.settles = m.settles || m.stopped_by_gate;
+            fm.stopped_by_gate = false;
             fm.cancelled = false;
             fm.from = 0;
             fm.to = 0;
@@ -2236,6 +2241,26 @@ impl PlayCtx<'_> {
         // Base distance: a stored step count overrides the roll
         // (`steps = if m.steps >= 0 { m.steps } else { m.roll }`).
         let steps = m.steps.unwrap_or(m.roll);
+        // 规则书 47: 「无法使用非[传送]的移动效果（如果因效果随机到非[传送]的移动效果
+        // 则抵消该效果）」 -- a walk that *starts* while the mover cannot move
+        // goes nowhere. `run_planned_roll` already clamps a main move; this
+        // covers a card's side move onto a staying player (a forced move onto
+        // them would otherwise take one step and settle there).
+        let steps = if self.move_gate_closed(i) {
+            m.settles = false;
+            if m.is_main_move
+                && self.w.blocked_settle_answer(i) == super::world::SettleAnswer::Unanswered
+            {
+                // The withheld main-move settle still runs at the turn end.
+                self.w
+                    .set_blocked_settle_answer(i, super::world::SettleAnswer::Settle);
+            }
+            0
+        } else {
+            steps
+        };
+        m.total = steps.max(0) + m.extra_steps.max(0);
+        m.remaining = m.total;
         // Snapshot the log-line fields: the loop below writes `m.total` /
         // `m.remaining` / `m.path`, so the closure must not borrow `m`.
         let (is_main_move, roller, reason, dir, settles) = (
@@ -2432,9 +2457,23 @@ impl PlayCtx<'_> {
             // the condition.
             if remaining > 0 && self.move_gate_closed(i) {
                 m.stopped = true;
-                if m.is_main_move && m.settles {
+                m.stopped_by_gate = true;
+                self.w.plan_mut().stopped = true;
+                // The move ends here: it walked `k + 1` of the planned steps and
+                // this square **is** the landing (47), so landing reads
+                // (`remaining == 0`) and `main_steps` see what was walked.
+                m.total = (k + 1) as i32;
+                m.remaining = 0;
+                // 47 withholds the *main* move's settle -- but only while the
+                // player has not already answered 「是否触发结算」 for this move:
+                // `Settle` keeps the stop square's settle here (no turn-end
+                // copy), `Skip` settles nowhere.
+                use super::world::SettleAnswer;
+                if m.is_main_move
+                    && m.settles
+                    && self.move_settle_answer(i) == SettleAnswer::Unanswered
+                {
                     m.settles = false;
-                    use super::world::SettleAnswer;
                     if self.w.blocked_settle_answer(i) == SettleAnswer::Unanswered {
                         self.w.set_blocked_settle_answer(i, SettleAnswer::Settle);
                     }
@@ -2442,7 +2481,7 @@ impl PlayCtx<'_> {
                 self.w.log(
                     "status",
                     i as i32,
-                    Msg::new("log.stay_stop").player_id("who", i),
+                    self.rules.gate_skip_msg(super::Gate::Move, i),
                 );
                 break;
             }

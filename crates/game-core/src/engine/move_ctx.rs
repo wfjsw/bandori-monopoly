@@ -174,6 +174,11 @@ pub struct MoveCtx {
     pub stop_at: Option<Tile>,
     /// Set mid-walk to stop here and settle (the 「强制停下」 cards).
     pub stopped: bool,
+    /// The stop came from a closed move gate ([停留] / [晕眩] / [除外] landing
+    /// mid-walk), not a card. A shared main move's followers settle on their own
+    /// gate: the withheld settle is the mover's alone.
+    #[serde(default)]
+    pub stopped_by_gate: bool,
     /// Restrict the walk to odd/even tiles (`-1` = either).
     pub parity: i32,
 
@@ -314,6 +319,7 @@ impl Default for MoveCtx {
             passed_players: Vec::new(),
             stop_at: None,
             stopped: false,
+            stopped_by_gate: false,
             parity: -1,
             settle_tile: -1,
             pay_factor: 1.0,
