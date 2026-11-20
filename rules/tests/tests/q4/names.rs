@@ -173,6 +173,7 @@ fn is_engine_key(name: &str) -> bool {
             | "stunStart"
             | "exile"
             | "exileTo"
+            | "exileBare"
             | "fire"
             | "noHand"
             | "unstoppable"

@@ -173,7 +173,9 @@ start) that is not named in the book -- see G-STATUS-01.
 * **Condition:** `exile > 0` in `condition` (or ticking to 0 at this turn start).
 * **Effect:** no player-skill or tile-[持续] body runs on their behalf; when
   the last layer ticks out, they [传送] to the tile the granting effect wrote
-  (`exileTo`).
+  (`exileTo`) -- at that turn start, not at the grant (C-Q38). Whether the
+  landing [结算]s follows the granting text's own rider (「不触发场地效果」 =
+  `exileBare`; a 「视为当回合的主要移动」 landing settles).
 * **Frame:** n/a.
 * **Rulings & OPEN:** the book states a convention on the *granting* effect's
   text (it must name the return tile), not a constraint the engine can fail;

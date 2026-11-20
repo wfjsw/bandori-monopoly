@@ -46,7 +46,7 @@ Specs: `rules/kani/src/spec/events.rs` · Proofs: `rules/kani/src/proofs/events.
 | E-lulu-02 | 拒绝则不动不付 | PROVEN | `lulu_02_decline_leaves_put` SUCCESSFUL | TBD | — | under-500 reading = no teleport |
 | E-habinel-01 | 每人获得X层[除外] X=1d2 | PROVEN (log) | `habinel_01_grants_exiles` | TBD | `GiveExile.to` = 微笑号 (26); no EXILE key in world | — |
 | E-habinel-02 | 回合开始时移除1层 | PROTOCOL-LEVEL | — | — | engine status tick | — |
-| E-habinel-03 | 结束后传送到微笑号 | OPEN | — | — | 「结束后」 timing unbound; return stored on the exile grant | OPEN-habinel-end |
+| E-habinel-03 | 结束后传送到微笑号 | RULED 2026-11-20 (C-Q38) | — | — | return fires at the exile end (turn start), bare (`exileBare`) | — |
 | E-this-hand-01 | 移动X，X=1d20-1d20+1d20 | PROTOCOL-LEVEL (PROVEN as stub) | `this_hand_01_move_is_protocol` **SUCCESSFUL 315 s** | — | `run_planned_move` + `plan::set_*` stubs; no pos change | — |
 | E-this-hand-02 | X负数则反方向 | PROTOCOL-LEVEL | — | — | `plan::set_reverse` stub | — |
 | E-this-hand-03 | 不触发场地效果 | PROTOCOL-LEVEL | — | — | settle suppression is engine | — |

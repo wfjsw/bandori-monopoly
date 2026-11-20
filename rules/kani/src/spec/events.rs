@@ -507,7 +507,7 @@ pub fn ex_quest_01_no_state_effects(effects: &[Effect]) -> bool {
 // 「每个玩家获得X层[除外]，…X=1d2（每个玩家独立投掷1d2）」
 // Destination 微笑号 is BLOCKED-HOST(tile_named) — `to` is -1 under Kani.
 // E-habinel-02 turn-start tick is engine status machinery (PROTOCOL-LEVEL).
-// E-habinel-03 timing is OPEN-habinel-end.
+// E-habinel-03 timing is RULED C-Q38 (at the exile end, never at the grant).
 // ===========================================================================
 
 /// One `GiveExile` per living player with `n ∈ 1..=2`, destination `to`
