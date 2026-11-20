@@ -1801,7 +1801,10 @@ fn saki_skill_pass_hook_is_silent_without_an_afflicted_passerby() {
                 && format!("{:?}", e.msg.args.get("reason")).contains("log.reason.pass")
         })
         .count();
-    assert_eq!(announced, 0, "pass activity without an affliction: {keys:?}");
+    assert_eq!(
+        announced, 0,
+        "pass activity without an affliction: {keys:?}"
+    );
     assert!(
         !keys.iter().any(|k| k == "log.effect_nothing"),
         "no 「（无事发生）」: {keys:?}"

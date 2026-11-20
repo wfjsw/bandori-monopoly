@@ -1687,7 +1687,8 @@ impl PassBase {
             }
         }
         for (i, base_v, wrote_v) in &own.board.co_owners {
-            if let (Some(v), Some(b)) = (live.st.co_owners.get(*i), self.board_co_owners.get_mut(*i))
+            if let (Some(v), Some(b)) =
+                (live.st.co_owners.get(*i), self.board_co_owners.get_mut(*i))
             {
                 if v == wrote_v {
                     *b = base_v.clone();

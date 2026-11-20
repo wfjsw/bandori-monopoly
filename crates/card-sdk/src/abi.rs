@@ -1739,10 +1739,17 @@ impl From<&str> for MarkStr {
     fn from(s: &str) -> Self {
         // Every current filter argument fits (longest: `skill.uikaIdol.pot`).
         let b = s.as_bytes();
-        let n = if b.len() > Self::CAP { Self::CAP } else { b.len() };
+        let n = if b.len() > Self::CAP {
+            Self::CAP
+        } else {
+            b.len()
+        };
         let mut bytes = [0u8; Self::CAP];
         bytes[..n].copy_from_slice(&b[..n]);
-        Self { len: n as u8, bytes }
+        Self {
+            len: n as u8,
+            bytes,
+        }
     }
 }
 

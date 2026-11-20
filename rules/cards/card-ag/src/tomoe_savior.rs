@@ -12,14 +12,18 @@ use card_sdk::{key, CardDef, Msg, On};
 pub const TOMOE_SAVIOR: CardDef = CardDef::new(
     "AG:（巴）商店街的救世主",
     // G4: kind (Mortgage) is the category. The money threshold moves to the
-    // condition (`owner.money >= tile.price / 2` on the non-self arm); the
-    // shop-street check is a derived predicate (GUARDS.md §6) and stays in the
-    // residual guard.
+    // condition (`owner.money >= tile.price + tile.houses * tile_attr(tile.id, "house")`
+    // on the non-self arm); the shop-street check is a derived predicate
+    // (GUARDS.md §6) and stays in the residual guard.
     // 规则书[反击]: 「当其他玩家抵押商店街地契时，你可以打出此卡」
     &[On::Counteract(
         &[ChainKind::Mortgage],
-        // 规则书[反击]: 「立刻支付常规收购价一半的价格」
-        "actor == owner || owner.money >= tile.price / 2",
+        // 规则书[反击]: 「立刻支付常规收购价一半的价格」. 「常规收购价」 is the
+        // forced-acquisition quote `force_price_native = 2 * quote_native`
+        // (`quote_native` = price + houses * house), so dividing by 2 cancels
+        // the factor and yields `quote_native` exactly -- land + standing
+        // houses (ruling 8 / C-Q4a).
+        "actor == owner || owner.money >= tile.price + tile.houses * tile_attr(tile.id, \"house\")",
         Some(can_counteract),
         counteract).counter_reason(key!("tomoe_savior_when"))],
 ).meta(&card_sdk::meta::CardMeta::new()
@@ -37,7 +41,7 @@ fn is_shop(t: i32) -> bool {
 fn can_counteract(player_id: i32) -> bool {
     // 规则书[反击]: 「商店街地契」 -- the shop-street check is a derived
     // predicate (GUARDS.md §6) and stays here. The money threshold is the
-    // condition (`owner.money >= tile.price / 2`).
+    // condition (`owner.money >= tile.price + tile.houses * tile_attr(tile.id, "house")`).
     let _ = player_id;
     is_shop(trigger::tile())
 }
@@ -63,9 +67,11 @@ fn counteract(player_id: i32) -> card_sdk::Asked {
     if ctx::tile_owner(t) != from {
         return Ok(());
     }
-    // TODO(规则书) ruling 8: 「常规收购价一半」 -- the base (land / land + houses / 2× force) is
-    // undecided.
-    let price = ctx::tile_price(t) / 2;
+    // 规则书[反击] ruling 8 / C-Q4(4a): 「常规收购价」 is the ordinary
+    // forced-acquisition price of the deed -- `quote_native` itself, which
+    // `force_price_native` doubles: `2 * (tile.price + houses * tile.house)`.
+    // 「一半」 cancels the factor 2 exactly, so the base is land + houses.
+    let price = ctx::tile_price(t) + ctx::houses_of(t) * ctx::build_cost(t);
     if price <= 0 {
         return Ok(());
     }

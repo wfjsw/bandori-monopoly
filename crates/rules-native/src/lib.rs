@@ -850,11 +850,7 @@ impl CardModules for NativeModules {
         // (mirrors `Ruleset::run`). Admissibility already refused a short
         // player; a pause carries the charged world, so the body's re-run
         // starts from the count it already paid.
-        if let Some(name) = info
-            .on
-            .get(entry as usize)
-            .and_then(|e| e.cost.as_deref())
-        {
+        if let Some(name) = info.on.get(entry as usize).and_then(|e| e.cost.as_deref()) {
             let (res, after, _fuel) = run_on(
                 state,
                 card,
@@ -875,9 +871,7 @@ impl CardModules for NativeModules {
                 }
             };
             if need > 0 {
-                state
-                    .w()
-                    .add_held_by_name(player_id, name, -need, i32::MAX);
+                state.w().add_held_by_name(player_id, name, -need, i32::MAX);
             }
         }
         // Body entry: the activation announcement goes here (mirrors

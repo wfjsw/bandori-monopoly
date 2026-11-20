@@ -168,7 +168,13 @@ pub fn fire_gain_ok(
 }
 
 /// MUTANT: the reference forgets the cap and adds the whole `n`.
-pub fn fire_gain_mutant_uncapped(effects: &[Effect], player: i32, pre: i32, n: i32, post: i32) -> bool {
+pub fn fire_gain_mutant_uncapped(
+    effects: &[Effect],
+    player: i32,
+    pre: i32,
+    n: i32,
+    post: i32,
+) -> bool {
     post == pre + n && fire_gain_log_ok(effects, player, n)
 }
 
@@ -197,7 +203,13 @@ pub fn fire_spend_windows_ok(points: &[WindowPoint], player: i32, n: i32, pay_na
         && points[0].player == player
         && points[0].value == n
         && crate::intern::id_eq_str(crate::intern::NameId(points[0].name), pay_name)
-        && fire_one_window(&points[1..], crate::world::WINDOW_SPEND, player, bandori_std::fire::KEY, -n)
+        && fire_one_window(
+            &points[1..],
+            crate::world::WINDOW_SPEND,
+            player,
+            bandori_std::fire::KEY,
+            -n,
+        )
 }
 
 /// Exactly one `AddToken{player, "charge", -n}` — the engine's 效果适用 line
@@ -213,7 +225,14 @@ pub fn fire_spend_log_ok(effects: &[Effect], player: i32, n: i32) -> bool {
 
 /// The whole book outcome of one `fire::spend`: the cost was paid in full,
 /// the pool fell by exactly `n`, and the effect log is that one write.
-pub fn fire_spend_ok(effects: &[Effect], player: i32, pre: i32, n: i32, post: i32, paid: bool) -> bool {
+pub fn fire_spend_ok(
+    effects: &[Effect],
+    player: i32,
+    pre: i32,
+    n: i32,
+    post: i32,
+    paid: bool,
+) -> bool {
     paid && n > 0 && pre >= n && post == pre - n && fire_spend_log_ok(effects, player, n)
 }
 

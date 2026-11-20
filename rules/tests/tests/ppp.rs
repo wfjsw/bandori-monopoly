@@ -1229,7 +1229,8 @@ fn saaya_sky_pass_hook_is_silent_off_its_tile() {
     let sky = tile("山吹面包房"); // where the play places the card
     t.begin_turn(0);
     skip_all(&mut t);
-    t.give_play(0, "PPP:（沙绫）总有一天要给这片天空命名").unwrap();
+    t.give_play(0, "PPP:（沙绫）总有一天要给这片天空命名")
+        .unwrap();
     skip_all(&mut t);
     assert!(t.on_field(0, "PPP:（沙绫）总有一天要给这片天空命名"));
     assert_eq!(t.field(0)[0].tile, sky as i32, "placed on 山吹面包房");

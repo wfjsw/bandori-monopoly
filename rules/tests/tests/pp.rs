@@ -2704,7 +2704,10 @@ fn strong_flower_pass_hook_is_silent_off_its_tile() {
                 && format!("{:?}", e.msg.args.get("reason")).contains("log.reason.pass")
         })
         .count();
-    assert_eq!(announced, 0, "pass activity off the flower's tile: {keys:?}");
+    assert_eq!(
+        announced, 0,
+        "pass activity off the flower's tile: {keys:?}"
+    );
     assert!(
         !keys.iter().any(|k| k == "log.effect_nothing"),
         "no 「（无事发生）」: {keys:?}"

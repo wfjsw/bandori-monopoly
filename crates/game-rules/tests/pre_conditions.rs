@@ -149,14 +149,7 @@ fn pre_gate_does_not_answer() {
     let mut flashed = false;
     let mut on_body = |_w: &mut TestWorld, _e: i32| flashed = true;
     let ran = r
-        .run_hook(
-            &w,
-            call,
-            &Default::default(),
-            &[],
-            Some(&mut on_body),
-            None,
-        )
+        .run_hook(&w, call, &Default::default(), &[], Some(&mut on_body), None)
         .unwrap();
     assert!(
         ran.is_none(),

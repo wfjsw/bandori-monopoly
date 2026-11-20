@@ -39,8 +39,6 @@ fn a_slot_condition_sees_an_earlier_entry_write_in_the_same_window() {
     let see = keys
         .iter()
         .position(|k| k.contains("cond_live_see"))
-        .unwrap_or_else(|| {
-            panic!("the gated entry read the stale snapshot: {keys:?}")
-        });
+        .unwrap_or_else(|| panic!("the gated entry read the stale snapshot: {keys:?}"));
     assert!(bump < see, "the gated entry runs after the write: {keys:?}");
 }

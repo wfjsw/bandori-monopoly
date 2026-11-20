@@ -436,7 +436,13 @@ pub fn fire_gain_iff() {
     );
     // The `markerGain` window opens once, for the actual.
     crate::kassert!(
-        spec::fire_one_window(&wins[..win_n], WINDOW_GAIN, user, bandori_std::fire::KEY, want),
+        spec::fire_one_window(
+            &wins[..win_n],
+            WINDOW_GAIN,
+            user,
+            bandori_std::fire::KEY,
+            want
+        ),
         "gain: exactly one markerGain window with name + actual"
     );
     crate::kassert!(narration_n() == 0, "a landed gain narrates nothing");
@@ -507,7 +513,10 @@ pub fn fire_gain_name_concrete_debug() {
     // Covers, not asserts: an unreachable cover names a wrong value without
     // stopping the run. `charge` is the third `known_init` insert (bucket 49,
     // nothing else in the probe window).
-    kani::cover!(wins[0].name == 49, "debug: name is charge's known_init slot");
+    kani::cover!(
+        wins[0].name == 49,
+        "debug: name is charge's known_init slot"
+    );
     kani::cover!(wins[0].name == 0, "debug: name is slot 0");
     crate::kassert!(wins[0].name == key.0, "debug: stored name is the key id");
     crate::kassert!(

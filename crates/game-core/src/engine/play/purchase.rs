@@ -221,10 +221,7 @@ pub fn dice_rent_unit(data: &GameData, w: &World, owner: usize, kind: &str, mult
 /// How many tiles of opaque `kind` `player` owns.
 pub fn count_owned_kind(data: &GameData, w: &World, player: usize, kind: &str) -> i32 {
     (0..data.tiles.len())
-        .filter(|&t| {
-            data.tiles[t].kind.as_str() == kind
-                && w.owns(t as i32, player as i32)
-        })
+        .filter(|&t| data.tiles[t].kind.as_str() == kind && w.owns(t as i32, player as i32))
         .count() as i32
 }
 

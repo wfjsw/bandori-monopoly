@@ -127,10 +127,10 @@ fn drain_taking(t: &mut Table, who: usize, take: &str) {
 // 「【反击】当其他玩家抵押商店街地契时，你可以打出此卡，立刻支付常规收购价一半的
 // 价格从该玩家处收购该地契。」
 //
-// 「常规收购价」 is the deed's regular purchase price (规则书 游戏流程 uses
-// 「地契购买价格」 for that number: 「抵押后[获得]地契购买价格50%的资金」), so
-// half of it is the price/2 the [反击] pays. The deed is a 商店街-group one
-// (山吹面包房, group 10).
+// 「常规收购价」 is the ordinary forced-acquisition price
+// (`force_price_native` = `2 * (price + houses * house)`), so 「一半」 is
+// `price + houses * house` -- with no houses standing, the price itself. The
+// deed is a 商店街-group one (山吹面包房, group 10).
 #[test]
 fn tomoe_savior_hands_the_deed_over_at_half_price() {
     let mut t = Table::vanilla(2);
@@ -157,14 +157,104 @@ fn tomoe_savior_hands_the_deed_over_at_half_price() {
         "the deed is handed over: events {:?}",
         t.recent_keys(12)
     );
-    // 「支付常规收购价一半的价格」 -- half of 山吹面包房's 2000. The mortgager
-    // keeps their own 「抵押后[获得]地契购买价格50%的资金」 payout on top.
-    assert_eq!(t.money(0), 10_000 - 1_000, "paid 2000/2 = 1000");
+    // 「支付常规收购价一半的价格」 -- half of 山吹面包房's force-buy
+    // 2 * (2000 + 0 * 1000) = 4000, i.e. the 2000 land price with no houses.
+    // The mortgager keeps their own 「抵押后[获得]地契购买价格50%的资金」 payout
+    // on top.
+    assert_eq!(t.money(0), 10_000 - 2_000, "paid price + 0 houses = 2000");
     assert_eq!(
         t.money(1),
-        10_000 + 1_000 + 1_000,
+        10_000 + 1_000 + 2_000,
         "mortgage 50% + the sale: events {:?}",
         t.recent_keys(12)
+    );
+}
+
+// C-Q4(4a) regression: with houses standing, 「常规收购价一半」 is land +
+// houses, not land alone. 山吹面包房: price 2000, house cost 1000, two houses
+// -> force-buy 2 * (2000 + 2 * 1000) = 8000, half 4000.
+#[test]
+fn tomoe_savior_pays_land_plus_houses() {
+    let mut t = Table::vanilla(2);
+    t.set_character_raw(0, "宇田川巴");
+    let shop = tile("山吹面包房");
+    t.own(1, &[shop]);
+    t.set_houses(shop, 2);
+    t.set_money(0, 10_000);
+    t.set_money(1, 10_000);
+    t.give(0, &["AG:（巴）商店街的救世主"]);
+    t.begin_turn(1);
+    drain(&mut t);
+    t.mortgage(1, shop).unwrap();
+    assert!(
+        t.counteract_offered("AG:（巴）商店街的救世主"),
+        "{}",
+        t.dump_prompt()
+    );
+    t.counteract(0, "AG:（巴）商店街的救世主").unwrap();
+    drain(&mut t);
+    assert_eq!(
+        t.owner(shop),
+        Some(0),
+        "the deed is handed over: events {:?}",
+        t.recent_keys(12)
+    );
+    // 2000 + 2 * 1000 = 4000. The mortgager keeps the 1000 mortgage payout.
+    assert_eq!(t.money(0), 10_000 - 4_000, "paid land + houses");
+    assert_eq!(
+        t.money(1),
+        10_000 + 1_000 + 4_000,
+        "mortgage 50% + the sale: events {:?}",
+        t.recent_keys(12)
+    );
+}
+
+// The window is inclusive at the base: a buyer holding exactly land + houses
+// (4000) is offered the counter.
+#[test]
+fn tomoe_savior_window_opens_at_the_exact_base() {
+    let mut t = Table::vanilla(2);
+    t.set_character_raw(0, "宇田川巴");
+    let shop = tile("山吹面包房");
+    t.own(1, &[shop]);
+    t.set_houses(shop, 2);
+    t.set_money(0, 4_000);
+    t.set_money(1, 10_000);
+    t.give(0, &["AG:（巴）商店街的救世主"]);
+    t.begin_turn(1);
+    drain(&mut t);
+    t.mortgage(1, shop).unwrap();
+    assert_eq!(t.money(0), 4_000, "at exactly land + houses");
+    assert!(
+        t.counteract_offered("AG:（巴）商店街的救世主"),
+        "counter at exactly 4000: {}",
+        t.dump_prompt()
+    );
+}
+
+// The money window uses the same base: a buyer holding at least price/2
+// (1000) but below land + houses (4000) is not offered the counter -- the old
+// land-only reading would have offered it. (`owner` is the card's owner, i.e.
+// the payer.)
+#[test]
+fn tomoe_savior_window_needs_the_house_inclusive_base() {
+    let mut t = Table::vanilla(2);
+    t.set_character_raw(0, "宇田川巴");
+    let shop = tile("山吹面包房");
+    t.own(1, &[shop]);
+    t.set_houses(shop, 2);
+    t.set_money(0, 1_500);
+    t.set_money(1, 10_000);
+    t.give(0, &["AG:（巴）商店街的救世主"]);
+    t.begin_turn(1);
+    drain(&mut t);
+    t.mortgage(1, shop).unwrap();
+    assert!(t.money(0) >= 1_000, "at least price/2: {}", t.money(0));
+    assert!(t.money(0) < 4_000, "below land + houses: {}", t.money(0));
+    assert!(
+        !t.counteract_offered("AG:（巴）商店街的救世主"),
+        "no counter at 1500 < 4000: {}",
+        t.dump_prompt()
     );
 }
 
@@ -339,6 +429,42 @@ fn tomoe_savior_on_your_own_mortgage_pays_twice_and_unmortgages() {
         10_000 + 1_000 + 1_000,
         "two mortgage payouts (2000/2 each)"
     );
+}
+
+// The `actor == owner` short-circuit beats the money threshold: a broke P0 on
+// their own 商店街 mortgage still gets the window (base 4000, money 0), and
+// playing it charges no acquisition price while flipping the deed back.
+#[test]
+fn tomoe_savior_self_arm_ignores_the_money_threshold() {
+    let mut t = Table::vanilla(2);
+    t.set_character_raw(0, "宇田川巴");
+    let shop = tile("山吹面包房"); // price 2000, 2 houses -> base 4000
+    t.own(0, &[shop]);
+    t.set_houses(shop, 2);
+    t.set_money(0, -1_000); // the mortgage's own 1000 payout lands us at 0
+    t.give(0, &["AG:（巴）商店街的救世主"]);
+    t.begin_turn(0);
+    drain(&mut t);
+    t.mortgage(0, shop).unwrap();
+    // Broke at the decision point, far below the 4000 base.
+    assert_eq!(t.money(0), 0, "money at the window");
+    assert!(
+        t.counteract_offered("AG:（巴）商店街的救世主"),
+        "self arm ignores the threshold: {}",
+        t.dump_prompt()
+    );
+    t.counteract(0, "AG:（巴）商店街的救世主").unwrap();
+    drain(&mut t);
+    assert_eq!(
+        t.owner(shop),
+        Some(0),
+        "owner stays P0: {:?}",
+        t.recent_keys(12)
+    );
+    assert!(!t.mortgaged(shop), "the deed is flipped back");
+    // No 4000 acquisition price leaves the wallet; only the extra payout comes in.
+    assert_eq!(t.money(0), 1_000, "no acquisition price paid");
+    assert_eq!(t.houses(shop), 2, "houses stay");
 }
 
 // =====================================================================

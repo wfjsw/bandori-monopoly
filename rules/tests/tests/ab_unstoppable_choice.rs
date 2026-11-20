@@ -345,10 +345,7 @@ fn self_caused_teleport_does_not_prompt() {
             t.decline();
         }
         if saw_choice {
-            return Err(format!(
-                "self teleport prompted: {:?}",
-                t.recent_keys(20)
-            ));
+            return Err(format!("self teleport prompted: {:?}", t.recent_keys(20)));
         }
         if t.pos(0) != 24 {
             return Err(format!(
