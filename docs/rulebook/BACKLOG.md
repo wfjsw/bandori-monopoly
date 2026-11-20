@@ -656,36 +656,42 @@ A circle-tile case (remove every 育美标记 and gain 1,000 per mark 「经过�
 **C-Q36 (CRYSTAL-08, Ringing Bloom (3) X).**
 「X为你收费格上的房屋数」: the count after (2) 「视为」 raises it (engine now), or the real house count?
 
-Worked examples — P0 = 燐子, P1 charged. The rent is what (2) makes the
-charge read (the table at the counted houses, halved on a raised tile); (3)
-then pays 500·X. The readings diverge only on a raised tile and agree the
-moment the tile catches up with the max.
+Worked examples — P0 = 燐子, 10,000 funds, own main phase, hand holds the
+named cards; P1 is an opponent who reaches the charged tile by a normal move
+roll. Both named tiles are **P0's own** throughout (needed by (2)'s 「你的所有
+格子」 and (3)'s 「你的…格子」); no other effect is on the board. The rent is
+what (2) makes the charge read (the table at the counted houses, halved on a
+raised tile); (3) then pays 500·X. The readings diverge only on a raised tile
+and agree the moment the tile catches up with the max.
 
-**(a) raised empty tile.** P0 stands on 购物中心 and plays 羽丘的不可思议女孩
-three times (d20 ≥ 10 each: one free layer per play), leaving 购物中心 at 3 —
-the max. P0 then plays Ringing Bloom: (1) places it, (2) now reads 天文馆's 0
-as 3. P1 rolls and lands on 天文馆; the settle reads the table at 3 and halves
-it (5120/2 = 2560), then (3) fires. **At this point X is 3 as counted (+1500)
-or 0 as standing (+0 — the code's `if x > 0` pays nothing).**
+**(a) raised empty tile.** P0 owns 购物中心 (0 layers, cap 3) and 天文馆
+(0 layers) and stands on 购物中心. P0 plays 羽丘的不可思议女孩 three times
+(d20 ≥ 10 each: one free layer per play), leaving 购物中心 at 3 — the max.
+P0 then plays Ringing Bloom: (1) places it, (2) now reads 天文馆's 0 as 3.
+P1 rolls and lands on 天文馆; the settle reads the table at 3 and halves it
+(5120/2 = 2560), then (3) fires. **At this point X is 3 as counted (+1500) or
+0 as standing (+0 — the code's `if x > 0` pays nothing).**
 
-**(b) partial raise.** P0 had built 天文馆 to 2 with 羽丘, level with 购物中心
-2. P0 plays Ringing Bloom, then plays （PAREO）渐渐远去的你 and takes one layer
-off 天文馆 (2 → 1); the view recomputes and 天文馆, still under the max, stays
-raised. P1 lands on 天文馆: the table at 2, halved (2500/2 = 1250), (3) fires.
-**X is 2 as counted (+1000) or 1 as standing (+500).**
+**(b) partial raise.** P0 owns 购物中心 (2 layers) and 天文馆 (2 layers, both
+built earlier with 羽丘) and may be anywhere. P0 plays Ringing Bloom, then
+plays （PAREO）渐渐远去的你 and takes one layer off 天文馆 (2 → 1); the view
+recomputes and 天文馆, still under the max, stays raised. P1 lands on 天文馆:
+the table at 2, halved (2500/2 = 1250), (3) fires. **X is 2 as counted
+(+1000) or 1 as standing (+500).**
 
-**(c) caught-up tile.** P0 has 购物中心 2, 天文馆 1 and Ringing Bloom placed
-(天文馆 raised). P0 stands on 天文馆 and plays 羽丘的不可思议女孩 (d20 ≥ 10):
-天文馆 reaches 2, ties the max, `houseAdded` recomputes and clears its half.
-P1 lands on 天文馆: full rent 2500, (3) fires. **X is 2 either way (+1000);
-only the full-versus-halved rent differs.**
+**(c) caught-up tile.** P0 owns 购物中心 (2 layers) and 天文馆 (1 layer),
+Ringing Bloom is already on P0's field (天文馆 raised) and P0 stands on 天文馆
+holding 羽丘的不可思议女孩. P0 plays 羽丘 (d20 ≥ 10): 天文馆 reaches 2, ties
+the max, `houseAdded` recomputes and clears its half. P1 lands on 天文馆: full
+rent 2500, (3) fires. **X is 2 either way (+1000); only the
+full-versus-halved rent differs.**
 
-**(d) razed owned tile.** Another player goes bankrupt holding 购物中心 with
-3 layers; P0 answers with 轨迹 (反击/特), takes the deed, redeems it free and
-razes every layer — 购物中心 is P0's and empty. On P0's turn Ringing Bloom is
-placed: (2) reads 购物中心's 0 as 天文馆's 2. P1 lands on 购物中心: halved
-(3220/2 = 1610), (3) fires. **X is 2 as counted (+1000) or 0 as standing
-(+0).**
+**(d) razed owned tile.** P0 owns 天文馆 (2 layers, the max). Another player
+(P2) holds 购物中心 with 3 layers and goes bankrupt; P0 answers with 轨迹
+(反击/特), takes the deed, redeems it free and razes every layer — 购物中心 is
+now P0's and empty. On P0's next turn Ringing Bloom is placed: (2) reads
+购物中心's 0 as 天文馆's 2. P1 lands on 购物中心: halved (3220/2 = 1610),
+(3) fires. **X is 2 as counted (+1000) or 0 as standing (+0).**
 
 (a) and (d) are the ones that matter: under the standing read the card pays
 nothing on exactly the tiles (2) lifted, so (3) could never pay out on a tile
