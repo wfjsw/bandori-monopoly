@@ -981,13 +981,14 @@ impl Run {
     fn post_log_value(&mut self, kind: &str, player_id: i32, msg: Msg, card: &str, value: i32) {
         // A silent entry hides its presentation outright -- the per-step
         // bookkeeping case (`docs/CARDS.md` "Per-step hooks"): the effect
-        // still lands, only the line is dropped. `logged` stays put so the
-        // silent guard keeps reporting a body's own `ctx::log` (a silent entry
-        // must not use one) rather than the engine line it legitimately posted.
+        // still lands, only the line is dropped. The body's own `ctx::log`
+        // still counts as `logged`, so the silent guard keeps reporting it
+        // (a silent entry must not use one); the engine line it legitimately
+        // posted does not.
+        self.logged = self.logged.saturating_add(1);
         if self.silent_body {
             return;
         }
-        self.logged = self.logged.saturating_add(1);
         // Ruling 2a: the header goes just before the drive's first visible
         // outcome (this line).
         self.flush_header();
