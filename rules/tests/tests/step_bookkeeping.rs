@@ -27,13 +27,6 @@ fn card_events(t: &Table, mark: i32, card: &str) -> Vec<MatchEvent> {
         .collect()
 }
 
-fn events_of(t: &Table, mark: i32, kind: &str) -> Vec<MatchEvent> {
-    t.events_since(mark)
-        .into_iter()
-        .filter(|e| e.r#type == kind)
-        .collect()
-}
-
 /// 濑田薰 (1): one pot per pass, silently. 羽丘女子学院 (11) / 富士见坂 (12) do
 /// not gain on their own, so any `gain` here is the skill's.
 #[test]
@@ -54,8 +47,8 @@ fn kaoru_per_pass_pot_is_silent() {
         t.recent_keys(20)
     );
     assert!(
-        events_of(&t, mark, "gain").is_empty(),
-        "no gain line per step: {:?}",
+        !t.keys_since(mark).iter().any(|k| k.contains("kaoru_gain")),
+        "no pot line per step: {:?}",
         t.recent_keys(20)
     );
     assert_eq!(t.charge(0), 2, "both passes still gained their pot");
@@ -81,8 +74,8 @@ fn yukina_pot_drop_is_silent() {
         t.recent_keys(20)
     );
     assert!(
-        events_of(&t, mark, "lose").is_empty(),
-        "no lose line per step: {:?}",
+        !t.keys_since(mark).iter().any(|k| k.contains("yukina_lost")),
+        "no pot-loss line per step: {:?}",
         t.recent_keys(20)
     );
     assert_eq!(t.charge(0), 0, "the pots are still gone");

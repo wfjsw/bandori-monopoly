@@ -491,7 +491,13 @@ the same outcome repeats down the whole walk. Such an entry is silent.
 a kind of tile, that is applicability, not effect, and it belongs in the
 entry's `condition` (CEL over `tile.*`) or its residual guard -- never in a
 body-top `if … return`. An entry that a condition or guard already narrows past
-"every tile" keeps announcing and needs nothing:
+"every tile" keeps announcing and needs nothing. A guard is not narrowing just
+because it exists: `PPP:Tomorrow's Door` guards on the card's own tile, but the
+card hops one stop per step, so every step still matches and it stays silent.
+Nor is a silent entry wrong for being narrowed -- entries silenced before this
+rule (`RAS:追逐梦想的步伐`, `PPP:向着未来的路标`, `凑友希那`'s pass) stay as
+they are: a once-per-pass clause narrowed to one tile is still one line per
+walk if it fires, and silence costs nothing.
 
 ```rust
 // narrow: only this named tile -- announces on its own

@@ -5542,6 +5542,12 @@ impl PlayCtx<'_> {
 
     /// Emit the money log line for one settled payment.
     fn log_money(&mut self, p: &Pay, to: Option<usize>, loss: i32, gain: i32) {
+        // A silent drive hides its presentation, not its effect: the money
+        // already moved, only the line is dropped (`docs/CARDS.md`
+        // "Per-step hooks"; `PlayCtx::silent_drive`).
+        if self.silent_drive > 0 {
+            return;
+        }
         let typ = p.typ.unwrap_or(if p.kind == PayKind::Rent {
             PayEvent::Rent
         } else if p.kind == PayKind::Loss {

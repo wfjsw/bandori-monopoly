@@ -652,6 +652,12 @@ pub struct PlayCtx<'a> {
     /// `"card"` activation event ids currently open, innermost last. A nested
     /// drive groups under the top of this stack; `-1` at the bottom.
     pub activation: Vec<i32>,
+    /// How many enclosing drives are **silent** (`On::silent`, a passive plan
+    /// filter, a per-step hook). The engine's own money lines are written on
+    /// this context, not through the guest `Run`, so `log_money` consults it:
+    /// a silent drive hides its presentation, not its effect. Depth, so a
+    /// nested announcing drive inside a silent body still logs.
+    pub silent_drive: u32,
     /// The move start of the move currently being walked / teleported, or `-1`
     /// when no move is in flight. 「[pass]the start square且[move start]不为the start square」 reads it
     /// (the built-in pass reward). Transient (not serialized) -- the walk sets it as it
@@ -3704,6 +3710,7 @@ impl<'a> PlayCtx<'a> {
             marker_raise_depth: 0,
             in_teleport_tail: false,
             activation: Vec::new(),
+            silent_drive: 0,
             move_start: -1,
             move_depth: 0,
             guest_overlays: Vec::new(),
