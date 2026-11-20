@@ -276,11 +276,12 @@ fn pay_after(player_id: i32) -> card_sdk::Asked {
     if tile < 0 || ctx::is_deed(tile) {
         return Ok(());
     }
-    // 规则书（3）: 「X为你收费格上的房屋数」 -- the **counted** value (「视为」),
-    // i.e. what the rent table was read at, not the standing houses. A read of
-    // the standing houses makes X = 0 on the very tiles (2) lifted. Read before
-    // `set_dest`, while the card and its counted view are still live.
-    let x = ctx::rent_houses_of(tile);
+    // 规则书（3）: 「X为你收费格上的房屋数」 -- RULED 2026-11-20 (C-Q36): the
+    // **standing** houses, not the (2) 「视为」 count the rent was read at. A
+    // lifted empty tile is still 0 houses, so (3) pays 500·0 there; the rent
+    // keeps the counted read. Read before `set_dest` only so the log lands
+    // while the tile is still the trigger's.
+    let x = ctx::houses_of(tile);
     // The disarm is not repeated here: the leave crosses `zoneLeft`, which
     // clears the counted view and every half-charge for *all* removal routes.
     ctx::set_dest(ctx::Dest::Graveyard, card_sdk::abi::ZoneChangeCause::Effect);

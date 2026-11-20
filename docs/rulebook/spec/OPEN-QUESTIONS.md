@@ -138,13 +138,13 @@ CeilTo when another modifier stacks after it.
 * **Suggested question:** Does a colour override (「该格获得所有颜色」) make
   that tile belong to every colour group for the agent's half-charge set?
 
-### OPEN-视为房屋数 — 「房屋数视为…」 overrides
+### OPEN-视为房屋数 — ANSWERED 2026-11-20 (C-Q36) — 「房屋数视为…」 overrides
 
-* **Text:** vs counted house count (Ringing Bloom (3) X; TEST-FINDINGS §6.3).
-* **Depends on:** G-MONEY rent house count; G-SETTLE-10; r OPEN-RINGING-X.
-* **Suggested question:** Does an effect that says 「房屋数视为 N」 change
-  X / rent house-count reads to N (counted), or do those reads use the real
-  house count?
+* **Text:** vs counted house count (Ringing Bloom (3) X).
+* **Answer:** the **rent lookup** keeps the counted value — that is what the
+  「视为」 exists for — while an explicit X / amount formula reads the
+  **standing** count. Ringing Bloom (3) now reads `ctx::houses_of`; the rent
+  and its half-charge are unchanged.
 * **Worked card examples:** BACKLOG C-Q36 (a–d: raised empty tile, partial
   raise, caught-up tile, razed owned tile).
 
@@ -334,7 +334,7 @@ Grouped by band. Shared concepts (触发结算 / 分摊 / 场上 / 强制停下 
 | **OPEN-RING-BUILD** | card 「加盖一层房屋」 vs 「所有RiNG不可升级」 | 向着顶点-02 | Which text is live? |
 | **OPEN-STUDENT-REFUND** | 「本卡原应拿到的资金」 | 学生会的检查-07 | Refund amount? |
 | **OPEN-RING-MULT** | 「ring的价格基础乘数」 | louder | — |
-| **OPEN-RINGING-X** | X after 「视为」 | Ringing Bloom (3) | (see OPEN-视为房屋数) |
+| **OPEN-RINGING-X** | X after 「视为」 | Ringing Bloom (3) | **answered 2026-11-20: X = standing count** |
 | **OPEN-SAYO-TIMING** | 「时机合适时」 | 弹奏 skill | — |
 | **OPEN-R1** | Fire bird 1.5× stacking | fire-bird | Stack or replace? |
 | **OPEN-FIRE-X** | Fire bird 「X（自选）」 range | fire-bird | — |

@@ -81,8 +81,8 @@ Both resolve harnesses below are `VERIFICATION:- SUCCESSFUL`.
 | C-R-轨迹-01..03 | bankruptcy reveal / take deed / demolish | PROTOCOL-LEVEL | — | — | bankruptcy window is engine scheduling | — |
 | C-R-选择自己的舞台-01/02 | [反击] vs abnormal move | PROTOCOL-LEVEL | — | — | [反击] window + settle choice | OPEN-触发结算 |
 | C-R-Ringing Bloom-01 | place on own field | (pending) | — | — | — | — |
-| C-R-Ringing Bloom-02/03 | houses-as-if max, rent halved; discard + 500·X | PROTOCOL-LEVEL / OPEN | — | — | rent pipeline; X after 「视为」 | OPEN-RINGING-X |
-| C-R-弹奏-01/02 | [反击] 「时机合适时」 / as one skill use | OPEN / PROTOCOL-LEVEL | — | — | window set undefined; (2)/(3) is a player pick (C-Q6) | OPEN-SAYO-TIMING |
+| C-R-Ringing Bloom-02/03 | houses-as-if max, rent halved; discard + 500·X | PROTOCOL-LEVEL | — | — | rent pipeline | OPEN-RINGING-X answered (X = standing) |
+| C-R-弹奏-01/02 | [反击] 「时机合适时」 / as one skill use | OPEN / PROTOCOL-LEVEL | — | — | window set undefined; skill-press is multi-activation | OPEN-SAYO-TIMING |
 
 ## Skill clauses
 

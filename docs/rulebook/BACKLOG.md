@@ -653,8 +653,8 @@ A circle-tile case (remove every 育美标记 and gain 1,000 per mark 「经过�
 **C-Q35 (CRYSTAL-06, 薰 charge/decay).**
 「（充能3，衰减1）」 names the charge and the decay but never says what happens at 0 (every other crystal card says 「为0时置入弃牌堆」). Keep decay-out, or leave the spent card on the field?
 
-**C-Q36 (CRYSTAL-08, Ringing Bloom (3) X).**
-「X为你收费格上的房屋数」: the count after (2) 「视为」 raises it (engine now), or the real house count?
+**C-Q36 (CRYSTAL-08, Ringing Bloom (3) X). — RULED 2026-11-20: the real (standing) house count.**
+「X为你收费格上的房屋数」: the count after (2) 「视为」 raises it, or the real house count? **The real count.** The rent leg keeps the counted read (the table at the `RENT_HOUSES` view, halved on a raised tile); (3) alone reads the standing houses, so a lifted empty tile pays 500·0 and a partial raise pays per its real layer. Code: `ctx::houses_of` at `ringing_bloom.rs:284`; t10/t10b flipped, `t10c` pins the partial case; spec C-R-Ringing Bloom-03 updated.
 
 Worked examples — P0 = 燐子, 10,000 funds, own main phase, hand holds the
 named cards; P1 is an opponent who reaches the charged tile by a normal move
@@ -708,13 +708,14 @@ empty. On P0's next turn Ringing Bloom is placed: (2) reads 购物中心's 0 as
 the other side: the tile was never built by P0, it arrived empty, and the
 standing read still treats the card as paying on a 0-house tile.
 
-(a) and (d) are the ones that matter: under the standing read the card pays
-nothing on exactly the tiles (2) lifted, so (3) could never pay out on a tile
-it inflated. (c) is the agreement bound. The engine's live read is the counted
-value (`ringing_bloom.rs:283`, `ctx::rent_houses_of`); the same phrase
-「房屋数量」 is read as the standing count by 属于我的武士道！
-(`eve_bushido.rs:139`, `ctx::houses_of`) and as the counted value by 改变世界
-(`change_world.rs:120`) — both spellings already live in the tree.
+(a) and (d) are the split's extremes; (c) is where the readings agree. The
+ruling takes the standing column, so (3) pays nothing on a lifted empty tile —
+the rent it just collected still read the counted value and was halved for it.
+The code now reads `ctx::houses_of` (t10c pins the partial case); the rent side
+is unchanged. The same phrase 「房屋数量」 is read as the standing count by
+属于我的武士道！ (`eve_bushido.rs:139`) and as the counted value by 改变世界
+(`change_world.rs:120`) — the two spellings already live in the tree, so X
+joining the standing one is not a new convention.
 
 **C-Q37 (SKILL-10, misaki).**
 「下次经过"弦卷集团"前可将"弦卷集团"格子额外视为CiRCLE」: what does 「额外视为CiRCLE」 pay on top of the tile's own effect? And is the override per-player tile-kind (not colour)?

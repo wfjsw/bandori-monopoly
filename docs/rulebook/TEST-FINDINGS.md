@@ -506,10 +506,10 @@ rulings above.
    * The turn-end order (行动阶段 18 before 19) is already correct.
 3. **（燐子）Ringing Bloom (3) X.** Is 「X为你收费格上的房屋数」 the count after
    (2) 「视为」 raises it, or the real count?
-   * Engine now: the counted value, `prop::RENT_HOUSES`. `TODO(规则书)` in
-     the card. Read with the real count, X would be 0 on exactly the tiles
-     (2) raised. Test: `cross_tiles::t10_ringing_bloom` (green; pins the
-     counted value).
+   * **RULED 2026-11-20 (C-Q36): the real count.** The rent keeps the counted
+     read (and the raise's half); X alone reads `ctx::houses_of`, so a lifted
+     empty tile pays `500 * 0`. Tests: `cross_tiles` t10/t10b flipped, `t10c`
+     pins the partial case (1 real layer → 500, not 500×max).
 4. **Two halvings on one settle.** （香澄）大家我都喜欢哦 halves 「地租」 and
    祥，移动 halves 「支付价格」. Do they stack to ¼, or does the 支付阶段
    「支付减半/翻倍」 window apply once?

@@ -450,12 +450,12 @@ fn t10_ringing_bloom() {
         paid, expected,
         "R(天文馆,3)/2 — the inflated houses charge half"
     );
-    // (3): after charging a non-RiNG tile, +500*X with X = the charged tile's
-    // (treated) house count = 3.
+    // (3): 「X为你收费格上的房屋数」 -- RULED 2026-11-20 (C-Q36): the standing
+    // houses. t2 stands at 0, so X = 0 and the card pays nothing on it.
     assert_eq!(
         t.money(0),
-        10_000 + expected + 500 * 3,
-        "owner gets the halved rent + 500×X, X = 3"
+        10_000 + expected,
+        "owner gets the halved rent only, X = 0 standing houses"
     );
 }
 
@@ -494,6 +494,42 @@ fn t10b_ringing_bloom_tracks_a_later_build() {
     assert_eq!(
         paid, expected,
         "the 「视为」 max tracks a build past the snapshot (want R(天文馆,3)/2)"
+    );
+    // (3): the standing count is 0 on t2, so the payoff leg stays empty even
+    // though the rent was read at 3. P0 started at 30,000 and paid one build.
+    assert_eq!(
+        t.money(0),
+        30_000 - house_cost(t1) + expected,
+        "X = 0 standing houses"
+    );
+}
+
+/// 规则书 (3): 「X为你收费格上的房屋数」 -- RULED 2026-11-20 (C-Q36): the
+/// **standing** houses, not the (2) count the rent is read at. A lifted tile
+/// with one real layer pays 500, not 500×max.
+#[test]
+fn t10c_ringing_bloom_x_is_the_standing_count() {
+    let mut t = Table::vanilla(2);
+    t.set_character_raw(0, "白金燐子");
+    t.begin_turn(0);
+    let t1 = tile("购物中心");
+    let t2 = tile("天文馆");
+    t.own(0, &[t1, t2]);
+    t.set_houses(t1, 2);
+    t.set_houses(t2, 1);
+    t.give_play(0, "R:（燐子）Ringing Bloom").unwrap();
+    until_turn(&mut t, 1);
+    t.set_pos(1, t2 - 1);
+    t.dice(&[1]);
+    t.roll(1).unwrap();
+    drain(&mut t);
+    let expected = rent(t2, 2) / 2;
+    let paid = 10_000 - t.money(1);
+    assert_eq!(paid, expected, "the rent still reads the counted 2, halved");
+    assert_eq!(
+        t.money(0),
+        10_000 + expected + 500,
+        "X = 1 real layer, not the counted 2"
     );
 }
 

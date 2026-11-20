@@ -1542,7 +1542,8 @@ fn ringing_bloom_place_contract() {
 }
 
 /// Ringing Bloom (3): after a non-RiNG rent the card is discarded and the
-/// user gains 500*X (OPEN-RINGING-X: X is the rent tile's house count).
+/// user gains 500*X, X the rent tile's standing house count (C-Q36, ruled
+/// 2026-11-20).
 #[test]
 fn ringing_bloom_after_rent() {
     let mut t = Table::new(&["白金燐子", "户山香澄"]);
@@ -1615,15 +1616,16 @@ fn ringing_bloom_as_if_max_houses() {
     drain(&mut t);
     let gain = t.money(0) as i64 - money0 as i64;
     let loss = money1 as i64 - t.money(1) as i64;
-    // (3) fires on this non-RiNG rent too: +500*X with X the counted houses.
-    // gain = half-rent + 500*X; loss = half-rent. Pin the half-rent via loss.
+    // (3) fires on this non-RiNG rent too: +500*X with X the standing houses
+    // (RULED 2026-11-20, C-Q36). `low` stands at 0, so X = 0 and gain equals
+    // the half-rent; pin the half-rent via loss and gain == loss.
     assert_eq!(
         loss, 770,
         "raised tile charges half of the 2-house rent (1540/2); loss={loss}"
     );
-    assert!(
-        gain > loss,
-        "the 500*X leg is on top of the rent; gain={gain} loss={loss}"
+    assert_eq!(
+        gain, loss,
+        "X = 0 standing houses, so the 500*X leg adds nothing; gain={gain} loss={loss}"
     );
 }
 

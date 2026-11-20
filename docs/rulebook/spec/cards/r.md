@@ -793,9 +793,9 @@ prefix dropped).
 * **Effect:** for rent purposes every owned tile's house count reads as the
   user's maximum; tiles whose count this raised charge half rent.
 * **Frame:** rent amounts (not the printed `houses` values).
-* **Rulings & OPEN:** OPEN-RINGING-X (TEST-FINDINGS §6 #3) -- whether clause
-  (3)'s X is the raised or the real count. Clause 02's 「视为」 is a read;
-  the printed `houses` are not rewritten.
+* **Rulings & OPEN:** RULED 2026-11-20 (C-Q36): (3)'s X is the **real**
+  (standing) count; the rent keeps the counted read. Clause 02's 「视为」 is a
+  read; the printed `houses` are not rewritten.
 * **Executable:** `ringing_bloom_rent` (scenario).
 
 ### C-R-Ringing Bloom-03 -- after a non-RiNG rent: discard + 500·X
@@ -808,10 +808,10 @@ prefix dropped).
 * **Effect:** the card goes to the discard, then the user gains `500 * X`
   where X is the house count of the rent tile.
 * **Frame:** the user's field / discard / money.
-* **Rulings & OPEN:** OPEN-RINGING-X -- X after clause 02's 「视为」 or the
-  real count. Spec asserts the discard move and that the gain is `500 * X`
-  for the X the engine reports as the rent tile's house count (the counted
-  value, per the green pin in TEST-FINDINGS #3), and records the open.
+* **Rulings & OPEN:** RULED 2026-11-20 (C-Q36): X is the rent tile's **real**
+  (standing) house count, not the clause 02 count the rent was read at — a
+  lifted empty tile pays `500 * 0`. Spec asserts the discard move and the
+  `500 * X` gain on the standing count.
 * **Executable:** `ringing_bloom_pay`.
 
 ---
@@ -1198,7 +1198,7 @@ prefix dropped).
 | OPEN-RING-BUILD | 向着顶点-02 「为属于你的一个livehouse格子加盖一层房屋」 vs `rulebook-doc.md:157` 「所有RiNG不可升级」 | newer card text taken as live; conflict recorded. |
 | OPEN-STUDENT-REFUND | 学生会的检查-07 「本卡原应拿到的资金」 | undefined amount. |
 | OPEN-RING-MULT | louder 「ring的价格基础乘数」 | not defined in the book. |
-| OPEN-RINGING-X | Ringing Bloom (3) X after (2)'s 「视为」 | TEST-FINDINGS §6 #3 still open. |
+| OPEN-RINGING-X | Ringing Bloom (3) X after (2)'s 「视为」 | **answered 2026-11-20: the standing count (`houses_of`); rent keeps the counted read.** |
 | OPEN-SAYO-TIMING | 弹奏 「时机合适时」 | undefined window. |
 | OPEN-R1 | Fire bird 1.5× stacking | TEST-FINDINGS §6 R-1. |
 | OPEN-ROUND10 | rounding of 1.5× and 20% | book does not say; integer cases pinned. |
