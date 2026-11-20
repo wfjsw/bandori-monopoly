@@ -21,14 +21,16 @@ pub const HABINEL: CardDef = CardDef::new("event:前往哈比内尔王国旅游"
 /// 规则书: 「每名玩家回合开始时移除1层[除外]，结束后传送到微笑号（不触发场地效果）」
 /// -- the engine's normal exile tick already is that clause: at the owner's
 /// turn start `EXILE` loses a layer, and on the last layer the return teleport
-/// goes to `exile_to` with no settle (`play.rs` exile tick). No extra body is
-/// needed -- `give_exile(p, x, smile)` stores both numbers.
+/// goes to `exile_to` (`rules/status/src/exile.rs`). 「结束后」 is the end of
+/// the [除外], not the end of this card (C-Q38); `send_bare` carries the
+/// 「不触发场地效果」 rider so the landing does not settle.
 fn play(_player_id: i32) -> card_sdk::Asked {
     let smile = ctx::tile_named("微笑号");
     for p in all_players() {
         let x = roll(p, 1, 2)?;
-        // 规则书: 「结束后传送到微笑号」 -- the return tile is `exile_to`.
-        rules_status::exile::send(p, x, smile);
+        // 规则书: 「结束后传送到微笑号」 -- the return tile is `exile_to`, and
+        // 「不触发场地效果」 keeps the return landing bare.
+        rules_status::exile::send_bare(p, x, smile);
         ctx::log(
             p,
             &Msg::new("log.event.habinel_exile")

@@ -72,7 +72,10 @@ A **generic move gate**, not a marker of its own. Stay / stun / exile all
 
 * layered counter; wear-off **one layer at the owner's turn start** (before
   `turnStart`); the return [传送] is written as `exileTo`, and
-  「视为当回合的主要移动」 is `exileMain` (MyGO:无路矢);
+  「视为当回合的主要移动」 is `exileMain` (MyGO:无路矢); `exileBare`
+  keeps the return landing bare (「不触发场地效果」, 前往哈比内尔王国旅游);
+  the return fires at the tick that zeroes the layer -- never at the grant
+  (C-Q38);
 * gates: move / act / receive-payment / **on-board** (「棋子不失为存在于任何
   格子上」 -- `present_from` / `players_on` skip exiled seats) / targeted
   (「不能被[指定]」);

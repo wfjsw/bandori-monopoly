@@ -674,8 +674,15 @@ A circle-tile case (remove every 育美标记 and gain 1,000 per mark 「经过�
 **C-Q37 (SKILL-10, misaki).**
 「下次经过"弦卷集团"前可将"弦卷集团"格子额外视为CiRCLE」: what does 「额外视为CiRCLE」 pay on top of the tile's own effect? And is the override per-player tile-kind (not colour)?
 
-**C-Q38 (EVENT-01, habinel).**
-「结束后传送到微笑号」: is the teleport immediate, or only after the [除外] wears off?
+**C-Q38 (EVENT-01, habinel) — ruled 2026-11-20: after the [除外] wears off.**
+「结束后传送到微笑号」: the return is the status's own end-of-exile clause, not
+part of the event body. rules.txt 50 already fixes the moment -- 「获得该状态的
+效果会写明状态结束后在玩家回合开始时要[传送]到的格子」 -- and an immediate
+teleport would leave `exileTo` with nothing left to do. The teleport therefore
+fires in the exile turn-start tick at the start where the last layer peels, and
+the 「不触发场地效果」 rider keeps the landing bare (`send_bare` / `exileBare`;
+`rules/status/src/exile.rs`). Pinned by `habinel_teleports_to_smile_ship` and
+`habinel_return_does_not_settle_smile_ship`.
 
 **C-Q39 (EVENT-02, asukayama).**
 「所有玩家[传送]到飞鸟山公园。然后抽到此卡的玩家移动1d20」 — is the walk also settle-free? (Engine now: settle-on-land.)

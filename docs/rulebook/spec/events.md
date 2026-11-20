@@ -179,15 +179,21 @@ A discrepancy is a plain failing test. No `#[ignore]`.
 * **Frame:** that player's `state:P*:exile`.
 * **Executable:** `habinel_exile_ticks_away_at_turn_start`.
 
-### E-habinel-03 (OPEN)
+### E-habinel-03
 
 * **ID:** `E-habinel-03`
 * **Quote:** 「结束后传送到微笑号（不触发场地效果）」
-* **Status:** **OPEN-habinel-end** -- 「结束后」 is not bound (after the event
-  body? after the exile countdown?). The destination 微笑号 and the
-  「不触发场地效果」 rider are determined; the timing is not. Specified only
-  as: whenever the teleport fires, it is a bare [传送] to 微笑号.
-* **Executable:** not scripted (timing gap).
+* **Trigger:** the turn start where the player's last [除外] layer peels.
+* **Effect:** that player [传送]s to 微笑号, without settling the landing.
+* **Frame:** that player's `pos:`.
+* **Status:** ruled 2026-11-20 (C-Q38, closes **OPEN-habinel-end**) --
+  「结束后」 is the end of the [除外], not the end of the event body. rules.txt
+  50 already fixes the moment (「状态结束后在玩家回合开始时」), and an immediate
+  teleport would leave `exileTo` with nothing to do. The 「不触发场地效果」
+  rider is carried by `exileBare` (`send_bare`); the return therefore
+  never offers the 3000 price-3000 property at 微笑号.
+* **Executable:** `habinel_teleports_to_smile_ship`,
+  `habinel_return_does_not_settle_smile_ship`.
 
 ---
 
@@ -816,7 +822,7 @@ School tiles come from the table in `rules/events/src/school_time.rs` (fallback 
 | OPEN-duobang-tie | 对邦 multi highest/lowest | 「所有…最高者从所有…最低者」; split among the extremes unspecified |
 | OPEN-estate-tie | 弦卷集团地产开发 equal high bids | tie-break unspecified |
 | OPEN-estate-empty | 「（如果有）」 | no purchasable tile ⇒ no-op only |
-| OPEN-habinel-end | 哈比内尔 「结束后」 | teleport timing unbound |
+| ~~OPEN-habinel-end~~ | 哈比内尔 「结束后」 | closed 2026-11-20 (C-Q38): fires at the exile end, bare |
 | OPEN-分摊 | 分摊 | undefined; only the 1000 total is pinned (前场队) |
 | OPEN-触发结算 | [触发结算] | undefined in the book body (协助CiRCLE重建, 火种) |
 | OPEN-tears-colour | 同色地契 | multi-colour overlap unspecified |

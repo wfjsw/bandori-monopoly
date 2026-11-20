@@ -98,6 +98,8 @@ pub mod state_key {
     pub const EXILE_MAIN: &str = "exileMain";
     /// Duration grant (「获得[除外]直至X」) marker.
     pub const EXILE_HOLD: &str = "exileHold";
+    /// 「不触发场地效果」 -- the return teleport lands bare (default: it settles).
+    pub const EXILE_BARE: &str = "exileBare";
     /// Layers of "may hold no hand cards".
     pub const NO_HAND: &str = "noHand";
     /// Layers of "cannot be stopped".

@@ -277,7 +277,7 @@ pub mod exile {
     /// player gains no new layer. [不可阻挡] 「无法获得新的[除外]层数」
     /// (`data/rules.txt` 51, STA-01): the same. A counteraction that cancels the
     /// abnormal window writes no markers.
-    fn grant(player_id: i32, n_layers: i32, to: i32, hold: bool) -> bool {
+    fn grant(player_id: i32, n_layers: i32, to: i32, hold: bool, settle: bool) -> bool {
         if get(player_id) > 0 {
             return false;
         }
@@ -301,17 +301,34 @@ pub mod exile {
         state::set(player_id, state_key::EXILE_TO, to);
         state::set_flags(player_id, state_key::EXILE_HOLD, LAYER_FLAGS);
         state::set(player_id, state_key::EXILE_HOLD, if hold { 1 } else { 0 });
+        // 「不触发场地效果」 rider, judged when the return teleport fires
+        // (the granting effect decides; the status owns only the storage).
+        // Absent key = settle, so hand-seeded state keeps the ordinary shape.
+        state::set_flags(player_id, state_key::EXILE_BARE, LAYER_FLAGS);
+        state::set(player_id, state_key::EXILE_BARE, if settle { 0 } else { 1 });
         ctx::raise_after(player_id, RAISE_EXILE, 1);
         log_grant(source_of(player_id), player_id, RAISE_EXILE);
         true
     }
 
-    /// Give `n` [除外] layers; `to` is the return tile (-1 = none).
-    /// Layered grants (「获得N层[除外]」) use this and still tick per turn start.
-    /// Negative `n` is a removal (「移除一层[除外]」) and always applies.
+    /// Give `n` [除外] layers; `to` is the return tile (-1 = none). The return
+    /// teleport [结算]s the landing tile (a main-move landing, e.g. MyGO:无路矢
+    /// 「视为当回合的主要移动」). Layered grants (「获得N层[除外]」) use this and
+    /// still tick per turn start. Negative `n` is a removal (「移除一层[除外]」)
+    /// and always applies.
     pub fn send(player_id: i32, n: i32, to: i32) {
+        send_grant(player_id, n, to, true)
+    }
+
+    /// Same as [`send`], but the return teleport is bare -- the granting text
+    /// says 「不触发场地效果」 (前往哈比内尔王国旅游).
+    pub fn send_bare(player_id: i32, n: i32, to: i32) {
+        send_grant(player_id, n, to, false)
+    }
+
+    fn send_grant(player_id: i32, n: i32, to: i32, settle: bool) {
         if n > 0 {
-            grant(player_id, n, to, false);
+            grant(player_id, n, to, false, settle);
             return;
         }
         if n < 0 {
@@ -328,7 +345,7 @@ pub mod exile {
     /// effect ends it. The turn-start layer tick does not peel it (`exileHold`);
     /// call [`clear`] when the `until` clause fires.
     pub fn hold(player_id: i32, to: i32) {
-        grant(player_id, 1, to, true);
+        grant(player_id, 1, to, true, true);
     }
 
     /// [除外] layers on the player.
@@ -358,6 +375,8 @@ pub mod exile {
         state::set(player_id, state_key::EXILE_MAIN, 0);
         state::set_flags(player_id, state_key::EXILE_HOLD, LAYER_FLAGS);
         state::set(player_id, state_key::EXILE_HOLD, 0);
+        state::set_flags(player_id, state_key::EXILE_BARE, LAYER_FLAGS);
+        state::set(player_id, state_key::EXILE_BARE, 0);
     }
 
     /// [除外]'s contribution to the generic move gate.

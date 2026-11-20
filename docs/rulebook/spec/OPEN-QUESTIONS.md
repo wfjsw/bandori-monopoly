@@ -195,7 +195,7 @@ CeilTo when another modifier stacks after it.
 | **OPEN-duobang-tie** | 对邦 multi highest/lowest split among extremes | E-duobang-01..02 | If several players share the highest (or lowest) roll, is the money split among all of them equally? |
 | **OPEN-estate-tie** | 弦卷集团地产开发 equal high bids | E-estate-01..03 | If two players bid the same highest amount, is the deed awarded to the earlier seat in turn order? |
 | **OPEN-estate-empty** | 「（如果有）」 no purchasable tile ⇒ no-op only | E-estate-02 | If there is no purchasable tile, does 弦卷集团地产开发 do nothing (no other effect)? |
-| **OPEN-habinel-end** | 哈比内尔 「结束后」 teleport timing unbound | E-habinel-03 | Does 「结束后」 mean immediately after the event body (not after the exile countdown)? |
+| ~~**OPEN-habinel-end**~~ | closed 2026-11-20 (C-Q38): the return fires when the [除外] ends, at the owner's turn start (`exileBare` keeps it bare) | E-habinel-03 | — |
 | **OPEN-tears-colour** | 泪水的含义 同色地契 multi-colour overlap | E-tears-01..02 | If a deed is in more than one colour group, does it count as same-colour for both players' checks? |
 | **OPEN-kizuna-song** | 「卡名为歌名的卡」 not defined | E-kizuna-01 | Is a card a 「卡名为歌名的卡」 when its printed name is exactly a song title (no other words)? |
 | **OPEN-chart-rush-or** | 「2000资金或抽一张卡」 chooser unspecified | E-chart-rush-02 | Does the ranked player choose whether to take 2000 funds or draw a card? |

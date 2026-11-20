@@ -394,16 +394,42 @@ fn habinel_exile_ticks_away_at_turn_start() {
     assert_eq!(t.state(0, "exile"), 0, "P0's start removes the last");
 }
 
-// The 「结束后传送到微笑号」 half: the text does not say whether the teleport
-// is immediate (after this card's other effects) or waits until the [除外]
-// wears off. Either reading is consistent with the sentence.
+// The 「结束后传送到微笑号」 half. RULED C-Q38 (OPEN-habinel-end): 「结束后」
+// is the end of the [除外], not the end of this card -- rules.txt 50 already
+// fixes the moment as 「状态结束后在玩家回合开始时」, and an immediate teleport
+// would leave `exileTo` with nothing to do. The return keeps the
+// 「不触发场地效果」 rider, so 微笑号 (a price-3000 property) is not offered.
 #[test]
-#[ignore = "RULING: 前往哈比内尔王国旅游 「结束后传送到微笑号」 -- is the teleport immediate, or only after the [除外] wears off?"]
 fn habinel_teleports_to_smile_ship() {
     let mut t = Table::vanilla(2);
     draw_event_quiet(&mut t, 0, "前往哈比内尔王国旅游", &[1, 1]);
-    assert_eq!(t.pos(0), tile("微笑号"), "teleported to 微笑号");
-    assert_eq!(t.pos(1), tile("微笑号"));
+    let start = t.pos(0);
+    assert_eq!(t.pos(0), start, "no immediate teleport: {}", t.pos(0));
+    assert_eq!(t.state(0, "exileTo"), tile("微笑号") as i32, "aimed at 微笑号");
+    // P1's start peels P1's only layer: P1 returns bare.
+    until_turn(&mut t, 1);
+    assert_eq!(t.pos(1), tile("微笑号"), "P1 returned at the exile end");
+    assert_eq!(t.pos(0), start, "P0 still exiled: {}", t.pos(0));
+    // P0's own start peels the last layer too.
+    until_turn(&mut t, 0);
+    assert_eq!(t.pos(0), tile("微笑号"), "P0 returned at the exile end");
+    assert_eq!(t.state(0, "exile"), 0);
+}
+
+#[test]
+fn habinel_return_does_not_settle_smile_ship() {
+    let mut t = Table::vanilla(2);
+    draw_event_quiet(&mut t, 0, "前往哈比内尔王国旅游", &[1, 1]);
+    until_turn(&mut t, 1);
+    until_turn(&mut t, 0);
+    assert_eq!(t.pos(0), tile("微笑号"));
+    assert!(
+        t.prompt().is_none(),
+        "「不触发场地效果」: no buy offer on the return: {}",
+        t.dump_prompt()
+    );
+    assert_eq!(t.owner(tile("微笑号")), None, "no free buy");
+    assert_eq!(t.money(0), 10_000, "no rent, no charge");
 }
 
 // =====================================================================

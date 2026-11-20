@@ -971,8 +971,9 @@ pub fn ex_quest_01_rolls_and_files() {
 // 「每个玩家获得X层[除外]…X=1d2（每个玩家独立投掷1d2）」
 // tile_named(微笑号) = 26 — `exile_to` is that board index (class C fixed).
 // E-habinel-02 turn-start tick = engine status machinery → PROTOCOL-LEVEL.
-// E-habinel-03 「结束后」 timing is OPEN-habinel-end; the return is stored on
-// the exile grant, not an immediate teleport.
+// E-habinel-03 「结束后」 ruled C-Q38: the return fires when the [除外] ends
+// (the owner's turn start), so it is stored on the exile grant, not fired
+// immediately; `exileBare` keeps the landing bare (「不触发场地效果」).
 // ===========================================================================
 
 /// Board index of 「微笑号」.
@@ -2310,7 +2311,7 @@ pub fn asukayama_02_status_spread_blocked_neighbor() {
 // E-lulu-02                PROVEN
 // E-habinel-01             PROVEN (GiveExile n∈1..=2, to=微笑号 tile 26)
 // E-habinel-02             PROTOCOL-LEVEL (engine status tick)
-// E-habinel-03             OPEN-habinel-end (return is stored on the exile grant)
+// E-habinel-03             RULED C-Q38 (fires at the exile end, bare `exileBare`)
 // E-this-hand-01/02/03     PROTOCOL-LEVEL (run_planned_move stub)
 // E-pico-swap-01/02        PROVEN
 // E-circle-rebuild-01      PROVEN (keep + 5 crystals)

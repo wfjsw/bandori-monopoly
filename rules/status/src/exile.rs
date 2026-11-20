@@ -24,7 +24,9 @@
 //!   runs at `turnStartBefore`, **before** `turnStart` (`docs/STATUS-HOSTS.md`
 //!   §4). One layer per start; if layers remain the turn is auto-skipped
 //!   (`log.exiled_skip` + `end_turn_now`); at 0 the return [传送] runs
-//!   (`log.exile_over`) using `exileTo`.
+//!   (`log.exile_over`) using `exileTo` -- **then**, never at the grant
+//!   (C-Q38). `exileBare` carries the granting effect's 「不触发场地效果」
+//!   rider for that landing.
 //! * **Duration grants (「获得[除外]直至X」)** (user ruling 2026-10-18,
 //!   `docs/rulebook/spec/global/status.md` G-STATUS-07) -- a continuous exile
 //!   whose expiry is the `until` clause, not the turn-start layer tick.
@@ -152,12 +154,17 @@ fn on_turn_start_before(_owner: i32) -> card_sdk::Asked {
         return Ok(());
     }
     // Ticked out: 「状态结束后在玩家回合开始时传送」 + `exileMain`.
+    // The teleport fires HERE, at the start where the last layer peels -- not
+    // at the grant (C-Q38 / OPEN-habinel-end): 「结束后」 is the end of the
+    // status, and rules.txt 50 fixes the moment as 「状态结束后在玩家回合开始时」.
     let to = ctx::state::get(p, KEY_TO);
     let as_main = ctx::state::get(p, KEY_MAIN) != 0;
+    let settles = ctx::state::get(p, KEY_BARE) == 0;
     // Drop every marker so nothing stale survives into the next acquisition.
     ctx::state::set(p, KEY_TO, -1);
     ctx::state::set(p, KEY_MAIN, 0);
     ctx::state::set(p, KEY_HOLD, 0);
+    ctx::state::set(p, KEY_BARE, 0);
     ctx::log_as(
         p,
         "status",
@@ -165,13 +172,13 @@ fn on_turn_start_before(_owner: i32) -> card_sdk::Asked {
     );
     if to >= 0 {
         // No abnormal window: the return is this status's own clause.
-        // 规则书（视为当回合的主要移动）: 主要移动的落点照常[结算] -- the return
-        // lands with `resolve = true`, so the landed tile settles as any
-        // main-move landing does (the card has no 「不进行结算」).
+        // Whether the landing [结算]s is the granting effect's own rider:
+        // 主要移动的落点照常[结算] (MyGO:无路矢 「视为当回合的主要移动」), while
+        // 「不触发场地效果」 (前往哈比内尔王国旅游) sets `exileBare`.
         // TODO(规则书)（视为当回合的主要移动）: C-Q21 / MOVE-07 may instead rule
         //   the immediate-`offer_buy` shape; if so this settle becomes the later
         //   half and the offer moves here.
-        ctx::teleport_as(p, to, /* resolve */ true, as_main);
+        ctx::teleport_as(p, to, /* resolve */ settles, as_main);
     }
     Ok(())
 }
@@ -190,9 +197,12 @@ pub const KEY_MAIN: &str = "exileMain";
 /// Duration grant (「获得[除外]直至X」) marker. While set, the turn-start
 /// layer tick does not peel [除外].
 pub const KEY_HOLD: &str = "exileHold";
+/// 「不触发场地效果」 -- the return [传送] lands bare (0/absent = it settles).
+pub const KEY_BARE: &str = "exileBare";
 
 pub use bandori_std::status::exile::{
     blocks_act, blocks_move, blocks_on_board, blocks_pay, blocks_targeted, clear, get, hold, send,
+    send_bare,
 };
 
 //
