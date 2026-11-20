@@ -1336,8 +1336,9 @@ Six ignored DISCREPANCY tests un-ignored and green. Root causes split
   「[停留]=无法移动」 is rulebook. `give_stay` / `give_exile` now maintain
   the `skip_move` latch as a consequence of the state (set on gain, clear when
   the last layer drops and no [除外] holds the move); [不可阻挡] 「无视已存在
-  的[停留]」 keeps the walk legal. C-Q7's *mid-walk* half (stay gained after
-  the roll) is unchanged. Green twins that moved after a stay grant
+  的[停留]」 keeps the walk legal. C-Q7's *mid-walk* half (a stay gained after
+  the roll) was ruled 2026-11-20: the walk stops at the square the layer landed
+  on and a main move's settle is withheld to that turn's end (`midturn_stay.rs`). Green twins that moved after a stay grant
   (`rain_extra_settle_at_turn_end`, `rain_day_drains_one_crystal_per_turn_end`,
   `g15_parking_space_…`) now use [不可阻挡] or skip the roll.
 * **A + D, `m28b_my_own_problem_after_forced_move` (MOVE-11):** 「（2）若受到

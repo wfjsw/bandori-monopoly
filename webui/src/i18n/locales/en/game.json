@@ -498,6 +498,7 @@
   "log.state.unstoppable": "[Unstoppable]",
   "log.play_immune": "\"{{card}}\" is unaffected by other effects",
   "log.stay_skip": "{{who}} is [Staying] -- cannot move this turn",
+  "log.stay_stop": "{{who}} is [Staying] -- the move stops here",
   "log.stunned_skip": "{{who}} is [Stunned] -- skipping operations and movement",
   "log.unstoppable_skip": "{{who}} is [Unstoppable] -- the abnormal move is ignored",
   "log.target_redirected": "「{{card}}」's target changes from {{from}} to {{to}}",

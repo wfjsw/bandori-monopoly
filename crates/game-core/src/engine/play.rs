@@ -2171,6 +2171,16 @@ impl PlayCtx<'_> {
         r
     }
 
+    /// C-Q7 (MOVE-05): is the move gate **closed** for `i` right now? The walk
+    /// asks this at every step boundary so a [停留] (or [晕眩] / [除外]) that
+    /// landed mid-walk ends the move there. `moveExempt` and [不可阻挡] keep it
+    /// open -- the ruleset owns the condition (`status:stay`'s CEL filter), the
+    /// engine never names a status.
+    fn move_gate_closed(&self, i: usize) -> bool {
+        self.w.st.players[i].state_get(key::MOVE_EXEMPT) == 0
+            && !self.w.gate_open(self.rules, super::Gate::Move, i)
+    }
+
     fn walk_inner_depth(&mut self, m: &mut Move) -> Flow<()> {
         let i = m.player_id;
         let n = self.data.tiles.len() as i32;
@@ -2409,6 +2419,31 @@ impl PlayCtx<'_> {
             }
             if m.stop_at == Some(Tile(next)) {
                 m.stopped = true;
+                break;
+            }
+            // C-Q7 (MOVE-05, user ruling 2026-11-20): a [停留] that lands
+            // *during* a walk applies at once -- the move's endpoint becomes the
+            // square the mover stands on (glossary 47 「[移动终点]视为当前所在
+            // 格子且不[结算]」). Only a main move withholds its settle (the
+            // clause scopes that to 主要移动); the withheld settle runs at the
+            // turn end like any blocked move, and the layer wears off there
+            // (rules.txt 48), so it never costs the next turn as well.
+            // [不可阻挡] / `moveExempt` keep the gate open; the ruleset owns
+            // the condition.
+            if remaining > 0 && self.move_gate_closed(i) {
+                m.stopped = true;
+                if m.is_main_move && m.settles {
+                    m.settles = false;
+                    use super::world::SettleAnswer;
+                    if self.w.blocked_settle_answer(i) == SettleAnswer::Unanswered {
+                        self.w.set_blocked_settle_answer(i, SettleAnswer::Settle);
+                    }
+                }
+                self.w.log(
+                    "status",
+                    i as i32,
+                    Msg::new("log.stay_stop").player_id("who", i),
+                );
                 break;
             }
             k += 1;

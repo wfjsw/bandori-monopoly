@@ -51,6 +51,12 @@ A **generic move gate**, not a marker of its own. Stay / stun / exile all
 * dropping the last layer (with no [除外] holding the move) un-latches the
   turn's `skip_move` -- done by the host's count-changed handler, **not** by
   the grant site (memory: *state clauses belong on events*).
+* **a layer that lands mid-walk applies at once** (C-Q7, user ruling
+  2026-11-20): the walk's next step boundary sees the closed gate and stops
+  there -- the move's endpoint is the square the mover stands on (glossary 47
+  「[移动终点]视为当前所在格子且不[结算]」), a main move withholds its settle to
+  the turn end, and the layer wears off at that same turn end, so it never
+  costs the next turn too (`play.rs::walk_inner_depth`, `move_gate_closed`).
 
 ### [晕眩] (`data/rules.txt` 49)
 
