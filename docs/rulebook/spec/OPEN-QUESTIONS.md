@@ -145,6 +145,8 @@ CeilTo when another modifier stacks after it.
 * **Suggested question:** Does an effect that says 「房屋数视为 N」 change
   X / rent house-count reads to N (counted), or do those reads use the real
   house count?
+* **Worked card examples:** BACKLOG C-Q36 (a–d: raised empty tile, partial
+  raise, caught-up tile, razed owned tile).
 
 ---
 

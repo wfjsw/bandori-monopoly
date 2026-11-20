@@ -656,6 +656,27 @@ A circle-tile case (remove every 育美标记 and gain 1,000 per mark 「经过�
 **C-Q36 (CRYSTAL-08, Ringing Bloom (3) X).**
 「X为你收费格上的房屋数」: the count after (2) 「视为」 raises it (engine now), or the real house count?
 
+Worked examples — P0 = 燐子 with the card placed, P1 charged on P0's tile. The
+rent column is what (2) makes the charge read (the table at the counted houses,
+halved on a raised tile); (3) then pays 500·X. The two readings diverge only on
+a raised tile, and agree the moment the tile catches up with the max.
+
+| # | Board when P1 lands | Charged tile | Rent collected | X as counted | X as standing |
+|---|---|---|---|---|---|
+| a | 天文馆 0; 购物中心 3 (the max, built with 羽丘的不可思议女孩 ×3) | 天文馆 | 5120/2 | 3 → owner +1500 | 0 → owner +0 |
+| b | 天文馆 1 (was 2, cut by （PAREO）渐渐远去的你); 购物中心 2 (the max) | 天文馆 | 2500/2 | 2 → +1000 | 1 → +500 |
+| c | 天文馆 2; 购物中心 2 — the 天文馆 caught up (a second 羽丘的不可思议女孩 layer), no longer raised | 天文馆 | 2500 (full) | 2 → +1000 | 2 → +1000 |
+| d | 购物中心 0 (taken with 轨迹, which razes it); 天文馆 2 (the max) | 购物中心 | 3220/2 | 2 → +1000 | 0 → +0 |
+
+Case (a) is the one that matters most: under the standing read the card pays
+nothing on exactly the tiles (2) lifted, so (3) could never pay out on a tile
+it inflated. Case (c) is the agreement bound (X is the same, only the full
+versus halved rent differs). The engine's live read is the counted column
+(`ringing_bloom.rs:283`, `ctx::rent_houses_of`); the same phrase 「房屋数量」
+is read as the standing count by 属于我的武士道！ (`eve_bushido.rs:139`,
+`ctx::houses_of`) and as the counted value by 改变世界
+(`change_world.rs:120`) — both spellings already live in the tree.
+
 **C-Q37 (SKILL-10, misaki).**
 「下次经过"弦卷集团"前可将"弦卷集团"格子额外视为CiRCLE」: what does 「额外视为CiRCLE」 pay on top of the tile's own effect? And is the override per-player tile-kind (not colour)?
 
