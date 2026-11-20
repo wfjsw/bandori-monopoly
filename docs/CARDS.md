@@ -460,6 +460,28 @@ Path: `On::silent` → `ManifestOn::presentation` (ABI v53) →
 `announce_drive` skips the `"card"` post and the 「效果适用」 header; the body
 runs the full category → condition → guard layering unchanged.
 
+### Plan-pass filters are bookkeeping (`On::Filter(Filter::DiceRollPlan(..))`)
+
+A passive movement change -- the dice table, the direction, the roller, a plan
+teleport -- is a **filter**: it runs while the move is being planned, never
+prompts, and has no outcome of its own (the walk it shapes logs itself). The
+host therefore presents a plan-filter drive like a silent entry, whether or not
+the card wrote `.silent()`: no `"card"` event, no 「效果适用」 header, no flash
+(so `Flash::Always` is moot on it), and `plan.*` host outcomes
+(`log.outcome.plan_dice` / `_steps` / `_direction` / …) are not posted. Bodies
+stay pure enough for the silent guard: write the plan, not a `ctx::log`.
+
+This is not an abnormal movement effect either: 异常移动 (glossary 14) is what
+the `abnormal` gate and counter describe -- a received [传送] / [强制移动] /
+[强制停下] / 反方向移动 settling on a seat -- and a passive plan reshape raises
+none of it, not even `abnormalHit` for its reverse.
+
+An **`On::Action(Action::DiceRollPlan(..))`** entry at the same kind is the
+opposite case: an offer or an armed activation consumed at the plan pass (the
+G05 plan offer, 雨中祈晴's armed teleport). It announces, prompts and flashes
+as any Action does; only its own body's `plan.*` writes ride the activation
+header.
+
 ## Flash policy (`On::flash`, ABI v55)
 
 Beside the header mode (Visible / Silent / QuietWhenEmpty), each entry carries

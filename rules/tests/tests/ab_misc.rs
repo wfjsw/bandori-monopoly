@@ -143,40 +143,31 @@ fn kaoru_marked_walk(t: &mut Table) {
     drain(t);
 }
 
-// 规则书: 「主要移动改为投掷1d2（前后）和1d10（距离）进行结算」 -- the
-// direction is its own d2 (W3-KAORU-02), rolled by the host from the world RNG
-// and logged as a face; no face outside 1/2 may occur, and over a sample both do.
+// 规则书: 「主要移动改为投掷1d2（前后）和1d10（距离）进行结算」 -- the plan is
+// one 1d10 of distance aimed by the direction die, never the default 1d20. A
+// passive plan reshape posts no outcome line any more, so the sweep reads the
+// walk: it is always 1..10 steps and both directions occur (the two loaded-face
+// tests below pin each face to its parity).
 #[test]
-fn kaoru_direction_die_is_a_d2() {
+fn kaoru_walk_is_a_d10_aimed_both_ways() {
     let mut seen = std::collections::BTreeSet::new();
     for seed in 0..16u64 {
         let mut t = kaoru_table(seed);
         kaoru_marked_walk(&mut t);
-        let mark = t.mark();
         t.roll(1).unwrap();
         drain(&mut t);
-        let faces: Vec<i64> = t
-            .events_since(mark)
-            .iter()
-            .filter(|e| log_key(e).ends_with("plan_direction"))
-            .filter_map(|e| int_arg(&e.msg, "n"))
-            .collect();
-        assert_eq!(
-            faces.len(),
-            1,
-            "one direction die per walk (seed {seed}): {:?}",
+        let delta = t.pos(1) as i64 - 30;
+        assert!(
+            (1..=10).contains(&delta.abs()),
+            "a 1d10 distance off tile 30 (seed {seed}): pos={} {:?}",
+            t.pos(1),
             t.recent_keys(20)
         );
-        let face = faces[0];
-        assert!(
-            face == 1 || face == 2,
-            "the direction die is a d2, got face {face} (seed {seed})"
-        );
-        seen.insert(face);
+        seen.insert(delta.signum());
     }
     assert!(
-        seen.contains(&1) && seen.contains(&2),
-        "both d2 faces occur over 16 seeds: {seen:?}"
+        seen.contains(&-1) && seen.contains(&1),
+        "both directions occur over 16 seeds: {seen:?}"
     );
 }
 

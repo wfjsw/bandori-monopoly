@@ -109,7 +109,7 @@ fn on_plan(player_id: i32, mut v: PlanValue) -> PlanValue {
         sides: 20,
     });
     v.add_base = Some(Dice { count: 1, sides: 4 });
-    ctx::log(player_id, &Msg::new(key!("kanon_dice")));
+    // Passive plan reshape: no header, no flash, no line of its own.
     v
 }
 

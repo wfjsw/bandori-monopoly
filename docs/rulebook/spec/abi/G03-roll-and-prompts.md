@@ -709,7 +709,12 @@ already ran after the last write.
 
 `diceRollPlan` is raised by the move dispatches (`main_move` /
 `card_move_seeded`), once, between opening the transaction and the cast — not
-by `run_cast`, which also serves rerolls and effect rolls. `roll_move` runs it
+by `run_cast`, which also serves rerolls and effect rolls.
+
+Presentation: a **filter** body at this stage is a passive reshape and stays
+off the log — no header, no flash, no `plan.*` line (`docs/CARDS.md`
+"Plan-pass filters are bookkeeping"); the walk's own line is the outcome. An
+**action** entry at the same kind is an offer and announces normally. `roll_move` runs it
 too (the victim's move is planned the same way); a reroll never does. This makes the main move's `diceRollBefore`
 post-cast: the window is named for the settlement, not the throw (today it
 fires with the `-1` sentinel at `play.rs:1448`, before `diceRollPlan`).

@@ -11,7 +11,7 @@
 
 use bandori_std::ctx::{self, plan};
 use card_sdk::abi::{Dice, FilterKind};
-use card_sdk::{key, CardDef, Filter, Msg, On, PlanValue};
+use card_sdk::{CardDef, Filter, On, PlanValue};
 
 pub const MASHIRO: CardDef = CardDef::new(
     "skill:仓田真白:向后全速前进",
@@ -25,12 +25,12 @@ pub const MASHIRO: CardDef = CardDef::new(
 )
 .rule();
 
-/// （1）「[主动移动]时移动掷骰变为2d20」, （2）「反方向移动」.
-fn roll_plan(player_id: i32, v: PlanValue) -> PlanValue {
-    let _ = player_id;
+/// （1）「[主动移动]时移动掷骰变为2d20」, （2）「反方向移动」. Passive on
+/// every main move: the plan pass is bookkeeping, so the skill writes no
+/// log line and does not flash -- the walk's own line is the outcome.
+fn roll_plan(_player_id: i32, v: PlanValue) -> PlanValue {
     // （1） -- the face is 2d20, not the default 1d20.
     // （2） -- the walk runs backwards.
-    ctx::log(player_id, &Msg::new(key!("mashiro_plan")));
     PlanValue {
         base: Some(Dice {
             count: 2,

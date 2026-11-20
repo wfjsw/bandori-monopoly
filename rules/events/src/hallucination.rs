@@ -75,14 +75,9 @@ fn on_plan(_owner: i32, mut v: PlanValue) -> PlanValue {
     if by == who {
         return v;
     }
-    // 「上一名玩家代替进行此次投掷」
+    // 「上一名玩家代替进行此次投掷」 -- passive, so the substitution rides
+    // the roll alone: no header, no flash, no line.
     v.roller = Some(Seat(by));
-    ctx::log(
-        who,
-        &Msg::new("log.event.hallucination_sub")
-            .player_id("who", who)
-            .player_id("by", by),
-    );
     v
 }
 

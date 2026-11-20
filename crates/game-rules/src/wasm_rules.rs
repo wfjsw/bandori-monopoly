@@ -4796,7 +4796,16 @@ impl<M: CardModules> RulesBridge<M> {
         // Silent entry (`On::silent`): bookkeeping. Body runs, no flash
         // and no 「效果适用」 header. `QuietWhenEmpty` still announces here;
         // the header is retracted at commit if the body produced nothing.
+        // A plan-pass **filter** drive (`On::Filter(Filter::DiceRollPlan(..))`)
+        // is a passive move reshape -- the dice table, the direction, the
+        // roller, a plan teleport. It never prompts and has no outcome of its
+        // own (the walk it shapes logs itself), so it is bookkeeping: no
+        // 「效果适用」 header, no flash, and no `plan.*` outcome line (the
+        // `silent_body` flag set beside `pres` suppresses those). An **Action**
+        // entry at the same kind is an offer / armed activation and announces
+        // normally, prompts and all.
         if self.entry_presentation(entry_card, entry).header == card_sdk::abi::Presentation::Silent
+            || self.is_passive_plan(entry_card, entry, trigger.kind)
         {
             return -1;
         }
@@ -4904,6 +4913,34 @@ impl<M: CardModules> RulesBridge<M> {
             header: on.map(|o| o.presentation).unwrap_or_default(),
             flash: on.map(|o| o.flash).unwrap_or_default(),
         }
+    }
+
+    /// Is this drive a **passive plan reshape**? True for an `On::Filter` body
+    /// raised at `diceRollPlan`: a move's dice table / direction / roller /
+    /// plan teleport being rewritten as the move is planned. The stage carries
+    /// no prompt and no activation of its own -- `docs/CARDS.md` の
+    /// "plan-pass filters" -- so its log presence is bookkeeping, not a
+    /// clause firing, and the walk's own line is the outcome.
+    ///
+    /// An `Action` entry at the same kind is different: it *is* an activation
+    /// (an offer, an armed teleport consumed here), so it announces.
+    fn is_passive_plan(
+        &self,
+        card_id: &str,
+        entry: i32,
+        kind: card_sdk::abi::TriggerKind,
+    ) -> bool {
+        if kind != card_sdk::abi::TriggerKind::DiceRollPlan {
+            return false;
+        }
+        let Some(idx) = self.ruleset.card(card_id) else {
+            return false;
+        };
+        self.ruleset
+            .cards()
+            .get(idx as usize)
+            .and_then(|c| c.on.get(entry.max(0) as usize))
+            .is_some_and(|o| o.kind == card_sdk::abi::OnKind::Filter as i32)
     }
 
     /// Run one effect to completion, prompting through the engine as needed. Returns
@@ -5405,6 +5442,9 @@ impl<M: CardModules> RulesBridge<M> {
             // Taken before the closure borrows `announced`; a fresh `Run` per
             // pass starts from the entry state, so the set must be too.
             let already_admitted: Vec<i32> = announced.iter().copied().collect();
+            // The drive's kind, read once so the `announce` closure can ask
+            // [`Self::is_passive_plan`] while `trigger` is borrowed elsewhere.
+            let drive_kind = trigger.kind;
             let mut announce = |w: &mut crate::Run, entry: i32| {
                 if !announced.insert(entry) {
                     // A multi-pass re-run. The learn pass either flushed the
@@ -5431,7 +5471,8 @@ impl<M: CardModules> RulesBridge<M> {
                     // `outcome_plan` on the re-run just because the cell was
                     // not copied across.
                     let folded_hdr = header_mode.get();
-                    w.silent_body = folded_hdr == card_sdk::abi::Presentation::Silent;
+                    w.silent_body = folded_hdr == card_sdk::abi::Presentation::Silent
+                        || self.is_passive_plan(card_id, entry, drive_kind);
                     w.quiet_when_empty = folded_hdr == card_sdk::abi::Presentation::QuietWhenEmpty;
                     w.flash_cued = flash_cued_cell.get();
                     return;
@@ -5449,7 +5490,8 @@ impl<M: CardModules> RulesBridge<M> {
                 // fold, so a re-run does not fold the same entry twice.
                 let folded_hdr = fold_header(header_mode.get(), pres.header);
                 header_mode.set(folded_hdr);
-                let is_silent = folded_hdr == card_sdk::abi::Presentation::Silent;
+                let is_silent = folded_hdr == card_sdk::abi::Presentation::Silent
+                    || self.is_passive_plan(card_id, entry, drive_kind);
                 let is_quiet = folded_hdr == card_sdk::abi::Presentation::QuietWhenEmpty;
                 silent_body.set(is_silent);
                 w.silent_body = is_silent;

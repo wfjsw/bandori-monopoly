@@ -81,11 +81,8 @@ fn on_plan(_player_id: i32, mut v: PlanValue) -> PlanValue {
     let f = ctx::tile_forward(here, there);
     let b = n - f;
     if f > 0 && b < f {
+        // The direction is a passive plan write: no header, no flash, no line.
         v.reverse = Some(true);
-        ctx::log(
-            mover,
-            &Msg::new("log.event.surprise_duel_dir").player_id("who", mover),
-        );
     }
     v
 }
