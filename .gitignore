@@ -36,6 +36,14 @@ node_modules
 /data/engine-archive/
 /data/engine-cache/
 
+# Roster dumps. The roster lives in the rule code and the client never fetches
+# these; tools read a dump from `target/roster-dump` (`tools/roster-dump.mjs`).
+# A copy under `data/` is a hand dump, not a served table.
+/data/cards.json
+/data/personas.json
+/data/groups.json
+/data/events.json
+
 # Browser verification screenshots.
 /tmp-shots/
 
