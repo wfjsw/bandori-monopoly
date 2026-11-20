@@ -372,10 +372,12 @@ Rulings that this unit leans on (TEST-FINDINGS §6 / sheet):
   **Condition:** this turn's movement phase; the path [经过]s that player.
   **Effect:** may [强制停下] there and [触发结算].
 * `C-HHW-phantom-04` -- Kaoru's tile rewrite. Quote second sentence.
-  **Condition:** the card is on the field; a player who can move sits on
-  薰's tile. **Effect:** that player's [主要移动] becomes `1d2` (forward /
-  backward) and `1d10` (distance), settled as that move.
-* **Executable:** `phantom_places_on_field`. (3)/(4) **not scripted**.
+  **Condition:** the card is on the field; every player standing on 薰's
+  tile who can move, **薰 included** (ruling W3-KAORU-03 / C-Q48,
+  2026-11-20: 「所有…人」 includes 薰, so the unprinted `actor != owner`
+  gate is gone). **Effect:** that player's [主要移动] becomes `1d2`
+  (forward / backward) and `1d10` (distance), settled as that move.
+* **Executable:** `phantom_places_on_field`, `kaoru_own_main_move_on_his_tile_rolls_d2_and_d10`. (3) **not scripted** (force-stop window is multi-act).
 * **OPEN-HHW-CHARGE:** 「充能3，衰减1」's counter name and whether it is
   奇迹水晶.
 * **OPEN-HHW-触发结算:** as above.
@@ -519,7 +521,7 @@ Rulings that this unit leans on (TEST-FINDINGS §6 / sheet):
 | C-HHW-misaki-02/03 | fire-pot roll + neighbour charge; window is multi-act |
 | C-HHW-hagumi-03/04 | force-stop window and turn-end [反击] |
 | C-HHW-wacha-01 (倒走) | OPEN-HHW-BACKWARDS; place + jump are pinned |
-| C-HHW-phantom-02..04 | mark plant is arranged via the card's own prompt; rewrite of the main move is a multi-act path |
+| C-HHW-phantom-02..03 | mark plant is arranged via the card's own prompt |
 | C-HHW-kaoru-03 | path filter is a whole-walk shape |
 | C-HHW-hagumi-skill-01..04 | croquette spawn / transfer / pay need a multi-turn multi-actor script |
 | C-HHW-kanon-03 | three-turn CiRCLE-reward clock |

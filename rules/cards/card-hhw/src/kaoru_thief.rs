@@ -23,11 +23,14 @@ pub const KAORU_THIEF: CardDef = CardDef::new(
         // 「[重叠]」, end-tile only). Riding `passPlayer` made `move.remaining > 0` false
         // whenever the raise fired, so the mid-walk force-stop never engaged.
         On::Action(Action::PassTile("actor == owner && card.placed && move.is_main_move && move.remaining > 0 && card.counter('marked') != 0 && card.counter('turn') == turn_key", Some(marked_on_tile), pass_marked)),
-        // TODO(规则书)（所有在薰所在格子的人）: The move-gate conjuncts are the status hosts'
-        // `MoveGate` clauses (`exile` / `stay` / stun -- the same reads the engine's
-        // walk clamp makes). `move.is_main_move` pins `actor` to the turn player, so the actor
-        // is the mover. W3-KAORU-03 / C-Q48, OPEN.
-        On::Filter(Filter::DiceRollPlan("card.placed && move.is_main_move && actor != owner && pos(actor) == owner.pos && state(actor,'exile') == 0 && state(actor,'stun') + state(actor,'stunStart') == 0 && (state(actor,'stay') == 0 || state(actor,'unstoppable') > 0) && state(owner,'exile') == 0 && plan.fixed_roll == null", None, roll_plan)),
+        // 规则书「所有在薰所在格子的人」: the gate is this filter's own condition -- no
+        // hook outside it decides who qualifies. 「所有…人」 includes 薰 himself (ruling
+        // W3-KAORU-03 / C-Q48, closed), so the owner is not excluded: `pos(actor) == owner.pos`
+        // holds trivially for him and is required for everyone else, and `move.is_main_move`
+        // pins `actor` to the turn player. The remaining conjuncts are the status hosts'
+        // `MoveGate` clauses (`exile` / `stay` / stun -- the same reads the engine's walk
+        // clamp makes); `state(owner,'exile') == 0` keeps an exiled card silent.
+        On::Filter(Filter::DiceRollPlan("card.placed && move.is_main_move && pos(actor) == owner.pos && state(actor,'exile') == 0 && state(actor,'stun') + state(actor,'stunStart') == 0 && (state(actor,'stay') == 0 || state(actor,'unstoppable') > 0) && state(owner,'exile') == 0 && plan.fixed_roll == null", None, roll_plan)),
         On::Action(Action::CounterChanged("actor == owner && card.placed && counter_is('crystals') && trigger_card == card.id && card.counter('crystals') == 0 && value <= 0", Some(crystals_changed_guard), on_crystals_changed)),
     ],
 )
