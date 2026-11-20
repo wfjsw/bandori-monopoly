@@ -18,7 +18,7 @@ file was flattened and re-verified against master `77d56311` on 2026-11-13,
 and the A/B sweep landed as ABI v124.
 
 Sources (re-counted 2026-11-13):
-- **265** `TODO(规则书)` tags in `rules/` + `crates/`. Some are convention
+- **264** `TODO(规则书)` tags in `rules/` + `crates/`. Some are convention
   markers (a module doc naming the policy, not a gap); the convention-marker
   list is at the end.
 - **8** live `#[ignore = "RULING: …"]` rulebook tests in
@@ -376,15 +376,6 @@ questions are in the appendix.
   - `rules/cards/card-hhw/src/kaoru_thief.rs:130-146` (keeps decay-out behaviour)
 - **question**: C-Q35.
 
-## EVENT-02 — asukayama settle-on-land vs settle-free walk
-- **kind**: rulebook divergence
-- **class**: C
-- **severity**: low
-- **suggested batch**: events
-- **locations**
-  - `rules/events/src/asukayama.rs:14-15` (derived 迷子的追逐), `:28-29` (settle-on-land default)
-- **question**: C-Q39.
-
 ## EVENT-03 — event text gaps (one-shot / count / 卡组 / 下2回合 / 同色)
 - **kind**: rulebook divergence
 - **class**: C (several small)
@@ -669,7 +660,7 @@ A circle-tile case (remove every 育美标记 and gain 1,000 per mark 「经过�
 「下次经过"弦卷集团"前可将"弦卷集团"格子额外视为CiRCLE」: what does 「额外视为CiRCLE」 pay on top of the tile's own effect? And is the override per-player tile-kind (not colour)?
 
 **C-Q39 (EVENT-02, asukayama).**
-「所有玩家[传送]到飞鸟山公园。然后抽到此卡的玩家移动1d20」 — is the walk also settle-free? (Engine now: settle-on-land.)
+「所有玩家[传送]到飞鸟山公园。然后抽到此卡的玩家移动1d20」 — the walk is settle-free too (ruled; the jump and the walk both pass through without resolving a landing; the walk still [pass]-resolves).
 
 **C-Q40 (EVENT-03, event text gaps).**
 Batch of event ambiguities — please answer each:
@@ -988,6 +979,7 @@ noted where it is known; all of these are closed in the tree.
 - **LOY-ANON-01** — closed: the capped re-link pays nothing (place-or-refuse stays atomic). Cited: `rules/tests/tests/ab_small.rs`, `crates/card-sdk/src/abi.rs`.
 - **LOY-THANKS-01** — closed: the offer reaches a pay-gated seat. Cited: `rules/tests/tests/ab_small.rs`, `crates/card-sdk/src/abi.rs`.
 - **CD-02** — closed: the folded `crystals_changed_of` guard still fires the j11 drain. Cited: `rules/tests/tests/ab_small.rs`, `crates/card-sdk/src/abi.rs`.
+- **EVENT-02 / C-Q39** — closed: the drawer's 1d20 walk after the park jump is settle-free (`plan::set_settles(false)`); the walk still [pass]-resolves the tiles it travels. Cited: `rules/events/src/asukayama.rs`, `rules/tests/tests/events.rs` (`asukayama_walk_does_not_settle_the_landing`).
 - **EVENT-04** — closed (ABI v124): `ctx::card_derived` / event-card enumeration read `CardInfo.derived`; the `NON_DERIVED` hand table is gone. Cited: `rules/tests/tests/ab_misc.rs`, `rules/events/src/end_it_all.rs`, `crates/card-sdk/src/kani_host.rs`.
 - **MARKERS-KANI-01** — closed: the marker model has Kani coverage. Cited: `rules/kani/tests/conf_fire_windows.rs`.
 - **COND-01** — closed: `run_hook` admits each entry against the live world, so a `slot()` condition sees an earlier entry's write in the same window (`ab_cond.rs`). Cited: `rules/tests/tests/ab_cond.rs`, `rules/fixtures/test-cards/src/lib.rs`, `rules/skills/skill-personas/src/kanon.rs`.

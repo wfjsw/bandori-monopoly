@@ -1055,6 +1055,32 @@ fn asukayama_drawer_moves_1d20_after_the_teleport() {
     );
 }
 
+// C-Q39: 「然后抽到此卡的玩家移动1d20」 -- the walk after the jump is
+// settle-free as well. The drawer lands on an unowned buyable tile: the buy
+// offer a settle would raise must never come up. (`draw_event_quiet` alone is
+// not enough -- its drain declines any offer and reaches the same end state.)
+#[test]
+fn asukayama_walk_does_not_settle_the_landing() {
+    let mut t = Table::vanilla(3);
+    t.set_pos(1, 5);
+    t.set_pos(2, 10);
+    let park = tile("飞鸟山公园");
+    let land = (park + 7) % 60;
+    assert_eq!(land, tile("水族馆"), "fixture: park + 7 is the aquarium");
+    draw_event_card(&mut t, 1, "飞鸟山之战", &[7]);
+    let mut asked: Vec<String> = Vec::new();
+    while let Some(p) = t.prompt() {
+        asked.push(p.title.key().to_string());
+        t.decline();
+    }
+    assert_eq!(t.pos(1), land, "the drawer walked the face: {}", t.pos(1));
+    assert!(
+        !asked.iter().any(|k| k == "ask.buy.title"),
+        "no settle on the landing: {asked:?}"
+    );
+    assert_eq!(t.owner(land), None, "no buy from the event walk");
+}
+
 // 「2层回合开始时减少一层的[眩晕]」 -- one layer per turn start of the owner.
 // A [眩晕] player's turn is auto-skipped past OPS (规则书 204) and may be
 // consumed inside another seat's `end()`, so `until_turn` (which waits for

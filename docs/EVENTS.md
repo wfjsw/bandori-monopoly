@@ -217,6 +217,9 @@ sheet text, by kind of gap (each tagged `TODO(规则书)` at the clause):
   (3 total); the text does not say how many.
 * **飞鸟山之战's B12 「衍生迷子的追逐」** is a sheet annotation the event text
   does not carry -- not triggered.
+* **飞鸟山之战's 1d20 walk is settle-free** (C-Q39) along with the jump onto the
+  park: the event's movement never resolves a landing, though the walk still
+  [pass]-resolves the tiles it travels.
 * **「下2回合开始时」** (意外的对邦) read as the start of the drawer's 2nd turn.
 * **很噜的感觉's shout** is out-of-game flavour, logged only.
 

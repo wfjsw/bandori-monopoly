@@ -397,8 +397,11 @@ Board indices: 「#N格」 = index `N-1`, so X is tiles 0–29 and Y is 30–59.
 ### E-asukayama-01
 
 * **ID:** `E-asukayama-01`
-* **Effect:** everyone [传送]s to 飞鸟山公园; the drawer then moves 1d20.
-* **Executable:** `asukayama_drawer_moves_1d20_after_the_teleport`.
+* **Effect:** everyone [传送]s to 飞鸟山公园; the drawer then moves 1d20. Both
+  the jump and the walk are settle-free (C-Q39) -- the walk still
+  [pass]-resolves the tiles it travels.
+* **Executable:** `asukayama_drawer_moves_1d20_after_the_teleport`,
+  `asukayama_walk_does_not_settle_the_landing`.
 
 ### E-asukayama-02
 

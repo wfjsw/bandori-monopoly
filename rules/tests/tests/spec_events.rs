@@ -1305,7 +1305,8 @@ fn bear_cookie_next_draw_is_chart_rush() {
 // 获得2层回合开始时减少一层的[眩晕]，行动序列上在抽到此卡的玩家的下一位玩家在下个自己的回合结束前
 // 不可使用手牌，其余玩家获得1层在回合开始时移除的[除外]」
 
-/// E-asukayama-01 -- everyone teleports to 飞鸟山公园; the drawer then moves 1d20.
+/// E-asukayama-01 -- everyone teleports to 飞鸟山公园; the drawer then moves 1d20
+/// settle-free.
 #[test]
 fn asukayama_drawer_moves_1d20_after_the_teleport() {
     forall(3, 0xE_0B01, |_rng, _i| {

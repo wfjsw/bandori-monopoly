@@ -23,10 +23,10 @@ pub const ASUKAYAMA: CardDef = CardDef::new("event:飞鸟山之战", &[On::Play(
 
 /// 规则书: 「所有玩家[传送]到飞鸟山公园」 -- everyone onto the park, no settle
 /// on the jump itself.
-/// 规则书: 「然后抽到此卡的玩家移动1d20」 -- the drawer walks the rolled face.
-/// The text does not say 不触发场地效果 here, so the landing settles.
-/// TODO(规则书): settle-on-land is the default reading; flip if the sheet means
-/// the walk is also settle-free.
+/// 规则书: 「然后抽到此卡的玩家移动1d20」 -- the drawer walks the rolled face,
+/// and the walk is settle-free too (C-Q39): the event's movement as a whole is
+/// a jump plus a walk, neither of which resolves the landing. The walk still
+/// [pass]-resolves the tiles it travels (`settles` gates stages 14-15 only).
 /// 规则书: 「上一位玩家获得2层回合开始时减少一层的[眩晕]」 -- `stunStart`, the
 /// stun that loses a layer at turn start (not the end-of-turn `stun`).
 /// 规则书: 「下一位玩家在下个自己的回合结束前不可使用手牌」 -- `noHand` = 2: the
@@ -61,7 +61,7 @@ fn play(player_id: i32) -> card_sdk::Asked {
     // another jump.
     plan::set_kind(MoveKind::Walk);
     plan::set_teleport_to(-1);
-    plan::set_settles(true);
+    plan::set_settles(false);
     plan::set_steps(face);
     ctx::run_planned_move(player_id);
 
