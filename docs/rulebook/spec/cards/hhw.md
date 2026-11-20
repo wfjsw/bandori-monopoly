@@ -372,12 +372,12 @@ Rulings that this unit leans on (TEST-FINDINGS §6 / sheet):
   **Condition:** this turn's movement phase; the path [经过]s that player.
   **Effect:** may [强制停下] there and [触发结算].
 * `C-HHW-phantom-04` -- Kaoru's tile rewrite. Quote second sentence.
-  **Condition:** the card is on the field; every player standing on 薰's
-  tile who can move, **薰 included** (ruling W3-KAORU-03 / C-Q48,
-  2026-11-20: 「所有…人」 includes 薰, so the unprinted `actor != owner`
-  gate is gone). **Effect:** that player's [主要移动] becomes `1d2`
+  **Condition:** the card is on the field; a player **other than 薰** who can
+  move stands on 薰's tile (ruling W3-KAORU-03 / C-Q48, 2026-11-20: 「所有…人」
+  excludes 薰, so `actor != owner` gates it and his own [主要移动] stays a
+  plain d20). **Effect:** that player's [主要移动] becomes `1d2`
   (forward / backward) and `1d10` (distance), settled as that move.
-* **Executable:** `phantom_places_on_field`, `kaoru_own_main_move_on_his_tile_rolls_d2_and_d10`. (3) **not scripted** (force-stop window is multi-act).
+* **Executable:** `phantom_places_on_field`, `kaoru_own_main_move_on_his_tile_keeps_the_d20`. (3) **not scripted** (force-stop window is multi-act).
 * **OPEN-HHW-CHARGE:** 「充能3，衰减1」's counter name and whether it is
   奇迹水晶.
 * **OPEN-HHW-触发结算:** as above.

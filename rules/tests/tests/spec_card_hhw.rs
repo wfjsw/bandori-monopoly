@@ -1332,11 +1332,11 @@ fn kaoru_removes_a_phantom_mark_instead_of_a_pot() {
     }
 }
 
-/// C-HHW-phantom-04 (W3-KAORU-03 / C-Q48): 「所有在薰所在格子的人」 includes 薰
-/// himself -- his own [主要移动] on his tile also becomes d2 + d10, not a d20
-/// walk.
+/// C-HHW-phantom-04 (W3-KAORU-03 / C-Q48): 「所有在薰所在格子的人」 excludes
+/// 薰 himself -- his own [主要移动] on his tile stays a d20 walk, while a
+/// rival on the tile still gets the d2 + d10 rewrite.
 #[test]
-fn kaoru_own_main_move_on_his_tile_rolls_d2_and_d10() {
+fn kaoru_own_main_move_on_his_tile_keeps_the_d20() {
     let mut t = Table::new(&["濑田薰", "户山香澄"]);
     t.clean();
     t.begin_turn(0);
@@ -1357,29 +1357,33 @@ fn kaoru_own_main_move_on_his_tile_rolls_d2_and_d10() {
     drain(&mut t);
     t.set_pos(0, 20);
     t.set_pos(1, 30);
-    t.dice(&[1, 12]);
+    t.dice(&[12, 12]);
     t.roll(0).unwrap();
     drain(&mut t);
-    if t.pos(0) != 10 {
+    if t.pos(0) != 32 {
         panic!(
-            "C-HHW-phantom-04: 薰's own main move on his tile must be d2+d10: face 1 (odd = reverse) then face 2nd is 12, clamped to 10 on the 1d10, so 20 - 10 = 10. A d20 walk would consume 12 and land on 32; pos {}",
+            "C-HHW-phantom-04: 薰's own main move on his tile must stay a d20: the face 12 is consumed as the walk and 20 + 12 = 32. A d2+d10 rewrite would spend the first face as direction (12 even = forward), clamp the second 12 to 10 and land on 30; pos {}",
             t.pos(0)
         );
     }
-    if !t
+    if t
         .recent_keys(200)
         .iter()
         .any(|k| k.contains("plan_direction"))
     {
         panic!(
-            "C-HHW-phantom-04: the direction outcome must be logged as plan_direction; keys={:?}",
+            "C-HHW-phantom-04: 薰's own move must not log a direction outcome; keys={:?}",
             t.recent_keys(200)
         );
     }
 
+    // A d20 walk consumes only the first loaded face; the second one (12)
+    // stays in the queue and becomes the rival's direction face below.
+    assert_eq!(t.dice_left(), 1, "the first half must leave exactly one face");
+
     // Second half (guards over-correction): another player on the tile still
-    // gets the rewrite -- face 2 (even = forward) then face 2nd is 12, clamped
-    // to 10 on the 1d10, so 20 + 10 = 30.
+    // gets the rewrite -- the leftover direction face 12 (even = forward)
+    // then the newly loaded 12 clamps to 10 on the 1d10, so 20 + 10 = 30.
     // 薰 walked off 20 above, so put him back: the rewrite needs a shared tile.
     t.end(0).unwrap();
     drain(&mut t);
@@ -1387,7 +1391,7 @@ fn kaoru_own_main_move_on_his_tile_rolls_d2_and_d10() {
     t.set_pos(1, 20);
     t.begin_turn(1);
     drain(&mut t);
-    t.dice(&[2, 12]);
+    t.dice(&[12]);
     t.roll(1).unwrap();
     // The 10-step walk crosses 21-29 and lands on 30 (江户川乐器店: one draw,
     // no choice), so nothing on that stretch may ask.
@@ -1400,8 +1404,18 @@ fn kaoru_own_main_move_on_his_tile_rolls_d2_and_d10() {
     drain(&mut t);
     if t.pos(1) != 30 {
         panic!(
-            "C-HHW-phantom-04: a rival on 薰's tile must also move d2+d10: face 2 (even = forward) then face 2nd is 12, clamped to 10 on the 1d10, so 20 + 10 = 30. A d20 walk would land on 32; pos {}",
+            "C-HHW-phantom-04: a rival on 薰's tile must move d2+d10: the leftover direction face 12 (even = forward) then the loaded 12 clamps to 10 on the 1d10, so 20 + 10 = 30. A d20 walk would land on 32; pos {}",
             t.pos(1)
+        );
+    }
+    if !t
+        .recent_keys(200)
+        .iter()
+        .any(|k| k.contains("plan_direction"))
+    {
+        panic!(
+            "C-HHW-phantom-04: the rival's direction outcome must be logged as plan_direction; keys={:?}",
+            t.recent_keys(200)
         );
     }
 }
