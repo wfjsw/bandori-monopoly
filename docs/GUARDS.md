@@ -127,7 +127,7 @@ with it; 118 hook decls are exactly `mine`).
 **Recommendation: B, CEL as first-class**, with C as a later optimisation if
 measurement says eval or binary size matters. Rationale: the guards are already
 small integer predicates — CEL re-expresses them without a vocabulary committee
-(`tomoe_savior.rs:22` `money(owner) >= tile.price/2`, `hold_hands_again.rs:28`
+(`tomoe_savior.rs:25` `money(owner) >= tile.price + tile.houses * tile_attr(tile.id, "house")`, `hold_hands_again.rs:28`
 `actor == neighbor(owner, -1)`, `secret_rainbow.rs:112` grade compares), eval is
 two orders of magnitude below instantiate cost, and the per-window context (§4.2)
 amortises the rest. Mandate **ints only** (docs/P0-FINDINGS.md:76-85: CEL does

@@ -96,11 +96,7 @@ fn net_error_clause_2_cancels_a_targetless_play() {
     let mut t = Table::vanilla(2);
     t.give(1, &[NET_ERROR]);
     t.give_play(0, "通用:GREAT").unwrap();
-    assert!(
-        t.counteract_offered(NET_ERROR),
-        "{}",
-        t.dump_prompt()
-    );
+    assert!(t.counteract_offered(NET_ERROR), "{}", t.dump_prompt());
     t.counteract(1, NET_ERROR).unwrap();
     drain(&mut t);
     // GREAT's effects are negated: no +2000, no PERFECT in the draw pile.
@@ -245,12 +241,7 @@ fn offered_cards(t: &Table) -> Vec<String> {
             _ => None,
         })
         .collect();
-    ids.extend(
-        p.items
-            .iter()
-            .filter(|i| i.starts_with("event:"))
-            .cloned(),
-    );
+    ids.extend(p.items.iter().filter(|i| i.starts_with("event:")).cloned());
     ids
 }
 
@@ -311,9 +302,7 @@ fn eng_cost_short_refuses_the_borrowed_press() {
     let sid = t.skill_id(0, "迷途之星");
     // One crystal is there for the press itself, no sticker for the tax.
     t.set_crystals(0, &sid, 1);
-    let err = t
-        .skill(0, &sid)
-        .expect_err("the press cannot be paid for");
+    let err = t.skill(0, &sid).expect_err("the press cannot be paid for");
     assert_eq!(err, "err.cost_short", "{}", t.dump_prompt());
     assert_eq!(t.crystals(0, &sid), Some(1), "nothing was spent");
     assert_eq!(t.token(0, STICKER), 0, "nothing was charged");
@@ -342,7 +331,11 @@ fn eng_cost_charges_once_and_the_body_sees_the_remainder() {
         "exactly one sticker charged: {:?}",
         t.recent_keys(20)
     );
-    assert_eq!(t.crystals(0, &sid), Some(0), "the body ran (2 crystals spent)");
+    assert_eq!(
+        t.crystals(0, &sid),
+        Some(0),
+        "the body ran (2 crystals spent)"
+    );
     assert!(
         t.keys_since(0).iter().any(|k| k.ends_with("mygo_draw")),
         "the body's draw landed: {:?}",

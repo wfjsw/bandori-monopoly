@@ -126,9 +126,8 @@ fn circle_deck_admits_only_general_cards() {
         .map(|k| k.id.clone())
         .collect();
     assert!(
-        pool.iter().all(|id| {
-            d.card(id).is_some_and(|k| k.is_universal())
-        }),
+        pool.iter()
+            .all(|id| { d.card(id).is_some_and(|k| k.is_universal()) }),
         "the CiRCLE pool is 通用-only: {pool:?}"
     );
     assert!(pool.len() >= 10, "the 通用 pool has room for 10");
@@ -350,7 +349,11 @@ fn lisa_temp_pot_is_free_on_a_passive_spend() {
     }
     assert_eq!(t.token(1, TEMP), 0, "the temp pot was lost to the event");
     // P0 is rank 3 (1000) -- and no 600 from the temp pot.
-    assert_eq!(t.money(0), m0 + 1000, "no provider charge on a passive spend");
+    assert_eq!(
+        t.money(0),
+        m0 + 1000,
+        "no provider charge on a passive spend"
+    );
     assert!(
         !t.events_since(mark)
             .iter()
@@ -392,7 +395,11 @@ fn band_third_turn_add_stands_down_on_a_crychic_face() {
         t.begin_turn(0);
         drain(&mut t);
     }
-    assert_eq!(t.crystals(0, BAND_MUJICA), Some(0), "no add on the third start");
+    assert_eq!(
+        t.crystals(0, BAND_MUJICA),
+        Some(0),
+        "no add on the third start"
+    );
     // Control: a face without the carve-out still takes the band's add.
     let mut u = mujica_in_two(UMIRI);
     for _ in 0..3 {
@@ -477,9 +484,7 @@ fn rui_copy_reset_costs_the_source_the_skill() {
         .events_since(mark)
         .iter()
         .find(|e| {
-            e.player_id == 1
-                && log_key(e).ends_with("rui_hit")
-                && int_arg(&e.msg, "x").is_some()
+            e.player_id == 1 && log_key(e).ends_with("rui_hit") && int_arg(&e.msg, "x").is_some()
         })
         .and_then(|e| int_arg(&e.msg, "x"));
     assert_eq!(copier_hit_x, Some(6), "the copier reset the source's X");
@@ -593,7 +598,9 @@ fn soyo_waiver_denies_the_next_circle_pot() {
     assert_eq!(t.pos(0), 0, "landed on CiRCLE");
     assert_eq!(t.charge(0), fire, "no pot from the pass");
     assert!(
-        t.keys_since(mark).iter().any(|k| k.ends_with("soyo_denied")),
+        t.keys_since(mark)
+            .iter()
+            .any(|k| k.ends_with("soyo_denied")),
         "{:?}",
         t.keys_since(mark)
     );
@@ -602,5 +609,9 @@ fn soyo_waiver_denies_the_next_circle_pot() {
         "the gain is denied: {:?}",
         t.keys_since(mark)
     );
-    assert_eq!(t.state(0, "skill.soyoClear.penalty"), 0, "the latch is consumed");
+    assert_eq!(
+        t.state(0, "skill.soyoClear.penalty"),
+        0,
+        "the latch is consumed"
+    );
 }

@@ -579,6 +579,10 @@ rulings above.
     「常规收购价」 is the same number the rulebook calls 「地契购买价格」
     elsewhere, and the one path that is *not* a purchase says so explicitly
     (强制购买: 「获得的地契仍为抵押状态」).
+    *(Base update: ruling 8 below supersedes the 「same number as
+    「地契购买价格」」 reading — 「常规收购价」 is the force-buy figure
+    `2 * (price + houses * house)`, half = land + houses; see the Ruling 8
+    entry.)*
     * **The mortgage:** 巴's text has no 「仍为抵押状态」 clause, and 基础[结算]
       6 says 「如果格子地契已抵押则无效果」 for building -- so a hand-over that
       kept the mortgage would make Afterglow's 「自动免费在上面加盖一栋房子」
@@ -844,8 +848,12 @@ their own counter's round and ruling 2026-10-07 is observable. Un-ignored, green
   today — `bought` / `buyAfter` do not fire on force-buy.
 * **Ruling 7** (auction win a 「购买格子」 for discounts? auction [消耗] through
   the pipeline?): money stays direct; `bought` fires but `buyAfter` does not.
-* **Ruling 8** (巴's 「常规收购价一半」 base): `ctx::acquire` takes the price
-  from the caller; the base is undecided.
+* **Ruling 8** (巴's 「常规收购价一半」 base) — **ruled (C-Q4 4a)**: 「常规收购价」
+  is the ordinary forced-acquisition price `force_price_native` =
+  `2 * (tile.price + houses * tile.house)` (`crates/game-core/src/engine/play/purchase.rs`);
+  「一半」 cancels the 2 exactly, so the card pays land + houses. Implemented as
+  `ctx::tile_price(t) + ctx::houses_of(t) * ctx::build_cost(t)`; the counter
+  condition mirrors it (`card_paths::tomoe_savior_pays_land_plus_houses`).
 * **Ruling 10** (「本回合」 linger in an extra turn / another player's turn?):
   linger expires at the next turn start (one turn), matching the old flags.
 

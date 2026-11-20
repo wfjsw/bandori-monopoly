@@ -1063,7 +1063,10 @@ fn assert_owned_livehouse(user: i32, live: &[i32], other: &[i32]) -> i32 {
         let buy = card_sdk::ctx::tile_in(-1, t, "buyable");
         let color = bandori_std::ctx::is_color(user, t, 6);
         let is_live = card_sdk::ctx::tile_in(user, t, "livehouse");
-        crate::kassert!(is_live == (buy && color), "IN-1: livehouse == buyable ∧ color:6");
+        crate::kassert!(
+            is_live == (buy && color),
+            "IN-1: livehouse == buyable ∧ color:6"
+        );
         crate::kassert!(
             buy == (board::TILES[t as usize].price > 0),
             "IN-1: buyable == price > 0 (ownership-independent)"
@@ -1319,17 +1322,29 @@ pub fn blue_rose_payout_log_ok_is_exact() {
         spec::blue_rose_payout_log_ok(&good, 0, n),
         "the exact one-effect log matches"
     );
-    let low = [Effect::GainMoney { player: 0, n: n - 1 }];
+    let low = [Effect::GainMoney {
+        player: 0,
+        n: n - 1,
+    }];
     crate::kassert!(!spec::blue_rose_payout_log_ok(&low, 0, n), "n − 1 differs");
-    let high = [Effect::GainMoney { player: 0, n: n + 1 }];
+    let high = [Effect::GainMoney {
+        player: 0,
+        n: n + 1,
+    }];
     crate::kassert!(!spec::blue_rose_payout_log_ok(&high, 0, n), "n + 1 differs");
     let seat = [Effect::GainMoney { player: 1, n }];
-    crate::kassert!(!spec::blue_rose_payout_log_ok(&seat, 0, n), "the other seat differs");
+    crate::kassert!(
+        !spec::blue_rose_payout_log_ok(&seat, 0, n),
+        "the other seat differs"
+    );
     let extra = [
         Effect::PayMoney { player: 0, n: 1 },
         Effect::GainMoney { player: 0, n },
     ];
-    crate::kassert!(!spec::blue_rose_payout_log_ok(&extra, 0, n), "an extra effect differs");
+    crate::kassert!(
+        !spec::blue_rose_payout_log_ok(&extra, 0, n),
+        "an extra effect differs"
+    );
     kani::cover!(n == 280, "the equality-fitfixture payout");
 }
 
@@ -1371,7 +1386,10 @@ pub fn blue_rose_rich_strict_mutant_is_detected() {
     invoke::unwrap_done(card_roselia::blue_rose::play_kani(user));
     let (logbuf, log_n) = log_slice();
     let effects = effects_of(&logbuf, log_n);
-    crate::kassert!(!spec::blue_rose_rich_strict(1, 1), "strict mutant rejects equality");
+    crate::kassert!(
+        !spec::blue_rose_rich_strict(1, 1),
+        "strict mutant rejects equality"
+    );
     crate::kassert!(
         spec::blue_rose_payout_log_ok(effects, user, spec::blue_rose_payout(&[1400])),
         "the body still logs the equality-boundary gain"

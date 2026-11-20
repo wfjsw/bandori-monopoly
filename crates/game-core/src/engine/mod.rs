@@ -2796,9 +2796,7 @@ impl Match {
                     // short bidder not even bid. (`auction_tile` runs
                     // `raise_funds` on the winner and only voids if they go out.)
                     let raiseable: i32 = (0..self.data.tiles.len())
-                        .filter(|&t| {
-                            self.world.stake_can_mortgage(t as i32, i as i32)
-                        })
+                        .filter(|&t| self.world.stake_can_mortgage(t as i32, i as i32))
                         .map(|t| self.data.tiles[t].price / 2)
                         .sum();
                     if m.value > money + raiseable {

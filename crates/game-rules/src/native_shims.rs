@@ -2766,10 +2766,12 @@ pub unsafe extern "C-unwind" fn ruleset_owns_tile(tile: i32, player_id: i32) -> 
 
 #[no_mangle]
 pub unsafe extern "C-unwind" fn ruleset_mortgaged_for(tile: i32, player_id: i32) -> i32 {
-    with_host(|h| match h.op_mortgaged_for([tile, player_id, 0, 0, 0, 0]) {
-        Ok(v) => v as i32,
-        Err(e) => abort_host(e),
-    })
+    with_host(
+        |h| match h.op_mortgaged_for([tile, player_id, 0, 0, 0, 0]) {
+            Ok(v) => v as i32,
+            Err(e) => abort_host(e),
+        },
+    )
 }
 
 #[no_mangle]
@@ -4687,10 +4689,12 @@ pub unsafe extern "C-unwind" fn ruleset_trig_set_cancelled() {
 
 #[no_mangle]
 pub unsafe extern "C-unwind" fn ruleset_trig_set_abnormal_allowed() {
-    with_host(|h| match h.op_trig_set_abnormal_allowed([0, 0, 0, 0, 0, 0]) {
-        Ok(_) => {}
-        Err(e) => abort_host(e),
-    })
+    with_host(
+        |h| match h.op_trig_set_abnormal_allowed([0, 0, 0, 0, 0, 0]) {
+            Ok(_) => {}
+            Err(e) => abort_host(e),
+        },
+    )
 }
 
 #[no_mangle]
@@ -5024,10 +5028,12 @@ pub unsafe extern "C-unwind" fn ruleset_set_base_dice(count: i32, sides: i32, pt
 
 #[no_mangle]
 pub unsafe extern "C-unwind" fn ruleset_set_direction_dice(count: i32, sides: i32) {
-    with_host(|h| match h.op_set_direction_dice([count, sides, 0, 0, 0, 0]) {
-        Ok(_) => {}
-        Err(e) => abort_host(e),
-    })
+    with_host(
+        |h| match h.op_set_direction_dice([count, sides, 0, 0, 0, 0]) {
+            Ok(_) => {}
+            Err(e) => abort_host(e),
+        },
+    )
 }
 
 #[no_mangle]
@@ -6893,12 +6899,10 @@ pub unsafe extern "C-unwind" fn ruleset_trigger_pending_negation() -> i32 {
 
 #[no_mangle]
 pub unsafe extern "C-unwind" fn ruleset_trigger_pay_split_ran() -> i32 {
-    with_host(
-        |h| match h.op_trigger_pay_split_ran([0, 0, 0, 0, 0, 0]) {
-            Ok(v) => v as i32,
-            Err(e) => abort_host(e),
-        },
-    )
+    with_host(|h| match h.op_trigger_pay_split_ran([0, 0, 0, 0, 0, 0]) {
+        Ok(v) => v as i32,
+        Err(e) => abort_host(e),
+    })
 }
 
 #[no_mangle]

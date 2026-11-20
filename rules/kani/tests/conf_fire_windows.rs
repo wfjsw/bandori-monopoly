@@ -117,9 +117,8 @@ fn gain_opens_one_window_for_the_actual() {
         install(fire_world(0, 1, 4));
         let landed = bandori_std::fire::gain(0, 2, &Msg::new("proof")).unwrap();
         assert_eq!(landed, 2, "gain lands the unclamped request");
-        let (wins, wins_n, log, log_n) = kworld::with_world(|w| {
-            (w.windows, w.windows_n, w.log, w.log_n)
-        });
+        let (wins, wins_n, log, log_n) =
+            kworld::with_world(|w| (w.windows, w.windows_n, w.log, w.log_n));
         assert_eq!(wins_n, 1, "exactly one window");
         assert!(
             spec::fire_one_window(&wins[..wins_n], WINDOW_GAIN, 0, bandori_std::fire::KEY, 2),
@@ -166,7 +165,10 @@ fn gain_on_a_seat_with_no_row_is_a_noop() {
     big(|| {
         let _g = model_lock();
         install(fire_world(0, 0, 0));
-        assert_eq!(bandori_std::fire::gain(0, 2, &Msg::new("proof")).unwrap(), 0);
+        assert_eq!(
+            bandori_std::fire::gain(0, 2, &Msg::new("proof")).unwrap(),
+            0
+        );
         let (wins_n, log_n, narration_n) =
             kworld::with_world(|w| (w.windows_n, w.log_n, w.narration_n));
         assert_eq!((wins_n, log_n, narration_n), (0, 0, 0), "silent no-op");
@@ -181,10 +183,12 @@ fn gain_at_cap_is_a_narrated_noop() {
     big(|| {
         let _g = model_lock();
         install(fire_world(0, 3, 3));
-        assert_eq!(bandori_std::fire::gain(0, 2, &Msg::new("proof")).unwrap(), 0);
-        let (wins_n, log_n, narration_n, charge) = kworld::with_world(|w| {
-            (w.windows_n, w.log_n, w.narration_n, w.charge[0])
-        });
+        assert_eq!(
+            bandori_std::fire::gain(0, 2, &Msg::new("proof")).unwrap(),
+            0
+        );
+        let (wins_n, log_n, narration_n, charge) =
+            kworld::with_world(|w| (w.windows_n, w.log_n, w.narration_n, w.charge[0]));
         assert_eq!((wins_n, log_n, charge), (0, 0, 3), "nothing moved");
         assert_eq!(narration_n, 1, "the refusal is narrated once");
         uninstall();
@@ -227,8 +231,7 @@ fn spend_short_pool_opens_windows_then_refuses() {
         let _g = model_lock();
         install(fire_world(0, 1, 5));
         assert!(!bandori_std::fire::spend(0, 3, &Msg::new("proof")).unwrap());
-        let (wins, wins_n, charge) =
-            kworld::with_world(|w| (w.windows, w.windows_n, w.charge[0]));
+        let (wins, wins_n, charge) = kworld::with_world(|w| (w.windows, w.windows_n, w.charge[0]));
         assert_eq!(charge, 1, "an all-or-nothing spend moves nothing");
         assert_eq!(wins_n, 2, "raise + markerSpend opened before the write");
         assert!(wins[1].value == -3, "the spend window carries -n");

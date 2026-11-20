@@ -185,10 +185,9 @@ fn force_buy_with_an_explicit_zero_clears_the_mortgage() {
     t.own(1, &[land]);
     t.set_mortgaged(land, true);
     t.set_money(0, 10_000);
-    let wrote = t
-        .m
-        .world_mut()
-        .set_tile_prop(land as i32, prop::FORCE_STAYS_MORTGAGED, 0);
+    let wrote =
+        t.m.world_mut()
+            .set_tile_prop(land as i32, prop::FORCE_STAYS_MORTGAGED, 0);
     assert_eq!(wrote, 0, "a tile rule instance governs the tile");
     settle_on(&mut t, 0, land);
     assert_eq!(t.expect_prompt().kind, "choice", "{}", t.dump_prompt());

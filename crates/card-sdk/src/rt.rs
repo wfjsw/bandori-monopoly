@@ -296,9 +296,13 @@ pub fn on(
         // ENG-COST: the entry's activation-cost amount for this player. Pure
         // and promptless (`fn(i32) -> i32`); the host refuses the press when
         // the player holds fewer and charges the amount before `OP_RUN`.
-        (On::PlayBody(PlayEntry { cost: Some((_, amount)), .. }), export::OP_COST) => {
-            amount(player_id) as i64
-        }
+        (
+            On::PlayBody(PlayEntry {
+                cost: Some((_, amount)),
+                ..
+            }),
+            export::OP_COST,
+        ) => amount(player_id) as i64,
         (_, export::OP_COST) => 0,
         // Activation-argument collector (docs/ACTIVATION.md §2). Runs before
         // the point of no return; the host stores the postcard bytes and

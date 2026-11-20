@@ -261,7 +261,8 @@ StubRules and the sim run.
 6. Is 强制购买 a 「购买」 for 「购买…时」 listeners? [no hooks today]
 7. Auction: is a win a 「购买格子」 for discounts? Does the auction [消耗] go
    through the pipeline?
-8. 巴's 「常规收购价一半」: what is the base (land / land + houses / 2× force)?
+8. 巴's 「常规收购价一半」: **ruled** — 「常规收购价」 is the force-buy figure
+   `2 * (price + houses * house)`; half is land + houses (`card_paths`).
 9. 迷宫般的仓库 raze + Afterglow free house: raze first, so 1 house remains?
    [yes]
 10. Do 「本回合」 linger effects end at this turn's end even in an extra turn,

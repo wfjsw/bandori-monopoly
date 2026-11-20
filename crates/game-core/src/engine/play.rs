@@ -1794,8 +1794,10 @@ impl PlayCtx<'_> {
     /// 2. **The deed comes off mortgage**, the same post-state `buy()` leaves.
     ///    规则书 基础settle 6: 「如果格子地契已抵押则无效果」 -- no house can be
     ///    built on a mortgaged deed -- and 巴's 「收购」 pays the 「常规收购价」
-    ///    (「地契购买价格」) with no 「仍为抵押状态」 clause, unlike 强制购买
-    ///    which states one explicitly. RULING in TEST-FINDINGS §6.
+    ///    halved (ruling 8: the force-buy figure `2 * (price + houses * house)`
+    ///    over 2, i.e. land price plus standing houses), with no
+    ///    「仍为抵押状态」 clause, unlike 强制购买 which states one explicitly.
+    ///    RULING in TEST-FINDINGS §6.
     /// 3. **Both acquisition hooks run**, the same pair `buy()` raises after an
     ///    ordinary purchase: `bought` (「a player became the owner of the tile」)
     ///    then `buyAfter` (「after the deed has changed hands」). Every
@@ -1863,8 +1865,10 @@ impl PlayCtx<'_> {
     /// 「收购」 (`docs/PURCHASE.md` P3) -- take `tile` from `from` at `price`:
     /// pipeline pay, then assign → `bought` → `buyAfter`. Replaces the manual
     /// `set_owner` + `raise_bought` pair (tomoe_savior's port target).
-    /// TODO(规则书) ruling 8: 巴's 「常规收购价一半」 base is undecided; the
-    /// caller passes the price.
+    /// Ruling 8 / C-Q4(4a): 巴's 「常规收购价一半」 is the force-buy figure
+    /// (`force_price_native` = `2 * (price + houses * house)`) halved, i.e.
+    /// land + houses; the caller (tomoe_savior) computes it and the engine
+    /// only takes the price.
     /// `true` when the deed actually changed hands. HOST-06.
     pub fn card_acquire(
         &mut self,

@@ -158,7 +158,7 @@ CeilTo when another modifier stacks after it.
 | **OPEN-强制购买支付钩** | may a 「写明改动强制购买」 effect retune the force-buy sum? Engine pays force-buy outside the money pipeline | G-MONEY-08; G-SETTLE-11 | May an effect that explicitly says it changes 强制购买 modify the force-buy amount? |
 | **OPEN-AGENT-MORTGAGED-HALF** | agent half-charge sweep vs a mortgaged member (no rent) | G-SETTLE-13 | In the agent's all-owned half-charge settle, is a mortgaged member skipped entirely (no half force-buy)? |
 | §6.11 RiNG mortgageability | engine refuses (`err.mortgage_ring`); book 游戏流程 5 says 「抵押拥有的地契」 with no exclusion | G-MONEY-05; G-BANKRUPT | Is a RiNG deed mortgageable? |
-| §6.13 巴's 「收购」 vs 「购买」 + mortgage | engine: acquisition is a purchase; commits un-mortgage | G-SETTLE / purchase | Is a priced 「收购」 a 「购买」 for 「购买…时」 listeners, and does it clear the mortgage? |
+| §6.13 巴's 「收购」 vs 「购买」 + mortgage | 4a **resolved**: 「常规收购价」 = the force-buy figure `2 * (price + houses * house)`, half = land + houses; 4b/4c still open (engine: acquisition is a purchase; commits un-mortgage) | G-SETTLE / purchase | 4a ruled; (4b) is a priced 「收购」 a 「购买」 for 「购买…时」 listeners, and (4c) does it clear the mortgage? |
 
 ### Cards / status / move / settle / flow / bankruptcy / counteract
 

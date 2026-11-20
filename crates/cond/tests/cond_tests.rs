@@ -209,8 +209,11 @@ fn uint_literal_rejected() {
 
 #[test]
 fn int_division_allowed() {
-    // `tile.price/2` is a real pattern (tomoe_savior).
+    // No live card needs it any more (tomoe_savior's base is now `tile.price +
+    // tile.houses * tile_attr(tile.id, "house")`), but the CEL spelling stays
+    // supported.
     assert!(compile("value >= tile.price / 2").is_ok());
+    assert!(compile("value >= tile.price + tile.houses * tile_attr(tile.id, \"house\")").is_ok());
 }
 
 // ---------------------------------------------------------------------------

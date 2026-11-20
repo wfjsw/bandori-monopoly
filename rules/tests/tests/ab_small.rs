@@ -243,10 +243,13 @@ fn a_v22_save_folds_legacy_fire_state_into_token_rows() {
     let mut t = Table::vanilla(2);
     t.strip_skills();
     t.clean();
-    let skill = t
-        .m
-        .world_mut()
-        .place_card(&data(), 0, "skill:测试:测火", Msg::default(), BTreeMap::new());
+    let skill = t.m.world_mut().place_card(
+        &data(),
+        0,
+        "skill:测试:测火",
+        Msg::default(),
+        BTreeMap::new(),
+    );
     assert!(skill >= 0);
     t.set_state_var(
         0,
@@ -304,7 +307,11 @@ fn a_v22_save_folds_legacy_fire_state_into_token_rows() {
     let p = &restored.state().players[0];
     assert_eq!(p.token("charge"), 3);
     assert_eq!(
-        p.tokens.iter().find(|c| c.name == "charge").unwrap().instance,
+        p.tokens
+            .iter()
+            .find(|c| c.name == "charge")
+            .unwrap()
+            .instance,
         None
     );
 

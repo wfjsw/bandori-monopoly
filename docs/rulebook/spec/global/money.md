@@ -108,7 +108,8 @@ build cost; the buy figure (price + houses) that the force-buy doubles.
 * **Rulings & OPEN:** the rate is a fixed 50% of the **price**, not of
   price+houses (contrast G-MONEY-07). Every printed price on the current
   board is even, so the half is exact. Immune to money modifiers (其他规则 6,
-  G-MONEY-08).
+  G-MONEY-08). 巴's card base is the force-buy figure halved (= price + houses),
+  distinct from this bare mortgage payout.
 * **Executable:** `g_money_05`. Scenario: `mortgage_pays_exactly_half_the_price`.
 
 ---

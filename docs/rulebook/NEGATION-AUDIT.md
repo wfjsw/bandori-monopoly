@@ -225,7 +225,7 @@ gate is **text-less**. Tag each `TODO(规则书)`.
 **Not play gates** (body-internal branches — leave alone): `black_birthday.rs:39`
 (bracket latch), `thanks_party.rs:24` (who is asked for an optional 500),
 `guerrilla.rs:103` / `sweet_escape.rs:147` / `tsugu_ycm.rs:105` /
-`tomoe_savior.rs:34` (price vs money inside a body), `starry_night.rs:196`
+`tomoe_savior.rs:25,73` (condition and price vs money inside a body), `starry_night.rs:196`
 (roller affordability). Event-side affordability checks
 (`events/src/lulu.rs:31`, `events/src/marina_box.rs:70`) gate an **optional**
 spend; `lulu.rs:28-30` already carries a `TODO(规则书)` on the shortfall

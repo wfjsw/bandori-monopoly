@@ -96,21 +96,6 @@ questions are in the appendix.
 - **expected**: decide (a) whether 「不受…影响」 also bars 「写明」 exceptions, (b) whether 强制购买 is a 「购买」 for 「购买…时」 listeners, (c) whether auction is a 「购买格子」 and whether auction [消耗] runs the pipeline.
 - **question**: C-Q3 (three sub-parts).
 
-## MONEY-05 — 巴 「常规收购价一半」 base + 收购-as-购买
-- **kind**: rulebook divergence
-- **class**: C
-- **severity**: high (AG shopping-street is a signature card)
-- **suggested batch**: payment pipeline
-- **locations**
-  - `crates/game-core/src/engine/play.rs:1815` (ruling 8 TODO)
-  - `rules/cards/card-ag/src/tomoe_savior.rs:70-73` (extra mortgage income raw vs `gain`, `price / 2` base)
-  - `docs/PURCHASE.md:250` ruling 8; TEST-FINDINGS §6 item 13
-  - tests (green, pin current): `card_paths::tomoe_savior_buy_listener_*`
-- **rulebook**: 「立刻支付常规收购价一半的价格从该玩家处收购该地契」 — 「收购」 not 「购买」; base (land / land+houses / 2× force) unnamed.
-- **current**: implemented as `price / 2` (land alone); hand-over runs `acquire` so every 「购买…时」 listener hears it; mortgage is cleared before the hook.
-- **expected**: decide the price base, whether 收购 is a 「购买」, and whether the mortgage stays.
-- **question**: C-Q4.
-
 ## W3-KAORU-03 — 「所有在薰所在格子的人」 excludes 薰 himself
 - **kind**: rulebook divergence
 - **class**: C
@@ -611,9 +596,9 @@ Three related questions on 基础[结算] 6.2 / 其他 6 「不受任何资金�
 
 **C-Q4 (MONEY-05, 巴 「常规收购价一半」).**
 AG:（巴）商店街的救世主 「立刻支付常规收购价一半的价格从该玩家处收购该地契」:
-(4a) What is 「常规收购价」 — land price only (the reading implemented), land + houses, or 2× force-buy total?
-(4b) Is 「收购」 a 「购买」 for 「购买…时」 listeners?
-(4c) Does the mortgage stay on the hand-over (the reading implemented keeps it; this port clears it so Afterglow's 「自动免费在上面加盖一栋房子」 can fire)?
+(4a) ~~What is 「常规收购价」 — land price only, land + houses, or 2× force-buy total?~~ **Ruled**: 「常规收购价」 is the ordinary forced-acquisition price, `force_price_native` = `2 * (tile.price + houses * tile.house)` (`crates/game-core/src/engine/play/purchase.rs`); 「一半」 cancels the factor 2, so the card pays `tile.price + houses * tile.house` (land + houses).
+(4b) Is 「收购」 a 「购买」 for 「购买…时」 listeners? *(implemented reading: yes)*
+(4c) Does the mortgage stay on the hand-over? *(implemented reading: no — this port clears it so Afterglow's 「自动免费在上面加盖一栋房子」 can fire)*
 
 **C-Q6 (MOVE-03, multi-activation).** *(updated)*
 A card / band skill with several press effects (MyGO band (2)/(3), Mor:（NNM）稍微努力了一下): should the player pick which activation fires, or should one `On::Play` entry branch? The engine now uses **one entry with an in-body branch** (placed vs hand) for MyGO and NNM. Is that the model for all of them?
@@ -1022,6 +1007,7 @@ One line each, so a source comment that cites the id still resolves. Outcome
 noted where it is known; all of these are closed in the tree.
 
 - **HOST-03** — closed: the 行动阶段 3 「回合开始后」 and 6 「经营、出牌阶段后」 hooks fire in stage order, once, and not on a 眩晕-skipped turn (`host03_windows.rs`, `ab_small.rs`). Cited: `rules/tests/tests/host03_windows.rs`, `rules/tests/tests/ab_small.rs`, `rules/tests/tests/g09_tile_build_pass.rs`.
+- **MONEY-05** — closed (C-Q4 4a ruled): 「常规收购价」 is the force-buy figure `2 * (price + houses * house)`; 「一半」 cancels the 2, so the card pays land + houses. Cited: `rules/cards/card-ag/src/tomoe_savior.rs`, `rules/tests/tests/card_paths.rs`.
 - **LOY-ANON-01** — closed: the capped re-link pays nothing (place-or-refuse stays atomic). Cited: `rules/tests/tests/ab_small.rs`, `crates/card-sdk/src/abi.rs`.
 - **LOY-THANKS-01** — closed: the offer reaches a pay-gated seat. Cited: `rules/tests/tests/ab_small.rs`, `crates/card-sdk/src/abi.rs`.
 - **CD-02** — closed: the folded `crystals_changed_of` guard still fires the j11 drain. Cited: `rules/tests/tests/ab_small.rs`, `crates/card-sdk/src/abi.rs`.

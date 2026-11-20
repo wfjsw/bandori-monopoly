@@ -3447,10 +3447,15 @@ pub fn arm_placed_cards(a: Args) -> i64 {
 /// 让我来结束一切's 3-pick loop; `card_derived` answers 0 for all of them.
 pub fn arm_event_card_ids(a: Args) -> i64 {
     let [buf, cap, ..] = a;
-    let ids: Vec<String> = ["event:kani-a", "event:kani-b", "event:kani-c", "event:kani-d"]
-        .iter()
-        .map(|s| (*s).to_string())
-        .collect();
+    let ids: Vec<String> = [
+        "event:kani-a",
+        "event:kani-b",
+        "event:kani-c",
+        "event:kani-d",
+    ]
+    .iter()
+    .map(|s| (*s).to_string())
+    .collect();
     let bytes = postcard::to_allocvec(&ids).unwrap_or_default();
     if buf == 0 {
         return bytes.len() as i64;

@@ -657,9 +657,11 @@ Exclusive to 宇田川巴.
 * **Effect:** the card may be played; the user immediately pays half the
   「常规收购价」 and acquires that deed from the mortgager.
 * **Frame:** `money:P*`, `owner:T<tile>`, `mortgaged:T<tile>`, card zones.
-* **Rulings & OPEN:** 「常规收购价」 is the tile's purchase price (TEST-FINDINGS
-  §6 item 13: 「the same number the rulebook calls 「地契购买价格」」).
-  「商店街地契」 = a group-10 deed. Whether the acquired deed stays mortgaged is
+* **Rulings & OPEN:** C-Q4(4a) ruled 「常规收购价」 to the ordinary
+  forced-acquisition price (`force_price_native` = `2 * (price + houses *
+  house)`); half is the land price plus the standing houses (for a bare deed
+  only, that equals the 「地契购买价格」). 「商店街地契」 = a group-10 deed.
+  Whether the acquired deed stays mortgaged is
   OPEN in the book; §6 item 13 records the engine un-mortgages (the book has
   no 「仍为抵押状态」, unlike 强制购买). The contract pins the money and the
   ownership transfer only.

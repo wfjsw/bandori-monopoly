@@ -61,8 +61,7 @@ pub const CRYCHIC: CardDef = CardDef::new(
         // 规则书（`PPP:Returns` [持续]（3））: 「使用因此卡获得的团卡的主动效果时需要
         // 支付1星星贴纸」 -- declared activation cost (ENG-COST); the host refuses
         // a short player and charges before the body.
-        On::Play("", Some(can_transform), transform_now)
-            .cost("星星贴纸", crate::copy_sticker_cost),
+        On::Play("", Some(can_transform), transform_now).cost("星星贴纸", crate::copy_sticker_cost),
     ],
 )
 .rule();

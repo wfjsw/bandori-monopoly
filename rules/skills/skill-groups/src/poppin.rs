@@ -233,9 +233,7 @@ fn before_settle(player_id: i32) -> card_sdk::Asked {
     }
     let mut payees: alloc::vec::Vec<i32> = alloc::vec::Vec::new();
     for p in 0..ctx::player_count() {
-        if ctx::in_group(p, "Poppin' Party")
-            && !ctx::player_out(p)
-            && !ctx::mortgaged_for(hill, p)
+        if ctx::in_group(p, "Poppin' Party") && !ctx::player_out(p) && !ctx::mortgaged_for(hill, p)
         {
             payees.push(p);
         }

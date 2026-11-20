@@ -2496,7 +2496,10 @@ impl CardWorld for Run {
         self.world.placed_cards(player_id)
     }
     fn card_tags(&self, card: &str) -> Vec<String> {
-        self.data.card(card).map(|c| c.tags.clone()).unwrap_or_default()
+        self.data
+            .card(card)
+            .map(|c| c.tags.clone())
+            .unwrap_or_default()
     }
     fn card_text_mentions(&self, card: &str, needle: &str) -> bool {
         if let Some(c) = self.data.card(card) {
@@ -7566,7 +7569,6 @@ impl<M: CardModules> RulesBridge<M> {
                 spec,
                 src,
             } => {
-
                 let shape = game_core::engine::PayShape::from_i32(spec & 0xF);
                 let kind = game_core::engine::PayKind::from_i32((spec >> 4) & 0xF);
                 let flags = (spec >> 8) & 0xF;
@@ -8335,7 +8337,9 @@ impl<M: CardModules> RulesBridge<M> {
         // count emptied by *any* path still leaves the field.
         for (owner, card, uid, name, change) in after.counter_log {
             if std::env::var("DBG_CT").is_ok() {
-                eprintln!("DBG_CT raise owner={owner} card={card} uid={uid} name={name} change={change}");
+                eprintln!(
+                    "DBG_CT raise owner={owner} card={card} uid={uid} name={name} change={change}"
+                );
             }
             self.raise_core(cx, "counterChanged", owner, |t| {
                 t.card = Some(card);
@@ -8667,9 +8671,7 @@ impl<M: CardModules> RulesBridge<M> {
                                 let Some(idx) = self.ruleset.card(&id) else {
                                     continue;
                                 };
-                                if std::env::var("DBG_CT").is_ok()
-                                    && id.contains("不再迷茫")
-                                {
+                                if std::env::var("DBG_CT").is_ok() && id.contains("不再迷茫") {
                                     eprintln!(
                                         "DBG_CT field cand uid={uid} id={id} kind={kind:?} hooks={}",
                                         self.ruleset.cards()[idx as usize].hooks(kind)
@@ -14889,13 +14891,12 @@ impl<M: CardModules> CardRules for RulesBridge<M> {
                 // generic stages never do. `BuyGate` still runs above (can-you-buy,
                 // not a price).
                 let mut price = base;
-                let stages: &[TriggerKind] = if q.kind
-                    == game_core::engine::purchase::BuyKind::Force
-                {
-                    &FORCE_BUY_STAGES
-                } else {
-                    &BUY_STAGES
-                };
+                let stages: &[TriggerKind] =
+                    if q.kind == game_core::engine::purchase::BuyKind::Force {
+                        &FORCE_BUY_STAGES
+                    } else {
+                        &BUY_STAGES
+                    };
                 for &kind in stages {
                     if !declares(kind) {
                         continue;

@@ -2482,15 +2482,7 @@ impl Ruleset {
         // the earlier pass's body writes may now refuse them. Only the declare
         // has to replay (it owns the argument and the answer cursor).
         if already_admitted {
-            return self.declare_after(
-                world,
-                card,
-                entry,
-                player_id,
-                log,
-                start_answer,
-                on_trap,
-            );
+            return self.declare_after(world, card, entry, player_id, log, start_answer, on_trap);
         }
         let condition = self
             .inner
@@ -2501,15 +2493,7 @@ impl Ruleset {
         if self.guard_is_none(card, entry) {
             return Ok(
                 if crate::condition::admits_condition(condition, scope, cand) {
-                    self.declare_after(
-                        world,
-                        card,
-                        entry,
-                        player_id,
-                        log,
-                        start_answer,
-                        on_trap,
-                    )?
+                    self.declare_after(world, card, entry, player_id, log, start_answer, on_trap)?
                 } else {
                     Admitted::No {
                         next_answer: start_answer,
@@ -2553,11 +2537,7 @@ impl Ruleset {
                     // swallow check below still runs. Report it (DECLARE-
                     // TRAP-LOG): the decline must not be silent.
                     if let Some(cb) = on_trap.as_deref_mut() {
-                        cb(
-                            store.data_mut().w(),
-                            entry,
-                            &format!("guard trapped: {e}"),
-                        );
+                        cb(store.data_mut().w(), entry, &format!("guard trapped: {e}"));
                     }
                     store_for_guard = Some(store);
                     Ok(false)
@@ -2581,15 +2561,9 @@ impl Ruleset {
             ));
         }
         Ok(match asked {
-            Ok(true) => self.declare_after(
-                world,
-                card,
-                entry,
-                player_id,
-                log,
-                st.log.cursor,
-                on_trap,
-            )?,
+            Ok(true) => {
+                self.declare_after(world, card, entry, player_id, log, st.log.cursor, on_trap)?
+            }
             _ => Admitted::No {
                 next_answer: st.log.cursor,
             },
@@ -3842,15 +3816,7 @@ impl CardModules for Ruleset {
         on_body: Option<&mut dyn FnMut(&mut crate::Run, i32)>,
         on_trap: Option<&mut dyn FnMut(&mut crate::Run, i32, &str)>,
     ) -> Result<Option<HookRun<crate::Run>>, RuleError> {
-        Ruleset::run_hook::<crate::Run>(
-            self,
-            world,
-            call,
-            log,
-            already_admitted,
-            on_body,
-            on_trap,
-        )
+        Ruleset::run_hook::<crate::Run>(self, world, call, log, already_admitted, on_body, on_trap)
     }
     fn can_counteract(
         &self,

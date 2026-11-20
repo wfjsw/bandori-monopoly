@@ -535,7 +535,10 @@ pub fn tile_in_buyable_is_price_based() {
     }
     kani::cover!(call_tile_in(-1, 1, "buyable") == 1, "property is buyable");
     kani::cover!(call_tile_in(-1, 8, "buyable") == 1, "RiNG is buyable");
-    kani::cover!(call_tile_in(-1, 31, "buyable") == 0, "the price-0 agent is not");
+    kani::cover!(
+        call_tile_in(-1, 31, "buyable") == 0,
+        "the price-0 agent is not"
+    );
     world::with_world_mut(|w| w.tiles[50].owner = 0);
     kani::cover!(
         call_tile_in(-1, 50, "buyable") == 1,
@@ -563,10 +566,7 @@ pub fn tile_in_livehouse_is_buyable_and_colour_6() {
                     let buy = call_tile_in(-1, i as i32, "buyable") == 1;
                     let color = call_tile_in(-1, i as i32, "color:6") == 1;
                     let live = call_tile_in(-1, i as i32, "livehouse") == 1;
-                    crate::kassert!(
-                        live == (buy && color),
-                        "M2: livehouse == buyable ∧ color:6"
-                    );
+                    crate::kassert!(live == (buy && color), "M2: livehouse == buyable ∧ color:6");
                     o += 1;
                 }
             }
@@ -575,8 +575,14 @@ pub fn tile_in_livehouse_is_buyable_and_colour_6() {
         outer += 1;
     }
     kani::cover!(call_tile_in(-1, 50, "livehouse") == 1, "Live House Galaxy");
-    kani::cover!(call_tile_in(-1, 31, "livehouse") == 0, "the agent is excluded");
-    kani::cover!(call_tile_in(-1, 8, "livehouse") == 1, "RiNG 1 is a Livehouse");
+    kani::cover!(
+        call_tile_in(-1, 31, "livehouse") == 0,
+        "the agent is excluded"
+    );
+    kani::cover!(
+        call_tile_in(-1, 8, "livehouse") == 1,
+        "RiNG 1 is a Livehouse"
+    );
 }
 
 /// M3 / IN-1: `color:<g>` reads the tile's own group; missing tiles answer 0.
@@ -631,7 +637,10 @@ pub fn owned_livehouse_witness() {
         call(Op::owned_at, [0, 0, 0, 0, 0, 0]) == 50,
         "the owned tile is 50"
     );
-    kani::cover!(call_tile_in(-1, 50, "livehouse") == 1, "still livehouse unowned");
+    kani::cover!(
+        call_tile_in(-1, 50, "livehouse") == 1,
+        "still livehouse unowned"
+    );
 }
 
 /// M5 / IN-2 end-to-end: emulating the card's filter (is_buyable(−1) then
