@@ -681,13 +681,14 @@ tiles, so the clause is dead where the card is doing its work.
 
 **(b) partial raise.** P0 owns 购物中心 (2 layers) and 天文馆 (2 layers, both
 built earlier with 羽丘) and may be anywhere. P0 plays Ringing Bloom, then
-plays （PAREO）渐渐远去的你 — 「可选择移除任意你拥有的格子上的一层房屋」 —
-and takes one layer off 天文馆 (2 → 1); the view recomputes and 天文馆, still
-under the max, stays raised. P1 lands on 天文馆: the table at 2, halved
-(2500/2 = 1250), (3) fires. **X is 2 as counted (+1000) or 1 as standing
-(+500).** Here the two numbers sit closer, and the standing read still pays
-on a tile whose rent is being read one level higher — the same split as (a),
-just smaller.
+plays 即使夕阳落山 — 「删除所有被[指定]格子上的1栋房」 — designating only
+天文馆 and taking one layer off it (2 → 1); the view recomputes and 天文馆,
+still under the max, stays raised. (The card's own X payment from the other
+player lands too and is not the (3) X.) P1 lands on 天文馆: the table at 2,
+halved (2500/2 = 1250), (3) fires. **X is 2 as counted (+1000) or 1 as
+standing (+500).** Here the two numbers sit closer, and the standing read
+still pays on a tile whose rent is being read one level higher — the same
+split as (a), just smaller.
 
 **(c) caught-up tile.** P0 owns 购物中心 (2 layers) and 天文馆 (1 layer),
 Ringing Bloom is already on P0's field (天文馆 raised) and P0 stands on 天文馆

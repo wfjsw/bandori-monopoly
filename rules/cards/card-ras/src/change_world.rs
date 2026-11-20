@@ -118,9 +118,10 @@ fn on_card_tile(_player_id: i32) -> bool {
 fn pay_choose(player_id: i32, mut v: PayAddValue) -> PayAddValue {
     let tile = ctx::self_tile().unwrap_or(-1);
     let houses = ctx::rent_houses_of(tile);
-    // TODO(规则书)（n为此卡放置格上房屋层数）: 「房屋数」 here has no 「视为」 -- read as the counted value
-    // the rent lookup itself uses, not the standing houses (Ringing Bloom's same
-    // reading).
+    // TODO(规则书)（n为此卡放置格上房屋层数）: 「房屋数」 here has no 「视为」.
+    // Ringing Bloom's X was ruled to the standing count (C-Q36); this card still
+    // reads the counted value the rent lookup uses and is not ruled -- align it
+    // if the same noun is meant.
     let bonus = 50 * (ctx::crystals() + 1) * houses;
     if bonus <= 0 {
         return PayAddValue {

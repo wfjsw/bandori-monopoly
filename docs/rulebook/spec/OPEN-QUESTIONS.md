@@ -142,9 +142,10 @@ CeilTo when another modifier stacks after it.
 
 * **Text:** vs counted house count (Ringing Bloom (3) X).
 * **Answer:** the **rent lookup** keeps the counted value — that is what the
-  「视为」 exists for — while an explicit X / amount formula reads the
-  **standing** count. Ringing Bloom (3) now reads `ctx::houses_of`; the rent
-  and its half-charge are unchanged.
+  「视为」 exists for. Ringing Bloom (3)'s per-tile X is ruled to the
+  **standing** count and reads `ctx::houses_of`; the rent and its half-charge
+  are unchanged. 改变世界's `n` (「房屋层数」) still reads the counted value and
+  is not ruled — align it only if the same noun is meant.
 * **Worked card examples:** BACKLOG C-Q36 (a–d: raised empty tile, partial
   raise, caught-up tile, razed owned tile).
 
