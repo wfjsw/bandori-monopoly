@@ -34,6 +34,12 @@ the kind to *branch behaviour*, never to reject. Consequence: the condition is
 no longer an optional hint — it is part of the decision and must be evaluated
 at every call site of its guard (§4.4).
 
+A **per-step** hook (`Pass` / `PassTile` / `PassPlayer` / `PassBefore`) is the
+case where layer 1 also decides presentation: a clause that only applies on a
+kind of tile must say so in the condition or the residual guard, never in a
+body-top `if … return`. Narrowed, it announces on its own; still true on every
+tile, it is silent bookkeeping (`docs/CARDS.md` "Per-step hooks").
+
 ## 1. Why — measurement
 
 `docs/BOT.md` §5 (4 standard bots, real ruleset, n=3–10): **55 900 module

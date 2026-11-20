@@ -21,7 +21,10 @@ pub const TOMORROWS_DOOR: CardDef = CardDef::new(
     "PPP:Tomorrow's Door",
     &[
         On::Play("", None, play),
-        On::Action(Action::PassTile("card.placed && actor == owner", Some(pass_tile_guard), pass_tile)),
+        // A hop per step: silent bookkeeping, the card's own position is the
+        // trace (`docs/CARDS.md` "Per-step hooks").
+        On::Action(Action::PassTile("card.placed && actor == owner", Some(pass_tile_guard), pass_tile))
+            .silent(),
         // 规则书: 「[拥有者]以外的玩家在[拥有者]拥有的格子或梦开始的地方[结算]时额外
         // 支付[拥有者]星之鼓动山丘上房子数量×100的资金」 -- the surcharge joins the
         // rent payment at `paySplitAdd` (before `paySplitMul`), so a 「支付减半」
@@ -116,17 +119,12 @@ fn pass_tile(player_id: i32) -> card_sdk::Asked {
     // 「如果已经所在为“大阪中之岛公园”则将此卡放置在此卡使用者的游玩区域」 --
     // the last stop is 大阪中之岛公园; past it the card goes back to the owner
     // (`tile = -1`), which is when the tax's `Action::SettleAfter` entry wakes up.
+    // The entry is silent: the card's own position is the trace of the hop.
     if next >= ROUTE.len() as i32 {
         ctx::set_self_tile(-1);
     } else {
         ctx::set_self_tile(ctx::tile_named(ROUTE[next as usize]));
     }
-    ctx::log(
-        player_id,
-        &Msg::new(key!("tomorrows_door_hop"))
-            .player_id("who", player_id)
-            .i("n", next as i64),
-    );
     Ok(())
 }
 

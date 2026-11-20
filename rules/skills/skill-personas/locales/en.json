@@ -108,7 +108,6 @@
   "kaoru_no_fire": "You need 7 fire pots.",
   "kaoru_note": "Thief Mark",
   "kaoru_option": "{{who}}",
-  "kaoru_removed": "Removed a [Thief Mark] from {{tile}}",
   "kaoru_spend": "The Dreamy Prince",
   "kaoru_title": "The Dreamy Prince",
   "kokoro_pass": "Kasumi Group: +1,500",
@@ -132,8 +131,7 @@
   "yukina_start": "Let's Practise: gained {{tile}} and start there",
   "yukina_stop_ask": "Stop at {{tile}}?",
   "yukina_stop_title": "Let's Practise",
-  "yukina_stopped": "Stopped at {{tile}}",
-  "yukina_waived": "First CiRCLE pass: no pass reward",
+
   "lisa_cancel_ask": "Spend 1 more fire pot to hand out a temporary pot and cancel this [Settle]?",
   "lisa_cancel_title": "Loving Goddess",
   "lisa_gain": "Loving Goddess: +1 fire pot",

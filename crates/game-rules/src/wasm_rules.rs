@@ -97,6 +97,21 @@ fn tile_local_kind(kind: TriggerKind) -> bool {
     )
 }
 
+/// A trigger that fires once per **step** of a walk: every tile passed, every
+/// tile stepped onto. A silent entry at one of these is bookkeeping by design
+/// (`docs/CARDS.md` "Per-step hooks"): the effect repeats at every step, so its
+/// trace is the state it writes, not a line per tile. An entry that narrows
+/// itself to a tile (condition or guard) may announce as usual.
+fn is_per_step_kind(kind: TriggerKind) -> bool {
+    matches!(
+        kind,
+        TriggerKind::Pass
+            | TriggerKind::PassTile
+            | TriggerKind::PassPlayer
+            | TriggerKind::PassBefore
+    )
+}
+
 /// Does a **placed** field instance hear a trigger for tile `t.tile`? A card
 /// lying on a tile only hears its own tile (a swap moves that set with the
 /// tile); a card with its owner (`tile < 0`) and a tile-less trigger still
@@ -964,6 +979,14 @@ impl Run {
     }
 
     fn post_log_value(&mut self, kind: &str, player_id: i32, msg: Msg, card: &str, value: i32) {
+        // A silent entry hides its presentation outright -- the per-step
+        // bookkeeping case (`docs/CARDS.md` "Per-step hooks"): the effect
+        // still lands, only the line is dropped. `logged` stays put so the
+        // silent guard keeps reporting a body's own `ctx::log` (a silent entry
+        // must not use one) rather than the engine line it legitimately posted.
+        if self.silent_body {
+            return;
+        }
         self.logged = self.logged.saturating_add(1);
         // Ruling 2a: the header goes just before the drive's first visible
         // outcome (this line).
@@ -7820,6 +7843,14 @@ impl<M: CardModules> RulesBridge<M> {
         let Some(what) = what else {
             return;
         };
+        // A per-step hook (「[经过]」/「[经过]…格时」) is silent on purpose: the
+        // effect repeats at every step and its trace is the state it writes,
+        // not a line per tile (`docs/CARDS.md` "Per-step hooks"). The guard's
+        // "silent must not hide a visible result" rule is about a clause the
+        // player sees once, so it does not apply here.
+        if is_per_step_kind(after.trigger.kind) {
+            return;
+        }
         record_silent_visible(card_id, what);
         debug_assert!(
             card_id.starts_with("TEST:"),

@@ -44,11 +44,14 @@ pub const YUKINA: CardDef = CardDef::new(
         // * （2）'s RiNG stop offer -- only with movement left;
         // * （3）'s 「任何时刻当你不位于RiNG时，失去所有的火罐」 -- any
         //   non-RiNG step while a pot is held.
+        // The union still hits nearly every step (the third arm), so the entry
+        // is silent: the pot counter is the trace, the offer still asks.
         On::Action(Action::Pass(
             "actor == owner && ((tile_is(tile.id, \"circle\") && state(owner, 'skill.kokoroPractice.waived') == 0) || (tile_is(tile.id, \"ring\") && move.remaining > 0) || (!tile_is(tile.id, \"ring\") && charge(owner) > 0))",
             None,
             on_pass,
-        )),
+        ))
+        .silent(),
         // （3）「当其他玩家移动[经过]您时」 -- 行动阶段 12 [经过], per step
         // (`SETTLE-STAGES.md` §4 M4), not the end-tile [重叠]. The guard reads
         // the mover and the tile being entered, so it is `passed_by`, not `mine`.
@@ -117,8 +120,8 @@ fn on_pass(player_id: i32) -> card_sdk::Asked {
         state::set(player_id, WAIVED, 1);
         ctx::set_prop(card_sdk::abi::prop::NO_REWARD, 0);
         // The waiver itself is the observable outcome of this pass (the
-        // suppressed reward is the tile's, not this card's line).
-        ctx::log(player_id, &Msg::new(key!("yukina_waived")));
+        // suppressed reward is the tile's, not this card's line) -- but the
+        // entry is silent, so it writes the flag only.
     }
     // （2） 「可以在[经过]的第一个RiNG停止移动」 -- offered on the first RiNG
     // the walk passes.
@@ -129,7 +132,6 @@ fn on_pass(player_id: i32) -> card_sdk::Asked {
             &Msg::new(key!("yukina_stop_ask")).tile("tile", t),
         )? {
             ctx::plan::set_stop_at(t);
-            ctx::log(player_id, &Msg::new(key!("yukina_stopped")).tile("tile", t));
         }
     }
     // （3） 「任何时刻当你不位于RiNG时，失去所有的火罐」.

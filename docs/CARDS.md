@@ -481,6 +481,36 @@ opposite case: an offer or an armed activation consumed at the plan pass (the
 G05 plan offer, 雨中祈晴's armed teleport). It announces, prompts and flashes
 as any Action does; only its own body's `plan.*` writes ride the activation
 header.
+### Per-step hooks are bookkeeping (`Pass` / `PassTile` / `PassPlayer` / `PassBefore`)
+
+A hook at a per-step kind runs again on **every tile** a walk passes or steps
+onto. A header, a flash and a line per tile is noise: the same 「效果适用」 with
+the same outcome repeats down the whole walk. Such an entry is silent.
+
+**Before marking it silent, narrow it.** Read the clause: if it only applies on
+a kind of tile, that is applicability, not effect, and it belongs in the
+entry's `condition` (CEL over `tile.*`) or its residual guard -- never in a
+body-top `if … return`. An entry that a condition or guard already narrows past
+"every tile" keeps announcing and needs nothing:
+
+```rust
+// narrow: only this named tile -- announces on its own
+On::Action(Action::Pass("card.placed && actor == owner && tile.id == tile_named('流星堂')", None, on_pass))
+// narrow: only tiles carrying a mark (`count_marks` is residual)
+On::Action(Action::PassTile("actor == owner", Some(has_mark_here), hook))
+// still every step: the clause acts on any tile -- silent
+On::Action(Action::Pass(card_sdk::condition::MINE, None, on_pass)).silent()
+```
+
+Silent here means the same as `On::silent` elsewhere, extended to the engine's
+own outcome lines: `ctx::gain` / `ctx::pay` / `ctx::spend_charge` write no
+`"gain"` / `"lose"` event under a silent body, so the state the effect wrote is
+the whole trace (the pot counter, the card's new tile, the mark removed).
+Prompts still show -- an offer asks whether or not the entry is silent.
+
+The silent debug guard (`take_silent_visible`) does not fire for these kinds:
+the "silent must not hide a visible result" rule is about a clause the player
+sees once, and a per-step effect is meant to be read off the board.
 
 ## Flash policy (`On::flash`, ABI v55)
 

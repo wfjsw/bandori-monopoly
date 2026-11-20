@@ -40,13 +40,14 @@ pub const KAORU: CardDef = CardDef::new(
         On::Play("", Some(can_use), use_skill).label("（2）"),
         On::Action(Action::TurnStartBefore("", None, declare_cap)).silent(),
         // （1） 「每次[经过]…时」 -- "I pass" is `actor == owner` (`MINE`); an
-        // unfiltered `Pass` fires for every passer's every step. The two halves
-        // of 「[经过]或被[经过]」 never both fire on one step: `Pass` here needs
-        // the owner to be the passer, and `PassTile` below needs someone else
-        // to step onto the owner's tile.
+        // unfiltered `Pass` fires for every passer's every step, so this half
+        // is silent bookkeeping (the pot / mark state is the trace). The two
+        // halves of 「[经过]或被[经过]」 never both fire on one step: `Pass`
+        // here needs the owner to be the passer, and `PassTile` below needs
+        // someone else to step onto the owner's tile.
         On::Action(Action::Pass(card_sdk::condition::MINE, None, on_pass))
             .label("（1）")
-            .quiet_when_empty(),
+            .silent(),
         // （1） 「…或被[经过]时」 -- 行动阶段 12 [经过] (`SETTLE-STAGES.md` §4
         // M4), the passer's step onto this player's tile -- not the end-tile
         // [重叠]. `target` is not on a `passTile` payload, so the condition
@@ -98,11 +99,8 @@ fn settle(player_id: i32) -> card_sdk::Asked {
         for name in [THIEF, THIEF_WIRE] {
             if ctx::held_count(p, name) > 0 {
                 // 「移除场上的一个[怪盗标记]」 -- one unit off that player's mark.
+                // Silent entry, so no line of its own.
                 ctx::add_held_by_name(p, name, -1, i32::MAX)?;
-                ctx::log(
-                    player_id,
-                    &Msg::new(key!("kaoru_removed")).player_id("who", p),
-                );
                 return Ok(());
             }
         }

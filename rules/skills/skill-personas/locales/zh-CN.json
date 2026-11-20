@@ -108,7 +108,6 @@
   "kaoru_no_fire": "你需要 7 个[火罐]。",
   "kaoru_note": "怪盗标记",
   "kaoru_option": "{{who}}",
-  "kaoru_removed": "移除 {{tile}} 上的一个[怪盗标记]",
   "kaoru_spend": "梦幻的王子殿下",
   "kaoru_title": "梦幻的王子殿下",
   "kokoro_pass": "弦卷集团：+1,500",
@@ -132,8 +131,7 @@
   "yukina_start": "来练习吧：获得 {{tile}} 并从此处开始",
   "yukina_stop_ask": "在 {{tile}} 停止移动？",
   "yukina_stop_title": "来练习吧",
-  "yukina_stopped": "在 {{tile}} 强制停下",
-  "yukina_waived": "首次经过CiRCLE：不获得经过奖励",
+
   "lisa_cancel_ask": "再消耗 1 个[火罐]，改为发放临时火罐并取消本次[结算]？",
   "lisa_cancel_title": "慈爱女神",
   "lisa_gain": "慈爱女神：+1 [火罐]",
