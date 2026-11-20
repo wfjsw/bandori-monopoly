@@ -592,9 +592,6 @@ AG:（巴）商店街的救世主 「立刻支付常规收购价一半的价格�
 **C-Q6 (MOVE-03, multi-activation).** *(updated)*
 A card / band skill with several press effects (MyGO band (2)/(3), Mor:（NNM）稍微努力了一下): should the player pick which activation fires, or should one `On::Play` entry branch? The engine now uses **one entry with an in-body branch** (placed vs hand) for MyGO and NNM. Is that the model for all of them?
 
-**C-Q7 (MOVE-05, mid-turn [停留]).**
-Glossary 51 says [停留]=「无法移动」. If a player gains [停留] *during* a move (after the roll, before the walk ends), does the current move stop immediately, or does the prohibition only apply to the next move? (Engine now: the latter; the immobile clamp runs only between roll and walk.)
-
 **C-Q10 (SETTLE-05, no_breakup R3).**
 Sumimi:no_breakup 「若传送并触发结算后未能使资金变为拥有相同数字，回到原处并取消所有受到的效果」: is 「触发结算后」 `settleAfter` or the `tileResolved` terminal? And does 「取消所有受到的效果」 undo money as well (「不进行任何结算」 scopes to the return)?
 
@@ -1059,6 +1056,8 @@ noted where it is known; all of these are closed in the tree.
 - **C-Q46 (W3-NANAMI-01)** — answered: the waived (2) press is the bare body (invoke-entry path skips the gate; `nanami_effort.rs:179`). Confirm only.
 - **C-Q49 (W3-HERE-01)** — closed 2026-11-06: (2) completion files the card to the graveyard (`Dest::Graveyard`, G08); the `here_held` prop replaced the old slot guard (`here_the_world.rs:26-89,152`).
 - **C-Q50 (W3-ONEOFUS-01)** — closed 2026-11-08, ruled: (a) real ownership move (`ctx::rehome_card`), (b) unconditional even for a deed sold on, (c) the deeds are card attachments and die with the card (`one_of_us_hands_over_a_deed_sold_to_a_third_party`).
+
+- **C-Q7 (MOVE-05, mid-turn [停留])** — ruled 2026-11-20: a layer gained *during* a walk applies at once -- the move's endpoint becomes the square the mover stands on (glossary 47 「[移动终点]视为当前所在格子且不[结算]」), a main move withholds its settle to the turn end, and the layer wears off at that same turn end (`play.rs::walk_inner_depth` step boundary, `move_gate_closed`; `midturn_stay.rs`).
 
 ---
 

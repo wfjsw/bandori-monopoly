@@ -489,7 +489,10 @@ and `TurnCtx::main_moved` is set, so 「一回合只能触发一次［主要移�
 player from rolling as well. `cant_act`'s `roll` / `end` gates both look at
 `main_moved`. Clearing a [停留] down to 0 also un-skips the move
 (`give_stay`): 「[停留]：处于该状态时[无法移动]」 makes the skip a consequence of
-the state, not a latch.
+the state, not a latch. The same consequence runs the other way mid-move: a
+[停留] that lands *during* a walk ends the walk at the square the mover stands
+on, withholds a main move's settle to the turn end, and wears off at that same
+turn end (C-Q7, `play.rs::walk_inner_depth` step boundary).
 
 ## Bot AI (mentalities)
 

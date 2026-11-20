@@ -922,6 +922,33 @@ fn end_stay(player_id: i32) -> card_sdk::Asked {
     Ok(())
 }
 
+/// Lands a [停留] on the actor **mid-walk** (the mover's first `pass` of the
+/// move): C-Q7 makes a stay gained mid-move apply at once -- the walk stops at
+/// the square the mover stands on, and a main move withholds its settle.
+const PASS_STAY: CardDef = CardDef::new(
+    "TEST:passStay",
+    &[
+        On::Play("", None, pass_stay_place),
+        On::Action(Action::Pass(
+            "actor == owner && card.placed",
+            None,
+            pass_stay,
+        )),
+    ],
+);
+
+fn pass_stay_place(player_id: i32) -> card_sdk::Asked {
+    ctx::set_dest(ctx::Dest::Field, card_sdk::abi::ZoneChangeCause::Play);
+    ctx::place_card(player_id, "TEST:passStay", &Msg::new(key!("pass_stay_note")));
+    Ok(())
+}
+
+fn pass_stay(player_id: i32) -> card_sdk::Asked {
+    rules_status::stay::add(player_id, 1);
+    ctx::log(player_id, &Msg::new(key!("pass_stay_done")));
+    Ok(())
+}
+
 /// Touches the first `PP:再次闪耀` on the board through its causer-aware
 /// immunity read: one [奇迹水晶] when `is_immune_from_at(uid, by)` is false.
 const IMMUNE_TOUCH: CardDef =
@@ -4751,6 +4778,7 @@ card_sdk::ruleset!(&[
     STAYER,
     PLAN_STAY,
     END_STAY,
+    PASS_STAY,
     IMMUNE_TOUCH,
     GUARD,
     AIMER,
