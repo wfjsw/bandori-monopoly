@@ -420,6 +420,44 @@ test("Animator: a skill rule's hook (not drawn in the field row) keeps the centr
   assert.equal(anim.pulse, null);
 });
 
+// -- chain overlay: cards only, two before it shows -------------------------
+
+/** Push frames and sample `chain` while the queue drains. */
+async function chainShots(frames: never[]) {
+  const { anim } = makeAnim();
+  const shots: { shown: boolean; links: { seq: number; card: string }[] }[] = [];
+  const poll = setInterval(() => {
+    if (anim.chain) shots.push({ shown: anim.chain.shown, links: anim.chain.links.map((l) => ({ seq: l.seq, card: l.card })) });
+  }, 5);
+  for (const e of frames) anim.push(e);
+  for (let i = 0; i < 600 && anim.animating; i++) await sleep(10);
+  clearInterval(poll);
+  return { anim, shots };
+}
+
+test("chain: a non-card link 1 joins no overlay; the first card stays a lone flash", async () => {
+  const { anim, shots } = await chainShots([
+    frame({ id: 101, type: "chain", card: "", value: 1, msg: { k: "log.chain_link_trigger" } }),
+    frame({ id: 102, type: "chain", card: "TEST:counter", value: 2, msg: { k: "log.chain_link" } }),
+  ]);
+  assert.ok(anim.chain, "the chain itself exists");
+  assert.deepEqual(anim.chain?.links.map((l) => l.seq), [2], "only the card is a link");
+  assert.equal(anim.chain?.links.every((l) => l.card), true);
+  assert.equal(shots.some((s) => s.shown), false, "one card never shows the overlay");
+  assert.equal(anim.chain?.done.length, 0);
+});
+
+test("chain: two cards show the overlay with both", async () => {
+  const { anim, shots } = await chainShots([
+    frame({ id: 111, type: "chain", card: "TEST:a", value: 1, msg: { k: "log.chain_link" } }),
+    frame({ id: 112, type: "chain", card: "TEST:b", value: 2, msg: { k: "log.chain_link" } }),
+  ]);
+  assert.deepEqual(anim.chain?.links.map((l) => l.card), ["TEST:a", "TEST:b"]);
+  const shown = shots.filter((s) => s.shown).at(-1);
+  assert.ok(shown, "two cards raise the overlay");
+  assert.deepEqual(shown!.links.map((l) => l.card), ["TEST:a", "TEST:b"]);
+});
+
 // -- full history -----------------------------------------------------------
 
 test("Animator: the log keeps the whole match (no tail cap)", () => {

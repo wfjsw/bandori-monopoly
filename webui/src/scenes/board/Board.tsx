@@ -8,7 +8,6 @@ import { useCompactValue, useStageFill } from "../../app/Stage";
 import { designBox } from "../../app/stageScale";
 import { RightTabs } from "./RightTabs";
 import { namesOf } from "../../core/names";
-import type { Msg } from "../../i18n/msg";
 import { t as tr } from "../../i18n/t";
 import { cx } from "../../core/cx";
 import { useAutoplay, useTick, useWakeLock } from "../../core/hooks";
@@ -247,8 +246,6 @@ export const Board = memo(function Board({ sess }: { sess: GameSession }) {
   rollClick.current = () => {
     if (control) void act(sess, { act: control });
   };
-  const names = namesOf(S);
-
   const nLinks = anim.chain?.links.length ?? 0;
   const cardW0 = nLinks <= 2 ? 150 : nLinks <= 4 ? 125 : nLinks <= 6 ? 105 : nLinks <= 8 ? 90 : 78;
   // The chain is sized as a fraction of the FX layer (the centre column), so it
@@ -311,7 +308,9 @@ export const Board = memo(function Board({ sess }: { sess: GameSession }) {
             )}
             {anim.chain?.shown && (
               <div className={cx(s.chain, anim.chain.resolving && s.chainResolving)} style={{ width: cardW * 3.2 }}>
-                {anim.chain.links.filter((l) => !anim.chain!.done.includes(l.seq) || l.seq === anim.chain!.active).map((l) => {
+                {anim.chain.links
+                  .filter((l) => !anim.chain!.done.includes(l.seq) || l.seq === anim.chain!.active)
+                  .map((l, i) => {
                   const ch = anim.chain!;
                   const done = ch.done.includes(l.seq);
                   return (
@@ -324,11 +323,9 @@ export const Board = memo(function Board({ sess }: { sess: GameSession }) {
                         ch.active === l.seq && !done && s.chainActive,
                         done && s.chainDone,
                       )}
-                      style={{ ["--owner" as string]: l.owner >= 0 ? m.colorOf(l.owner) : "var(--pink)", marginTop: l.seq > 1 ? -cardW * (l.seq === 2 && anim.chain!.links[0]?.origin ? 0.05 : 0.55) : 0 }}
+                      style={{ ["--owner" as string]: l.owner >= 0 ? m.colorOf(l.owner) : "var(--pink)", marginTop: i > 0 ? -cardW * 0.55 : 0 }}
                     >
-                      {l.card
-                        ? <CardFace id={l.card} size="big" width={cardW} className={s.chainFace} />
-                        : <ChainOrigin msg={l.origin} names={names} w={cardW} k={chainK} />}
+                      <CardFace id={l.card} size="big" width={cardW} className={s.chainFace} />
                       <span className={s.chainNo}>{l.seq}</span>
                     </div>
                   );
@@ -348,7 +345,7 @@ export const Board = memo(function Board({ sess }: { sess: GameSession }) {
                   className={s.flashFace}
                   style={{ ["--owner" as string]: anim.flash.owner >= 0 ? m.colorOf(anim.flash.owner) : "var(--pink)" }}
                 >
-                  <CardFace id={anim.flash.card} size="big" />
+                  <CardFace id={anim.flash.card} size="mini" className={s.flashCard} />
                   {(anim.flash.caption || anim.flash.detail.length > 0) && (
                     <div className={s.flashCaption}>
                       {anim.flash.caption && <div>{anim.flash.caption}</div>}
@@ -388,69 +385,3 @@ export const Board = memo(function Board({ sess }: { sess: GameSession }) {
 
 /** The FX layer height (design px) the chain's desktop sizes were drawn for: 900 stage - 110 top bar. */
 const FX_REF_H = 790;
-
-const ROLL_KINDS = new Set(["diceRollBefore", "diceRollValue"]);
-
-/** The tile standing in for a chain's link 1 when the timing is no card (a
- *  roll, a payment, a landing ...): an icon, what happened, and the
- *  particulars the engine recorded on the trigger. */
-const ChainOrigin = memo(function ChainOrigin({ msg, names, w, k }: { msg?: Msg; names: ReturnType<typeof namesOf>; w: number; k: number }) {
-  const text = (k: string) => (msg?.a?.[k] as { text?: string } | undefined)?.text ?? "";
-  const num = (k: string) => (msg?.a?.[k] as { i?: number } | undefined)?.i ?? 0;
-  const kind = text("kind");
-  const who = (msg?.a?.who as { playerId?: number } | undefined)?.playerId ?? -1;
-  const tile = (msg?.a?.tile as { tile?: number } | undefined)?.tile ?? -1;
-  const rent = text("rent") === "1";
-  // A kind with no label of its own shows its wire name.
-  const kindLabel = (k: string) => {
-    const key = `anim.chainKind.${k}`;
-    const v = tr(key);
-    return v === key ? k : v;
-  };
-  const label = kind ? kindLabel(rent && kind === "pay" ? "rent" : kind) : tr("anim.chainOrigin");
-  const pid = (k: string) => (msg?.a?.[k] as { playerId?: number } | undefined)?.playerId ?? -1;
-  const tid = (k: string) => (msg?.a?.[k] as { tile?: number } | undefined)?.tile ?? -1;
-  const has = (k: string) => msg?.a?.[k] !== undefined;
-  const fx = ((msg?.a?.effects as { list?: { msg?: Msg }[] } | undefined)?.list ?? []).flatMap((x) => (x.msg ? [x.msg] : []));
-  const fxLine = (m: Msg) => {
-    const g = (k: string) => (m.a?.[k] as { text?: string; i?: number; playerId?: number; tile?: number } | undefined);
-    const k = g("kind")?.text ?? "";
-    const bits = [
-      kindLabel(k),
-      g("target")?.playerId !== undefined ? `→ ${names.playerId(g("target")!.playerId!)}` : "",
-      g("tile")?.tile !== undefined ? names.tile(g("tile")!.tile!) : "",
-      g("value")?.i ? String(g("value")!.i) : "",
-    ];
-    return bits.filter(Boolean).join(" ");
-  };
-  const lines = [
-    who >= 0 ? names.playerId(who) : "",
-    pid("target") >= 0 ? tr("anim.chainTarget", { who: names.playerId(pid("target")) }) : "",
-    pid("by") >= 0 ? tr("anim.chainBy", { who: names.playerId(pid("by")) }) : "",
-    ROLL_KINDS.has(kind) ? tr("anim.chainFace", { n: num("value") }) : num("value") ? tr("anim.chainValue", { n: num("value") }) : "",
-    has("mv_roll") && !(ROLL_KINDS.has(kind) && num("mv_roll") === num("value")) ? tr("anim.chainFace", { n: num("mv_roll") }) : "",
-    has("mv_total") && num("mv_total") > 0 ? tr("anim.chainMove", { from: tid("mv_from") >= 0 ? names.tile(tid("mv_from")) : "?", n: num("mv_total"), left: num("mv_left") }) : "",
-    has("price") ? tr("anim.chainPrice", { n: num("price") }) : "",
-    tile >= 0 ? names.tile(tile) : "",
-    text("src") ? tr(`anim.chainSrc.${text("src")}`) : "",
-    text("main") === "1" ? tr("anim.chainMain") : "",
-    ...fx.map(fxLine),
-  ].filter(Boolean);
-  return (
-    <div className={s.chainOrigin} style={{ width: Math.max(w, 124 * k), minHeight: w * 1.5, fontSize: Math.max(11 * k, w * 0.1) }}>
-      {ROLL_KINDS.has(kind) && <DiceIcon size={Math.max(34 * k, w * 0.4)} />}
-      <b>{label}</b>
-      {lines.map((l, k) => <span key={k}>{l}</span>)}
-    </div>
-  );
-});
-
-/** A die face (five pips), drawn inline so it never depends on an asset. */
-const DiceIcon = memo(function DiceIcon({ size }: { size: number }) {
-  return (
-    <svg className={s.chainDice} width={size} height={size} viewBox="0 0 40 40" aria-hidden="true">
-      <rect x="3" y="3" width="34" height="34" rx="8" fill="#fff" stroke="#e0527f" strokeWidth="3" />
-      {[[12, 12], [28, 12], [20, 20], [12, 28], [28, 28]].map(([x, y]) => <circle key={`${x}-${y}`} cx={x} cy={y} r="3.2" fill="#e0527f" />)}
-    </svg>
-  );
-});

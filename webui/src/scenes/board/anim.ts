@@ -135,11 +135,12 @@ export class Animator {
    *  cue). `uid` is the field instance. */
   pulse: { uid: number; id: number; ms: number } | null = null;
   /** The [反击] chain under construction / resolving (Master Duel style): the
-   *  links so far (1 = the initiating card), the link settling now, and the
-   *  links already settled. `shown` turns on with the second link -- a lone
-   *  initiating card is not a chain. */
+   *  card links so far (their `seq` is the engine's link number, 1 = the
+   *  initiating card), the link settling now, and the links already settled.
+   *  Non-card timings carry no face and never become links, so `shown` turns
+   *  on only once two cards are on the chain -- a lone card is just its flash. */
   chain: {
-    links: { seq: number; card: string; owner: number; fresh: number; origin?: Msg }[];
+    links: { seq: number; card: string; owner: number; fresh: number }[];
     shown: boolean;
     resolving: boolean;
     active: number;
@@ -726,59 +727,67 @@ export class Animator {
     while (this.flash && !this.disposed) await sleep(30 / Math.max(1, this.speed));
   }
 
-  /** A link joins the chain: the card flashes (the initiating card first),
-   *  the second link raises the Chain banner, then the card is appended to the
-   *  chain stack with the link animation. */
+  /** A card joins the chain: it flashes (the initiating card first) and is
+   *  appended to the chain stack. The Chain banner and the stack itself wait
+   *  for the second card -- a lone card, and every non-card timing, is only
+   *  the flash. */
   private async chainLink(e: MatchEvent, fast: boolean): Promise<void> {
     const seq = e.value;
     const quiet = this.noFlash();
     if (seq <= 1 || !this.chain) {
       this.chain = { links: [], shown: false, resolving: false, active: 0, done: [] };
-      // A chain on a timing with no card of its own (a board event) opens
-      // without a link 1 event on old records: stand one in.
-      if (seq > 1) this.chain.links.push({ seq: 1, card: "", owner: -1, fresh: 0 });
     }
-    const link = { seq, card: e.card, owner: e.playerId, fresh: ++this.seq, origin: seq === 1 && !e.card ? e.msg : undefined };
-    if (!quiet && e.card) {
+    // A timing with no card of its own (a roll, a payment, a landing ...) has
+    // no face to show on the chain overlay.
+    if (!e.card) return;
+    const link = { seq, card: e.card, owner: e.playerId, fresh: ++this.seq };
+    if (!quiet) {
       await this.cardFlash({ ...e, kind: "counter", msg: e.msg, results: [], negated: false }, false);
       await this.flashGone();
       if (this.disposed) return;
     }
     this.chain.links = [...this.chain.links, link];
-    if (seq >= 2 && !quiet) {
+    // Two cards make a chain; the first one only flashed.
+    if (this.chain.links.length >= 2 && !quiet) {
       // The chain appears only while a card attaches, then goes.
       const ch = this.chain;
+      const opening = ch.links.length === 2;
       ch.shown = true;
       sfx("place");
-      if (seq === 2) {
+      if (opening) {
         if (!fast) sfx("prompt");
         this.showChainTitle(tr("anim.chain"));
       }
       this.bump();
-      await this.nap(seq === 2 ? 1100 : chainStep(CHAIN_LINK_MS, ch.links.length));
+      await this.nap(opening ? 1100 : chainStep(CHAIN_LINK_MS, ch.links.length));
       ch.shown = false;
       this.bump();
     }
   }
 
-  /** The closed chain settles newest-first: a Resolve title, then each link
-   *  is shown for a beat as it comes off the chain. The chain is gone before
-   *  the link's effect events play, so each effect lands right after its card. */
+  /** The closed chain settles newest-first: a Resolve title, then each card
+   *  link is shown for a beat as it comes off the chain. The chain is gone
+   *  before the link's effect events play, so each effect lands right after
+   *  its card. A chain of one card never showed the overlay and settles
+   *  without it; a non-card link has no face and settles silently. */
   private async chainResolve(e: MatchEvent): Promise<void> {
     const quiet = this.noFlash();
     const ch = this.chain;
     if (!ch) return;
+    // `multi` = the overlay exists (two cards or more).
+    const multi = ch.links.length >= 2;
     if (e.value === 0) {
       ch.resolving = true;
-      if (!quiet) {
+      if (!quiet && multi) {
         sfx("prompt");
         this.showChainTitle(tr("anim.resolve"));
         await this.nap(900);
       }
       return;
     }
+    const onChain = ch.links.some((l) => l.seq === e.value);
     ch.active = e.value;
-    if (!quiet) {
+    if (!quiet && multi && onChain) {
       ch.shown = true;
       sfx("card_play");
       this.bump();
@@ -786,7 +795,7 @@ export class Animator {
     }
     // The card fades off the chain, then the board is clear for its effect.
     ch.done = [...ch.done, e.value];
-    if (!quiet) {
+    if (!quiet && multi && onChain) {
       this.bump();
       await this.nap(250);
     }
