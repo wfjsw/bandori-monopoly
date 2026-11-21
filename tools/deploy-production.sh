@@ -1,12 +1,13 @@
 #!/usr/bin/env bash
-# Release to the live site: pull master into this worktree, build for production,
+# Release to the live site: reset this worktree onto master, build for production,
 # seal the built engine into the archive, cut over, and verify. Run it from a
 # deploy worktree, never from the checkout a dev server is serving (the build
 # writes webui/dist). The deploy is refused unless the live site serves the exact
 # engine bundle this run sealed -- a record sealed by it must stay replayable.
 #
 #   node tools/build-production.mjs      the build steps on their own
-#   tools/deploy-production.sh           this script: merge + build + deploy + check
+#   tools/deploy-production.sh           this script: reset + build + deploy + check
+#   tools/deploy-production.sh --prepare-only   reset onto master and stop
 #   tools/deploy-production.sh --no-merge   redeploy the tree as it stands
 #
 # Everything a deploy touches is overridable; the defaults are the bmdev host:
@@ -16,14 +17,16 @@
 #   SITE        bm.piggy.link              Host: header used for the health checks
 #   BACKEND     127.0.0.1:8081             backend address for the health checks
 #
-# The branch this worktree sits on is local and is never pushed. Master is only
-# read (merged in); nothing is merged into master here.
+# The branch this worktree sits on is local, disposable, and never pushed: a
+# deploy makes it exactly master plus one archive commit. Nothing is merged into
+# master here.
 #
-# The engine archive is append-only and is written by every deploy, so before
-# merging this script parks the worktree's uncommitted archive entries, merges
-# master on a clean tree, unions them back (tools/merge-engine-archive.mjs), and
-# commits the result at the end. An interrupted merge keeps the parked entries
-# in target/scratch/archive-park for the rerun.
+# The engine archive is append-only and is written by every deploy, so the reset
+# parks the worktree's archive (index + reference records), hard-resets master,
+# and unions the parked entries back (tools/merge-engine-archive.mjs). Entries
+# are keyed by immutable bundle id, so no merge -- and no merge conflict -- is
+# involved. An interrupted run keeps the park in target/scratch/archive-park for
+# the rerun.
 
 set -euo pipefail
 
@@ -37,10 +40,12 @@ ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 cd "$ROOT"
 
 DO_MERGE=1
+PREPARE_ONLY=0
 for arg in "$@"; do
   case "$arg" in
     --no-merge) DO_MERGE=0 ;;
-    -h|--help) sed -n '2,18p' "$0" | sed 's/^# \{0,1\}//'; exit 0 ;;
+    --prepare-only) PREPARE_ONLY=1 ;;
+    -h|--help) sed -n '2,29p' "$0" | sed 's/^# \{0,1\}//'; exit 0 ;;
     *) echo "deploy-production: unknown argument: $arg" >&2; exit 2 ;;
   esac
 done
@@ -57,67 +62,56 @@ if [ "$(cd "$common" && pwd)" = "$(cd "$here" && pwd)" ]; then
 fi
 
 # ---------------------------------------------------------------- 1. master
-# `archive/engine/index.json` and its reference records are an append-only
-# catalog: this worktree writes them on every deploy, and master receives
-# entries the same way. git refuses to merge over those uncommitted files, so
-# park them, merge on a clean tree, and union the parked entries back in. Both
-# sides may also have sealed different bundles; that conflict is resolved by
-# taking master's index verbatim (the parked entries are unioned back, so
-# nothing of ours is lost). Entries are keyed by immutable bundle id.
+# The deploy branch is disposable and production is always a master commit, so
+# this never merges. Park the archive, hard-reset onto master, union the parked
+# entries back: no conflict is possible. Master's index is already in the tree
+# after the reset and the parked entries are keyed by immutable bundle id.
 park="$ROOT/target/scratch/archive-park"
 if [ "$DO_MERGE" = 1 ]; then
-  log "reconcile the engine archive before merging"
-  # An earlier attempt may have stopped in the merge with only the index
-  # conflicted. Rewind it; the parked entries below are the complete record.
+  log "reset onto master"
+  git rev-parse -q --verify master >/dev/null || die "no master branch to deploy from"
+
+  # The reset discards everything not in master; nothing but the archive may
+  # ride through it.
+  stray="$(git status --porcelain -- . ':(exclude)archive/engine')"
+  [ -z "$stray" ] || die "uncommitted changes outside archive/engine would be lost by the reset:
+$stray"
+
+  # A deploy interrupted by the old merge-based script can still leave a
+  # conflicted merge behind; clear it before touching anything.
   if git rev-parse -q --verify MERGE_HEAD >/dev/null; then
-    pending="$(git diff --name-only --diff-filter=U)"
-    if [ -z "$pending" ] || [ "$pending" = "archive/engine/index.json" ]; then
-      step "rewinding the interrupted merge"
-      git merge --abort
-    else
-      die "a merge with real conflicts is in progress -- resolve it in $ROOT and rerun"
-    fi
+    step "rewinding an interrupted merge"
+    git merge --abort
   fi
-  mkdir -p "$park/refs"
-  # A previous run that died after parking left its entries here; fold them
-  # into the worktree index first so an interrupted deploy can be rerun.
+
+  # A run that died after parking is the complete record: fold it into the
+  # worktree first, then park again, so nothing of this worktree disappears.
   if [ -f "$park/index.json" ]; then
     step "recovering entries parked by an interrupted run"
-    node tools/merge-engine-archive.mjs --into archive/engine/index.json --from "$park/index.json"
+    node tools/merge-engine-archive.mjs --into archive/engine/index.json \
+      --from "$park/index.json" --refs-from "$park/refs"
   fi
+  mkdir -p "$park/refs"
   cp archive/engine/index.json "$park/index.json"
-  git ls-files --others --exclude-standard -z -- archive/engine/refs |
-    xargs -0 -r cp -t "$park/refs/"
+  # Reference records, tracked or not: the reset drops whatever master lacks.
+  if [ -d archive/engine/refs ]; then cp -a archive/engine/refs/. "$park/refs/"; fi
   step "parked $(node -e 'process.stdout.write(String(JSON.parse(require("fs").readFileSync(process.argv[1],"utf8")).bundles.length))' "$park/index.json") archive entries"
-  git restore --worktree --staged -- archive/engine
-  git ls-files --others --exclude-standard -z -- archive/engine/refs | xargs -0 -r rm -f
 
-  log "merge master"
-  if ! git merge master --no-edit; then
-    if ! git rev-parse -q --verify MERGE_HEAD >/dev/null; then
-      die "merge of master did not start -- uncommitted changes outside the archive block it; deal with them and rerun (parked archive: $park)"
-    fi
-    pending="$(git diff --name-only --diff-filter=U)"
-    if [ "$pending" = "archive/engine/index.json" ]; then
-      # Both sides sealed bundles. Master's entry list wins here; ours arrive
-      # through the union below.
-      git checkout --theirs -- archive/engine/index.json
-      git add -- archive/engine/index.json
-      git commit -q --no-edit
-    else
-      # the parked archive is the only copy of this worktree's uncommitted
-      # entries; a rerun picks it up, so keep it.
-      die "merge of master failed -- resolve it in $ROOT and rerun (parked archive: $park)"
-    fi
-  fi
+  git reset --hard master
   git log --oneline -1 | sed 's/^/   /'
 
   log "restore the parked archive entries"
-  node tools/merge-engine-archive.mjs --into archive/engine/index.json --from "$park/index.json" --refs-from "$park/refs"
+  node tools/merge-engine-archive.mjs --into archive/engine/index.json \
+    --from "$park/index.json" --refs-from "$park/refs"
   rm -rf "$park"
 else
-  log "merge master (skipped: --no-merge)"
+  log "reset onto master (skipped: --no-merge)"
   git log --oneline -1 | sed 's/^/   /'
+fi
+
+if [ "$PREPARE_ONLY" = 1 ]; then
+  step "prepare only: stopping before the build"
+  exit 0
 fi
 
 # ---------------------------------------------------------------- 2. build
