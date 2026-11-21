@@ -748,6 +748,12 @@ file). That is what the `os.tmpdir()` worktree is for. The index records
 
 ### 9.6 Deploy steps
 
+The deploy runs from a **permanent worktree on the local `deploy` branch,
+`/home/monopoly/deploy`** (`tools/deploy-production.sh` refuses the primary
+checkout, where the dev server serves `webui/dist`). It merges master, builds,
+seals, and commits the archive block itself; nothing is pushed from it. Its
+`data/engine-archive` is the working store -- keep it complete.
+
 1. `node tools/build-glue.mjs` (part of `npm run build`) -- writes
    `webui/src/wasm/engine_id.json` with the glue sha **and** the commit /
    dirty flag / toolchain of the bytes just built.
