@@ -405,7 +405,11 @@ def run(args) -> int:
     #     without an anchor simply keeps the CSS fallback until `faces.py
     #     --detect` fills it.
     from faces import ANCHORS as FACE_ANCHORS, build as build_faces  # noqa: E402
-    face_anchors = json.loads(FACE_ANCHORS.read_text(encoding="utf-8")) if FACE_ANCHORS.exists() else {}
+    try:
+        face_anchors = json.loads(FACE_ANCHORS.read_text(encoding="utf-8")) if FACE_ANCHORS.exists() else {}
+    except (OSError, ValueError) as e:  # a hand-edited cache must not break the export
+        print(f"   faces: unreadable {FACE_ANCHORS.name} ({e}); avatars get the CSS fallback", file=sys.stderr)
+        face_anchors = {}
     for cid, extra in build_faces(out, p.manifest["personas"], face_anchors, force=False, quiet=False).items():
         p.manifest["personas"].setdefault(cid, {}).update(extra)
 

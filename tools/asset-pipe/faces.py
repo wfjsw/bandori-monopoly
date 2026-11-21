@@ -9,14 +9,19 @@ from a face anchor, so every avatar puts the head at the same place and scale:
   img/char/sd_<id>.webp -> img/char/avatar_<id>.webp (192x192 WebP)
 
 The anchors live in `faces.json` beside this script (tracked, display data):
-id -> [cx, cy, side, score] in raw source pixels. `--detect` fills missing ids
-with the YOLOv3 anime-face detector (anime-face-detector, CPU), and hand edits
-survive because detection only touches missing ids unless --force is given.
-Regenerating the crops needs only Pillow; the detector is optional.
+id -> [cx, cy, side, score] in raw source pixels. That file *is* the detection
+cache: `--detect` only runs the model for ids that have no anchor yet, so a
+rebuild (or a new character) never re-runs it. Hand edits survive too; delete
+an entry (or pass --force) to have it detected again. A crop is only rebuilt
+when its source or `faces.json` is newer than the crop. Regenerating the crops
+needs only Pillow; the detector is optional.
+
+Low-confidence anchors (score < 0.6) are printed as a hint to eyeball the
+contact sheet and adjust the anchor by hand.
 
 Usage:
   python faces.py --detect     # detect missing anchors, then build + patch manifest
-  python faces.py              # rebuild crops from faces.json
+  python faces.py              # rebuild crops from faces.json (no model)
   python faces.py --force      # re-detect every id (hand edits are lost)
   python faces.py --sheet /tmp/avatars.png   # contact sheet for review
 """
@@ -130,6 +135,8 @@ def detect(paths: dict[str, Path], anchors: dict[str, list[float]], force: bool,
             print(f"   faces: {done}/{len(todo)} {cid}: {'hit' if anchor else 'no face'}", file=sys.stderr)
             if anchor:
                 anchors[cid] = anchor
+                if anchor[3] < 0.6:
+                    print(f"   faces: {cid}: low confidence ({anchor[3]}) -- check the sheet", file=sys.stderr)
                 ANCHORS.write_text(json.dumps(anchors, indent=1, sort_keys=True), encoding="utf-8")
 
 
@@ -150,11 +157,16 @@ def build(out: Path, characters: dict, anchors: dict[str, list[float]], force: b
         if not src.exists():
             print(f"   faces: missing source {src_rel}", file=sys.stderr)
             continue
-        if dest.exists() and not force and dest.stat().st_mtime >= src.stat().st_mtime:
-            skipped += 1
-        else:
+        # An edited anchor must rebuild the crop: faces.json's mtime is part of
+        # the freshness test, so a plain run picks hand tuning up.
+        stale = not dest.exists() or force or src.stat().st_mtime > dest.stat().st_mtime
+        if not stale and ANCHORS.exists() and ANCHORS.stat().st_mtime > dest.stat().st_mtime:
+            stale = True
+        if stale:
             make_avatar(src, dest, anchor)
             made += 1
+        else:
+            skipped += 1
         extra.setdefault(cid, {})["avatar"] = dest_rel
     if not quiet:
         print(f"== faces: {made} written, {skipped} up to date, {missing} without an anchor")
