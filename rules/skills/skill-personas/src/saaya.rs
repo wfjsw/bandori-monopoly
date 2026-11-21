@@ -13,11 +13,13 @@
 //! 格子」 is the floor: a shave that empties the face sends the mover to the
 //! next buyable tile instead.
 
-use bandori_std::ctx;
+use bandori_std::ctx::{self, state};
 use card_sdk::abi::Dice;
 use card_sdk::{key, Action, CardDef, Filter, Msg, On, PlanValue};
 
 const MARK: &str = "saaya标记";
+/// The roll whose mark was spent; the settled arm floors only that one.
+const FLOOR: &str = "skill.saayaSky.floor";
 
 pub const SAAYA: CardDef = CardDef::new(
     "skill:山吹沙绫:焕然一新的天空中",
@@ -40,6 +42,14 @@ pub const SAAYA: CardDef = CardDef::new(
             card_sdk::condition::MINE,
             Some(roll_needs_mark),
             on_roll,
+        )),
+        // 「计算后小等于0…」 must also cover a re-cast (which never raises
+        // After) and must decide on the face the player actually kept, so it
+        // runs at `diceRollSettled` -- once per transaction, after the pick.
+        On::Action(Action::DiceRollSettled(
+            card_sdk::condition::MINE,
+            Some(is_floored_roll),
+            on_result,
         )),
         // （2）'s 「可使用5个[火罐]」 -- the amount and the pot are the
         // applicability; spending the pot is the cost, kept in the body.
@@ -118,11 +128,23 @@ fn on_plan(_player_id: i32, mut v: PlanValue) -> PlanValue {
     v
 }
 
-/// （1）「拥有saaya标记时投掷移动骰时失去1个saaya标记，此次投掷结果减1d10
-/// （计算后小等于0则移动到下一个可购买格子）」. The face already carries the
-/// plan's d10; this arm only spends the mark and applies the floor.
+/// （1）「拥有saaya标记时投掷移动骰时失去1个saaya标记」. The face already
+/// carries the plan's d10; this arm only spends the mark and pins the floor to
+/// this roll.
 fn on_roll(player_id: i32) -> card_sdk::Asked {
     ctx::add_held_by_name(player_id, MARK, -1, 1)?;
+    state::set(player_id, FLOOR, ctx::trigger::roll_id());
+    Ok(())
+}
+
+/// Is this the roll whose mark was spent (set by [`on_roll`])?
+fn is_floored_roll(player_id: i32) -> bool {
+    let id = ctx::trigger::roll_id();
+    id >= 0 && id == state::get(player_id, FLOOR)
+}
+
+/// 「计算后小等于0则移动到下一个可购买格子」 -- on the face that settles.
+fn on_result(player_id: i32) -> card_sdk::Asked {
     let after = ctx::trigger::move_roll().unwrap_or(ctx::trigger::value());
     if after <= 0 {
         // 「计算后小等于0则移动到下一个可购买格子」 -- the face is empty, so the

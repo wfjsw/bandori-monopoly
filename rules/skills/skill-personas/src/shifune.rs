@@ -23,6 +23,8 @@ const PARTNER: &str = "skill.tukushiTry.partner";
 const LEFT: &str = "skill.tukushiTry.left";
 /// 「在此技能效果影响下触发结算时…」 -- the pay bend / build kickback latch.
 const SPELL: &str = "skill.tukushiTry.spell";
+/// The roll whose charge was spent; the settled arm floors only that one.
+const FLOOR: &str = "skill.tukushiTry.floor";
 
 pub const SHIFUNE: CardDef = CardDef::new(
     "skill:都筑诗船:尽力了吗",
@@ -39,8 +41,12 @@ pub const SHIFUNE: CardDef = CardDef::new(
             None,
             on_plan,
         )),
-        // The floor 「若由于此效果导致移动数为0…」 reads the settled face.
         On::Action(Action::DiceRollAfter("", Some(paired), on_roll)),
+        // The floor 「若由于此效果导致移动数为0…」 must also cover a re-cast
+        // (which never raises After) and must decide on the face the player
+        // actually kept, so it runs at `diceRollSettled` -- once per
+        // transaction, after the pick.
+        On::Action(Action::DiceRollSettled("", Some(is_floored_roll), on_result)),
         On::Filter(Filter::PaySplitMul("", Some(paired), on_pay)),
         On::Action(Action::HouseAdded("", Some(partner), on_built)),
     ],
@@ -134,15 +140,27 @@ fn on_plan(player_id: i32, mut v: PlanValue) -> PlanValue {
     v
 }
 
-/// （2）「接下来的两次移动掷骰先后-1d6与+1d6，若由于此效果导致移动数为0，则视为
-/// 原地进行一次结算」. The face already carries the plan's d6; this arm only
-/// spends the charge and checks the floor.
+/// （2）「接下来的两次移动掷骰先后-1d6与+1d6」 -- the face already carries the
+/// plan's d6; this arm only spends the charge and pins the floor to this roll.
 fn on_roll(player_id: i32) -> card_sdk::Asked {
     let left = state::get(player_id, LEFT);
     if left <= 0 {
         return Ok(());
     }
     state::set(player_id, LEFT, left - 1);
+    state::set(player_id, FLOOR, ctx::trigger::roll_id());
+    Ok(())
+}
+
+/// Is this the roll whose charge was spent (set by [`on_roll`])?
+fn is_floored_roll(player_id: i32) -> bool {
+    let id = ctx::trigger::roll_id();
+    id >= 0 && id == state::get(player_id, FLOOR)
+}
+
+/// 「若由于此效果导致移动数为0，则视为原地进行一次结算」 -- on the face that
+/// settles.
+fn on_result(player_id: i32) -> card_sdk::Asked {
     let after = ctx::trigger::move_roll().unwrap_or(ctx::trigger::value());
     if after <= 0 {
         // 「若由于此效果导致移动数为0，则视为原地进行一次结算」

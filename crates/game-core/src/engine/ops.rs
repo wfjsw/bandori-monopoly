@@ -888,9 +888,12 @@ impl World {
                 if t.dice.sides <= 0 {
                     lo += t.dice.count;
                     hi += t.dice.count;
+                } else if sign < 0 {
+                    lo += sign * n * t.dice.sides.max(1);
+                    hi += sign * n;
                 } else {
-                    lo += sign * n;
-                    hi += sign * n * t.dice.sides.max(1);
+                    lo += n;
+                    hi += n * t.dice.sides.max(1);
                 }
             }
             return if self.turn.extreme == Extreme::Max {

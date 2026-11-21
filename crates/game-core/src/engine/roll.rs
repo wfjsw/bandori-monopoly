@@ -204,9 +204,10 @@ impl World {
     /// and a join recast would otherwise throw the staged table and drop the
     /// 1d4 extras. A bare default would throw a plain d20 and drop every plan
     /// table (forced 2d20 included). Reading the cast pool back is what makes
-    /// 「放弃第一次的结果重骰一次」 a re-throw of the whole set (3d20+2d20,
-    /// 1d20+1d6) rather than of one base die: the plan frame is already gone
-    /// when the re-cast runs from the `diceRollAfter` window.
+    /// 「放弃第一次的结果重骰一次」 a re-throw of the whole set (1d20+2d20,
+    /// 1d20+1d6) rather than of one base die: a re-cast can run under a frame
+    /// that is not the move's (a nested side frame), where the plan no longer
+    /// names the tables the first throw used.
     pub fn roll_move_view(&self, id: i32, fallback_roller: usize) -> Move {
         let roller = self
             .roll_by_id(id)
@@ -588,6 +589,18 @@ impl PlayCtx<'_> {
         if fixed.is_some() {
             let f = fixed.expect("checked");
             self.cast_fixed(id, f);
+            // A pinned face replaces the resolved face, but an extra-die term
+            // is still part of this roll (「此次投掷结果减1d10」): roll it on
+            // top of the pin so the After/Result floors and the walk see the
+            // same figure the windows do.
+            let extra = self.roll_extra_terms(m);
+            if extra != 0 {
+                if let Some(r) = self.tx_mut(id) {
+                    if let Some(c) = r.casts.last_mut() {
+                        c.raw = (c.raw + extra).max(0);
+                    }
+                }
+            }
         } else {
             let source = self.roll_by_id(id).map(|r| r.source).unwrap_or_default();
             self.cast(id, Some(m), source, log_dice)?;
@@ -755,6 +768,23 @@ impl PlayCtx<'_> {
             }
         }
         Ok(self.roll_by_id(id).map(|r| r.face()).unwrap_or(0))
+    }
+
+    /// Roll only the plan's **extra-die** terms -- the base table is replaced
+    /// by a pinned face. Same sign / flat handling as [`Self::roll_tables`].
+    fn roll_extra_terms(&mut self, m: &Move) -> i32 {
+        let mut total = 0;
+        for t in m.dice.iter() {
+            if t.dice.sides <= 0 {
+                total += t.dice.count;
+            } else {
+                let sign = if t.dice.count < 0 { -1 } else { 1 };
+                for _ in 0..t.dice.count.abs() {
+                    total += sign * self.w.rng.d(t.dice.sides.max(1));
+                }
+            }
+        }
+        total
     }
 
     /// Pick a cast; the enclosing commit settles it.

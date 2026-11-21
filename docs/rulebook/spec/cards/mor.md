@@ -350,7 +350,7 @@ Card text (cards.json#Mor:蝴蝶飞舞的星月夜):
 * **Rulings & OPEN:** OPEN-重骰次数 -- 「重骰一次」 (one re-roll) is clear;
   whether the second result is final is implied.
 * **RULING (whole roll):** 「放弃第一次的结果」 discards the *roll*, so the
-  re-roll re-throws the whole dice set -- every base and extra die (3d20+2d20,
+  re-roll re-throws the whole dice set -- every base and extra die (1d20+2d20,
   1d20+1d6), not just the base d20. The re-cast reads the pool the first throw
   used (`RollTransaction::tables`). `CROSS-TESTS.md` G08 / G08b assert it.
 * **Executable:** [`c_mor_starry_reroll`].

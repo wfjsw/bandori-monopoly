@@ -2154,7 +2154,9 @@ impl PlayCtx<'_> {
                 // 规则书: 「使任意结果只有数字区间的效果以理论最大值或最小值结算」
                 // -- a move roll's `NdM` is such an interval: settle every die at
                 // the armed extreme instead of casting (as `PlayCtx::roll` does).
-                let face = if extreme == Extreme::Max {
+                // The extreme flips for a minus term: max wants the smallest
+                // subtrahend, min the largest.
+                let face = if (extreme == Extreme::Max) != (sign < 0) {
                     t.dice.sides.max(1)
                 } else {
                     1

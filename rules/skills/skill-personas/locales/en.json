@@ -244,7 +244,7 @@
   "rinko_spend": "Advance 1cm at a Time",
   "rinko_title": "Advance 1cm at a Time",
   "saaya_ask": "Give {{who}} 200 for 1 saaya mark and 1 fire pot?",
-  "saaya_cut": "Roll −{{n}}, now {{total}}",
+  "saaya_cut": "Roll −1d10, now {{total}}",
   "saaya_cut_ask": "Spend 5 fire pots to cut this money by 5000? (now {{n}})",
   "saaya_cut_title": "A Renewed Sky",
   "saaya_floor": "Roll cut to nothing: move to {{tile}}",

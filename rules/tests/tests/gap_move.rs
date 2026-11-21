@@ -192,6 +192,39 @@ fn g08b_starlit_reroll_rethrows_a_skill_d6() {
 }
 
 // =====================================================================
+// G08c. dice-reroll x dice-floor: keeping a re-rolled face below 0
+// =====================================================================
+
+// 规则书 (山吹沙绫 (1)): 「拥有saaya标记时…此次投掷结果减1d10（计算后小等于0则
+// 移动到下一个可购买格子）」 -- the floor decides on the face the player keeps,
+// including a re-rolled one.
+#[test]
+fn g08c_kept_reroll_below_zero_applies_the_floor() {
+    let mut t = Table::new(&["山吹沙绫", "仓田真白"]);
+    t.clean();
+    t.begin_turn(0);
+    drain(&mut t);
+    t.place_raw(0, "Mor:蝴蝶飞舞的星月夜");
+    t.set_crystals(0, "Mor:蝴蝶飞舞的星月夜", 3);
+    let uid = t.m.world().persona_skill_uid(0);
+    t.m.world_mut().set_held(0, "saaya标记", 1, uid, 1);
+    t.set_pos(0, 20);
+    // First cast 10 − 1 = 9; the re-roll throws 1 − 9 = −8 → the floor.
+    t.dice(&[10, 1, 1, 9]);
+    t.roll(0).unwrap();
+    assert!(t.prompt().is_some(), "a reroll choice: {}", t.dump_prompt());
+    t.answer_one(1).unwrap(); // keep the rerolled face
+    drain(&mut t);
+    assert_eq!(
+        t.pos(0),
+        21,
+        "the floor takes the next buyable tile: {}",
+        t.dump_prompt()
+    );
+    assert_eq!(t.token(0, "saaya标记"), 0, "the mark is spent once");
+}
+
+// =====================================================================
 // G09. dice-reroll x dice-fix: 白金燐子's fixed X*6 plus a re-roll
 // =====================================================================
 
@@ -235,6 +268,50 @@ fn g09_fixed_roll_plus_starlit_reroll() {
     drain(&mut t);
     assert_eq!(t.charge(0), 0, "3 fire spent");
     assert_eq!(t.pos(0), 18, "the move is the fixed 18");
+}
+
+// =====================================================================
+// G09b. dice-fix x dice-add: a pinned face still carries the skill die
+// =====================================================================
+
+// 规则书 (白金燐子 (2)): 「使这回合移动掷骰的结果固定为X*6」 -- the pin replaces
+// the throw. 规则书 (都筑诗船 (2)): 「移动掷骰…-1d6」 -- the skill die is part of
+// the roll, so it still lands on the pinned face.
+#[test]
+fn g09b_fixed_face_still_applies_a_skill_die() {
+    let mut t = Table::new(&["白金燐子", "都筑诗船"]);
+    t.clean();
+    t.begin_turn(0);
+    drain(&mut t);
+    // P1 arms 尽力了吗 on P0: P0's roll is fixed 18 − 1d6.
+    t.set_fire(1, 1, 2);
+    let sid = t.skill_id(1, "尽力了吗");
+    t.skill(1, &sid).unwrap();
+    t.answer(1, 0).unwrap(); // partner P0
+    // P0 pins the move at 3*6 = 18.
+    t.set_fire(0, 3, 3);
+    let skill = t.skill_id(0, "即使1cm");
+    skill_with(&mut t, 0, &skill, 3).unwrap();
+    for _ in 0..6 {
+        let Some(p) = t.prompt() else { break };
+        if p.kind == "choice" {
+            let k = (p.options.len() as i32 - 1).max(0);
+            let _ = t.answer(0, k);
+        } else {
+            break;
+        }
+    }
+    drain(&mut t);
+    t.set_pos(0, 20);
+    t.dice(&[4]); // the skill's d6
+    t.roll(0).unwrap();
+    drain(&mut t);
+    assert_eq!(t.pos(0), 34, "the pin carries the die: 18 − 4 = 14");
+    assert_eq!(
+        t.state(1, "skill.tukushiTry.left"),
+        1,
+        "the pair's first charge is spent"
+    );
 }
 
 // =====================================================================
