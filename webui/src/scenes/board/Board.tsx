@@ -247,11 +247,15 @@ export const Board = memo(function Board({ sess }: { sess: GameSession }) {
     if (control) void act(sess, { act: control });
   };
   const nLinks = anim.chain?.links.length ?? 0;
-  const cardW0 = nLinks <= 2 ? 150 : nLinks <= 4 ? 125 : nLinks <= 6 ? 105 : nLinks <= 8 ? 90 : 78;
+  // A flash has no links to count: it takes the chain's two-link size, so the
+  // activation face and a just-opened chain show the card at one scale.
+  const CHAIN_CARD_W = 150;
+  const cardW0 = nLinks <= 2 ? CHAIN_CARD_W : nLinks <= 4 ? 125 : nLinks <= 6 ? 105 : nLinks <= 8 ? 90 : 78;
   // The chain is sized as a fraction of the FX layer (the centre column), so it
   // fills the same share of it on a desktop and on a phone's shorter compact canvas.
   const chainK = fxH / FX_REF_H;
   const cardW = Math.round(cardW0 * chainK);
+  const flashW = Math.round(CHAIN_CARD_W * chainK);
   return (
     <>
       <TopBar
@@ -346,6 +350,7 @@ export const Board = memo(function Board({ sess }: { sess: GameSession }) {
                   style={{
                     ["--owner" as string]: anim.flash.owner >= 0 ? m.colorOf(anim.flash.owner) : "var(--pink)",
                     ["--hit-ms" as string]: `${anim.flash.hitMs}ms`,
+                    ["--card-w" as string]: `${flashW}px`,
                   }}
                 >
                   <CardFace id={anim.flash.card} size="mini" className={cx(s.flashCard, anim.flash.hit && s.flashHit)} />

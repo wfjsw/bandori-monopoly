@@ -251,7 +251,9 @@
   /* A real px width: `--card-w: 100%` made `.mini`'s
      `min-height: calc(var(--card-w) * 1.5)` invalid (percentage times a
      number), so the face collapsed to its content instead of a 2:3 card. */
-  --card-w: 200px;
+  /* `Board` overrides this inline with the chain's scaled card width; the
+     fallback is the chain's two-link size. */
+  --card-w: 150px;
   width: var(--card-w);
 }
 .flashCard {
@@ -321,7 +323,6 @@
 /* Phone canvas: the activation flash is a glance, not a poster -- a smaller face
    (so it fits the 540px stage) and a caption that wraps instead of clipping. */
 :global(:root[data-compact]) .flash { top: 50%; max-width: 70%; }
-:global(:root[data-compact]) .flashFace { --card-w: 170px; }
 :global(:root[data-compact]) .flashCaption { padding: 4px 8px 6px; font-size: var(--fs-sm); overflow-wrap: anywhere; }
 :global(:root[data-compact]) .flashDetail { font-size: var(--fs-xs); line-height: 1.35; }
 :global(:root[data-compact]) .flashNegated span { font-size: 26px; border-width: 4px; padding: 2px 10px; }

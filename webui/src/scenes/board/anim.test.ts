@@ -652,12 +652,16 @@ test("Animator: the flash hits once, then restores before fading", async () => {
   assert.equal(anim.flash, null);
 });
 
-test("flash styles: the face is card-sized and the hit is one animation", () => {
-  const css = readFileSync(path.join(path.dirname(fileURLToPath(import.meta.url)), "Board.module.css"), "utf8");
+test("flash styles: the face is chain-card sized and the hit is one animation", () => {
+  const here = path.dirname(fileURLToPath(import.meta.url));
+  const css = readFileSync(path.join(here, "Board.module.css"), "utf8");
   const bare = css.replace(/\/\*[\s\S]*?\*\//g, "");
   const face = bare.match(/\.flashFace \{[^}]*\}/)?.[0] ?? "";
-  assert.match(face, /--card-w:\s*\d+px/, "the face needs a px width for the 1.5 min-height calc");
+  assert.match(face, /--card-w:\s*150px/, "the face falls back to the chain's two-link width");
   assert.doesNotMatch(face, /--card-w:\s*100%/, "a percentage breaks min-height: calc(100% * 1.5)");
+  const board = readFileSync(path.join(here, "Board.tsx"), "utf8");
+  assert.match(board, /flashW = Math\.round\(CHAIN_CARD_W \* chainK\)/, "a flash uses the chain's scaled width");
+  assert.match(board, /\["--card-w" as string\]: `\$\{flashW\}px`/, "the flash face is given that width inline");
   const card = bare.match(/\.flashCard \{[^}]*\}/)?.[0] ?? "";
   assert.doesNotMatch(card, /animation:/, "the glow must not be permanently attached");
   assert.match(bare, /\.flashHit \{[^}]*var\(--hit-ms/, "the hit runs on the shared blink clock");
