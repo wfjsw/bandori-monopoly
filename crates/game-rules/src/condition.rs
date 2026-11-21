@@ -1932,6 +1932,13 @@ pub const SLOT_NAMES: &[&str] = &[
     "skill.arisa.passedStation",
     // `uika` 1d6 bonus count (`state::set(player_id, BONUS, n)`).
     "skill.uikaImprisoned.bonus",
+    // `shifune` 尽力了吗: rolls left on the pair / the spell latch that keeps
+    // the pay bend and build kickback up. The plan filter that adds the ±1d6
+    // reads both (`On::Filter(Filter::DiceRollPlan(…))`).
+    "skill.tukushiTry.left",
+    "skill.tukushiTry.spell",
+    // `shifune`'s paired partner seat; the plan filter admits either seat.
+    "skill.tukushiTry.partner",
     // `star_beat` banked build layers (`ctx::inc_slot(player_id, "star_beat.layers", ±1)`).
     "star_beat.layers",
     // `no_breakup` armed marker (`ctx::set_slot(player_id, "latch:nb_armed", 1)`,

@@ -104,7 +104,7 @@ fn drain_playing(t: &mut Table, who: usize, card: &str) {
 }
 
 // =====================================================================
-// G08. dice-set x dice-reroll: 星月夜's re-roll on a 3d20 set
+// G08. dice-set x dice-reroll: 星月夜's re-roll on a whole multi-die set
 // =====================================================================
 
 // 规则书 (CRUSH ON THE DRUM): 「本回合主要移动掷骰额外添加Xd20，X为你弃牌堆的
@@ -112,9 +112,8 @@ fn drain_playing(t: &mut Table, who: usize, card: &str) {
 // 规则书 (星月夜): 「此卡在场时，你每次移动掷骰时可以放弃第一次的结果重骰一次」.
 // RULING: is 「放弃第一次的结果重骰一次」 a re-roll of the full set, or of
 // only the base die? Assert the full set.
-#[ignore = "RULING: does 星月夜's re-roll cover the whole dice set or only the base die? assert full set"]
 #[test]
-fn g08_starlit_reroll_of_a_whole_3d20_set() {
+fn g08_starlit_reroll_of_a_whole_dice_set() {
     let mut t = Table::new(&["佐藤益木", "仓田真白"]);
     t.clean();
     t.begin_turn(0);
@@ -127,22 +126,66 @@ fn g08_starlit_reroll_of_a_whole_3d20_set() {
     t.give(0, &["RAS:（MASKING）CRUSH ON THE DRUM!!!"]);
     t.play(0, "RAS:（MASKING）CRUSH ON THE DRUM!!!").unwrap();
     drain(&mut t);
-    // Main roll: 3d20 + 2d20 = 5 dice. First sum = 10+1+1+1+1 = 14. The re-roll
-    // (if offered) replaces the whole set with 2+2+2+2+2 = 10.
-    t.dice(&[10, 1, 1, 1, 1, 2, 2, 2, 2, 2]);
+    // Main roll: 1d20 + 2d20 = 3 dice. First sum = 10+1+1 = 12. The re-roll
+    // (if offered) replaces the whole set with 2+2+2 = 6.
+    t.dice(&[10, 1, 1, 2, 2, 2]);
     t.roll(0).unwrap();
-    drain_playing(&mut t, 0, "Mor:蝴蝶飞舞的星月夜");
+    assert!(t.prompt().is_some(), "a reroll choice: {}", t.dump_prompt());
+    t.answer_one(1).unwrap(); // keep the rerolled face
+    drain(&mut t);
     assert_eq!(
         t.dice_left(),
         0,
         "every loaded face was rolled: {}",
         t.dice_left()
     );
-    // The walk is the second sum (10) from CiRCLE (index 0) -> index 10.
+    // The walk is the second sum (6) from CiRCLE (index 0) -> index 6.
     assert_eq!(
         t.pos(0),
-        10,
+        6,
         "the re-roll replaced the whole set: pos = {}, events {:?}",
+        t.pos(0),
+        t.recent_keys(8)
+    );
+}
+
+// =====================================================================
+// G08b. dice-reroll x dice-add (skill): the re-roll of a 1d20 + 1d6 move
+// =====================================================================
+
+// 规则书 (都筑诗船 (2)): 「接下来的两次移动掷骰先后-1d6与+1d6」 -- the skill
+// die is part of the movement roll, not a rider on top of it.
+// 规则书 (星月夜): 「放弃第一次的结果重骰一次」 -- the whole roll is thrown
+// again, so the skill's d6 is re-thrown with the d20.
+#[test]
+fn g08b_starlit_reroll_rethrows_a_skill_d6() {
+    let mut t = Table::new(&["都筑诗船", "仓田真白"]);
+    t.clean();
+    t.begin_turn(0);
+    drain(&mut t);
+    t.place_raw(0, "Mor:蝴蝶飞舞的星月夜");
+    t.set_crystals(0, "Mor:蝴蝶飞舞的星月夜", 3);
+    t.set_fire(0, 1, 2);
+    let sid = t.skill_id(0, "尽力了吗");
+    t.skill(0, &sid).unwrap();
+    t.answer(0, 0).unwrap(); // partner P1
+    t.set_pos(0, 20);
+    // This roll is d20 − 1d6: 10 − 4 = 6. The re-roll throws 12 − 1 = 11.
+    t.dice(&[10, 4, 12, 1]);
+    t.roll(0).unwrap();
+    assert!(t.prompt().is_some(), "a reroll choice: {}", t.dump_prompt());
+    t.answer_one(1).unwrap(); // keep the rerolled face
+    drain(&mut t);
+    assert_eq!(
+        t.dice_left(),
+        0,
+        "the skill d6 was re-thrown with the d20: {}",
+        t.dice_left()
+    );
+    assert_eq!(
+        t.pos(0),
+        31,
+        "the whole roll was re-thrown (12 − 1): pos = {}, events {:?}",
         t.pos(0),
         t.recent_keys(8)
     );

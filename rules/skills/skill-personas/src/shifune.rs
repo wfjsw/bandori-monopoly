@@ -13,10 +13,10 @@
 //! kickback. The pairing is a value (「你与一名其他玩家」) and the two rolls are
 //! a countdown, both of which the keyed state holds.
 
-use bandori_std::ctx::{self, plan, state};
+use bandori_std::ctx::{self, state};
 use bandori_std::state_key;
-use card_sdk::abi::{roll_source, ActionKind, FilterKind, RollPurpose};
-use card_sdk::{key, Action, CardDef, Filter, Msg, On};
+use card_sdk::abi::{ActionKind, Dice, FilterKind};
+use card_sdk::{key, Action, CardDef, Filter, Msg, On, PlanValue};
 
 /// The paired player, or -1.
 const PARTNER: &str = "skill.tukushiTry.partner";
@@ -32,6 +32,15 @@ pub const SHIFUNE: CardDef = CardDef::new(
         On::Action(Action::TurnStartBefore("", None, at_start)),
         On::Action(Action::DeckAtGameStart("", None, at_start)),
         On::Action(Action::Pass(bandori_std::guards::OWN_START, None, on_pass)),
+        // 「接下来的两次移动掷骰先后-1d6与+1d6」 -- the die is a term of the
+        // movement roll itself (plan `extra`), not a rider applied after the
+        // fact: a re-roll of that roll (`Mor:蝴蝶飞舞的星月夜`) throws it again.
+        On::Filter(Filter::DiceRollPlan(
+            "slot('skill.tukushiTry.left') > 0 && slot('skill.tukushiTry.spell') > 0 && (actor == owner || actor == slot('skill.tukushiTry.partner'))",
+            None,
+            on_plan,
+        )),
+        // The floor 「若由于此效果导致移动数为0…」 reads the settled face.
         On::Action(Action::DiceRollAfter("", Some(paired), on_roll)),
         On::Filter(Filter::PaySplitMul("", Some(paired), on_pay)),
         On::Action(Action::HouseAdded("", Some(partner), on_built)),
@@ -118,18 +127,24 @@ fn use_skill(player_id: i32) -> card_sdk::Asked {
     Ok(())
 }
 
+/// 「先后-1d6与+1d6」 -- the first of the pair cuts, the second boosts. The die
+/// joins the plan so it is part of the roll, and of any re-roll of that roll.
+fn on_plan(player_id: i32, mut v: PlanValue) -> PlanValue {
+    let d = if state::get(player_id, LEFT) == 2 { -1 } else { 1 };
+    v.extra = Some(Dice { count: d, sides: 6 });
+    v
+}
+
 /// （2）「接下来的两次移动掷骰先后-1d6与+1d6，若由于此效果导致移动数为0，则视为
-/// 原地进行一次结算」.
+/// 原地进行一次结算」. The face already carries the plan's d6; this arm only
+/// spends the charge and checks the floor.
 fn on_roll(player_id: i32) -> card_sdk::Asked {
     let left = state::get(player_id, LEFT);
     if left <= 0 {
         return Ok(());
     }
     state::set(player_id, LEFT, left - 1);
-    // 「先后-1d6与+1d6」 -- the first is the cut, the second the boost.
-    let d = ctx::roll(player_id, 1, 6, RollPurpose::Effect, roll_source::SKILL)?.max(0);
-    let before = ctx::trigger::move_roll().unwrap_or(ctx::trigger::value());
-    let after = if left == 2 { before - d } else { before + d };
+    let after = ctx::trigger::move_roll().unwrap_or(ctx::trigger::value());
     if after <= 0 {
         // 「若由于此效果导致移动数为0，则视为原地进行一次结算」
         ctx::trigger::set_move_roll(0);
@@ -138,9 +153,7 @@ fn on_roll(player_id: i32) -> card_sdk::Asked {
             ctx::settle_tile_at(ctx::trigger::player_id(), at, true);
         }
         ctx::log(player_id, &Msg::new(key!("shifune_zero")));
-        return Ok(());
     }
-    ctx::trigger::set_move_roll(after);
     Ok(())
 }
 

@@ -102,6 +102,12 @@ pub struct RollTransaction {
     /// synthesized view; false for a side move, a preview or a victim roll).
     #[serde(default)]
     pub main: bool,
+    /// The dice tables of the last real cast (base, extra). A re-cast throws
+    /// exactly this pool again -- `roll_move_view` reads it instead of the
+    /// live plan, whose frame may already be gone and whose staging table is
+    /// a bare d20. `None` before the first cast and on a fixed face.
+    #[serde(default)]
+    pub tables: Option<(Vec<super::move_ctx::Roll>, Vec<super::move_ctx::Roll>)>,
     /// The current cast is a fixed face; no die is thrown.
     pub fixed: bool,
     /// The running face was written after its settlement; the settle re-runs.
@@ -126,6 +132,7 @@ impl RollTransaction {
             has_result_window: purpose == PURPOSE_MOVE,
             parent,
             main: false,
+            tables: None,
             fixed: false,
             dirty: false,
             final_face: None,
@@ -190,18 +197,26 @@ impl World {
     /// The synthesized move view of a transaction, for a trigger raised
     /// outside a live move frame (a join recast or a preview): a walk that does
     /// not resolve -- the transaction's caller owns the walk and the settle.
-    /// The dice come from the plan this transaction rides -- the innermost
-    /// frame (`plan()`), not the staging `turn.plan`: a `rollPlan` filter's
-    /// `set_base_dice` / `add_base_dice` write the frame, and a join recast
-    /// would otherwise throw the staged table and drop the 1d4 extras. A bare
-    /// default would throw a plain d20 and drop every plan table (forced 2d20
-    /// included).
+    /// The dice are the ones the transaction last threw ([`RollTransaction::tables`]);
+    /// before the first cast they come from the plan this transaction rides --
+    /// the innermost frame (`plan()`), not the staging `turn.plan`: a
+    /// `rollPlan` filter's `set_base_dice` / `add_base_dice` write the frame,
+    /// and a join recast would otherwise throw the staged table and drop the
+    /// 1d4 extras. A bare default would throw a plain d20 and drop every plan
+    /// table (forced 2d20 included). Reading the cast pool back is what makes
+    /// 「放弃第一次的结果重骰一次」 a re-throw of the whole set (3d20+2d20,
+    /// 1d20+1d6) rather than of one base die: the plan frame is already gone
+    /// when the re-cast runs from the `diceRollAfter` window.
     pub fn roll_move_view(&self, id: i32, fallback_roller: usize) -> Move {
         let roller = self
             .roll_by_id(id)
             .map(|r| r.roller)
             .unwrap_or(fallback_roller);
         let mut m = self.plan().clone();
+        if let Some((base, dice)) = self.roll_by_id(id).and_then(|r| r.tables.as_ref()) {
+            m.base = base.clone();
+            m.dice = dice.clone();
+        }
         m.player_id = roller;
         m.roller = Some(game_kinds::Seat(roller as i32));
         m.is_main_move = self.roll_by_id(id).map(|r| r.main).unwrap_or(false);
@@ -415,6 +430,11 @@ impl PlayCtx<'_> {
         let Some(r) = self.tx_mut(id) else {
             return Ok(value);
         };
+        if purpose == PURPOSE_MOVE {
+            if let Some(m) = m {
+                r.tables = Some((m.base.clone(), m.dice.clone()));
+            }
+        }
         if source.rank() > r.source.rank() {
             r.source = source;
         }

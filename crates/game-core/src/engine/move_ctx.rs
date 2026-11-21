@@ -63,12 +63,18 @@ impl Roll {
         self.dice.sides
     }
 
-    /// The value this term contributes.
+    /// The value this term contributes. A negative `count` is a minus term
+    /// (`-1d6`): the faces still come in positive, the contribution flips.
     pub fn value(&self, faces: &[i32]) -> i32 {
-        if self.dice.sides <= 0 {
+        let sum = if self.dice.sides <= 0 {
             self.dice.count
         } else {
             faces.iter().sum()
+        };
+        if self.dice.count < 0 && self.dice.sides > 0 {
+            -sum
+        } else {
+            sum
         }
     }
 }

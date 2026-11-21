@@ -137,10 +137,18 @@ pub(crate) fn plan_dice_msg(player_id: i32, plan: &Move, total: i32) -> Msg {
     };
     let mut extra = String::new();
     for t in terms {
-        extra.push('+');
         if t.dice.sides > 0 {
-            extra.push_str(&format!("{}d{}", t.dice.count, t.dice.sides));
+            if t.dice.count < 0 {
+                extra.push('-');
+                extra.push_str(&format!("{}d{}", t.dice.count.abs(), t.dice.sides));
+            } else {
+                extra.push('+');
+                extra.push_str(&format!("{}d{}", t.dice.count, t.dice.sides));
+            }
+        } else if t.dice.count < 0 {
+            extra.push_str(&t.dice.count.to_string());
         } else {
+            extra.push('+');
             extra.push_str(&t.dice.count.to_string());
         }
     }
@@ -2128,10 +2136,18 @@ impl PlayCtx<'_> {
     /// Each term is `count`d`sides`, or a flat `count` when `sides <= 0` (see
     /// [`crate::engine::move_ctx::Roll`]). This is what makes a Play body's
     /// 「掷骰变为3d20」 (`set_base_dice(3, 20)`) actually roll three dice.
+    /// A negative `count` is a minus term (`-1d6`): its faces still come out
+    /// of the same stream, the contribution flips.
     pub(crate) fn roll_tables(&mut self, m: &Move) -> i32 {
         let extreme = self.w.turn.extreme;
         let mut total = 0;
         for t in m.base.iter().chain(m.dice.iter()) {
+            let sign = if t.dice.count < 0 && t.dice.sides > 0 {
+                -1
+            } else {
+                1
+            };
+            let n = t.dice.count.abs();
             if t.dice.sides <= 0 {
                 total += t.dice.count;
             } else if extreme != Extreme::Plain {
@@ -2143,10 +2159,10 @@ impl PlayCtx<'_> {
                 } else {
                     1
                 };
-                total += face * t.dice.count.max(0);
+                total += sign * face * n;
             } else {
-                for _ in 0..t.dice.count.max(0) {
-                    total += self.w.rng.d(t.dice.sides.max(1));
+                for _ in 0..n {
+                    total += sign * self.w.rng.d(t.dice.sides.max(1));
                 }
             }
         }

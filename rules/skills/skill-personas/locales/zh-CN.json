@@ -244,7 +244,7 @@
   "rinko_spend": "即使1cm也要前进",
   "rinko_title": "即使1cm也要前进",
   "saaya_ask": "让 {{who}} 获得 200，你获得 1 个 saaya 标记和 1 个[火罐]？",
-  "saaya_cut": "掷骰 −{{n}}，结果 {{total}}",
+  "saaya_cut": "掷骰 −1d10，结果 {{total}}",
   "saaya_cut_ask": "消耗 5 个[火罐]，本次资金变动 −5000？（当前 {{n}}）",
   "saaya_cut_title": "焕然一新的天空中",
   "saaya_floor": "掷骰减至 0 以下，移动到 {{tile}}",

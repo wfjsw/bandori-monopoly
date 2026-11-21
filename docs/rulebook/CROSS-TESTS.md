@@ -1187,14 +1187,14 @@ responders on one stage sum / multiply instead of the last one winning:
 
 ### G2. Roll
 
-#### G08. dice-set x dice-reroll: 星月夜's re-roll on a 3d20 set
+#### G08. dice-set x dice-reroll: 星月夜's re-roll on a multi-die set
 * **Cards:** `Mor:蝴蝶飞舞的星月夜` (P0 field) + `RAS:（MASKING）CRUSH ON THE
   DRUM!!!` (adds Xd20 to the move roll).
 * **Act:** P0 plays CRUSH (discard has 2 cards, so +2d20), then moves. 星月夜
   (2) lets P0 abandon the first result and re-roll.
-* **Expect:** the re-roll is of the whole 3d20+2d20 set (5 dice), not just the
+* **Expect:** the re-roll is of the whole 1d20+2d20 set (3 dice), not just the
   base d20. Assert `dice_left() == 0` after and that the movement equals the
-  second sum.
+  second sum. The same rule is exercised on a skill-granted d6 by G08b.
 * **RULING:** is 「放弃第一次的结果重骰一次」 a re-roll of the full set, or a
   re-roll of only the base die? Assert full set.
 

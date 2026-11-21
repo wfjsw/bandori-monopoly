@@ -15,8 +15,8 @@
 
 use bandori_std::ctx::{self, state};
 use bandori_std::state_key;
-use card_sdk::abi::{roll_source, ActionKind, RollPurpose};
-use card_sdk::{key, Action, CardDef, Msg, On};
+use card_sdk::abi::{ActionKind, Dice, FilterKind};
+use card_sdk::{key, Action, CardDef, Filter, Msg, On, PlanValue};
 
 const MARK: &str = "saaya标记";
 
@@ -28,7 +28,15 @@ pub const SAAYA: CardDef = CardDef::new(
         // （1）'s 「一次[消耗]或[支付]至少1000资金且自己不拥有saaya标记时」 is the
         // hook's applicability, not its effect (the ask is the effect).
         On::Action(Action::PayAfter("", Some(pay_after_applies), on_pay_after)),
-        // （1）'s 「拥有saaya标记时」 -- the mark is the applicability.
+        // （1）'s 「拥有saaya标记时」 -- the mark is the applicability. The cut
+        // die is a term of the movement roll itself (plan `extra`), so a
+        // re-roll of that roll (`Mor:蝴蝶飞舞的星月夜`) throws it again; the
+        // After arm below only spends the mark and checks the floor.
+        On::Filter(Filter::DiceRollPlan(
+            card_sdk::condition::MINE,
+            Some(roll_needs_mark),
+            on_plan,
+        )),
         On::Action(Action::DiceRollAfter(
             card_sdk::condition::MINE,
             Some(roll_needs_mark),
@@ -101,13 +109,22 @@ fn on_pay_after(player_id: i32) -> card_sdk::Asked {
     Ok(())
 }
 
+/// 「此次投掷结果减1d10」 -- the cut is a minus term of the movement roll,
+/// part of it (and of any re-roll of it), not a value subtracted afterwards.
+fn on_plan(_player_id: i32, mut v: PlanValue) -> PlanValue {
+    v.extra = Some(Dice {
+        count: -1,
+        sides: 10,
+    });
+    v
+}
+
 /// （1）「拥有saaya标记时投掷移动骰时失去1个saaya标记，此次投掷结果减1d10
-/// （计算后小等于0则移动到下一个可购买格子）」.
+/// （计算后小等于0则移动到下一个可购买格子）」. The face already carries the
+/// plan's d10; this arm only spends the mark and applies the floor.
 fn on_roll(player_id: i32) -> card_sdk::Asked {
     ctx::add_held_by_name(player_id, MARK, -1, 1)?;
-    let cut = ctx::roll(player_id, 1, 10, RollPurpose::Effect, roll_source::SKILL)?.max(0);
-    let before = ctx::trigger::move_roll().unwrap_or(ctx::trigger::value());
-    let after = before - cut;
+    let after = ctx::trigger::move_roll().unwrap_or(ctx::trigger::value());
     if after <= 0 {
         // 「计算后小等于0则移动到下一个可购买格子」 -- the face is empty, so the
         // move goes to the next buyable tile instead.
@@ -129,12 +146,9 @@ fn on_roll(player_id: i32) -> card_sdk::Asked {
         ctx::log(player_id, &Msg::new(key!("saaya_floor")).tile("tile", to));
         return Ok(());
     }
-    ctx::trigger::set_move_roll(after);
     ctx::log(
         player_id,
-        &Msg::new(key!("saaya_cut"))
-            .i("n", cut as i64)
-            .i("total", after as i64),
+        &Msg::new(key!("saaya_cut")).i("total", after as i64),
     );
     Ok(())
 }

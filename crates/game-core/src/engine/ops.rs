@@ -132,7 +132,7 @@ impl World {
         self.turn.fixed_roll = None;
         let p = self.plan_mut();
         p.base.clear();
-        if count > 0 && sides >= 0 {
+        if count != 0 && sides >= 0 {
             p.base
                 .push(crate::engine::move_ctx::Roll::new(count, sides, reason));
         }
@@ -140,7 +140,7 @@ impl World {
     /// Add one more die group to the starting dice (3d20 = three of
     /// these, or one `count = 3`). `sides == 0` is a flat `count`.
     pub fn add_base_dice(&mut self, count: i32, sides: i32, reason: &str) {
-        if count > 0 && sides >= 0 {
+        if count != 0 && sides >= 0 {
             self.plan_mut()
                 .base
                 .push(crate::engine::move_ctx::Roll::new(count, sides, reason));
@@ -174,7 +174,7 @@ impl World {
     /// Extra dice added to the roll (summed into the face). A flat add
     /// is a `0`-sided term: `add_extra_dice(n, 0, reason)`.
     pub fn add_extra_dice(&mut self, count: i32, sides: i32, reason: &str) {
-        if count > 0 && sides >= 0 {
+        if count != 0 && sides >= 0 {
             // The write is a plan write, so it must land on the live frame
             // (`plan_mut`) -- a dice hook (`DiceRollPlan`) runs inside the
             // roll's own plan frame, and staging there is discarded when the
@@ -878,12 +878,19 @@ impl World {
             let mut lo = 0;
             let mut hi = 0;
             for t in plan.base.iter().chain(plan.dice.iter()) {
+                // A minus term (`-1d6`) contributes at the opposite extreme.
+                let sign = if t.dice.count < 0 && t.dice.sides > 0 {
+                    -1
+                } else {
+                    1
+                };
+                let n = t.dice.count.abs();
                 if t.dice.sides <= 0 {
                     lo += t.dice.count;
                     hi += t.dice.count;
                 } else {
-                    lo += t.dice.count.max(0);
-                    hi += t.dice.count.max(0) * t.dice.sides.max(1);
+                    lo += sign * n;
+                    hi += sign * n * t.dice.sides.max(1);
                 }
             }
             return if self.turn.extreme == Extreme::Max {
@@ -897,8 +904,9 @@ impl World {
             if t.dice.sides <= 0 {
                 total += t.dice.count;
             } else {
-                for _ in 0..t.dice.count.max(0) {
-                    total += self.rng.d(t.dice.sides.max(1));
+                let sign = if t.dice.count < 0 { -1 } else { 1 };
+                for _ in 0..t.dice.count.abs() {
+                    total += sign * self.rng.d(t.dice.sides.max(1));
                 }
             }
         }
