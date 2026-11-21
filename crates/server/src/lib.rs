@@ -155,7 +155,7 @@ pub fn router(
                 .allow_headers([header::AUTHORIZATION, header::CONTENT_TYPE])
                 // The record download names its file in this header; without
                 // it a cross-origin client sees only the fallback name.
-                .expose_headers([header::CONTENT_DISPOSITION]),
+                .expose_headers([header::CONTENT_DISPOSITION, header::HeaderName::from_static("x-match-id")]),
         )
         .with_state(server);
     if let Some(dir) = data_dir {

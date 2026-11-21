@@ -150,7 +150,9 @@ impl Archive {
             if path.extension().and_then(|e| e.to_str()) != Some("json") {
                 continue;
             }
-            let Some(meta) = read_meta(&path)? else {
+            // One unreadable or hand-edited sidecar must not take the whole
+            // room's list down; it is simply not listed.
+            let Ok(Some(meta)) = read_meta(&path) else {
                 continue;
             };
             if meta.room != room {
