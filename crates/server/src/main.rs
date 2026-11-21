@@ -1,6 +1,7 @@
-//! `server [--port 8080] [--host 127.0.0.1] [--data data] [--static webui/dist] [--rules dist/cards] [--builds DIR] [--workers N] [--redis URL] [--bot-service PATH] [--bot-threads N] [--bot-search-threads N]`
+//! `server [--port 8080] [--host 127.0.0.1] [--data data] [--static webui/dist] [--rules dist/cards] [--builds DIR] [--workers N] [--redis URL] [--records DIR] [--bot-service PATH] [--bot-threads N] [--bot-search-threads N]`
 //!
 //! Environment: `PORT`, `BM_DATA`, `BM_STATIC`, `BM_WORKER`, `BM_WORKERS`, `BM_REDIS`,
+//! `BM_RECORDS` (durable record archive, default `records` beside `<data>`),
 //! `BM_BOT_SERVICE`, `BOT_THREADS`, `BOT_SEARCH_THREADS`, `BM_SSE_KEEPALIVE` (seconds, default 30).
 
 use std::path::PathBuf;
@@ -202,15 +203,36 @@ async fn main() {
     // Card modules for the bot service and the in-process fallback load from
     // the default build.
     let rules_dir = default.rules_path.clone();
+    // Durable archive of finished matches (`docs/REPLAY.md` §1): the copy the
+    // 24 h store cache does not keep. Every process of a deployment must name
+    // the same shared directory.
+    let records_dir = {
+        let r = arg("--records", "BM_RECORDS", "");
+        if r.is_empty() {
+            // Beside `<data>`, not inside it: `/data` is served unauthenticated,
+            // and a record reveals every hand.
+            data_dir
+                .parent()
+                .unwrap_or_else(|| std::path::Path::new("."))
+                .join("records")
+        } else {
+            PathBuf::from(r)
+        }
+    };
+    eprintln!("record archive: {}", records_dir.display());
     // Cross-endpoint state: Redis to share/retain it across processes, the
     // in-memory store otherwise (one process, lost on restart).
     let redis_url = arg("--redis", "BM_REDIS", "");
     let store: Arc<dyn server::store::CrossState> = if redis_url.is_empty() {
         eprintln!("cross-endpoint state: in-memory (pass --redis URL to share or retain it)");
-        Arc::new(server::store::dummy::Store::new())
+        Arc::new(server::store::dummy::Store::new().with_archive(records_dir))
     } else {
         eprintln!("cross-endpoint state: redis at {redis_url}");
-        Arc::new(server::store::redis::Store::connect(&redis_url).expect("redis store"))
+        Arc::new(
+            server::store::redis::Store::connect(&redis_url)
+                .expect("redis store")
+                .with_archive(records_dir),
+        )
     };
     let mut server = server::Server::new(data, rules, engine, store);
     {

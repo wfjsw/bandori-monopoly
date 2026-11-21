@@ -544,6 +544,14 @@ impl MatchHandle {
         self.store
             .record_put(&self.id, &sealed)
             .map_err(|e| e.to_string())?;
+        // The durable copy: the store's above is the expiring cache.
+        if let Some(meta) = &sealed.meta {
+            if let Err(e) = self.store.archive_put(meta, &sealed.record) {
+                // The store copy still serves the match; only the durable
+                // download is missing. Not `gaps` -- the record itself is fine.
+                eprintln!("room {}: record archive failed: {e}", self.id);
+            }
+        }
         let _ = self.store.record_log_del(&self.id);
         Ok(())
     }
@@ -583,7 +591,7 @@ impl MatchHandle {
         let st: game_core::state::MatchState =
             serde_json::from_value(view.get("state").cloned().unwrap_or(Value::Null))
                 .map_err(|e| format!("final view: {e}"))?;
-        let seats = st
+        let seats: Vec<SeatInfo> = st
             .players
             .iter()
             .map(|p| SeatInfo {
@@ -596,6 +604,35 @@ impl MatchHandle {
                 score: p.score,
             })
             .collect();
+        // The archive sidecar is written beside the durable bytes; build it
+        // while the final view is in hand. `match_id` comes from the head (a
+        // head written before the archive gets one here).
+        let match_id = if head.match_id.is_empty() {
+            crate::state::random_hex(8)
+        } else {
+            head.match_id.clone()
+        };
+        let meta = crate::archive::ArchiveMeta {
+            id: match_id,
+            room: self.id.clone(),
+            created: head.created.clone(),
+            ended: true,
+            reason: st.end_reason.clone(),
+            rounds: st.round,
+            total_ticks: ticks,
+            seats: seats
+                .iter()
+                .map(|p| crate::archive::ArchiveSeat {
+                    member: p.member,
+                    player: p.player.clone(),
+                    bot: p.bot,
+                    persona: p.persona.clone(),
+                    rank: p.rank,
+                    score: p.score,
+                })
+                .collect(),
+            members: members.to_vec(),
+        };
         let body = RecordBody {
             init: head.init.clone(),
             inputs,
@@ -632,6 +669,7 @@ impl MatchHandle {
         Ok(StoredRecord {
             record: game_core::record::encode_record_zst(&file),
             members: members.to_vec(),
+            meta: Some(meta),
         })
     }
 }
@@ -1277,6 +1315,7 @@ impl Room {
             })
             .collect();
         let head = RecordHead {
+            match_id: crate::state::random_hex(8),
             init: Init::Seed(MatchSetup {
                 members,
                 seed: 0,

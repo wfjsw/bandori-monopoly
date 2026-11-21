@@ -18,6 +18,29 @@ export interface BuildView {
   default: boolean;
 }
 
+/** One seat in an archived match (`GET /api/rooms/{id}/records`). */
+export interface ArchivedSeat {
+  member: number;
+  player: string;
+  bot: boolean;
+  persona: string;
+  rank: number;
+  score: number;
+}
+
+/** A finished match's durable archive entry (`docs/SERVER.md` §Match records). */
+export interface ArchivedMatch {
+  id: string;
+  room: string;
+  created: string;
+  ended: boolean;
+  reason: string;
+  rounds: number;
+  total_ticks: string;
+  seats: ArchivedSeat[];
+  members: number[];
+}
+
 /**
  * Game-server sessions are per server: the same browser may hold a different
  * token (and a different seat) on each one. The classic origin keeps the bare
@@ -178,6 +201,31 @@ export const api = {
       const disp = r.headers.get("content-disposition") ?? "";
       const named = /filename="([^"]+)"/.exec(disp)?.[1];
       return { ok: true, bytes: new Uint8Array(await r.arrayBuffer()), filename: named || `bdrec-${id}.bdrec` };
+    } catch {
+      return { ok: false, error: msg("err.offline"), status: 0 };
+    }
+  },
+  /**
+   * The room's durable archive of finished matches, newest first, narrowed to
+   * the caller's own seats (`docs/SERVER.md` §Match records). Metadata only;
+   * `archivedRecord` fetches one.
+   */
+  records: (id: string) => call<{ records: ArchivedMatch[] }>("GET", `/api/rooms/${id}/records`),
+  /** One archived match's `.bdrec`, same body/headers as `record`. */
+  archivedRecord: async (id: string, match: string): Promise<{ ok: true; bytes: Uint8Array; filename: string } | { ok: false; error: Msg; status: number }> => {
+    syncToken();
+    try {
+      const r = await fetch(gameUrl(`/api/rooms/${id}/records/${match}`), {
+        credentials: "same-origin",
+        headers: token ? { Authorization: `Bearer ${token}` } : {},
+      });
+      if (!r.ok) {
+        const data = await r.json().catch(() => null);
+        return { ok: false, error: data?.error ?? msg("err.http", { status: { i: r.status } }), status: r.status };
+      }
+      const disp = r.headers.get("content-disposition") ?? "";
+      const named = /filename="([^"]+)"/.exec(disp)?.[1];
+      return { ok: true, bytes: new Uint8Array(await r.arrayBuffer()), filename: named || `bdrec-${id}-${match}.bdrec` };
     } catch {
       return { ok: false, error: msg("err.offline"), status: 0 };
     }
