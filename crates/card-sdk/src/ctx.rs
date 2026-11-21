@@ -4294,6 +4294,15 @@ pub mod trigger {
         facts & crate::abi::settle_fact::BODY_REPLACED != 0
     }
 
+    /// The settle is the withheld one of a [无法移动] turn, put back at that
+    /// turn's end by a card's `Settle`. Like the other settle facts it is read
+    /// from `settleBody` / `settleAfter` / `tileResolved` on -- `settleBefore`
+    /// (and `settle`) still read 0, the fact being stamped with the body.
+    pub fn settle_blocked() -> bool {
+        let facts = unsafe { sys::trig_settle_facts() };
+        facts & crate::abi::settle_fact::BLOCKED != 0
+    }
+
     /// A rent payment to this settle's owner, on the settle's own tile,
     /// committed.
     pub fn settle_paid() -> bool {

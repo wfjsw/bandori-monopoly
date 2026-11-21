@@ -673,10 +673,10 @@ fn g17_quarter_rent_remote_settle_then_full_extra_settle() {
         "the remote settle pays R/4 = {quarter} (R = {rent})"
     );
     // On P1's turn, 轮符雨 adds a stay and a turn-end extra settle. P1 cannot
-    // move (stay), so G03 defers the withheld landing settle to the turn end
-    // (one settle of P0's tile at the FULL rent -- 立希's 「本次结算」 quarter
-    // modifier does not carry over); 轮符雨's 「额外进行一次结算」 is additive
-    // on top of it, so the turn end settles twice.
+    // move (stay), so the withheld landing settle is NOT run at the turn end
+    // (glossary 47 「…且不[结算]」 -- no card answered `Settle` here); 轮符雨's
+    // 「额外进行一次结算」 is the only settle of that turn end, at the FULL rent
+    // (立希's 「本次结算」 quarter modifier does not carry over).
     until_turn(&mut t, 1);
     t.give(1, &["MyGO:轮符雨"]);
     t.play(1, "MyGO:轮符雨").unwrap();
@@ -685,7 +685,7 @@ fn g17_quarter_rent_remote_settle_then_full_extra_settle() {
     pass(&mut t, 1);
     assert_eq!(
         t.money(1),
-        10_000 - quarter - 2 * rent,
-        "the deferred settle and the extra settle both pay the full rent {rent}"
+        10_000 - quarter - rent,
+        "only the extra settle pays ({rent}); the blocked turn's own settle is withheld"
     );
 }

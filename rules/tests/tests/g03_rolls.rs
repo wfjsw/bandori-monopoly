@@ -6,6 +6,8 @@
 
 mod common;
 use common::*;
+use game_core::engine::CardRules;
+use game_core::msg::Msg;
 
 fn drain(t: &mut Table) {
     while t.prompt().is_some() {
@@ -56,6 +58,14 @@ const DOLL_GARDEN: &str = "Mujica:人偶的箱庭";
 const OWN_STAGE: &str = "R:选择自己的舞台";
 const RAIN: &str = "通用:雨啊，快点来吧";
 const OVERLAP: &str = "PP:[衍生]重叠的声音";
+const PARKING: &str = "通用:[都筑诗船]Parking Space";
+
+fn place_on_tile(t: &mut Table, who: usize, card: &str, tile: usize) {
+    let d = data();
+    let props = rules().card_props(card);
+    t.m.world_mut()
+        .place_card_on(&d, who as i32, tile as i32, card, Msg::default(), props);
+}
 
 // 规则书 (`starry_night` (1) + `moca_half` (2)): the reroll is a new cast of
 // the same transaction, so 「最终结算」 modifiers reach it too -- the half
@@ -705,11 +715,11 @@ fn g03_own_stage_cross_seat_skip_survives_the_turn() {
     assert_eq!(t.money(1), 10_000, "P1's own answer suppressed the settle");
 }
 
-/// A [眩晕] closes both gates, so the turn auto-skips before any main move:
-/// the default must already be stamped at the turn start (the old post-ladder
-/// immobile stamp never ran for it).
+/// A [眩晕] closes both gates, so the turn auto-skips before any main move. The
+/// blocked turn settles nothing (glossary 47), so without the card the tile rule
+/// does not run either -- 江户川乐器店's draw needs `选择自己的舞台`'s `Settle`.
 #[test]
-fn g03_own_stage_stun_turn_end_settles() {
+fn g03_own_stage_stun_turn_end_settles_nothing_by_default() {
     let mut t = Table::new(&["户山香澄", "lock"]);
     t.strip_skills();
     t.clean();
@@ -730,8 +740,85 @@ fn g03_own_stage_stun_turn_end_settles() {
     assert_eq!(t.pos(0), edogawa, "no move happened");
     let keys = t.keys_since(mark);
     assert!(
-        keys.iter().any(|k| k == "log.land_draw"),
-        "the stunned turn's end settle ran the tile rule: {keys:?}"
+        !keys.iter().any(|k| k == "log.land_draw"),
+        "the stunned turn end settled nothing without the card: {keys:?}"
     );
-    assert_eq!(t.hand(0).len(), before + 1, "the settle drew a card");
+    assert_eq!(t.hand(0).len(), before, "no draw");
+}
+
+/// 规则书 (glossary 47): 「[无法移动]…[移动终点]视为当前所在格子且**不[结算]**」.
+/// A blocked turn runs no settle at all, so `Parking Space` (1) -- which rewrites
+/// its tile's settle into +1 [停留] at turn end -- does not re-arm: the peeled
+/// layer stays off and the piece is free next turn. Without this the layer would
+/// be re-granted on every skipped turn and pin the player to the tile for the
+/// rest of the match (3100 bare `end` rounds in the 2026-11-21 record).
+#[test]
+fn g03_blocked_turn_end_settles_nothing() {
+    let mut t = fresh(&["户山香澄", "lock"]);
+    let space = tile("Space");
+    place_on_tile(&mut t, 0, PARKING, space);
+    t.set_pos(0, space);
+    t.set_state(0, "stay", 1);
+    // The refused roll is the blocked main move; its settle is withheld.
+    t.dice(&[1]);
+    t.roll(0).unwrap();
+    drain(&mut t);
+    assert_eq!(t.pos(0), space, "the move is blocked");
+    let mark = t.mark();
+    t.end(0).unwrap();
+    drain(&mut t);
+    let keys = t.keys_since(mark);
+    assert!(
+        !keys.iter().any(|k| k.contains("parking_space_park")),
+        "no settle body at the blocked turn end: {keys:?}"
+    );
+    assert_eq!(
+        t.state(0, "stay"),
+        0,
+        "the peeled layer is not re-granted: {:?}",
+        t.recent_keys(20)
+    );
+}
+
+/// 规则书 (`own_stage`): 「选择自己的本次移动（或无法移动的回合结束时）是否
+/// 触发结算」 -- a `Settle` answer puts the **whole** settle back at the turn end,
+/// `settleBody` included. `Parking Space` therefore does re-arm there, which is
+/// what makes the card the escape hatch from its tile.
+#[test]
+fn g03_own_stage_yes_reruns_the_whole_settle_at_turn_end() {
+    let mut t = fresh(&["户山香澄", "lock"]);
+    let space = tile("Space");
+    place_on_tile(&mut t, 0, PARKING, space);
+    t.place_raw(0, "TEST:settle_probe");
+    t.set_pos(0, space);
+    t.give(0, &[OWN_STAGE, RAIN]);
+    t.dice(&[1, 1]);
+    t.play(0, RAIN).unwrap();
+    t.answer(0, 0).unwrap(); // the extra target
+    play_counter(&mut t, 0, OWN_STAGE);
+    t.answer_one(0).unwrap(); // yes
+    drain(&mut t);
+    assert_eq!(t.state(0, "stay"), 1, "the [停留] landed");
+    t.end(0).unwrap();
+    drain(&mut t);
+    assert_eq!(
+        t.state(0, "stay"),
+        1,
+        "the forced settle ran its body and re-granted the layer: {:?}",
+        t.recent_keys(20)
+    );
+    // The frame carries the blocked fact through the body raise, so a hook can
+    // tell this settle from a landing's.
+    let probe = t
+        .events_since(0)
+        .into_iter()
+        .filter(|e| e.msg.key().ends_with("settle_probe"))
+        .last()
+        .expect("the probe logged the settle");
+    assert_eq!(
+        probe.msg.args.get("k"),
+        Some(&game_core::msg::Arg::Integer(1)),
+        "settle_blocked() reads 1 inside the body: {:?}",
+        probe.msg.args
+    );
 }

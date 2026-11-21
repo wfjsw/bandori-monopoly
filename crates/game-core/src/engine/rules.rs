@@ -577,6 +577,9 @@ pub struct SettleFacts {
     pub paid: bool,
     /// What that payment moved (0 without `paid`).
     pub paid_value: i32,
+    /// The settle is the withheld one of a [无法移动] turn: it runs at the turn
+    /// end because a card answered `Settle` (glossary 47 「…且不[结算]」).
+    pub blocked: bool,
 }
 
 impl SettleFacts {
@@ -591,6 +594,9 @@ impl SettleFacts {
         }
         if self.paid {
             v |= 4;
+        }
+        if self.blocked {
+            v |= 8;
         }
         v
     }

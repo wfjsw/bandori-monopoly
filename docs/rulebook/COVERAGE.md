@@ -271,6 +271,7 @@ assert the clause (or the reason it is not).
 | `通用:[月岛麻里奈]今天也要加油工作喔#2` | the pass/settle on #1 goes through without the extra effect | **ok** | marina_card_counters_extra_effect_on_circle |
 | `通用:[都筑诗船]Parking Space#1` | place on the Space tile; move its houses to your other tiles (max +1 each) | **ok** | parking_moves_space_houses_out |
 | `通用:[都筑诗船]Parking Space#2` | [持续](1) that tile's settle becomes 'turn end: gain 1 [停留]' | **ok** | parking_replaces_settle_with_stay |
+| `通用:[都筑诗船]Parking Space#2b` | a [无法移动] turn settles nothing by default, so the tile does not re-arm (glossary 47 「…且不[结算]」) | **ok** | g03_blocked_turn_end_settles_nothing |
 | `通用:[都筑诗船]Parking Space#3` | (2) players on that tile cannot use character or band skills | **ok** | parking_blocks_skills_on_the_tile,ix_parking_blocks_tsugu_skill |
 | `skill:月岛麻里奈:礼物还有好多好多哟#1` | when another passes CiRCLE they may pay you 500 | **ok** | marina_skill_offered_on_pass |
 | `skill:月岛麻里奈:礼物还有好多好多哟#2` | you roll 1d10; >=6 -> they gain 1200 | **ok** | marina_skill_roll_at_least_six_pays_1200,marina_skill_roll_under_six_pays_nothing |

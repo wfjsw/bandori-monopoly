@@ -24,8 +24,8 @@ fn zz_blocked_then_lifted_settles_once() {
     assert!(t.m.world().st.skip_move, "turn start was blocked");
     assert_eq!(
         t.m.world().blocked_settle_answer(0),
-        game_core::engine::SettleAnswer::Settle,
-        "blocked turn start stamps the withheld settle"
+        game_core::engine::SettleAnswer::Unanswered,
+        "a blocked turn end settles nothing unless a card asks (glossary 47)"
     );
     // Lift the stay mid-turn (hitoshizuku's status clear shape).
     t.m.world_mut()

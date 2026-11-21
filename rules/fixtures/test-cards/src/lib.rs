@@ -564,7 +564,8 @@ fn settle_probe(player_id: i32) -> card_sdk::Asked {
             .i("c", trigger::settle_cancelled() as i64)
             .i("b", trigger::settle_body_replaced() as i64)
             .i("p", trigger::settle_paid() as i64)
-            .i("v", trigger::settle_paid_value() as i64),
+            .i("v", trigger::settle_paid_value() as i64)
+            .i("k", trigger::settle_blocked() as i64),
     );
     Ok(())
 }

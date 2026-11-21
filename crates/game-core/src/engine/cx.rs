@@ -587,6 +587,9 @@ pub struct SettleEntry {
     /// binding one. Seeded from the frame, so a later `set_no_buy(false)`
     /// cannot clear it.
     pub no_buy: bool,
+    /// The settle is the withheld one of a [无法移动] turn, relocated to the
+    /// turn end by a card's `Settle` answer (glossary 47 「…且不[结算]」).
+    pub blocked: bool,
     /// The one normal operation this settle has performed on its tile, if any
     /// (基础[结算] item 8; see [`SettleOperation`]).
     pub operation: SettleOperation,
@@ -2393,6 +2396,7 @@ impl<'a> PlayCtx<'a> {
                 body_replaced: e.body_replaced,
                 paid: e.paid,
                 paid_value: e.paid_value,
+                blocked: e.blocked,
             })
     }
 

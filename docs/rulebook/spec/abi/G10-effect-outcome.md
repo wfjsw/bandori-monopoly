@@ -324,7 +324,8 @@ decision inside an import.
 | the redirect's origin | `redirected_from` / `trigger_redirected_from` / `trigger::redirected_from()` | it reads as the source, and `redirected()` is derived |
 
 `SettleFacts`' bit constants live in `card_sdk::abi::settle_fact`
-(`CANCELLED = 1`, `BODY_REPLACED = 2`, `PAID = 4`) and are mirrored in
+(`CANCELLED = 1`, `BODY_REPLACED = 2`, `PAID = 4`, `BLOCKED = 8`) and are
+mirrored in
 `game_core::state::settle_fact` like every other engine constant. The import
 takes the bitset so one host call answers all three reads.
 
@@ -389,7 +390,7 @@ externs in `crates/card-sdk/src/ctx/sys.rs`.
 | `event_defer` | `() -> i32` | 1 = the event is deferred by this instance (the record exists now); 0 = not an `event` trigger, or another instance already deferred it |
 | `draw_event_as` | `(player_id: i32, tile: i32) -> i32` | 1 (the whole event pipeline ran) |
 | `trigger_by_card_instance` | `() -> i32` | the cause instance, or -1 |
-| `trigger_settle_facts` | `() -> i32` | bitset `1 cancelled`, `2 body_replaced`, `4 paid`; 0 outside a settle hook |
+| `trigger_settle_facts` | `() -> i32` | bitset `1 cancelled`, `2 body_replaced`, `4 paid`, `8 blocked` (a [无法移动] turn's withheld settle); 0 outside a settle hook |
 | `trigger_settle_paid_value` | `() -> i32` | the committed rent amount, else 0 |
 | `trigger_redirected_from` | `() -> i32` | the seat the rename moved from, else -1 |
 | `world_snapshot` | `() -> i32` | the new key; -1 when no world (never, in practice) |

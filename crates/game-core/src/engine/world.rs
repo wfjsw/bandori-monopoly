@@ -1365,8 +1365,9 @@ impl World {
         }
     }
 
-    /// The withheld turn-end settle answer for `player` (`Unanswered` when
-    /// never stamped; a save predating the field has a short vector).
+    /// The withheld turn-end settle answer for `player`. `Unanswered` (never
+    /// stamped; a save predating the field has a short vector) settles nothing
+    /// at the turn end -- only a card's `Settle` runs it.
     pub fn blocked_settle_answer(&self, player: usize) -> SettleAnswer {
         self.blocked_settle.get(player).copied().unwrap_or_default()
     }

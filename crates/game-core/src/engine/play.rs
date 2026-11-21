@@ -953,15 +953,12 @@ impl PlayCtx<'_> {
             self.w.gate_open(self.rules, super::Gate::Move, i),
         );
         // 「（或无法移动的回合结束时）」: a turn that cannot take its main move
-        // withholds the landing settle (the move goes nowhere) and moves it to
-        // the turn end. Stamp **before** the act-gate return -- [晕眩] closes
-        // both gates, and the act skip never reaches the move branch below.
-        // The stamp is the default only: an answer the card gave when the
-        // blocking effect landed keeps it (G03 §4.7).
-        use super::world::SettleAnswer;
-        if (!act || !mv) && self.w.blocked_settle_answer(i) == SettleAnswer::Unanswered {
-            self.w.set_blocked_settle_answer(i, SettleAnswer::Settle);
-        }
+        // settles nothing (the move goes nowhere, glossary 47), so the whole
+        // settle -- windows, body and tile rule -- is withheld. Only a card that
+        // answered `Settle` when the blocking effect landed puts it back, at
+        // the turn end (G03 §4.7). Checked **before** the act-gate return:
+        // [晕眩] closes both gates and the act skip never reaches the move
+        // branch below.
         if !act {
             self.w.log(
                 "status",
@@ -1045,12 +1042,13 @@ impl PlayCtx<'_> {
         // from outside a move (see `main_move`), so it dies with this turn.
         // Writes later in the end hooks are for the next turn's move and stay.
         self.w.turn.plan.claimed = false;
-        // A blocked main move's withheld settle (G03 §4.7). The blocked branch
-        // stamped `Settle` by default and a card could only decline with
-        // `Skip`; run the ordinary landing settle at the seat's own tile (the
-        // walk went nowhere) before the turn-end raises -- the full stage
-        // path (`settleBefore` -> `settle` -> `settleBody` -> the tile rule ->
-        // `settleAfter` -> `tileResolved`), not the built-in fallback.
+        // A blocked main move's withheld settle (G03 §4.7): a [无法移动] turn
+        // settles nothing, so this only runs when a card (`R:选择自己的舞台`)
+        // answered `Settle` back when the blocking effect landed. When it does
+        // run it is the ordinary settle at the seat's own tile (the walk went
+        // nowhere) -- the full stage path (`settleBefore` -> `settle` ->
+        // `settleBody` -> the tile rule -> `settleAfter` -> `tileResolved`),
+        // not the built-in fallback.
         if !self.out(i)
             && self.playing()
             && self.w.blocked_settle_answer(i) == super::world::SettleAnswer::Settle
@@ -1061,7 +1059,11 @@ impl PlayCtx<'_> {
             m.from = at;
             m.to = at;
             m.settles = true;
-            self.after_walk(&mut m)?;
+            // A blocked-turn settle: the fact is exposed so a card can tell it
+            // from a landing's (glossary 47 「…且不[结算]」). Passed by argument
+            // (not ctx state) so a settle a `settleBefore` hook opens inside
+            // this window cannot steal it.
+            self.after_walk(&mut m, true)?;
         }
         self.w
             .set_blocked_settle_answer(i, super::world::SettleAnswer::Unanswered);
@@ -1443,12 +1445,8 @@ impl PlayCtx<'_> {
             m.roll = 0;
             m.steps = Some(0);
             m.settles = false;
-            // 「（或无法移动的回合结束时）」 -- the withheld settle is the
-            // default only; a card that answered `Skip` keeps it.
-            use super::world::SettleAnswer;
-            if self.w.blocked_settle_answer(i) == SettleAnswer::Unanswered {
-                self.w.set_blocked_settle_answer(i, SettleAnswer::Settle);
-            }
+            // 「（或无法移动的回合结束时）」 -- nothing settles unless a
+            // card answered `Settle` when the blocking effect landed.
         }
         Ok(true)
     }
@@ -2109,9 +2107,9 @@ impl PlayCtx<'_> {
         self.w.turn.main_moved = true;
         self.w.turn.move_activation_ordinal = self.w.turn.activation_ordinal;
         // Taking the main move lifts the 「无法移动」 premise: a withheld
-        // turn-end settle (stamped at a blocked turn start, or by a card) is no
-        // longer owed -- the move settles where it lands instead. A move that
-        // is *still* immobile re-stamps it at the clamp in `run_move_body`.
+        // turn-end settle a card armed is no longer owed -- the move settles
+        // where it lands instead. Nothing re-stamps it: a move that is *still*
+        // immobile just keeps settling nothing (glossary 47).
         self.w
             .set_blocked_settle_answer(i, super::world::SettleAnswer::Unanswered);
         // A claim written outside a frame (a turn-start hook, a pressed skill)
@@ -2266,13 +2264,8 @@ impl PlayCtx<'_> {
         // them would otherwise take one step and settle there).
         let steps = if self.move_gate_closed(i) {
             m.settles = false;
-            if m.is_main_move
-                && self.w.blocked_settle_answer(i) == super::world::SettleAnswer::Unanswered
-            {
-                // The withheld main-move settle still runs at the turn end.
-                self.w
-                    .set_blocked_settle_answer(i, super::world::SettleAnswer::Settle);
-            }
+            // The withheld main-move settle stays withheld: only a card's
+            // `Settle` answer runs it at the turn end.
             0
         } else {
             steps
@@ -2342,7 +2335,7 @@ impl PlayCtx<'_> {
             if self.out(i) || !self.playing() {
                 return Ok(());
             }
-            self.after_walk(m)?;
+            self.after_walk(m, false)?;
             return self.move_resolved(m);
         }
         // Lazy-flush segment: steps accumulate here and are published as one
@@ -2492,9 +2485,6 @@ impl PlayCtx<'_> {
                     && self.move_settle_answer(i) == SettleAnswer::Unanswered
                 {
                     m.settles = false;
-                    if self.w.blocked_settle_answer(i) == SettleAnswer::Unanswered {
-                        self.w.set_blocked_settle_answer(i, SettleAnswer::Settle);
-                    }
                 }
                 self.w.log(
                     "status",
@@ -2522,7 +2512,7 @@ impl PlayCtx<'_> {
         if self.out(i) || !self.playing() {
             return Ok(());
         }
-        self.after_walk(m)?;
+        self.after_walk(m, false)?;
         self.move_resolved(m)
     }
 
@@ -2760,7 +2750,7 @@ impl PlayCtx<'_> {
         // The settle stages (14–15) run only when the move settles (其他规则
         // 注意事项 1.2: 「是否settle」 gates only the settle).
         if settles {
-            self.after_walk(&mut m)?;
+            self.after_walk(&mut m, false)?;
         }
         // `Teleported` after the settlement (or at once when the move
         // does not settle). Retained for wire/replay compatibility only --
@@ -2846,7 +2836,7 @@ impl PlayCtx<'_> {
     /// The move tail (`moveAfter` before this, `moveResolved` after) is raised
     /// by the walk / teleport themselves, so a 「不[触发结算]」 move runs the
     /// tail and skips only this.
-    fn after_walk(&mut self, m: &mut Move) -> Flow<()> {
+    fn after_walk(&mut self, m: &mut Move, blocked: bool) -> Flow<()> {
         let i = m.player_id;
         if self.out(i) || !self.playing() || !m.settles {
             return Ok(());
@@ -2899,7 +2889,7 @@ impl PlayCtx<'_> {
         }
         if !self.out(i) && self.playing() {
             self.w.turn.settle_seed = seed;
-            self.settle(i, m)?;
+            self.settle(i, m, blocked)?;
         }
         Ok(())
     }
@@ -2913,7 +2903,7 @@ impl PlayCtx<'_> {
     /// A relocation inside `settle` / `settleBody` / `settleAfter` does **not**
     /// re-target: `pos` is read **once**, here, and the landed tile finishes
     /// (行动阶段 15 「触发地块/落点效果」).
-    fn settle(&mut self, i: usize, m: &Move) -> Flow<()> {
+    fn settle(&mut self, i: usize, m: &Move, blocked: bool) -> Flow<()> {
         let at = self.w.st.players[i].pos as usize;
         // The move's own landing entry is the tile, but a relocation inside
         // `settleBefore` moved the player after that entry was written, so the
@@ -2924,7 +2914,7 @@ impl PlayCtx<'_> {
             Some(&t) if self.w.position_of_tile(t) as usize == at => t,
             _ => standing,
         };
-        self.settle_at(i, at, tile, m)
+        self.settle_at(i, at, tile, m, blocked)
     }
 
     /// The [触发结算] of an arbitrary tile. A card that resolves a
@@ -2934,12 +2924,15 @@ impl PlayCtx<'_> {
     /// STACK-01: implemented as a stage machine ([`Self::step_settle`]) so a
     /// nested settle suspends and resumes on the work stack instead of
     /// recursing. See `docs/ENGINE.md` "settle work stack".
-    fn settle_at(&mut self, i: usize, at: usize, tile: i32, m: &Move) -> Flow<()> {
+    fn settle_at(&mut self, i: usize, at: usize, tile: i32, m: &Move, blocked: bool) -> Flow<()> {
         let mut frame = crate::engine::work::SettleFrame::new(i, at, tile, m.clone());
         // 「必须购买」 (LOY-MUSTBUY-02) is one-shot per settle; a walk landing
         // settles here, so the latch is consumed onto the frame too.
         frame.no_buy = self.w.plan().no_buy || self.w.turn.settle_no_buy;
         self.w.turn.settle_no_buy = false;
+        // ... and the blocked-turn marker rides the same way (the withheld
+        // settle of a [无法移动] turn, put back by a card's `Settle`).
+        frame.blocked = blocked;
         self.step_settle(&mut frame)
     }
 
@@ -2997,6 +2990,7 @@ impl PlayCtx<'_> {
                     .expect("planted by `with_move`"),
                 is_main_move: frame.m.is_main_move,
                 no_buy: frame.no_buy,
+                blocked: frame.blocked,
                 operation: super::cx::SettleOperation::None,
                 seed: self.w.turn.settle_seed.take(),
             });

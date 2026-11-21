@@ -56,6 +56,11 @@ pub struct SettleFrame {
     /// live [`SettleEntry`](super::cx::SettleEntry), so a caller's later
     /// `set_no_buy(false)` cannot clear it.
     pub no_buy: bool,
+    /// The settle belongs to a turn whose main move was [无法移动]: a card
+    /// answered `Settle`, so the withheld settle runs at the turn end. Nothing
+    /// landed, so the flag tells a hook this is not a landing settle
+    /// (glossary 47 「[移动终点]视为当前所在格子且**不[结算]**」).
+    pub blocked: bool,
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -93,6 +98,7 @@ impl SettleFrame {
             stack_idx: usize::MAX,
             scoped: false,
             no_buy: false,
+            blocked: false,
         }
     }
 }

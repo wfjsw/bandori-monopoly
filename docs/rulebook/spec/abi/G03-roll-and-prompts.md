@@ -621,16 +621,25 @@ one `Unanswered` per seat, SAVE'd): the card answers while the blocking effect
 lands, i.e. in the turn **before** the blocked one, so the slot outlives
 `TurnCtx`.
 
-`blocked_settle[seat]` is engine-stamped **at that seat's turn start**
-(`turn_start`, inside the `!mv` branch): the roll gate (`why_not_act "roll"`)
-already refuses a blocked main move, so that move never casts and the old
-post-ladder `immobile` stamp never ran for it. The roll-dispatch `immobile`
-branch keeps the same stamp as a fallback (a join / card-driven roll that is
-refused mid-walk). Both stamps only fire while the slot is `Unanswered`: a
-card that answered `Skip` when the blocking effect landed keeps it, which is
-what makes 「无法移动的回合结束时」 a settling turn end only when the card
-said nothing. Leaving the card unplayed therefore settles at turn end. `Skip`
-withholds it. The seat's slot is cleared after that seat's turn-end runner.
+`blocked_settle[seat]` is **not** engine-stamped: glossary 47 makes a blocked
+main move 「[移动终点]视为当前所在格子且不[结算]」, so the default is *no* settle
+at all -- no `settleBefore` window, no body, no tile rule -- and the turn end is
+a bare end. Only a card's `Settle` answer (`R:选择自己的舞台`) puts one back; the
+answer is given while the blocking effect lands, i.e. in the turn **before**
+the blocked one, and the slot outlives `TurnCtx` for it. `Skip` and `Unanswered`
+both mean "nothing happens"; the engine never fills the slot itself. It is
+cleared after that seat's turn-end runner.
+
+A settle that a card did put back runs **whole** at the turn end (`settleBefore`
+-> `settle` -> `settleBody` -> the tile rule -> `settleAfter` -> `tileResolved`)
+on the seat's own tile, exactly like a landing -- so a card that rewrites the
+tile's settle does fire there. Its frame is marked `blocked` and the flag rides
+`settle_facts` as `settle_fact::BLOCKED` (bit 8) / `trigger::settle_blocked()`, so
+a hook can tell the two apart. Without the default the difference is fatal:
+`generic:[都筑诗船]Parking Space` grants +1 [停留] on each settle of its tile, and
+a skip-settle would let it re-arm every turn -- 1 layer granted against the 1
+peeled, pinning the player to that tile for the rest of the match (the
+2026-11-21 record ends with 3100 bare-end rounds this way).
 
 ## 5. Engine wiring
 

@@ -860,7 +860,8 @@ use crate::intern::NameId;
 ///    `trigger_by_card_instance` add the causing **instance** beside
 ///    `by_card`'s seat. `Trigger.settle_facts` / `trigger_settle_facts`
 ///    (bitset) / `trigger_settle_paid_value` publish a settle's
-///    `cancelled` / `body_replaced` / `paid` outcome from the body stage on.
+///    `cancelled` / `body_replaced` / `paid` outcome -- and (v124) `blocked`,
+///    a blocked turn's withheld settle -- from the body stage on.
 ///    `Trigger.redirected_from` / `trigger_redirected_from` name the seat a
 ///    landed redirect moved a hit from. `world_snapshot` / `world_restore` /
 ///    `world_snapshot_drop` checkpoint and restore
@@ -1299,6 +1300,9 @@ pub mod settle_fact {
     /// A rent payment to the settle's owner, on the settle's own tile,
     /// committed.
     pub const PAID: i32 = 4;
+    /// This is a blocked turn's withheld settle, run at the turn end because a
+    /// card answered `Settle` (「[无法移动]…不[结算]」 makes running one opt-in).
+    pub const BLOCKED: i32 = 8;
 }
 
 /// The [`charge_source`] code of a raise: what opened a `ChargePaying` window.
@@ -2121,8 +2125,11 @@ pub mod roll_source {
 
 /// A 「是否触发结算」 answer (选择自己的舞台), shared by the move half
 /// (`set_move_settle_answer`, the current move) and the turn-end half
-/// (`set_turn_end_settle_answer`, a blocked turn). `Unanswered` = the card
-/// said nothing, which is also the engine's default.
+/// (`set_turn_end_settle_answer`, a blocked turn). `Unanswered` = the card said
+/// nothing: for the turn-end half that is the engine's default and means the
+/// blocked turn settles nothing at all (glossary 47 「…且不[结算]」), so only
+/// `Settle` can put the withheld settle back. The move half reads `Unanswered`
+/// as "the walk settles", its ordinary behaviour.
 #[repr(i32)]
 #[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
 pub enum SettleAnswer {
