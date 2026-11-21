@@ -400,6 +400,15 @@ def run(args) -> int:
     for cid, extra in build_thumbs(out, p.manifest["personas"]).items():
         p.manifest["personas"].setdefault(cid, {}).update(extra)
 
+    # 7b) face-centered square avatars (tools/asset-pipe/faces.py). Anchors are
+    #     tracked in faces.json, so this needs no detector; a new character
+    #     without an anchor simply keeps the CSS fallback until `faces.py
+    #     --detect` fills it.
+    from faces import ANCHORS as FACE_ANCHORS, build as build_faces  # noqa: E402
+    face_anchors = json.loads(FACE_ANCHORS.read_text(encoding="utf-8")) if FACE_ANCHORS.exists() else {}
+    for cid, extra in build_faces(out, p.manifest["personas"], face_anchors, force=False, quiet=False).items():
+        p.manifest["personas"].setdefault(cid, {}).update(extra)
+
     # A partial run (--only img,audio,...) never touches the fonts / live2d
     # sections; carry them over from the previous manifest instead of clobbering.
     mf = out / "manifest.json"
