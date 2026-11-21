@@ -26,6 +26,9 @@ const EFFECT_HOLD_MS = Math.max(DICE_ROLL_MS + 300, 1500);
 const CARD_FLASH_MS = 1200;
 /** How long the face then fades out. */
 const CARD_FLASH_FADE_MS = 250;
+/** The one halo pulse mid-hold, and the rest before the fade starts. */
+const CARD_FLASH_HIT_MS = 150;
+const CARD_FLASH_REST_MS = 60;
 import type { GameSession } from "../../game/session";
 import { t as tr } from "../../i18n/t";
 import { FlashOnce, flashPlay } from "./presentation.ts";
@@ -126,6 +129,8 @@ export class Animator {
   flash: {
     card: string; owner: number; caption: string; negated: boolean;
     out: boolean; id: number;
+    /** The single halo pulse is running (see `armFlash`). */
+    hit: boolean;
     detail: string[];
     /** The activation's trigger kind (`card_trigger`); `hook` and kin caption
      *  generically, and their detail lines already name the card. */
@@ -176,6 +181,7 @@ export class Animator {
   private bannerTimer = 0;
   private turnTimer = 0;
   private flashTimer = 0;
+  private hitTimer = 0;
   private pulseTimer = 0;
   private pulseCard = "";
   private disposed = false;
@@ -228,6 +234,7 @@ export class Animator {
     clearTimeout(this.chainTitleTimer);
     clearTimeout(this.turnTimer);
     clearTimeout(this.flashTimer);
+    clearTimeout(this.hitTimer);
     clearTimeout(this.pulseTimer);
   }
 
@@ -527,7 +534,7 @@ export class Animator {
   /** Put a card face up; `armFlash` starts its hold. */
   private showFlash(card: string, owner: number, caption: string, negated: boolean, kind: string, detail: string[], actId = -1): void {
     const id = ++this.seq;
-    this.flash = { card, owner, caption, negated, out: false, id, detail, kind, actId };
+    this.flash = { card, owner, caption, negated, out: false, id, hit: false, detail, kind, actId };
     this.armFlash(id);
     this.bump();
   }
@@ -540,10 +547,31 @@ export class Animator {
     const hold = CARD_FLASH_MS / Math.max(1, this.speed);
     // Always positive (speed never drops below 1): every flash has a fade.
     const fade = CARD_FLASH_FADE_MS / Math.max(1, this.speed);
+    const hit = CARD_FLASH_HIT_MS / Math.max(1, this.speed);
+    const rest = CARD_FLASH_REST_MS / Math.max(1, this.speed);
     clearTimeout(this.flashTimer);
+    clearTimeout(this.hitTimer);
+    // Re-arming (a body line landing on the face) restarts the beat: the
+    // class is dropped now and put back for the next hit, which also restarts
+    // the CSS animation.
+    if (this.flash) {
+      this.flash = { ...this.flash, hit: false };
+      this.bump();
+    }
+    this.hitTimer = setTimeout(() => {
+      if (this.flash?.id !== id) return;
+      this.flash = { ...this.flash, hit: true };
+      this.bump();
+      this.hitTimer = setTimeout(() => {
+        if (this.flash?.id !== id) return;
+        this.flash = { ...this.flash, hit: false };
+        this.bump();
+      }, hit);
+    }, Math.max(0, hold - fade - hit - rest));
     this.flashTimer = setTimeout(() => {
       if (this.flash?.id !== id) return;
-      this.flash = { ...this.flash, out: true };
+      clearTimeout(this.hitTimer);
+      this.flash = { ...this.flash, out: true, hit: false };
       this.bump();
       this.flashTimer = setTimeout(() => {
         if (this.flash?.id !== id || !this.flash.out) return;

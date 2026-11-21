@@ -618,3 +618,38 @@ test("Animator: a deep queue does not shorten the card flash", async () => {
   assert.ok(deep > 800, `deep flash shorter than solo: ${deep}ms`);
   assert.ok(Math.abs(deep - shallow) < 450, `flash length not parity: ${shallow} vs ${deep}`);
 });
+
+test("Animator: the flash hits once, briefly, then restores before fading", async () => {
+  const anim = new Animator(() => {}, () => null, false);
+  anim.push(frame({ id: 401, type: "card", card: "TEST:hit", kind: "play", uid: -1, msg: { k: "log.played" }, flash: true }));
+  let hitStart = 0;
+  let hitEnd = 0;
+  let out = false;
+  for (let i = 0; i < 250; i++) {
+    const f = anim.flash;
+    if (f && !f.out) {
+      if (f.hit && !hitStart) hitStart = Date.now();
+      if (hitStart && !f.hit && !hitEnd) hitEnd = Date.now();
+    }
+    if (f?.out) { out = true; break; }
+    await sleep(10);
+  }
+  assert.ok(hitStart, "the flash must hit");
+  assert.ok(hitEnd, "the hit must restore before the fade");
+  assert.ok(out, "the face must then fade");
+  assert.ok(hitEnd - hitStart < 500, `hit too long: ${hitEnd - hitStart}ms`);
+  assert.equal(anim.flash?.hit ?? false, false);
+  for (let i = 0; i < 100 && anim.flash; i++) await sleep(10);
+  assert.equal(anim.flash, null);
+});
+
+test("flash styles: the face is card-sized and the hit is one short animation", () => {
+  const css = readFileSync(path.join(path.dirname(fileURLToPath(import.meta.url)), "Board.module.css"), "utf8");
+  const bare = css.replace(/\/\*[\s\S]*?\*\//g, "");
+  const face = bare.match(/\.flashFace \{[^}]*\}/)?.[0] ?? "";
+  assert.match(face, /--card-w:\s*\d+px/, "the face needs a px width for the 1.5 min-height calc");
+  assert.doesNotMatch(face, /--card-w:\s*100%/, "a percentage breaks min-height: calc(100% * 1.5)");
+  const card = bare.match(/\.flashCard \{[^}]*\}/)?.[0] ?? "";
+  assert.doesNotMatch(card, /animation:/, "the glow must not be permanently attached");
+  assert.match(bare, /\.flashHit \{[^}]*animation:/, "the hit is its own short animation");
+});

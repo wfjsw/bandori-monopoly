@@ -345,7 +345,7 @@ export const Board = memo(function Board({ sess }: { sess: GameSession }) {
                   className={s.flashFace}
                   style={{ ["--owner" as string]: anim.flash.owner >= 0 ? m.colorOf(anim.flash.owner) : "var(--pink)" }}
                 >
-                  <CardFace id={anim.flash.card} size="mini" className={s.flashCard} />
+                  <CardFace id={anim.flash.card} size="mini" className={cx(s.flashCard, anim.flash.hit && s.flashHit)} />
                   {(anim.flash.caption || anim.flash.detail.length > 0) && (
                     <div className={s.flashCaption}>
                       {anim.flash.caption && <div>{anim.flash.caption}</div>}

@@ -248,21 +248,26 @@
    colour and blinking with the field card's 「效果适用」 halo. */
 .flashFace {
   position: relative;
-  width: 200px;
-  --card-w: 100%;
+  /* A real px width: `--card-w: 100%` made `.mini`'s
+     `min-height: calc(var(--card-w) * 1.5)` invalid (percentage times a
+     number), so the face collapsed to its content instead of a 2:3 card. */
+  --card-w: 200px;
+  width: var(--card-w);
 }
 .flashCard {
   box-shadow: 0 0 0 2.5px var(--owner, var(--pink)), var(--card-shadow);
   background: color-mix(in srgb, var(--owner, var(--white)) 12%, var(--white));
-  /* Glows from the first frame and keeps the halo: `both` holds the last
-     keyframe, so a flash re-armed by a later effect line stays lit until
-     `flashOut` fades the whole face. */
-  animation: flashGlow 1s ease-in-out 0.02s 1 both;
+}
+/* The 「效果适用」 beat: one short halo in the middle of the hold, then back
+   to the plain owner ring before the face fades (`flashHit` is put on by
+   `armFlash` for CARD_FLASH_HIT_MS). Starts and ends at rest, so the card's
+   own text and the caption stay readable; it never holds lit. */
+.flashHit {
+  animation: flashGlow 150ms ease-out 1;
 }
 @keyframes flashGlow {
-  0% { filter: brightness(1); }
-  15%,
-  100% {
+  0%, 100% { filter: brightness(1); }
+  45% {
     filter: brightness(1.45);
     box-shadow: 0 0 0 3px #fff, 0 0 20px 7px var(--owner, #fff), 0 0 38px 12px rgba(255, 255, 255, 0.75);
   }
@@ -315,7 +320,7 @@
 /* Phone canvas: the activation flash is a glance, not a poster -- a smaller face
    (so it fits the 540px stage) and a caption that wraps instead of clipping. */
 :global(:root[data-compact]) .flash { top: 50%; max-width: 70%; }
-:global(:root[data-compact]) .flashFace { width: 170px; }
+:global(:root[data-compact]) .flashFace { --card-w: 170px; }
 :global(:root[data-compact]) .flashCaption { padding: 4px 8px 6px; font-size: var(--fs-sm); overflow-wrap: anywhere; }
 :global(:root[data-compact]) .flashDetail { font-size: var(--fs-xs); line-height: 1.35; }
 :global(:root[data-compact]) .flashNegated span { font-size: 26px; border-width: 4px; padding: 2px 10px; }
