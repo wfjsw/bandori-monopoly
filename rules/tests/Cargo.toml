@@ -17,3 +17,8 @@ bandori-std = { path = "../bandori-std" }
 serde_json = { workspace = true }
 rules-spec = { path = "../spec" }
 spec-kit = { path = "../../crates/spec-kit" }
+# `#[cfg(kani)]` items only exist for the proof harnesses; ordinary
+# build/check/test compiles them out and check-cfg flags the name as unknown.
+# Declare it so non-Kani builds stay quiet while real cfg typos still warn.
+[lints.rust]
+unexpected_cfgs = { level = "warn", check-cfg = ["cfg(kani)"] }

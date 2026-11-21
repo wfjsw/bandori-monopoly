@@ -10,3 +10,8 @@ description = "Data-only engine trigger-kind table and shared wire vocabulary. E
 # `MoveCtx` saves and the guest ABI. Not the workspace serde (that one
 # enables `std`); this is derive-only so wasm guests stay `no_std`.
 serde = { version = "1", default-features = false, features = ["derive"] }
+# `#[cfg(kani)]` items only exist for the proof harnesses; ordinary
+# build/check/test compiles them out and check-cfg flags the name as unknown.
+# Declare it so non-Kani builds stay quiet while real cfg typos still warn.
+[lints.rust]
+unexpected_cfgs = { level = "warn", check-cfg = ["cfg(kani)"] }

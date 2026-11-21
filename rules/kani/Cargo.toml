@@ -100,3 +100,8 @@ rules-cond = { path = "../../crates/cond", features = ["lower"] }
 [package.metadata.kani]
 # Unwinding: card bodies use bounded Vec loops (discard pick, player_count<=4).
 # Default 80 + --no-unwinding-checks (see tools/kani/run.sh and KANI.md §5).
+# `#[cfg(kani)]` items only exist for the proof harnesses; ordinary
+# build/check/test compiles them out and check-cfg flags the name as unknown.
+# Declare it so non-Kani builds stay quiet while real cfg typos still warn.
+[lints.rust]
+unexpected_cfgs = { level = "warn", check-cfg = ["cfg(kani)"] }

@@ -22,6 +22,11 @@ Each proof is paired with a deliberate MUTANT that Kani must report as failing
 | host rustc (non-Kani) | 1.96.1 |
 | build dir | `CARGO_TARGET_DIR=/home/monopoly/kani-target` (outside the repo) |
 
+`cfg(kani)` is declared in the `[lints.rust] unexpected_cfgs` check-cfg list of
+every crate that carries proof-only items, so ordinary `cargo build` / `check` /
+`test` runs stay free of `unexpected_cfgs` noise, while a misspelled cfg name
+still warns.
+
 Run from the task worktree:
 
 ```sh
