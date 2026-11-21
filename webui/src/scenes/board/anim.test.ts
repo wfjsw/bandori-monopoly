@@ -588,7 +588,7 @@ test("Animator: mergeHistory seals the flash ids it seeds", async () => {
 
 /** Mount a centre-face flash with `backlog` trivial events behind it and
  *  sample its halo duration and total lifetime. */
-async function flashHold(backlog: number): Promise<{ hit: number; life: number }> {
+async function flashHold(backlog: number): Promise<{ hit: number; rest: number; life: number }> {
   const anim = new Animator(() => {}, () => null, false);
   // A leading pass keeps the loop busy (250ms) while the card and its backlog
   // queue up, so the animator reaches the card with the queue already deep --
@@ -605,27 +605,36 @@ async function flashHold(backlog: number): Promise<{ hit: number; life: number }
   assert.ok(anim.flash, "flash must show");
   const shown = Date.now();
   let hitStart = 0;
-  let hit = 0;
+  let hitEnd = 0;
+  let outAt = 0;
   for (let i = 0; i < 700 && anim.flash; i++) {
     const f = anim.flash;
-    if (f?.hit && !hitStart) hitStart = Date.now();
-    if (hitStart && f && !f.hit) { hit = Date.now() - hitStart; break; }
+    if (f?.hit) {
+      if (!hitStart) hitStart = Date.now();
+    } else if (hitStart && f && !hitEnd) {
+      hitEnd = Date.now();
+    }
+    if (f?.out) { outAt = Date.now(); break; }
     await sleep(5);
   }
   for (let i = 0; i < 200 && anim.flash; i++) await sleep(5);
   assert.equal(anim.flash, null);
-  return { hit, life: Date.now() - shown };
+  return { hit: hitEnd - hitStart, rest: hitEnd && outAt ? outAt - hitEnd : 0, life: Date.now() - shown };
 }
 
-test("Animator: the flash halo equals the field card's blink, and is short when deep", async () => {
+test("Animator: the flash halo takes the field glow's share, and is short when deep", async () => {
   const shallow = await flashHold(0);
   const deep = await flashHold(12); // > FAST_QUEUE
-  // A field slot lights for PULSE_MS (1500) shallow, PULSE_FAST_MS (800) in a
-  // deep queue; the centre face uses the same clock, not its own constant.
-  assert.ok(shallow.hit >= 1150 && shallow.hit <= 1900, `shallow hit ${shallow.hit}ms`);
-  assert.ok(deep.hit >= 600 && deep.hit <= 1050, `deep hit ${deep.hit}ms`);
+  // A field slot lives PULSE_MS (1500) shallow / PULSE_FAST_MS (800) deep and
+  // its glow runs from 25% to 65% of that; the face copies the same clock and
+  // must not outlive it.
+  assert.ok(shallow.hit >= 450 && shallow.hit <= 800, `shallow glow ${shallow.hit}ms`);
+  assert.ok(shallow.life >= 1300 && shallow.life <= 1750, `shallow face ${shallow.life}ms`);
+  assert.ok(deep.hit >= 210 && deep.hit <= 460, `deep glow ${deep.hit}ms`);
+  assert.ok(deep.life >= 650 && deep.life <= 1000, `deep face ${deep.life}ms`);
+  assert.ok(shallow.rest >= 20, `no rest before the shallow fade: ${shallow.rest}ms`);
+  assert.ok(deep.rest >= 20, `no rest before the deep fade: ${deep.rest}ms`);
   assert.ok(deep.hit < shallow.hit, "a deep queue must take the field's fast blink");
-  assert.ok(deep.life > deep.hit + 300, `the face must outlast the hit: ${deep.life}ms`);
 });
 
 test("Animator: the flash hits once, then restores before fading", async () => {
@@ -646,7 +655,7 @@ test("Animator: the flash hits once, then restores before fading", async () => {
   assert.ok(hitStart, "the flash must hit");
   assert.ok(hitEnd, "the hit must restore before the fade");
   assert.ok(out, "the face must then fade");
-  assert.ok(hitEnd - hitStart >= 1200, `hit shorter than the field blink: ${hitEnd - hitStart}ms`);
+  assert.ok(hitEnd - hitStart >= 450, `hit shorter than the field glow: ${hitEnd - hitStart}ms`);
   assert.equal(anim.flash?.hit ?? false, false);
   for (let i = 0; i < 200 && anim.flash; i++) await sleep(10);
   assert.equal(anim.flash, null);
@@ -665,4 +674,19 @@ test("flash styles: the face is chain-card sized and the hit is one animation", 
   const card = bare.match(/\.flashCard \{[^}]*\}/)?.[0] ?? "";
   assert.doesNotMatch(card, /animation:/, "the glow must not be permanently attached");
   assert.match(bare, /\.flashHit \{[^}]*var\(--hit-ms/, "the hit runs on the shared blink clock");
+});
+
+test("Animator: a body line re-arms one hit, never during the fade", async () => {
+  const anim = new Animator(() => {}, () => null, false);
+  anim.push(frame({ id: 500, type: "card", card: "TEST:rearm", kind: "play", uid: -1, msg: { k: "log.played" }, flash: true }));
+  for (let i = 0; i < 30 && !anim.flash; i++) await sleep(10);
+  await sleep(200);
+  anim.push(frame({ id: 501, type: "pass", parent: 500, msg: { k: "log.effect_nothing" } }));
+  const before = anim.flash?.id;
+  await sleep(10);
+  assert.equal(anim.flash?.id, before, "the same face stays");
+  assert.equal(anim.flash?.out, false, "the re-arm must not land in the fade");
+  assert.equal(anim.flash?.detail.length, 1, "the line rides the face");
+  for (let i = 0; i < 300 && anim.flash; i++) await sleep(10);
+  assert.equal(anim.flash, null);
 });
