@@ -856,7 +856,7 @@ export class Animator {
         // card's flash (正论暴击 and kin: no modal of their own); only an
         // unattributed one keeps the popup window.
         if (this.noFlash()) break;
-        if (e.card) {
+        if (isCardFaceId(e.card)) {
           await this.rideEffect(e.card, playerId, body);
           await wait(fast ? 0 : 250);
           break;
@@ -938,8 +938,10 @@ export class Animator {
         // the one card flash: hand plays, skill presses, event draws, [反击]
         // bodies and field-card hooks all land here. The event's own `flash`
         // (set at commit) is the final decision -- `cardFlash` / `flashPlay`
-        // honour it, and a negated activation (无效) always shows.
-        if (!e.card) break;
+        // honour it, and a negated activation (无效) always shows. A board-rule
+        // host (status / tile / mark) has no face -- flashing an empty card
+        // would put a non-card on screen, so it stays log-only.
+        if (!isCardFaceId(e.card)) break;
         this.lastDiscard = e.card;
         if (this.noFlash()) break;
         await this.cardFlash(e, fast);
@@ -953,7 +955,7 @@ export class Animator {
         // named card's face, or a tile banner when there is no card. Parent-
         // linked under the activation; once-per-flash by event id.
         if (this.noFlash()) break;
-        if (e.card) {
+        if (isCardFaceId(e.card)) {
           this.lastDiscard = e.card;
           await this.cardFlash(e, fast);
           break;

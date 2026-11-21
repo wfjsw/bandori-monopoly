@@ -343,6 +343,39 @@ test("Animator: owner-self-only (flash === false) stays in the log, no flash", a
   assert.equal(anim.log.length, 1);
 });
 
+test("Animator: a board-rule card event (status / tile) keeps the log, no empty flash", async () => {
+  const { anim } = makeAnim();
+  anim.push(frame({
+    id: 91,
+    type: "card",
+    card: "status:no_hand",
+    kind: "hook",
+    uid: -1,
+    msg: { k: "log.effect_applied" },
+    flash: true,
+  }));
+  for (let i = 0; i < 40; i++) await sleep(10);
+  assert.equal(anim.flash, null, "no empty face comes up");
+  assert.equal(anim.log.filter((l) => l.id === 91).length, 1, "the line still logs");
+});
+
+test("Animator: a real card activation still flashes", async () => {
+  const { anim } = makeAnim();
+  anim.push(frame({
+    id: 92,
+    type: "card",
+    card: "TEST:real",
+    kind: "play",
+    uid: -1,
+    msg: { k: "log.played" },
+    flash: true,
+  }));
+  let flashed = false;
+  for (let i = 0; i < 60 && !flashed; i++) { flashed = !!anim.flash; await sleep(10); }
+  assert.ok(flashed);
+  assert.equal(anim.flash?.card, "TEST:real");
+});
+
 test("Animator: a \"flash\" tile cue (no card) banners once and dedupes", async () => {
   const { anim } = makeAnim();
   // Cue text only (no `tile` arg -- node has no game data to resolve one).
