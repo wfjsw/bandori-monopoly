@@ -34,7 +34,7 @@
 import { execFileSync } from "node:child_process";
 import { createHash } from "node:crypto";
 import { existsSync, readFileSync, readdirSync, statSync } from "node:fs";
-import { join, relative, sep } from "node:path";
+import { dirname, join, relative, sep } from "node:path";
 
 /** Version tag baked into every source_id. */
 export const SOURCE_ID_VERSION = "bdre-source-v1";
@@ -257,6 +257,17 @@ export async function loadGlue({ glueDir, dataDir, rules, glueSha, tag }) {
     const index = JSON.parse(readFileSync(rules.index, "utf8"));
     for (const m of index.modules ?? []) {
       g.ruleset_add(new Uint8Array(readFileSync(join(rules.modulesDir, m.file))));
+    }
+    // Precompiled guard conditions ride beside the index (docs/GUARDS.md
+    // §8.2). A browser glue cannot compile a condition source, so a set with
+    // `conds` fails `ruleset_build` unless the blob is loaded first.
+    if (index.conds?.file) {
+      const cp = join(dirname(rules.index), index.conds.file);
+      if (!existsSync(cp)) throw new Error(`precompiled conds blob missing: ${cp}`);
+      if (typeof g.ruleset_precompiled !== "function") {
+        throw new Error("ruleset ships precompiled conditions but this glue cannot load them");
+      }
+      g.ruleset_precompiled(new Uint8Array(readFileSync(cp)));
     }
     g.ruleset_build();
   }
