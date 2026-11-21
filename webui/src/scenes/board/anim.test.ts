@@ -587,8 +587,8 @@ test("Animator: mergeHistory seals the flash ids it seeds", async () => {
 // -- flash length is transport-independent ----------------------------------
 
 /** Mount a centre-face flash with `backlog` trivial events behind it and
- *  return how long the face stayed up. */
-async function flashHold(backlog: number): Promise<number> {
+ *  sample its halo duration and total lifetime. */
+async function flashHold(backlog: number): Promise<{ hit: number; life: number }> {
   const anim = new Animator(() => {}, () => null, false);
   // A leading pass keeps the loop busy (250ms) while the card and its backlog
   // queue up, so the animator reaches the card with the queue already deep --
@@ -603,29 +603,38 @@ async function flashHold(backlog: number): Promise<number> {
   for (let i = 0; i < backlog; i++) anim.push(frame({ id: 200 + backlog * 20 + i, type: "pass", msg: { k: "log.x" } }));
   for (let i = 0; i < 100 && !anim.flash; i++) await sleep(5);
   assert.ok(anim.flash, "flash must show");
-  const t0 = Date.now();
-  for (let i = 0; i < 600 && anim.flash; i++) await sleep(5);
+  const shown = Date.now();
+  let hitStart = 0;
+  let hit = 0;
+  for (let i = 0; i < 700 && anim.flash; i++) {
+    const f = anim.flash;
+    if (f?.hit && !hitStart) hitStart = Date.now();
+    if (hitStart && f && !f.hit) { hit = Date.now() - hitStart; break; }
+    await sleep(5);
+  }
+  for (let i = 0; i < 200 && anim.flash; i++) await sleep(5);
   assert.equal(anim.flash, null);
-  return Date.now() - t0;
+  return { hit, life: Date.now() - shown };
 }
 
-test("Animator: a deep queue does not shorten the card flash", async () => {
+test("Animator: the flash halo equals the field card's blink, and is short when deep", async () => {
   const shallow = await flashHold(0);
   const deep = await flashHold(12); // > FAST_QUEUE
-  // Both run the full CARD_FLASH_MS (~1.2s, fade included); the deep queue's
-  // fast path used to cut it to 350ms with no fade.
-  assert.ok(shallow > 800, `shallow flash too short: ${shallow}ms`);
-  assert.ok(deep > 800, `deep flash shorter than solo: ${deep}ms`);
-  assert.ok(Math.abs(deep - shallow) < 450, `flash length not parity: ${shallow} vs ${deep}`);
+  // A field slot lights for PULSE_MS (1500) shallow, PULSE_FAST_MS (800) in a
+  // deep queue; the centre face uses the same clock, not its own constant.
+  assert.ok(shallow.hit >= 1150 && shallow.hit <= 1900, `shallow hit ${shallow.hit}ms`);
+  assert.ok(deep.hit >= 600 && deep.hit <= 1050, `deep hit ${deep.hit}ms`);
+  assert.ok(deep.hit < shallow.hit, "a deep queue must take the field's fast blink");
+  assert.ok(deep.life > deep.hit + 300, `the face must outlast the hit: ${deep.life}ms`);
 });
 
-test("Animator: the flash hits once, briefly, then restores before fading", async () => {
+test("Animator: the flash hits once, then restores before fading", async () => {
   const anim = new Animator(() => {}, () => null, false);
   anim.push(frame({ id: 401, type: "card", card: "TEST:hit", kind: "play", uid: -1, msg: { k: "log.played" }, flash: true }));
   let hitStart = 0;
   let hitEnd = 0;
   let out = false;
-  for (let i = 0; i < 250; i++) {
+  for (let i = 0; i < 400; i++) {
     const f = anim.flash;
     if (f && !f.out) {
       if (f.hit && !hitStart) hitStart = Date.now();
@@ -637,13 +646,13 @@ test("Animator: the flash hits once, briefly, then restores before fading", asyn
   assert.ok(hitStart, "the flash must hit");
   assert.ok(hitEnd, "the hit must restore before the fade");
   assert.ok(out, "the face must then fade");
-  assert.ok(hitEnd - hitStart < 500, `hit too long: ${hitEnd - hitStart}ms`);
+  assert.ok(hitEnd - hitStart >= 1200, `hit shorter than the field blink: ${hitEnd - hitStart}ms`);
   assert.equal(anim.flash?.hit ?? false, false);
-  for (let i = 0; i < 100 && anim.flash; i++) await sleep(10);
+  for (let i = 0; i < 200 && anim.flash; i++) await sleep(10);
   assert.equal(anim.flash, null);
 });
 
-test("flash styles: the face is card-sized and the hit is one short animation", () => {
+test("flash styles: the face is card-sized and the hit is one animation", () => {
   const css = readFileSync(path.join(path.dirname(fileURLToPath(import.meta.url)), "Board.module.css"), "utf8");
   const bare = css.replace(/\/\*[\s\S]*?\*\//g, "");
   const face = bare.match(/\.flashFace \{[^}]*\}/)?.[0] ?? "";
@@ -651,5 +660,5 @@ test("flash styles: the face is card-sized and the hit is one short animation", 
   assert.doesNotMatch(face, /--card-w:\s*100%/, "a percentage breaks min-height: calc(100% * 1.5)");
   const card = bare.match(/\.flashCard \{[^}]*\}/)?.[0] ?? "";
   assert.doesNotMatch(card, /animation:/, "the glow must not be permanently attached");
-  assert.match(bare, /\.flashHit \{[^}]*animation:/, "the hit is its own short animation");
+  assert.match(bare, /\.flashHit \{[^}]*var\(--hit-ms/, "the hit runs on the shared blink clock");
 });

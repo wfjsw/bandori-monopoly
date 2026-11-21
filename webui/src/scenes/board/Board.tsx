@@ -343,7 +343,10 @@ export const Board = memo(function Board({ sess }: { sess: GameSession }) {
               <div key={anim.flash.id} className={cx(s.flash, anim.flash.out && s.flashOut)}>
                 <div
                   className={s.flashFace}
-                  style={{ ["--owner" as string]: anim.flash.owner >= 0 ? m.colorOf(anim.flash.owner) : "var(--pink)" }}
+                  style={{
+                    ["--owner" as string]: anim.flash.owner >= 0 ? m.colorOf(anim.flash.owner) : "var(--pink)",
+                    ["--hit-ms" as string]: `${anim.flash.hitMs}ms`,
+                  }}
                 >
                   <CardFace id={anim.flash.card} size="mini" className={cx(s.flashCard, anim.flash.hit && s.flashHit)} />
                   {(anim.flash.caption || anim.flash.detail.length > 0) && (

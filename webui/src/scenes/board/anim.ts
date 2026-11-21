@@ -19,15 +19,10 @@ const DICE_ROLL_MS = 10 * 55;
 /** How long the effect popup stays up: just longer than the dice roll it
  *  follows, but never under 1.5s -- long enough to read which branch landed. */
 const EFFECT_HOLD_MS = Math.max(DICE_ROLL_MS + 300, 1500);
-/** How long a card activation's face stays up, fade-out included. The length
- *  is fixed per activation, not keyed to the queue: online delivers a whole
- *  resolution in one batch, so a queue-depth test made the same flash play
- *  ~3x shorter there than in solo. */
-const CARD_FLASH_MS = 1200;
-/** How long the face then fades out. */
+/** The face's beat: show, wait, one halo for exactly the field slot's blink
+ *  time (so a centre face and a field card light alike), restore, fade. */
+const CARD_FLASH_WAIT_MS = 450;
 const CARD_FLASH_FADE_MS = 250;
-/** The one halo pulse mid-hold, and the rest before the fade starts. */
-const CARD_FLASH_HIT_MS = 150;
 const CARD_FLASH_REST_MS = 60;
 import type { GameSession } from "../../game/session";
 import { t as tr } from "../../i18n/t";
@@ -131,6 +126,8 @@ export class Animator {
     out: boolean; id: number;
     /** The single halo pulse is running (see `armFlash`). */
     hit: boolean;
+    /** Its length in ms: the CSS keyframe is driven by the same clock. */
+    hitMs: number;
     detail: string[];
     /** The activation's trigger kind (`card_trigger`); `hook` and kin caption
      *  generically, and their detail lines already name the card. */
@@ -317,7 +314,7 @@ export class Animator {
         && this.flash.detail.length < 2 && line) {
       const f = this.flash;
       this.flash = { ...f, detail: [...f.detail, line], out: false };
-      this.armFlash(f.id);
+      this.armFlash(f.id, this.fast());
     }
     // History rows have already been shown (or were never animated): seal
     // their flash identity so a reconnect / seek cannot play them now.
@@ -491,7 +488,7 @@ export class Animator {
     // A negated activation's `results` name what negated it; a live one's
     // outcome lines ride the face as they arrive (`addLog`).
     const detail = (e.results ?? []).map((r) => fmtMsg(r, this.names())).filter(Boolean);
-    this.showFlash(e.card, e.playerId, caption, !!e.negated, kind, detail, e.id);
+    this.showFlash(e.card, e.playerId, caption, !!e.negated, kind, detail, fast, e.id);
   }
 
   /** `uid` when that field instance is still face-up to the viewer (the event
@@ -532,42 +529,43 @@ export class Animator {
   }
 
   /** Put a card face up; `armFlash` starts its hold. */
-  private showFlash(card: string, owner: number, caption: string, negated: boolean, kind: string, detail: string[], actId = -1): void {
+  private showFlash(card: string, owner: number, caption: string, negated: boolean, kind: string, detail: string[], fast: boolean, actId = -1): void {
     const id = ++this.seq;
-    this.flash = { card, owner, caption, negated, out: false, id, hit: false, detail, kind, actId };
-    this.armFlash(id);
+    this.flash = { card, owner, caption, negated, out: false, id, hit: false, hitMs: 0, detail, kind, actId };
+    this.armFlash(id, fast);
     this.bump();
   }
 
-  /** Start (or re-arm) the flash's hold, then its fade. One timer slot: an
-   *  effect line that lands on the face re-arms it before the fade eats it.
-   *  A deep queue never shortens this -- only the explicit speed setting does
-   *  (scaled below), so live online and solo play the same length. */
-  private armFlash(id: number): void {
-    const hold = CARD_FLASH_MS / Math.max(1, this.speed);
-    // Always positive (speed never drops below 1): every flash has a fade.
-    const fade = CARD_FLASH_FADE_MS / Math.max(1, this.speed);
-    const hit = CARD_FLASH_HIT_MS / Math.max(1, this.speed);
-    const rest = CARD_FLASH_REST_MS / Math.max(1, this.speed);
+  /** Start (or re-arm) the flash's beat: wait, one halo, restore, fade.
+   *  The halo is exactly the field slot's blink under the same conditions
+   *  (`PULSE_MS` / `PULSE_FAST_MS`), so the centre face and a field card
+   *  light alike -- and, like a pulse, a deep queue shortens it. One timer
+   *  slot: an effect line that lands on the face re-arms the beat. */
+  private armFlash(id: number, fast: boolean): void {
+    const scale = Math.max(1, this.speed);
+    const wait = CARD_FLASH_WAIT_MS / scale;
+    const fade = CARD_FLASH_FADE_MS / scale;
+    const hit = (fast ? PULSE_FAST_MS : PULSE_MS) / scale;
+    const rest = CARD_FLASH_REST_MS / scale;
+    const hold = wait + hit + rest + fade;
     clearTimeout(this.flashTimer);
     clearTimeout(this.hitTimer);
-    // Re-arming (a body line landing on the face) restarts the beat: the
-    // class is dropped now and put back for the next hit, which also restarts
-    // the CSS animation.
+    // Re-arming restarts the beat: the class is dropped now and put back for
+    // the next hit, which also restarts the CSS animation.
     if (this.flash) {
-      this.flash = { ...this.flash, hit: false };
+      this.flash = { ...this.flash, hit: false, hitMs: hit };
       this.bump();
     }
     this.hitTimer = setTimeout(() => {
       if (this.flash?.id !== id) return;
-      this.flash = { ...this.flash, hit: true };
+      this.flash = { ...this.flash, hit: true, hitMs: hit };
       this.bump();
       this.hitTimer = setTimeout(() => {
         if (this.flash?.id !== id) return;
         this.flash = { ...this.flash, hit: false };
         this.bump();
       }, hit);
-    }, Math.max(0, hold - fade - hit - rest));
+    }, wait);
     this.flashTimer = setTimeout(() => {
       if (this.flash?.id !== id) return;
       clearTimeout(this.hitTimer);
@@ -578,14 +576,14 @@ export class Animator {
         this.flash = null;
         this.bump();
       }, fade);
-    }, Math.max(0, hold - fade));
+    }, hold - fade);
   }
 
   /** An `effect` line whose source is a card: it rides that card's flash (the
    *  same 「<卡名> 的效果：…」 wording the log keeps) instead of popping the
    *  effect modal -- 正论暴击 and every other `ctx::effect` land here. With no
    *  flash up the card's face comes back, line attached. */
-  private async rideEffect(card: string, owner: number, text: string): Promise<void> {
+  private async rideEffect(card: string, owner: number, text: string, fast: boolean): Promise<void> {
     // The card is lit in the field row: its effect lines stay in the log.
     if (this.pulse && !this.flash && this.pulseCard === card) return;
     const f = this.flash;
@@ -594,13 +592,13 @@ export class Animator {
       // drop it and let the line speak. A named trigger keeps its caption.
       const caption = KIND_KEY[f.kind] ? f.caption : "";
       this.flash = { ...f, caption, detail: [...f.detail, text], out: false };
-      this.armFlash(f.id);
+      this.armFlash(f.id, fast);
       this.bump();
       return;
     }
     while (this.flash && !this.disposed) await sleep(30 / Math.max(1, this.speed));
     if (this.disposed) return;
-    this.showFlash(card, owner, "", false, "", [text]);
+    this.showFlash(card, owner, "", false, "", [text], fast);
   }
 
   private showTurn(label: string): void {
@@ -885,7 +883,7 @@ export class Animator {
         // unattributed one keeps the popup window.
         if (this.noFlash()) break;
         if (isCardFaceId(e.card)) {
-          await this.rideEffect(e.card, playerId, body);
+          await this.rideEffect(e.card, playerId, body, fast);
           await wait(fast ? 0 : 250);
           break;
         }

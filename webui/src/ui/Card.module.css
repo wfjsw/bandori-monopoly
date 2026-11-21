@@ -77,7 +77,7 @@
 .big .art { border-radius: calc(var(--card-w, 240px) * 0.025); }
 .big .line { height: calc(var(--card-w, 240px) * 0.0333); margin-top: calc(var(--card-w, 240px) * 0.0167); }
 .big .title {
-  font-size: calc(var(--card-w, 240px) * 0.1083);
+  font-size: calc(var(--card-w, 240px) * 0.12);
   padding: calc(var(--card-w, 240px) * 0.0333) calc(var(--card-w, 240px) * 0.0167)
     calc(var(--card-w, 240px) * 0.0167);
 }

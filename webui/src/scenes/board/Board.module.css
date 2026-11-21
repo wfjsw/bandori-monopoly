@@ -258,16 +258,17 @@
   box-shadow: 0 0 0 2.5px var(--owner, var(--pink)), var(--card-shadow);
   background: color-mix(in srgb, var(--owner, var(--white)) 12%, var(--white));
 }
-/* The 「效果适用」 beat: one short halo in the middle of the hold, then back
-   to the plain owner ring before the face fades (`flashHit` is put on by
-   `armFlash` for CARD_FLASH_HIT_MS). Starts and ends at rest, so the card's
-   own text and the caption stay readable; it never holds lit. */
+/* The 「效果适用」 beat: one halo in the middle of the hold, lit for exactly
+   the field slot's blink time (`--hit-ms`, set by `armFlash` from PULSE_MS /
+   PULSE_FAST_MS), then back to the plain owner ring before the face fades.
+   Ramps are a few percent of that clock; it starts and ends at rest, so the
+   card's own text and the caption stay readable and it never holds lit. */
 .flashHit {
-  animation: flashGlow 150ms ease-out 1;
+  animation: flashGlow var(--hit-ms, 1500ms) ease-in-out 1;
 }
 @keyframes flashGlow {
   0%, 100% { filter: brightness(1); }
-  45% {
+  4%, 94% {
     filter: brightness(1.45);
     box-shadow: 0 0 0 3px #fff, 0 0 20px 7px var(--owner, #fff), 0 0 38px 12px rgba(255, 255, 255, 0.75);
   }
