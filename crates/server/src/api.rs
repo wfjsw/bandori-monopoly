@@ -3,9 +3,10 @@
 
 use std::sync::{Arc, Mutex};
 
+use axum::body::Body;
 use axum::extract::{Path, Query, State};
-use axum::http::{header, StatusCode};
-use axum::response::IntoResponse;
+use axum::http::{header, HeaderValue, StatusCode};
+use axum::response::{IntoResponse, Response};
 use axum::Json;
 use game_core::net::{self, NetMessage, RoomInfo};
 use game_core::scoring::ScoreWeights;
@@ -812,6 +813,91 @@ pub async fn act(
 
 // ------------------------------------------------------------------ record
 
+/// The caller's member id in `room`: the session's own memory of the seat
+/// first (the room may already be dissolved), then the room's live token map.
+fn caller_member(s: &Server, sess: &Session, id: &str) -> Option<i32> {
+    match &sess.room {
+        Some((rid, member)) if rid == id => Some(*member),
+        _ => s
+            .room(id)
+            .and_then(|r| r.lock().unwrap().member_of(&sess.token)),
+    }
+}
+
+/// A record download: the sealed bytes as stored, named for the browser.
+/// Deliberately **no** `Content-Encoding` -- a browser would transparently
+/// decode zstd and inconsistently; the client decodes in wasm
+/// (`from_record_bytes`).
+fn download(id: &str, match_id: Option<&str>, bytes: Vec<u8>) -> Response {
+    let ctype = if game_core::record::is_zstd(&bytes) {
+        "application/zstd"
+    } else {
+        "application/json"
+    };
+    let name = match match_id {
+        Some(m) => format!("bdrec-{id}-{m}.bdrec"),
+        None => format!("bdrec-{id}-{}.bdrec", crate::state::now_file_stamp()),
+    };
+    let mut b = Response::builder()
+        .header(header::CONTENT_TYPE, ctype)
+        .header(
+            header::CONTENT_DISPOSITION,
+            format!("attachment; filename=\"{name}\""),
+        );
+    if let Some(m) = match_id {
+        // The archived match is named back so a client can ask for the
+        // neighbours (`GET .../records`).
+        b = b.header("x-match-id", HeaderValue::from_str(m).unwrap_or(HeaderValue::from_static("")));
+    }
+    b.body(Body::from(bytes))
+        .unwrap_or_else(|e| ApiError::bad(e.to_string().as_str()).into_response())
+}
+
+/// The store's last-record cache, or -- when it has expired / been replaced --
+/// the durable archive's newest match the caller sat in.
+///
+/// `Ok(Ok((bytes, match_id)))` serves it; `Ok(Err(exists))` is the refusal,
+/// and `exists` tells the caller whether `403` or `404` is the honest answer.
+/// The outer `Err` is a store failure.
+fn caller_record(
+    s: &Server,
+    me: Option<i32>,
+    id: &str,
+) -> Result<Result<(Vec<u8>, Option<String>), bool>, ApiError> {
+    let mut exists = false;
+    if let Some(rec) = s
+        .store
+        .record_get(id)
+        .map_err(|e| ApiError::bad(e.to_string().as_str()))?
+    {
+        exists = true;
+        if me.is_some_and(|m| rec.members.contains(&m)) {
+            let mid = rec.meta.as_ref().map(|m| m.id.clone());
+            return Ok(Ok((rec.record, mid)));
+        }
+    }
+    let list = s
+        .store
+        .archive_list(id)
+        .map_err(|e| ApiError::bad(e.to_string().as_str()))?;
+    let Some(me) = me else {
+        return Ok(Err(exists || !list.is_empty()));
+    };
+    for meta in &list {
+        if !meta.members.contains(&me) {
+            continue;
+        }
+        if let Some(rec) = s
+            .store
+            .archive_get(id, &meta.id)
+            .map_err(|e| ApiError::bad(e.to_string().as_str()))?
+        {
+            return Ok(Ok((rec.record, Some(rec.meta.id))));
+        }
+    }
+    Ok(Err(exists || !list.is_empty()))
+}
+
 /// `GET /api/rooms/{id}/record` -- the last finished match's `.bdrec`.
 ///
 /// The full record reveals every hand and the deck order, so it is only served
@@ -820,17 +906,14 @@ pub async fn act(
 /// `404 err.record.none` when there is nothing sealed yet, `403
 /// err.record.forbidden` to anyone the room's tokens do not put in the match.
 ///
-/// The body is the sealed bytes **as stored**: a zstd-framed `.bdrec` today,
-/// served as `application/zstd`. Deliberately **not** `Content-Encoding: zstd`
-/// -- a browser would transparently decode that, and inconsistently; the
-/// client decompresses in wasm (`from_record_bytes`). A record stored before
-/// compression is plain JSON and is served as-is as `application/json`.
-/// `Content-Disposition` names the file the way a download should.
+/// The store's 24 h copy is used first; past it (or after the next match in
+/// the room replaced it) the durable archive serves the newest match the caller
+/// sat in.
 pub async fn record(
     State(s): S,
     Auth(sess): Auth,
     Path(id): Path<String>,
-) -> ApiResult<impl IntoResponse> {
+) -> ApiResult<Response> {
     // `playing` is the store's flag (any instance may have started the match).
     let playing = s
         .store
@@ -840,37 +923,57 @@ pub async fn record(
     if playing {
         return Err(ApiError::new(StatusCode::CONFLICT, "err.record.live"));
     }
-    let rec = s
+    let me = caller_member(&s, &sess, &id);
+    match caller_record(&s, me, &id)? {
+        Ok((bytes, mid)) => Ok(download(&id, mid.as_deref(), bytes)),
+        Err(false) => Err(ApiError::not_found("err.record.none")),
+        Err(true) => Err(ApiError::forbidden("err.record.forbidden")),
+    }
+}
+
+/// `GET /api/rooms/{id}/records` -- the room's archived matches, newest first,
+/// narrowed to the ones the caller sat in. Metadata only (no hands); the
+/// download for one is `GET /api/rooms/{id}/records/{match}`. An empty archive
+/// answers `{ "records": [] }`; an archive the caller never sat in is `403`.
+pub async fn records(
+    State(s): S,
+    Auth(sess): Auth,
+    Path(id): Path<String>,
+) -> ApiResult<Json<serde_json::Value>> {
+    let me = caller_member(&s, &sess, &id);
+    let list = s
         .store
-        .record_get(&id)
-        .map_err(|e| ApiError::bad(e.to_string().as_str()))?
-        .ok_or_else(|| ApiError::not_found("err.record.none"))?;
-    // "whoever the room's tokens put in this match" -- a member id, checked
-    // against the seats the record was sealed for. The room may already be
-    // dissolved; the session's own memory of the seat still counts.
-    let me = match &sess.room {
-        Some((rid, member)) if *rid == id => Some(*member),
-        _ => s
-            .room(&id)
-            .and_then(|r| r.lock().unwrap().member_of(&sess.token)),
+        .archive_list(&id)
+        .map_err(|e| ApiError::bad(e.to_string().as_str()))?;
+    if list.is_empty() {
+        return Ok(Json(serde_json::json!({ "records": [] })));
+    }
+    let Some(me) = me else {
+        return Err(ApiError::forbidden("err.record.forbidden"));
     };
-    if !me.is_some_and(|m| rec.members.contains(&m)) {
+    let mine: Vec<&crate::archive::ArchiveMeta> =
+        list.iter().filter(|m| m.members.contains(&me)).collect();
+    if mine.is_empty() {
         return Err(ApiError::forbidden("err.record.forbidden"));
     }
-    let ctype = if game_core::record::is_zstd(&rec.record) {
-        "application/zstd"
-    } else {
-        "application/json"
-    };
-    let name = format!("bdrec-{id}-{}.bdrec", crate::state::now_file_stamp());
-    Ok((
-        [
-            (header::CONTENT_TYPE, ctype.to_string()),
-            (
-                header::CONTENT_DISPOSITION,
-                format!("attachment; filename=\"{name}\""),
-            ),
-        ],
-        rec.record,
-    ))
+    Ok(Json(serde_json::json!({ "records": mine })))
+}
+
+/// `GET /api/rooms/{id}/records/{match}` -- one archived match, participants
+/// only. `404 err.record.none` for an unknown id.
+pub async fn archived_record(
+    State(s): S,
+    Auth(sess): Auth,
+    Path((id, match_id)): Path<(String, String)>,
+) -> ApiResult<Response> {
+    let me = caller_member(&s, &sess, &id);
+    let rec = s
+        .store
+        .archive_get(&id, &match_id)
+        .map_err(|e| ApiError::bad(e.to_string().as_str()))?
+        .ok_or_else(|| ApiError::not_found("err.record.none"))?;
+    if !me.is_some_and(|m| rec.meta.members.contains(&m)) {
+        return Err(ApiError::forbidden("err.record.forbidden"));
+    }
+    Ok(download(&id, Some(&rec.meta.id), rec.record))
 }

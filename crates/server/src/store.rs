@@ -114,6 +114,26 @@ pub trait CrossState: Send + Sync {
     /// [`RECORD_TTL_SECS`] (a store with native expiry may drop it sooner).
     fn record_put(&self, room: &str, rec: &StoredRecord) -> Result<(), StoreError>;
     fn record_get(&self, room: &str) -> Result<Option<StoredRecord>, StoreError>;
+    /// Drop the live copy (the durable archive is untouched). A store with
+    /// native expiry does this on its own; pruning and tests use it directly.
+    fn record_del(&self, room: &str) -> Result<(), StoreError>;
+
+    /// The **durable** record archive (`docs/REPLAY.md` §1, [`crate::archive`]):
+    /// every sealed match, written once and kept past any TTL or restart. The
+    /// `record_put`/`record_get` pair above is the live cache (last match per
+    /// room, expiring); this is the copy a deployment keeps. The default
+    /// implementations accept the write and read as empty when an operator
+    /// configured no archive (tests, a bare dev box).
+    fn archive_put(&self, meta: &crate::archive::ArchiveMeta, record: &[u8])
+        -> Result<(), StoreError>;
+    /// Metadata for `room`, newest first.
+    fn archive_list(&self, room: &str) -> Result<Vec<crate::archive::ArchiveMeta>, StoreError>;
+    /// One archived match with its bytes.
+    fn archive_get(
+        &self,
+        room: &str,
+        id: &str,
+    ) -> Result<Option<crate::archive::ArchivedRecord>, StoreError>;
 
     // ------------------------------------------------------------- locks
     //
@@ -428,6 +448,11 @@ pub enum LogEntry {
 /// in the log rather than in memory so a restart can still seal the record.
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 pub struct RecordHead {
+    /// The match id, stable across a handover: the archive's file stem and the
+    /// id a participant names to download this match later. A head written
+    /// before the archive existed has none and gets one at seal.
+    #[serde(default)]
+    pub match_id: String,
     /// `Init::Seed` -- members (bot mentality included), seed and weights.
     pub init: Init,
     /// The engine that is running the match (`pool.info()`).
@@ -472,6 +497,10 @@ pub struct StoredRecord {
     /// Member ids that sat down for this match. `GET /api/rooms/{id}/record`
     /// only serves one of these, resolved through the room's tokens.
     pub members: Vec<i32>,
+    /// The same metadata written to the durable archive beside this copy. A
+    /// value stored before the archive existed reads back without it.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub meta: Option<crate::archive::ArchiveMeta>,
 }
 
 impl LogEntry {

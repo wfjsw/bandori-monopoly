@@ -79,3 +79,6 @@ docs/ui-ref
 
 # generated display export (tools/export-display.mjs)
 /webui/src/generated/
+
+# durable online replay archive (server --records default)
+/records/

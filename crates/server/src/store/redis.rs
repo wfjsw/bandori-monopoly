@@ -47,6 +47,10 @@ const NS_PRES: &str = "bm:pres:";
 pub struct Store {
     client: redis::Client,
     conn: Mutex<redis::Connection>,
+    /// The durable half, when a directory is configured
+    /// ([`Store::with_archive`]). Redis holds the live cache; this holds the
+    /// copy a `EX` never takes away.
+    archive: Option<super::super::archive::Archive>,
 }
 
 impl Store {
@@ -59,7 +63,16 @@ impl Store {
         Ok(Self {
             client,
             conn: Mutex::new(conn),
+            archive: None,
         })
+    }
+
+    /// Keep the durable copy of every sealed record under `root`
+    /// ([`crate::archive`]). Every process of a deployment must name the same
+    /// shared directory.
+    pub fn with_archive(mut self, root: std::path::PathBuf) -> Self {
+        self.archive = Some(super::super::archive::Archive::new(root));
+        self
     }
 
     fn call<T>(
@@ -196,7 +209,9 @@ impl CrossState for Store {
     fn record_put(&self, room: &str, rec: &StoredRecord) -> Result<(), StoreError> {
         let key = format!("{NS_RECORD}{room}");
         let mkey = format!("{NS_RECORD}{room}:members");
+        let akey = format!("{NS_RECORD}{room}:meta");
         let members = json(&rec.members)?;
+        let meta = rec.meta.as_ref().map(json).transpose()?;
         // `SET key value EX <ttl>` -- spelled out so the TTL is visible at the
         // call site rather than buried in a helper. The record itself is the
         // sealed `.bdrec` bytes (a zstd frame), so the value is written as
@@ -215,7 +230,16 @@ impl CrossState for Store {
                 .arg(&members)
                 .arg("EX")
                 .arg(RECORD_TTL_SECS)
-                .query::<()>(c)
+                .query::<()>(c)?;
+            match &meta {
+                Some(meta) => redis::cmd("SET")
+                    .arg(&akey)
+                    .arg(meta)
+                    .arg("EX")
+                    .arg(RECORD_TTL_SECS)
+                    .query::<()>(c),
+                None => c.del::<_, ()>(&akey),
+            }
         })
         .map(|_| ())
     }
@@ -223,15 +247,21 @@ impl CrossState for Store {
     fn record_get(&self, room: &str) -> Result<Option<StoredRecord>, StoreError> {
         let key = format!("{NS_RECORD}{room}");
         let mkey = format!("{NS_RECORD}{room}:members");
+        let akey = format!("{NS_RECORD}{room}:meta");
         let raw: Option<Vec<u8>> = self.call(|c| c.get(&key))?;
         let Some(raw) = raw else {
             return Ok(None);
         };
         if let Some(members) = self.call(|c| c.get::<_, Option<String>>(mkey))? {
             let members = from_json(&members)?;
+            let meta = match self.call(|c| c.get::<_, Option<String>>(&akey))? {
+                Some(m) => from_json(&m).ok(),
+                None => None,
+            };
             return Ok(Some(StoredRecord {
                 record: raw,
                 members,
+                meta,
             }));
         }
         // A value written before compression: one JSON envelope with the
@@ -246,13 +276,52 @@ impl CrossState for Store {
             return Ok(Some(StoredRecord {
                 record: env.record.into_bytes(),
                 members: env.members,
+                meta: None,
             }));
         }
         // The bytes, with nobody cleared to download them.
         Ok(Some(StoredRecord {
             record: raw,
             members: vec![],
+            meta: None,
         }))
+    }
+
+    fn record_del(&self, room: &str) -> Result<(), StoreError> {
+        let key = format!("{NS_RECORD}{room}");
+        let mkey = format!("{NS_RECORD}{room}:members");
+        let akey = format!("{NS_RECORD}{room}:meta");
+        self.call(|c| c.del::<_, ()>(vec![key, mkey, akey]))
+            .map(|_| ())
+    }
+
+    fn archive_put(
+        &self,
+        meta: &crate::archive::ArchiveMeta,
+        record: &[u8],
+    ) -> Result<(), StoreError> {
+        match &self.archive {
+            Some(a) => a.save(meta, record).map(|_| ()).map_err(StoreError::Backend),
+            None => Ok(()),
+        }
+    }
+
+    fn archive_list(&self, room: &str) -> Result<Vec<crate::archive::ArchiveMeta>, StoreError> {
+        match &self.archive {
+            Some(a) => a.list(room).map_err(StoreError::Backend),
+            None => Ok(Vec::new()),
+        }
+    }
+
+    fn archive_get(
+        &self,
+        room: &str,
+        id: &str,
+    ) -> Result<Option<crate::archive::ArchivedRecord>, StoreError> {
+        match &self.archive {
+            Some(a) => a.get(room, id).map_err(StoreError::Backend),
+            None => Ok(None),
+        }
     }
 
     fn lock_acquire(&self, key: &str, owner: &str, ttl_ms: u64) -> Result<bool, StoreError> {

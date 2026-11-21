@@ -65,13 +65,24 @@ struct Inner {
 #[derive(Clone)]
 pub struct Store {
     inner: Arc<Inner>,
+    /// The durable half, when a directory is configured ([`Store::with_archive`]).
+    archive: Option<super::super::archive::Archive>,
 }
 
 impl Store {
     pub fn new() -> Self {
         Self {
             inner: Arc::new(Inner::default()),
+            archive: None,
         }
+    }
+
+    /// Keep the durable copy of every sealed record under `root`
+    /// ([`crate::archive`]). In-memory state itself still dies with the
+    /// process; the archive is what a restart reads.
+    pub fn with_archive(mut self, root: std::path::PathBuf) -> Self {
+        self.archive = Some(super::super::archive::Archive::new(root));
+        self
     }
 
     /// Monotonic "now" relative to store creation.
@@ -204,6 +215,40 @@ impl CrossState for Store {
             return Ok(Some(rec.clone()));
         }
         Ok(None)
+    }
+
+    fn record_del(&self, room: &str) -> Result<(), StoreError> {
+        lock(&self.inner.records)?.remove(room);
+        Ok(())
+    }
+
+    fn archive_put(
+        &self,
+        meta: &crate::archive::ArchiveMeta,
+        record: &[u8],
+    ) -> Result<(), StoreError> {
+        match &self.archive {
+            Some(a) => a.save(meta, record).map(|_| ()).map_err(StoreError::Backend),
+            None => Ok(()),
+        }
+    }
+
+    fn archive_list(&self, room: &str) -> Result<Vec<crate::archive::ArchiveMeta>, StoreError> {
+        match &self.archive {
+            Some(a) => a.list(room).map_err(StoreError::Backend),
+            None => Ok(Vec::new()),
+        }
+    }
+
+    fn archive_get(
+        &self,
+        room: &str,
+        id: &str,
+    ) -> Result<Option<crate::archive::ArchivedRecord>, StoreError> {
+        match &self.archive {
+            Some(a) => a.get(room, id).map_err(StoreError::Backend),
+            None => Ok(None),
+        }
     }
 
     fn lock_acquire(&self, key: &str, owner: &str, ttl_ms: u64) -> Result<bool, StoreError> {

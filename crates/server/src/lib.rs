@@ -27,6 +27,7 @@
 //! is set for join rejections (`password`, `full`, `playing`, `version`).
 
 pub mod api;
+pub mod archive;
 pub mod auth;
 pub mod botsvc;
 pub mod clock;
@@ -139,6 +140,8 @@ pub fn router(
         .route("/api/rooms/{id}/anim-done", post(api::anim_done))
         .route("/api/rooms/{id}/order-ready", post(api::order_ready))
         .route("/api/rooms/{id}/record", get(api::record))
+        .route("/api/rooms/{id}/records", get(api::records))
+        .route("/api/rooms/{id}/records/{match_id}", get(api::archived_record))
         .route("/api/rooms/{id}/stream", get(sse::stream))
         .route("/api/clock", post(api::clock_ping))
         .layer(DefaultBodyLimit::max(game_core::net::MAX_MESSAGE))
@@ -152,7 +155,7 @@ pub fn router(
                 .allow_headers([header::AUTHORIZATION, header::CONTENT_TYPE])
                 // The record download names its file in this header; without
                 // it a cross-origin client sees only the fallback name.
-                .expose_headers([header::CONTENT_DISPOSITION]),
+                .expose_headers([header::CONTENT_DISPOSITION, header::HeaderName::from_static("x-match-id")]),
         )
         .with_state(server);
     if let Some(dir) = data_dir {
