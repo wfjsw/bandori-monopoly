@@ -1,7 +1,311 @@
 {
  "version": 1,
- "current": "4f0bb9e336d4fb4a9a0b52ced35de67833f04b8b5ea7f1a7348726e7c953377b",
+ "current": "1fd2810f4f0c7f44c19a136333ad2b72c9498618c5bb2820679408f780e032eb",
  "bundles": [
+  {
+   "id": "1fd2810f4f0c7f44c19a136333ad2b72c9498618c5bb2820679408f780e032eb",
+   "created": "2026-11-20T07:13:57.439Z",
+   "glueSha256": "f69afe0f1c289e821bd3869a0ada2295110aa6747f8529499304e61c187076f4",
+   "bytes": 7628356,
+   "stamp": {
+    "format": 4,
+    "save_version": 23,
+    "abi": 124,
+    "ruleset_sha256": "87c0e920d390e9059a0241b4091098a3dc64afb54ee1730cae6e1eabbd8b5a66",
+    "data_sha256": "",
+    "engine": "game-core",
+    "build": "0.1.0",
+    "bundle": "1fd2810f4f0c7f44c19a136333ad2b72c9498618c5bb2820679408f780e032eb"
+   },
+   "key": "4|23|124|87c0e920d390e9059a0241b4091098a3dc64afb54ee1730cae6e1eabbd8b5a66|",
+   "source_id": "6c854cab13351f2524a77b4a2f072ea30a9c6acb97ae6aafaf62739deb3bbe34",
+   "ref": "refs/1fd2810f4f0c7f44c19a136333ad2b72c9498618c5bb2820679408f780e032eb.bdrec",
+   "ref_sha256": "e7bca9d007f138296f291c52acb3089bc809cafc426766caff91bcc841e2229c",
+   "commit": "1c2d013c03defcb6808f48525e2eaf2ccb2e2c6b",
+   "dirty": false,
+   "rebuild": true,
+   "toolchain": {
+    "rustc": "rustc 1.96.1 (31fca3adb 2026-06-26)",
+    "cargo": "cargo 1.96.1 (356927216 2026-06-26)",
+    "wasm_bindgen": "wasm-bindgen 0.2.129"
+   },
+   "files": {
+    "1fd2810f4f0c7f44c19a136333ad2b72c9498618c5bb2820679408f780e032eb/bundle.json": "a595dc5d9c449ac8cc5e4ce27cff4b11b94e7076e24a185fac32d15af8013365",
+    "1fd2810f4f0c7f44c19a136333ad2b72c9498618c5bb2820679408f780e032eb/data/board.json": "47022faba8372771767e54b9c81e87812f353e6bdc29849e6cd21cb31f720db3",
+    "1fd2810f4f0c7f44c19a136333ad2b72c9498618c5bb2820679408f780e032eb/data/match_rules.json": "8b6e77c429e95ef9e0d6cf7c9aa72eec085e327d30d2dc3cc137195ab6788a2e",
+    "1fd2810f4f0c7f44c19a136333ad2b72c9498618c5bb2820679408f780e032eb/glue.js": "3f596f9dff1e5eb0a3e6c03e84b76eefc4113add92b624924bc369b83dc94aa8",
+    "1fd2810f4f0c7f44c19a136333ad2b72c9498618c5bb2820679408f780e032eb/glue_bg.wasm": "77693fa28a47213f8a4e4d07bee448e05f0222e63458084cdb1e134bc6331b45",
+    "1fd2810f4f0c7f44c19a136333ad2b72c9498618c5bb2820679408f780e032eb/rules/conds-320fff56e5e6e6c5ee832073cb7a0a2dadaf11b034dac9e1fcea1c24fee9bdae.bin": "320fff56e5e6e6c5ee832073cb7a0a2dadaf11b034dac9e1fcea1c24fee9bdae",
+    "1fd2810f4f0c7f44c19a136333ad2b72c9498618c5bb2820679408f780e032eb/rules/index.json": "ca53bba8e67554307db8a1b550ac017525c9507673292d6454a91e28abbe3883",
+    "modules/d98e3c583f8527bf977c24766961cf8fc0091d208446681e8013316c5fbeab8a.wasm": "d98e3c583f8527bf977c24766961cf8fc0091d208446681e8013316c5fbeab8a"
+   }
+  },
+  {
+   "id": "e2691a6c7dba46e47cce185abdd6e25398740586a1919b4650cbc4b9ce246b20",
+   "created": "2026-11-20T04:34:12.986Z",
+   "glueSha256": "42a7dbff2b4de723a3067dc9a87f11a7ade413f74851f7aeca6f9126e1447e33",
+   "bytes": 7628356,
+   "stamp": {
+    "format": 4,
+    "save_version": 23,
+    "abi": 124,
+    "ruleset_sha256": "87c0e920d390e9059a0241b4091098a3dc64afb54ee1730cae6e1eabbd8b5a66",
+    "data_sha256": "",
+    "engine": "game-core",
+    "build": "0.1.0",
+    "bundle": "e2691a6c7dba46e47cce185abdd6e25398740586a1919b4650cbc4b9ce246b20"
+   },
+   "key": "4|23|124|87c0e920d390e9059a0241b4091098a3dc64afb54ee1730cae6e1eabbd8b5a66|",
+   "source_id": "d96f96b14ba0ddabcb7afe79f68b61feda5833f48ad894493e251fe9acff212e",
+   "ref": "refs/e2691a6c7dba46e47cce185abdd6e25398740586a1919b4650cbc4b9ce246b20.bdrec",
+   "ref_sha256": "2ac418ea77687769e6f4e4068c41b7d5b28366876f82fa9298af4cda99e75ed4",
+   "commit": "a89f7924a58658150b011020ebf707fd6db14482",
+   "dirty": false,
+   "rebuild": true,
+   "toolchain": {
+    "rustc": "rustc 1.96.1 (31fca3adb 2026-06-26)",
+    "cargo": "cargo 1.96.1 (356927216 2026-06-26)",
+    "wasm_bindgen": "wasm-bindgen 0.2.129"
+   },
+   "files": {
+    "e2691a6c7dba46e47cce185abdd6e25398740586a1919b4650cbc4b9ce246b20/bundle.json": "c95e3498b59dcd390dabd1ef0702d2022f15417335f7bc7f9066130dfad2c36f",
+    "e2691a6c7dba46e47cce185abdd6e25398740586a1919b4650cbc4b9ce246b20/data/board.json": "47022faba8372771767e54b9c81e87812f353e6bdc29849e6cd21cb31f720db3",
+    "e2691a6c7dba46e47cce185abdd6e25398740586a1919b4650cbc4b9ce246b20/data/match_rules.json": "8b6e77c429e95ef9e0d6cf7c9aa72eec085e327d30d2dc3cc137195ab6788a2e",
+    "e2691a6c7dba46e47cce185abdd6e25398740586a1919b4650cbc4b9ce246b20/glue.js": "3f596f9dff1e5eb0a3e6c03e84b76eefc4113add92b624924bc369b83dc94aa8",
+    "e2691a6c7dba46e47cce185abdd6e25398740586a1919b4650cbc4b9ce246b20/glue_bg.wasm": "2e5491ccb49d0cf1b804486b6b9c21d208ac6bbf47847ef93926957fd705c78c",
+    "e2691a6c7dba46e47cce185abdd6e25398740586a1919b4650cbc4b9ce246b20/rules/conds-320fff56e5e6e6c5ee832073cb7a0a2dadaf11b034dac9e1fcea1c24fee9bdae.bin": "320fff56e5e6e6c5ee832073cb7a0a2dadaf11b034dac9e1fcea1c24fee9bdae",
+    "e2691a6c7dba46e47cce185abdd6e25398740586a1919b4650cbc4b9ce246b20/rules/index.json": "ca53bba8e67554307db8a1b550ac017525c9507673292d6454a91e28abbe3883",
+    "modules/d98e3c583f8527bf977c24766961cf8fc0091d208446681e8013316c5fbeab8a.wasm": "d98e3c583f8527bf977c24766961cf8fc0091d208446681e8013316c5fbeab8a"
+   }
+  },
+  {
+   "id": "53ef55b32e272b48edef450479cb71d53038bf698fd2f7bd599b60d1cc5fa383",
+   "created": "2026-11-15T04:07:45.558Z",
+   "glueSha256": "7600cd707a640e9e359ad517e63fa241e038bab913199dc2f355945900ab57ac",
+   "bytes": 7625284,
+   "stamp": {
+    "format": 4,
+    "save_version": 23,
+    "abi": 124,
+    "ruleset_sha256": "cf636b10c10a9713ee826cb316f94751ef5563eb4db7aed440328a4e76b7b105",
+    "data_sha256": "",
+    "engine": "game-core",
+    "build": "0.1.0",
+    "bundle": "53ef55b32e272b48edef450479cb71d53038bf698fd2f7bd599b60d1cc5fa383"
+   },
+   "key": "4|23|124|cf636b10c10a9713ee826cb316f94751ef5563eb4db7aed440328a4e76b7b105|",
+   "source_id": "c8b80f4015567d82a307bb1483574a640e75e901f63687c93bbc0dc52f0219ed",
+   "ref": "refs/53ef55b32e272b48edef450479cb71d53038bf698fd2f7bd599b60d1cc5fa383.bdrec",
+   "ref_sha256": "4635761870bcf2ce4988519f631dde8f5b691bcf7c9c70e8130c741b71c394b7",
+   "commit": "b0eace7b35fc014feb6f52ef87f6708f98124f53",
+   "dirty": false,
+   "rebuild": true,
+   "toolchain": {
+    "rustc": "rustc 1.96.1 (31fca3adb 2026-06-26)",
+    "cargo": "cargo 1.96.1 (356927216 2026-06-26)",
+    "wasm_bindgen": "wasm-bindgen 0.2.129"
+   },
+   "files": {
+    "53ef55b32e272b48edef450479cb71d53038bf698fd2f7bd599b60d1cc5fa383/bundle.json": "8e73fa86e40b74ddc4748aa96ceb8afd505fe56404b900d6c0dd6595084b80bc",
+    "53ef55b32e272b48edef450479cb71d53038bf698fd2f7bd599b60d1cc5fa383/data/board.json": "47022faba8372771767e54b9c81e87812f353e6bdc29849e6cd21cb31f720db3",
+    "53ef55b32e272b48edef450479cb71d53038bf698fd2f7bd599b60d1cc5fa383/data/match_rules.json": "8b6e77c429e95ef9e0d6cf7c9aa72eec085e327d30d2dc3cc137195ab6788a2e",
+    "53ef55b32e272b48edef450479cb71d53038bf698fd2f7bd599b60d1cc5fa383/glue.js": "3f596f9dff1e5eb0a3e6c03e84b76eefc4113add92b624924bc369b83dc94aa8",
+    "53ef55b32e272b48edef450479cb71d53038bf698fd2f7bd599b60d1cc5fa383/glue_bg.wasm": "1ed10333f6792cb28cefa7ded0a97d164d1172ad41b391fc431c8136bdcc6aca",
+    "53ef55b32e272b48edef450479cb71d53038bf698fd2f7bd599b60d1cc5fa383/rules/conds-1981b0aead848d17340e846a74c80bb49b13e919f433f084aa61c3ca4c0756d2.bin": "1981b0aead848d17340e846a74c80bb49b13e919f433f084aa61c3ca4c0756d2",
+    "53ef55b32e272b48edef450479cb71d53038bf698fd2f7bd599b60d1cc5fa383/rules/index.json": "5619abc1c7be2736ccf2438daea6255d093c2cf46c2b1e25fa9531dd411a942b",
+    "modules/3edb498fc3b36d52997a28f7b1060ec9f1612f77b12c50635e354134b998d987.wasm": "3edb498fc3b36d52997a28f7b1060ec9f1612f77b12c50635e354134b998d987"
+   }
+  },
+  {
+   "id": "6e99e8512ca1b5fe890e5a219778c768a6a40eb4a283827876bd4732612c3cc8",
+   "created": "2026-11-14T21:38:58.262Z",
+   "glueSha256": "262c5011abd1ddc949a574705253261039d2873a4927ecde232e8504bc9edd52",
+   "bytes": 7620833,
+   "stamp": {
+    "format": 4,
+    "save_version": 23,
+    "abi": 124,
+    "ruleset_sha256": "1b43ac6dc83b40f755a70cca2a472e506dbf5c6fe627982169dd7ae205f1b244",
+    "data_sha256": "",
+    "engine": "game-core",
+    "build": "0.1.0",
+    "bundle": "6e99e8512ca1b5fe890e5a219778c768a6a40eb4a283827876bd4732612c3cc8"
+   },
+   "key": "4|23|124|1b43ac6dc83b40f755a70cca2a472e506dbf5c6fe627982169dd7ae205f1b244|",
+   "source_id": "ab0ec2a982eba91739375936a664c821e1ac387b07a946c8a2772b550064cce7",
+   "ref": "refs/6e99e8512ca1b5fe890e5a219778c768a6a40eb4a283827876bd4732612c3cc8.bdrec",
+   "ref_sha256": "53f7a4868eee46703bfa7cfbc59868cff683103776a46eb9ba20f67245200f57",
+   "commit": "178759fa343315619e5b20668095f6922c90646f",
+   "dirty": false,
+   "rebuild": true,
+   "toolchain": {
+    "rustc": "rustc 1.96.1 (31fca3adb 2026-06-26)",
+    "cargo": "cargo 1.96.1 (356927216 2026-06-26)",
+    "wasm_bindgen": "wasm-bindgen 0.2.129"
+   },
+   "files": {
+    "6e99e8512ca1b5fe890e5a219778c768a6a40eb4a283827876bd4732612c3cc8/bundle.json": "66b2e223cb165946fe4fbfc46fb22a58e57c18cd7056fb5aa3b11ca6553a0b34",
+    "6e99e8512ca1b5fe890e5a219778c768a6a40eb4a283827876bd4732612c3cc8/data/board.json": "47022faba8372771767e54b9c81e87812f353e6bdc29849e6cd21cb31f720db3",
+    "6e99e8512ca1b5fe890e5a219778c768a6a40eb4a283827876bd4732612c3cc8/data/match_rules.json": "8b6e77c429e95ef9e0d6cf7c9aa72eec085e327d30d2dc3cc137195ab6788a2e",
+    "6e99e8512ca1b5fe890e5a219778c768a6a40eb4a283827876bd4732612c3cc8/glue.js": "3f596f9dff1e5eb0a3e6c03e84b76eefc4113add92b624924bc369b83dc94aa8",
+    "6e99e8512ca1b5fe890e5a219778c768a6a40eb4a283827876bd4732612c3cc8/glue_bg.wasm": "141c4aae4587b61a1ca2e4030dfc3bb26b7f482f74f18e47003a05493d078771",
+    "6e99e8512ca1b5fe890e5a219778c768a6a40eb4a283827876bd4732612c3cc8/rules/conds-6ff45189cf1c5b221a4c657b4ef7b0ef9fe354a928a35767d94b9b6b49e398e6.bin": "6ff45189cf1c5b221a4c657b4ef7b0ef9fe354a928a35767d94b9b6b49e398e6",
+    "6e99e8512ca1b5fe890e5a219778c768a6a40eb4a283827876bd4732612c3cc8/rules/index.json": "abf4fa0400aa79f4026b2f629bbbc3d90ccf0c7bde1d6ee0bf62eaa670f7370b",
+    "modules/f789584ba65d7f47ee38dda79e4e89f9e1cbce14003228d47c497ca774172124.wasm": "f789584ba65d7f47ee38dda79e4e89f9e1cbce14003228d47c497ca774172124"
+   }
+  },
+  {
+   "id": "209a15f364abafb12d30e8cbb25c5cd2700e9e6cbf39197b1ffd8f4a0a01f991",
+   "created": "2026-11-14T19:35:14.825Z",
+   "glueSha256": "fc7c748c7c883ad93aea4efe05e93e57d29b62b55f7b83262ea9e5ef72d72f2b",
+   "bytes": 7620638,
+   "stamp": {
+    "format": 4,
+    "save_version": 23,
+    "abi": 124,
+    "ruleset_sha256": "1b43ac6dc83b40f755a70cca2a472e506dbf5c6fe627982169dd7ae205f1b244",
+    "data_sha256": "",
+    "engine": "game-core",
+    "build": "0.1.0",
+    "bundle": "209a15f364abafb12d30e8cbb25c5cd2700e9e6cbf39197b1ffd8f4a0a01f991"
+   },
+   "key": "4|23|124|1b43ac6dc83b40f755a70cca2a472e506dbf5c6fe627982169dd7ae205f1b244|",
+   "source_id": "5c0e645d05bb14a611d06496831bc87842e50ff06a847749e5e514654c8b40f3",
+   "ref": "refs/209a15f364abafb12d30e8cbb25c5cd2700e9e6cbf39197b1ffd8f4a0a01f991.bdrec",
+   "ref_sha256": "6eeab7f4a31baa5ebfac585488ceed0fdd240a5f2413b4291cca7870c34473ef",
+   "commit": "07d81d13bdb08d65a6cc251ab6a70ba3d13def0f",
+   "dirty": false,
+   "rebuild": true,
+   "toolchain": {
+    "rustc": "rustc 1.96.1 (31fca3adb 2026-06-26)",
+    "cargo": "cargo 1.96.1 (356927216 2026-06-26)",
+    "wasm_bindgen": "wasm-bindgen 0.2.129"
+   },
+   "files": {
+    "209a15f364abafb12d30e8cbb25c5cd2700e9e6cbf39197b1ffd8f4a0a01f991/bundle.json": "f5e96bf973a91ecb57d792b1f0a6283ba5a847ac4e6190543ebb91a4a65e60f2",
+    "209a15f364abafb12d30e8cbb25c5cd2700e9e6cbf39197b1ffd8f4a0a01f991/data/board.json": "47022faba8372771767e54b9c81e87812f353e6bdc29849e6cd21cb31f720db3",
+    "209a15f364abafb12d30e8cbb25c5cd2700e9e6cbf39197b1ffd8f4a0a01f991/data/match_rules.json": "8b6e77c429e95ef9e0d6cf7c9aa72eec085e327d30d2dc3cc137195ab6788a2e",
+    "209a15f364abafb12d30e8cbb25c5cd2700e9e6cbf39197b1ffd8f4a0a01f991/glue.js": "acd6b7f2eae89864132cc8d37180c8663f435a19c64fa20f0658067fee61dbb4",
+    "209a15f364abafb12d30e8cbb25c5cd2700e9e6cbf39197b1ffd8f4a0a01f991/glue_bg.wasm": "493ff7ec39e6fe3a732ab11c1babf3d3e4eb53907bd33ad727a8cfd89f9d0875",
+    "209a15f364abafb12d30e8cbb25c5cd2700e9e6cbf39197b1ffd8f4a0a01f991/rules/conds-6ff45189cf1c5b221a4c657b4ef7b0ef9fe354a928a35767d94b9b6b49e398e6.bin": "6ff45189cf1c5b221a4c657b4ef7b0ef9fe354a928a35767d94b9b6b49e398e6",
+    "209a15f364abafb12d30e8cbb25c5cd2700e9e6cbf39197b1ffd8f4a0a01f991/rules/index.json": "abf4fa0400aa79f4026b2f629bbbc3d90ccf0c7bde1d6ee0bf62eaa670f7370b",
+    "modules/f789584ba65d7f47ee38dda79e4e89f9e1cbce14003228d47c497ca774172124.wasm": "f789584ba65d7f47ee38dda79e4e89f9e1cbce14003228d47c497ca774172124"
+   }
+  },
+  {
+   "id": "95d095d3312ecf24a9a0e53255dfb09b787b2f058adbb225356e7c80e2c433f0",
+   "created": "2026-11-14T16:23:18.836Z",
+   "glueSha256": "9beedf8e707cbd3921314ba9c4c289f2da9015ce95916b1b320c190cb73adda1",
+   "bytes": 7620557,
+   "stamp": {
+    "format": 4,
+    "save_version": 23,
+    "abi": 124,
+    "ruleset_sha256": "1b43ac6dc83b40f755a70cca2a472e506dbf5c6fe627982169dd7ae205f1b244",
+    "data_sha256": "",
+    "engine": "game-core",
+    "build": "0.1.0",
+    "bundle": "95d095d3312ecf24a9a0e53255dfb09b787b2f058adbb225356e7c80e2c433f0"
+   },
+   "key": "4|23|124|1b43ac6dc83b40f755a70cca2a472e506dbf5c6fe627982169dd7ae205f1b244|",
+   "source_id": "53f198fe97afe604ba6375fc59b72082864c910ec6298a79b61b6fd30e77c6f8",
+   "ref": "refs/95d095d3312ecf24a9a0e53255dfb09b787b2f058adbb225356e7c80e2c433f0.bdrec",
+   "ref_sha256": "fa4976b5948c7568075f7b408959c19b3e7d982b63b86df995577a0e1bbecba5",
+   "commit": "d23df3bcfb1ffc8e11db35cfe897aa570c5ba7ae",
+   "dirty": false,
+   "rebuild": true,
+   "toolchain": {
+    "rustc": "rustc 1.96.1 (31fca3adb 2026-06-26)",
+    "cargo": "cargo 1.96.1 (356927216 2026-06-26)",
+    "wasm_bindgen": "wasm-bindgen 0.2.129"
+   },
+   "files": {
+    "95d095d3312ecf24a9a0e53255dfb09b787b2f058adbb225356e7c80e2c433f0/bundle.json": "5b8f7a8a90dae44378582a403899132b91a6d7858fe23b7768964b8f8fd35be6",
+    "95d095d3312ecf24a9a0e53255dfb09b787b2f058adbb225356e7c80e2c433f0/data/board.json": "47022faba8372771767e54b9c81e87812f353e6bdc29849e6cd21cb31f720db3",
+    "95d095d3312ecf24a9a0e53255dfb09b787b2f058adbb225356e7c80e2c433f0/data/match_rules.json": "8b6e77c429e95ef9e0d6cf7c9aa72eec085e327d30d2dc3cc137195ab6788a2e",
+    "95d095d3312ecf24a9a0e53255dfb09b787b2f058adbb225356e7c80e2c433f0/glue.js": "3f596f9dff1e5eb0a3e6c03e84b76eefc4113add92b624924bc369b83dc94aa8",
+    "95d095d3312ecf24a9a0e53255dfb09b787b2f058adbb225356e7c80e2c433f0/glue_bg.wasm": "e4d7173fa3ace16f20ccaba19c73df5ec918252d29900e85e14d4452ac138f7e",
+    "95d095d3312ecf24a9a0e53255dfb09b787b2f058adbb225356e7c80e2c433f0/rules/conds-6ff45189cf1c5b221a4c657b4ef7b0ef9fe354a928a35767d94b9b6b49e398e6.bin": "6ff45189cf1c5b221a4c657b4ef7b0ef9fe354a928a35767d94b9b6b49e398e6",
+    "95d095d3312ecf24a9a0e53255dfb09b787b2f058adbb225356e7c80e2c433f0/rules/index.json": "abf4fa0400aa79f4026b2f629bbbc3d90ccf0c7bde1d6ee0bf62eaa670f7370b",
+    "modules/f789584ba65d7f47ee38dda79e4e89f9e1cbce14003228d47c497ca774172124.wasm": "f789584ba65d7f47ee38dda79e4e89f9e1cbce14003228d47c497ca774172124"
+   }
+  },
+  {
+   "id": "e6396264f2530b47c8808560b95666de7aee32791dbed6a58d7e4982fdadff35",
+   "created": "2026-11-14T07:41:34.408Z",
+   "glueSha256": "5fd12ba32edc8bde87ead9488bd4dde7bfa775f9197fdb515dde4a7eebfa0344",
+   "bytes": 7619926,
+   "stamp": {
+    "format": 4,
+    "save_version": 23,
+    "abi": 124,
+    "ruleset_sha256": "1b43ac6dc83b40f755a70cca2a472e506dbf5c6fe627982169dd7ae205f1b244",
+    "data_sha256": "",
+    "engine": "game-core",
+    "build": "0.1.0",
+    "bundle": "e6396264f2530b47c8808560b95666de7aee32791dbed6a58d7e4982fdadff35"
+   },
+   "key": "4|23|124|1b43ac6dc83b40f755a70cca2a472e506dbf5c6fe627982169dd7ae205f1b244|",
+   "source_id": "39bd6e94e600063e4dc5094e1e972609e3419a305c58557bc9d14e61c8b98c7e",
+   "ref": "refs/e6396264f2530b47c8808560b95666de7aee32791dbed6a58d7e4982fdadff35.bdrec",
+   "ref_sha256": "a214afc6c5a20c7fefa177ff2fe0d17c62adb7b93b7153d28631450e27f4bdf7",
+   "commit": "decf6e16e543d69236079b86abbb3ea2425847e6",
+   "dirty": false,
+   "rebuild": true,
+   "toolchain": {
+    "rustc": "rustc 1.96.1 (31fca3adb 2026-06-26)",
+    "cargo": "cargo 1.96.1 (356927216 2026-06-26)",
+    "wasm_bindgen": "wasm-bindgen 0.2.129"
+   },
+   "files": {
+    "e6396264f2530b47c8808560b95666de7aee32791dbed6a58d7e4982fdadff35/bundle.json": "0e3c726d32d8f9240754ef14fd8cf10a2b6823e72199459c751b84e5fdaa1184",
+    "e6396264f2530b47c8808560b95666de7aee32791dbed6a58d7e4982fdadff35/data/board.json": "47022faba8372771767e54b9c81e87812f353e6bdc29849e6cd21cb31f720db3",
+    "e6396264f2530b47c8808560b95666de7aee32791dbed6a58d7e4982fdadff35/data/match_rules.json": "8b6e77c429e95ef9e0d6cf7c9aa72eec085e327d30d2dc3cc137195ab6788a2e",
+    "e6396264f2530b47c8808560b95666de7aee32791dbed6a58d7e4982fdadff35/glue.js": "3f596f9dff1e5eb0a3e6c03e84b76eefc4113add92b624924bc369b83dc94aa8",
+    "e6396264f2530b47c8808560b95666de7aee32791dbed6a58d7e4982fdadff35/glue_bg.wasm": "bd0db7c55d6b7e441860640b23ea6c88e0c605c90527a3e3ee8ea2ade8df643b",
+    "e6396264f2530b47c8808560b95666de7aee32791dbed6a58d7e4982fdadff35/rules/conds-6ff45189cf1c5b221a4c657b4ef7b0ef9fe354a928a35767d94b9b6b49e398e6.bin": "6ff45189cf1c5b221a4c657b4ef7b0ef9fe354a928a35767d94b9b6b49e398e6",
+    "e6396264f2530b47c8808560b95666de7aee32791dbed6a58d7e4982fdadff35/rules/index.json": "abf4fa0400aa79f4026b2f629bbbc3d90ccf0c7bde1d6ee0bf62eaa670f7370b",
+    "modules/f789584ba65d7f47ee38dda79e4e89f9e1cbce14003228d47c497ca774172124.wasm": "f789584ba65d7f47ee38dda79e4e89f9e1cbce14003228d47c497ca774172124"
+   }
+  },
+  {
+   "id": "a4e25702ff5f8a0de8b8959047047e421e1d8958ee07ac3250783b923dae7ef0",
+   "created": "2026-11-09T07:39:58.028Z",
+   "glueSha256": "f5aa97c663596c4627d9b2dac992f0cc6db5d7c6c4d8e7aa33b6b9773e88fde2",
+   "bytes": 7510115,
+   "stamp": {
+    "format": 4,
+    "save_version": 22,
+    "abi": 123,
+    "ruleset_sha256": "76426816e12dde3b16640667f0d0afad3a7061d4f4281c6e8b4283f065e10777",
+    "data_sha256": "",
+    "engine": "game-core",
+    "build": "0.1.0",
+    "bundle": "a4e25702ff5f8a0de8b8959047047e421e1d8958ee07ac3250783b923dae7ef0"
+   },
+   "key": "4|22|123|76426816e12dde3b16640667f0d0afad3a7061d4f4281c6e8b4283f065e10777|",
+   "source_id": "4c452e098f8a8b3f7816444b35bf74107e53894963b4f08dd906de7261d2bd38",
+   "ref": "refs/a4e25702ff5f8a0de8b8959047047e421e1d8958ee07ac3250783b923dae7ef0.bdrec",
+   "ref_sha256": "45966e678c7376e863cd570467118232a1eaa980099bf0950cf80ef5dd5ee84a",
+   "commit": "87d79dd86f7559e6afa6a5751c29b8813d44becc",
+   "dirty": false,
+   "rebuild": true,
+   "toolchain": {
+    "rustc": "rustc 1.96.1 (31fca3adb 2026-06-26)",
+    "cargo": "cargo 1.96.1 (356927216 2026-06-26)",
+    "wasm_bindgen": "wasm-bindgen 0.2.129"
+   },
+   "files": {
+    "a4e25702ff5f8a0de8b8959047047e421e1d8958ee07ac3250783b923dae7ef0/bundle.json": "5da2c68c5e45f542a31400ad602cf1e25cec2ad28e1fd2da1ed2fd4d2bdc0bb4",
+    "a4e25702ff5f8a0de8b8959047047e421e1d8958ee07ac3250783b923dae7ef0/data/board.json": "47022faba8372771767e54b9c81e87812f353e6bdc29849e6cd21cb31f720db3",
+    "a4e25702ff5f8a0de8b8959047047e421e1d8958ee07ac3250783b923dae7ef0/data/match_rules.json": "8b6e77c429e95ef9e0d6cf7c9aa72eec085e327d30d2dc3cc137195ab6788a2e",
+    "a4e25702ff5f8a0de8b8959047047e421e1d8958ee07ac3250783b923dae7ef0/glue.js": "3f596f9dff1e5eb0a3e6c03e84b76eefc4113add92b624924bc369b83dc94aa8",
+    "a4e25702ff5f8a0de8b8959047047e421e1d8958ee07ac3250783b923dae7ef0/glue_bg.wasm": "470b7b6e2905ae27553b601f75055a3b17be47750070a042c01164d9688f60c6",
+    "a4e25702ff5f8a0de8b8959047047e421e1d8958ee07ac3250783b923dae7ef0/rules/conds-eae76b5112d90026eab996133310016535e1805ed73b18383b5a21c36fb0660a.bin": "eae76b5112d90026eab996133310016535e1805ed73b18383b5a21c36fb0660a",
+    "a4e25702ff5f8a0de8b8959047047e421e1d8958ee07ac3250783b923dae7ef0/rules/index.json": "2d4e7b285b65e2e2be00b642321138b0db105d2cb245a5cdda0fe36a892e5206",
+    "modules/74d922853309a80433636516e18bb976fd2b5c4630eefd860082d7c8fe644dc0.wasm": "74d922853309a80433636516e18bb976fd2b5c4630eefd860082d7c8fe644dc0"
+   }
+  },
   {
    "id": "4f0bb9e336d4fb4a9a0b52ced35de67833f04b8b5ea7f1a7348726e7c953377b",
    "created": "2026-11-06T22:25:28.932Z",
