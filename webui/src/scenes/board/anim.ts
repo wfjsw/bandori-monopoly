@@ -19,11 +19,10 @@ const DICE_ROLL_MS = 10 * 55;
 /** How long the effect popup stays up: just longer than the dice roll it
  *  follows, but never under 1.5s -- long enough to read which branch landed. */
 const EFFECT_HOLD_MS = Math.max(DICE_ROLL_MS + 300, 1500);
-/** The face's beat: show, wait, one halo for exactly the field slot's blink
- *  time (so a centre face and a field card light alike), restore, fade. */
-const CARD_FLASH_WAIT_MS = 450;
+/** The face lives exactly as long as the field slot's blink (`PULSE_MS` /
+ *  `PULSE_FAST_MS`): the halo takes the same 25% delay and 40% length the field
+ *  card's glow uses, the rest is restore, then this fade. */
 const CARD_FLASH_FADE_MS = 250;
-const CARD_FLASH_REST_MS = 60;
 import type { GameSession } from "../../game/session";
 import { t as tr } from "../../i18n/t";
 import { FlashOnce, flashPlay } from "./presentation.ts";
@@ -536,18 +535,19 @@ export class Animator {
     this.bump();
   }
 
-  /** Start (or re-arm) the flash's beat: wait, one halo, restore, fade.
-   *  The halo is exactly the field slot's blink under the same conditions
-   *  (`PULSE_MS` / `PULSE_FAST_MS`), so the centre face and a field card
-   *  light alike -- and, like a pulse, a deep queue shortens it. One timer
-   *  slot: an effect line that lands on the face re-arms the beat. */
+  /** Start (or re-arm) the flash's beat, on the field slot's clock: the face
+   *  stays up for `PULSE_MS` (`PULSE_FAST_MS` in a deep queue), its halo
+   *  starting at the field glow's 25% and lasting its 40%. The face never
+   *  outlives the pulse -- an oversized hold also backed the queue up and made
+   *  the field pulses themselves take the fast path. One timer slot: an effect
+   *  line that lands on the face re-arms the beat. */
   private armFlash(id: number, fast: boolean): void {
     const scale = Math.max(1, this.speed);
-    const wait = CARD_FLASH_WAIT_MS / scale;
+    // The field slot's own blink, which the face copies end to end.
+    const hold = (fast ? PULSE_FAST_MS : PULSE_MS) / scale;
+    const wait = hold * 0.25;
+    const hit = hold * 0.4;
     const fade = CARD_FLASH_FADE_MS / scale;
-    const hit = (fast ? PULSE_FAST_MS : PULSE_MS) / scale;
-    const rest = CARD_FLASH_REST_MS / scale;
-    const hold = wait + hit + rest + fade;
     clearTimeout(this.flashTimer);
     clearTimeout(this.hitTimer);
     // Re-arming restarts the beat: the class is dropped now and put back for
