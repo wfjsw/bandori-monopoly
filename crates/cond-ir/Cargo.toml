@@ -10,3 +10,8 @@ publish = false
 crate-type = ["rlib"]
 
 [dependencies]
+# `#[cfg(kani)]` items only exist for the proof harnesses; ordinary
+# build/check/test compiles them out and check-cfg flags the name as unknown.
+# Declare it so non-Kani builds stay quiet while real cfg typos still warn.
+[lints.rust]
+unexpected_cfgs = { level = "warn", check-cfg = ["cfg(kani)"] }
