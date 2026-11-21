@@ -750,9 +750,18 @@ file). That is what the `os.tmpdir()` worktree is for. The index records
 
 The deploy runs from a **permanent worktree on the local `deploy` branch,
 `/home/monopoly/deploy`** (`tools/deploy-production.sh` refuses the primary
-checkout, where the dev server serves `webui/dist`). It merges master, builds,
-seals, and commits the archive block itself; nothing is pushed from it. Its
-`data/engine-archive` is the working store -- keep it complete.
+checkout, where the dev server serves `webui/dist`). It **hard-resets onto
+master** -- the deploy branch is disposable, so nothing is merged and no merge
+conflict exists: the archive is parked, the reset happens, and the parked
+entries are unioned back. It then builds, seals, and commits the archive block
+itself; nothing is pushed from it. Its `data/engine-archive` is the working
+store -- keep it complete.
+
+Two generated inputs are gitignored and must be present in the worktree once
+(a fresh worktree has neither): `cd webui && npm ci`, and the asset-pipe output
+under `webui/public/assets/` (`python tools/asset-pipe/extract.py`, or a copy
+from an existing checkout with `img/`, `audio/`, `fonts/`, `live2d/` and
+`manifest.json`).
 
 1. `node tools/build-glue.mjs` (part of `npm run build`) -- writes
    `webui/src/wasm/engine_id.json` with the glue sha **and** the commit /
