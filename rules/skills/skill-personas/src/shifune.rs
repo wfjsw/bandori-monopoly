@@ -14,8 +14,7 @@
 //! a countdown, both of which the keyed state holds.
 
 use bandori_std::ctx::{self, state};
-use bandori_std::state_key;
-use card_sdk::abi::{ActionKind, Dice, FilterKind};
+use card_sdk::abi::Dice;
 use card_sdk::{key, Action, CardDef, Filter, Msg, On, PlanValue};
 
 /// The paired player, or -1.

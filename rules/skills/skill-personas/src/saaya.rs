@@ -13,9 +13,8 @@
 //! 格子」 is the floor: a shave that empties the face sends the mover to the
 //! next buyable tile instead.
 
-use bandori_std::ctx::{self, state};
-use bandori_std::state_key;
-use card_sdk::abi::{ActionKind, Dice, FilterKind};
+use bandori_std::ctx;
+use card_sdk::abi::Dice;
 use card_sdk::{key, Action, CardDef, Filter, Msg, On, PlanValue};
 
 const MARK: &str = "saaya标记";
