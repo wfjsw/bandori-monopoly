@@ -21,6 +21,7 @@ import { Icon } from "../../ui/Icon";
 import { formula, showScoreWeights } from "../../ui/ScoreWeights";
 import { DEFAULT_CLOCK, showClockSettings } from "../../ui/ClockSettings";
 import { toast } from "../../ui/Toast";
+import { showReplayArchive } from "./replayArchive";
 import { TopBar } from "../../ui/TopBar";
 import s from "./Room.module.css";
 import { t as tr } from "../../i18n/t";
@@ -208,21 +209,26 @@ export function Room({ id }: { id: string }) {
       </div>
       <div className={s.foot}>
         <p className={s.formula}>{formula(r.weights)}</p>
-        {/* The sealed record reveals every hand: only a seat may download it. */}
+        {/* The sealed records reveal every hand: only a seat may download them. */}
         {!r.playing && !spectating && (
-          <Btn
-            icon="download"
-            onClick={async () => {
-              const res = await api.record(r.id);
-              if (!res.ok) {
-                toast(fmtMsg(res.error), "error");
-                return;
-              }
-              downloadRecordPrompt(res.bytes, res.filename);
-            }}
-          >
-            {tr("room.downloadLastReplay")}
-          </Btn>
+          <>
+            <Btn
+              icon="download"
+              onClick={async () => {
+                const res = await api.record(r.id);
+                if (!res.ok) {
+                  toast(fmtMsg(res.error), "error");
+                  return;
+                }
+                downloadRecordPrompt(res.bytes, res.filename);
+              }}
+            >
+              {tr("room.downloadLastReplay")}
+            </Btn>
+            <Btn icon="history" onClick={() => showReplayArchive(r.id)}>
+              {tr("room.replayArchive")}
+            </Btn>
+          </>
         )}
         <Btn size="big" icon="logout" onClick={leave}>{tr("room.leave")}</Btn>
         {r.playing ? <Btn kind="pink" size="big" className={s.main} onClick={() => navigate({ name: "play", id })}>{tr("room.backToMatch")}</Btn>

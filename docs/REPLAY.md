@@ -88,6 +88,13 @@ endpoint policy, and the deviations below.
     * 409 `err.record.live` while playing;
     * 403 to anyone who wasn't a participant;
     * 404 when there is none.
+  * Every sealed record is also written to a **durable server archive**
+    (`<records>/<room>/<match>.bdrec` + a `.json` sidecar, `docs/SERVER.md`
+    §Match records). The store's last-per-room copy is a 24 h cache; TTL,
+    restart, or the next match never delete the archive copy.
+  * `GET /api/rooms/{id}/records` lists the caller's archived matches and
+    `GET /api/rooms/{id}/records/{match}` downloads one. Metadata is public to
+    participants; the bytes reveal every hand, exactly like `/record`.
   * The full record reveals every hand and the deck order, so it is only
     available after the match ends, and only to participants.
 * **Serialization:**
@@ -297,8 +304,9 @@ pub struct RecordBody { init: Init, inputs: Vec<Input>, checkpoints: Vec<Checkpo
     and the `cp` checkpoints. Flush before other inputs, every 100 ticks, and
     at the end. Failed worker round-trips are not recorded.
   * **`start`:** `Init::Seed` plus the stamp from `pool.info()`.
-  * **On end:** finalize the `RecordFile` and store it as `record:{room}:last`
-    with a 24 h TTL, together with the participant member ids.
+  * **On end:** finalize the `RecordFile`, store it as `record:{room}:last`
+    with a 24 h TTL (the cache), and write the durable archive copy with the
+    participant member ids.
   * **Store:** `CrossState` gains `record_log_append/get/del` and
     `record_put/get`, in both Dummy (an LRU of 64) and Redis.
   * **`api.rs`:** `GET /api/rooms/{id}/record`, returning 409 / 404 / 403 as

@@ -9,6 +9,7 @@ use game_core::deck;
 use game_core::engine::StubRules;
 use reqwest::StatusCode;
 use serde_json::{json, Value};
+use server::store::CrossState;
 use server::Server;
 
 fn data() -> Arc<GameData> {
@@ -63,6 +64,19 @@ async fn spawn_tuned(
     time_scale: f32,
     tune: impl FnOnce(&mut Server),
 ) -> (String, Arc<Server>) {
+    let store: Arc<dyn server::store::CrossState> =
+        Arc::new(server::store::dummy::Store::new());
+    spawn_with_store(presence_timeout, time_scale, store, tune).await
+}
+
+/// [`spawn_tuned`] over a caller-supplied store (the archive tests need the
+/// handle to drop the live cache copy).
+async fn spawn_with_store(
+    presence_timeout: Duration,
+    time_scale: f32,
+    store: Arc<dyn server::store::CrossState>,
+    tune: impl FnOnce(&mut Server),
+) -> (String, Arc<Server>) {
     test_glue_identity();
     let d = data();
     let rules: Arc<dyn game_core::engine::CardRules> = Arc::new(StubRules);
@@ -71,7 +85,7 @@ async fn spawn_tuned(
         d.clone(),
         rules.clone(),
         server::pool::Pool::in_process(d, rules),
-        Arc::new(server::store::dummy::Store::new()),
+        store,
     );
     {
         let s = Arc::get_mut(&mut server).expect("fresh");
@@ -1394,6 +1408,107 @@ async fn the_record_endpoint_serves_the_last_finished_match() {
     }
     assert!(!rp.status().diverged, "every checkpoint matched");
     assert_eq!(hash_save(&rp.match_ref().save()), want, "same final hash");
+}
+
+/// The durable archive (`docs/REPLAY.md` §1): an online record is written to
+/// disk at seal, listed by match, and still downloads after the store's live
+/// copy is gone. The full record stays participants-only.
+#[tokio::test]
+async fn online_records_are_archived_and_outlive_the_store_copy() {
+    let dir = std::env::temp_dir().join(format!(
+        "bm-archive-http-{}-{}",
+        std::process::id(),
+        server::state::random_hex(4)
+    ));
+    let _ = std::fs::remove_dir_all(&dir);
+    let store = Arc::new(server::store::dummy::Store::new().with_archive(dir.clone()));
+    let (base, server) =
+        spawn_with_store(Duration::from_millis(400), 20.0, store.clone(), |_| {}).await;
+    let a = Client::new(&base, "Host").await;
+    let outsider = Client::new(&base, "Outsider").await;
+    let id = a.ok("/api/rooms", json!({ "name": "Archive" })).await["room"]["id"]
+        .as_str()
+        .unwrap()
+        .to_string();
+
+    a.ok(
+        &format!("/api/rooms/{id}/bots"),
+        json!({ "op": "add", "mentality": "chaos" }),
+    )
+    .await;
+    a.ok(&format!("/api/rooms/{id}/bots"), json!({ "op": "add" }))
+        .await;
+    a.fair_nonce(&id).await;
+    a.ok(&format!("/api/rooms/{id}/start"), json!({ "force": true }))
+        .await;
+    let handle = {
+        let room = server.room(&id).unwrap();
+        let r = room.lock().unwrap();
+        r.game.as_ref().expect("match started").clone()
+    };
+    handle.quick_start().unwrap();
+    tokio::time::sleep(Duration::from_millis(1500)).await;
+    handle.quick_start().unwrap();
+    tokio::time::sleep(Duration::from_millis(300)).await;
+    handle.finish().unwrap();
+    let deadline = Instant::now() + Duration::from_secs(10);
+    loop {
+        let (s, st) = a.get(&format!("/api/rooms/{id}/state")).await;
+        assert_eq!(s, StatusCode::OK, "{st}");
+        if st["room"]["playing"] == false {
+            break;
+        }
+        assert!(Instant::now() < deadline, "match did not end: {st}");
+        tokio::time::sleep(Duration::from_millis(100)).await;
+    }
+
+    // The participant sees the match in the room's archive.
+    let (s, v) = a.get(&format!("/api/rooms/{id}/records")).await;
+    assert_eq!(s, StatusCode::OK, "{v}");
+    let list = v["records"].as_array().expect("records array");
+    assert_eq!(list.len(), 1, "one archived match: {v}");
+    let mid = list[0]["id"].as_str().expect("match id").to_string();
+    assert_eq!(list[0]["room"], id);
+    assert!(list[0]["seats"].as_array().unwrap().len() >= 2);
+    assert!(list[0]["ended"].as_bool().unwrap());
+
+    // It is on disk: the sealed bytes and their sidecar.
+    let room_dir = dir.join(&id);
+    assert!(room_dir.join(format!("{mid}.bdrec")).is_file(), "record file");
+    assert!(room_dir.join(format!("{mid}.json")).is_file(), "sidecar");
+
+    // An outsider sees neither metadata nor bytes.
+    let (s, v) = outsider.get(&format!("/api/rooms/{id}/records")).await;
+    assert_eq!(s, StatusCode::FORBIDDEN, "{v}");
+    let (s, v) = outsider
+        .get(&format!("/api/rooms/{id}/records/{mid}"))
+        .await;
+    assert_eq!(s, StatusCode::FORBIDDEN, "{v}");
+
+    // Drop the store's 24 h copy -- exactly what its expiry does. Both
+    // downloads fall back to the archive.
+    store.record_del(&id).unwrap();
+    let (s, body, headers) = a.get_bytes(&format!("/api/rooms/{id}/record")).await;
+    assert_eq!(s, StatusCode::OK, "{}", String::from_utf8_lossy(&body));
+    assert_eq!(headers["x-match-id"], mid.as_str());
+    let file = game_core::record::decode_record(&body).expect("archived record decodes");
+    assert_eq!(file.header.origin, game_core::record::Origin::Online { room: id.clone() });
+
+    let (s, named, _) = a
+        .get_bytes(&format!("/api/rooms/{id}/records/{mid}"))
+        .await;
+    assert_eq!(s, StatusCode::OK);
+    assert_eq!(named, body, "the named download is the same bytes");
+
+    // Another store over the same directory -- a restarting process -- sees
+    // the archive even though it never held the live copy.
+    let fresh = server::store::dummy::Store::new().with_archive(dir.clone());
+    let metas = fresh.archive_list(&id).unwrap();
+    assert_eq!(metas.len(), 1);
+    assert_eq!(metas[0].id, mid);
+    assert!(metas[0].members.contains(&1), "the host's seat is the set");
+
+    let _ = std::fs::remove_dir_all(dir);
 }
 
 // ------------------------------------------------------- advanced bots (B5)

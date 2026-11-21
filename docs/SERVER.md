@@ -312,6 +312,8 @@ Putting a real IdP in front is future work.
 | GET  | `/api/rooms/{id}/events?since=N` | | `MatchEvent[]` after `N`, oldest first -- the log's history seed; the engine keeps a tail, so `0` is "as far back as it still has" (seats and spectators) |
 | POST | `/api/rooms/{id}/act` | `NetMessage` | `{ok}` |
 | GET  | `/api/rooms/{id}/record` | | the last finished match's `.bdrec` (see below) |
+| GET  | `/api/rooms/{id}/records` | | the room's archived matches, newest first, narrowed to the caller (see below) |
+| GET  | `/api/rooms/{id}/records/{match}` | | one archived `.bdrec`, participants only |
 | GET  | `/api/rooms/{id}/stream` | | SSE |
 | POST | `/api/clock` | `{t1}` | `{t1, t2, t3}` -- NTP-style sample (see §Turn clock) |
 
@@ -564,16 +566,29 @@ boundary. When the match ends the log is sealed into a `RecordFile` -- seats
 from the final view, `final_hash` an FNV-1a-64 of the final `Match::save()` --
 and stored **zstd-compressed** as `record:{room}:last`; the log is then
 cleared. Seal-time compression is enough: the in-progress log stays one JSON
-line per entry.
+line per entry. The same seal also writes the durable archive copy
+(`docs/REPLAY.md` §1): one `.bdrec` plus a `.json` sidecar under
+`<records>/<room>/<match>`. The store copy below is a cache; the archive is
+never expired.
 
-**`GET /api/rooms/{id}/record`** serves that `.bdrec`:
+**`GET /api/rooms/{id}/record`** serves that `.bdrec` -- the store's last copy,
+or, once it has expired or been replaced, the newest archived match the caller
+sat in:
 
 | Case | Answer |
 |---|---|
 | the room is still playing | `409` `err.record.live` |
-| nothing sealed yet | `404` `err.record.none` |
+| nothing sealed yet / archived | `404` `err.record.none` |
 | the caller was not in the match | `403` `err.record.forbidden` |
-| otherwise | `200`, the record as `application/zstd` |
+| otherwise | `200`, the record as `application/zstd`, `X-Match-Id` naming it |
+
+**`GET /api/rooms/{id}/records`** lists the room's archived matches, newest
+first, narrowed to the caller's own seats: `{ "records": [ { id, created,
+ended, reason, rounds, totalTicks, seats, members } ] }`. **`GET
+/api/rooms/{id}/records/{match}`** downloads one of them with the same headers
+as above. Both answer `403 err.record.forbidden` when the archive names no seat
+of the caller, and the named download is `404 err.record.none` for an unknown
+id.
 
 Participation is resolved through the room's member → session-token map: the
 caller's token names a member id, and that id must be one of the seats the
@@ -594,10 +609,18 @@ narrow, since the full record reveals every hand and the deck order.
   `bm:rec:<room>:members` key, same TTL) and reads them back with `GET`; the
   in-memory store keeps the bytes in its 64-entry LRU. A value written before
   compression (one JSON envelope) is still read and served.
-* **TTL 24 h.** `record:{room}:last` is written with a 24 h expiry (Redis
-  `SET EX`; the in-memory store bounds itself to a 64-entry LRU instead of a
-  clock). The in-progress log gets the same expiry so a box that dies mid-match
-  does not leak a list.
+* **TTL 24 h on the cache only.** `record:{room}:last` is written with a 24 h
+  expiry (Redis `SET EX`; the in-memory store bounds itself to a 64-entry LRU
+  instead of a clock). The in-progress log gets the same expiry so a box that
+  dies mid-match does not leak a list. The archive beside it has no TTL: a
+  deployment prunes `<records>` itself.
+* **Archive directory.** `--records DIR` / `BM_RECORDS` (default `records`
+  beside the data directory, outside the served `/data`) is the durable store
+  for every sealed match; every process of one deployment must name the same
+  shared directory. Writes are atomic
+  (temp file + rename), so a crash leaves at worst an unlisted orphan, never a
+  half record. Archive failures are logged and do not fail the seal -- the
+  store copy still serves the match; `/records` is simply missing it.
 * **`gaps`.** The open tick run and the record-log counters live in the store
   (`RecordMeta`), written under the match lock, so a process that dies mid-match
   (or a second server taking over) continues the same log. `header.gaps = true`
