@@ -254,13 +254,17 @@
 .flashCard {
   box-shadow: 0 0 0 2.5px var(--owner, var(--pink)), var(--card-shadow);
   background: color-mix(in srgb, var(--owner, var(--white)) 12%, var(--white));
-  animation: flashGlow 0.48s ease-in-out 0.3s 1 both;
+  /* Glows from the first frame and keeps the halo: `both` holds the last
+     keyframe, so a flash re-armed by a later effect line stays lit until
+     `flashOut` fades the whole face. */
+  animation: flashGlow 1s ease-in-out 0.02s 1 both;
 }
 @keyframes flashGlow {
-  0%, 100% { filter: brightness(1); }
-  50% {
+  0% { filter: brightness(1); }
+  15%,
+  100% {
     filter: brightness(1.45);
-    box-shadow: 0 0 0 3px #fff, 0 0 18px 6px var(--owner, #fff), 0 0 34px 10px rgba(255, 255, 255, 0.7);
+    box-shadow: 0 0 0 3px #fff, 0 0 20px 7px var(--owner, #fff), 0 0 38px 12px rgba(255, 255, 255, 0.75);
   }
 }
 .flashCaption {
