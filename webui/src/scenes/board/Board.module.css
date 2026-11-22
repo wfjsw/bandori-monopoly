@@ -260,19 +260,18 @@
   box-shadow: 0 0 0 2.5px var(--owner, var(--pink)), var(--card-shadow);
   background: color-mix(in srgb, var(--owner, var(--white)) 12%, var(--white));
 }
-/* The 「效果适用」 beat: one halo in the middle of the hold, taking the field
-   glow's 40% length (`--hit-ms`, set by `armFlash` as a fraction of PULSE_MS /
-   PULSE_FAST_MS), then back to the plain owner ring before the face fades.
-   Ramps are a few percent of that clock; it starts and ends at rest, so the
-   card's own text and the caption stay readable and it never holds lit. */
+/* The 「效果适用」 beat: the field slot's `pulse-glow` (`FieldSheet.module.css`)
+   note for note -- same 25% delay and 40% length via `--hit-ms`, same
+   `ease-in-out`, same brightness and halo, peaking at the halfway point and
+   returning to the owner ring. No plateau: a held peak read as a stuck state. */
 .flashHit {
   animation: flashGlow var(--hit-ms, 600ms) ease-in-out 1;
 }
 @keyframes flashGlow {
   0%, 100% { filter: brightness(1); }
-  4%, 94% {
+  50% {
     filter: brightness(1.45);
-    box-shadow: 0 0 0 3px #fff, 0 0 20px 7px var(--owner, #fff), 0 0 38px 12px rgba(255, 255, 255, 0.75);
+    box-shadow: 0 0 0 3px #fff, 0 0 18px 6px var(--owner, #fff), 0 0 34px 10px rgba(255, 255, 255, 0.7);
   }
 }
 .flashCaption {
