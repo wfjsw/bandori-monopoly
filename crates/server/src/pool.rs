@@ -33,7 +33,7 @@ use serde_json::{json, Value};
 /// late prompt in a ten-seat event card can take several seconds while the
 /// state is large; 5 s killed those attempts before [`crate::room::MatchHandle`]
 /// could store the result. Kept below [`crate::store::LOCK_TTL_MS`].
-pub const DEFAULT_TIMEOUT: Duration = Duration::from_secs(20);
+pub const DEFAULT_TIMEOUT: Duration = Duration::from_secs(30);
 
 /// One worker process plus the reader thread that owns its stdout.
 struct Worker {
