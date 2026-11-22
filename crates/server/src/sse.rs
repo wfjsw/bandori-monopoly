@@ -73,7 +73,7 @@ fn frames(info: &RoomInfo, m: Option<&MatchHandle>, member: i32, cur: &mut Curso
     if let Some(m) = m {
         // Two round-trips through the worker pool: this member's view, and the
         // events since the cursor.
-        let Ok(view) = match_view(m, member) else {
+        let Ok(view) = match_view(m, member, false) else {
             cur.retry = true;
             return out;
         };

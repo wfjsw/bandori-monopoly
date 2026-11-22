@@ -470,10 +470,20 @@ impl Pool {
     /// Human clients compute those themselves from the seat view (the
     /// seat-view engine, `docs/BOT.md` §1) -- pass `false` and the worker
     /// skips the work. The bot service passes `true`.
-    pub fn view(&self, state: &str, member: i32, need_extras: bool) -> Result<Value, String> {
-        let v = self.call(
-            json!({"op": "view", "state": state, "member": member, "needExtras": need_extras}),
-        )?;
+    pub fn view(
+        &self,
+        state: &str,
+        member: i32,
+        need_extras: bool,
+        need_quotes: bool,
+    ) -> Result<Value, String> {
+        let v = self.call(json!({
+            "op": "view",
+            "state": state,
+            "member": member,
+            "needExtras": need_extras,
+            "needQuotes": need_quotes,
+        }))?;
         v.get("view")
             .cloned()
             .ok_or_else(|| "worker returned no view".to_string())

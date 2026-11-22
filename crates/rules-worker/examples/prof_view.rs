@@ -7,7 +7,9 @@ use std::path::Path;
 use std::time::Instant;
 
 use game_core::engine::compose_tile_texts;
+use game_core::net::NetMessage;
 use game_core::record::{decode_record, Replayer};
+use game_core::state::stage;
 
 fn main() {
     let mut args = std::env::args().skip(1);
@@ -72,4 +74,43 @@ fn main() {
     let t = Instant::now();
     let json = serde_json::to_string(&frame).expect("serialize");
     println!("frame serialize {:?} ({} bytes)", t.elapsed(), json.len());
+
+    // Cost of one engine act at this depth: a prompt answer (the replay path
+    // an online seat pays) or the actor's roll.
+    let st = m.state();
+    let cmd = if st.prompt.id > 0 {
+        let seat = st.prompt.players[0] as usize;
+        Some((
+            st.players[seat].member,
+            NetMessage {
+                act: "answer".into(),
+                prompt: st.prompt.id,
+                value: st.prompt.fallback,
+                ..Default::default()
+            },
+        ))
+    } else if st.step == stage::OPS && st.turn >= 0 {
+        let seat = st.roller.max(st.turn) as usize;
+        st.players
+            .get(seat)
+            .filter(|p| p.bot)
+            .map(|p| (p.member, NetMessage { act: "roll".into(), ..Default::default() }))
+    } else {
+        None
+    };
+    match cmd {
+        Some((member, cmd)) => {
+            std::fs::write("/tmp/prof-act-state.json", rp.match_ref().save()).expect("dump state");
+            std::fs::write(
+                "/tmp/prof-act-cmd.json",
+                serde_json::json!({"member": member, "act": cmd.act, "prompt": cmd.prompt, "value": cmd.value})
+                    .to_string(),
+            )
+            .expect("dump cmd");
+            let t = Instant::now();
+            let out = rp.match_mut().act(member, &cmd);
+            println!("act {} {:?} err={}", cmd.act, t.elapsed(), out.is_err());
+        }
+        None => println!("act skipped (step/phase)"),
+    }
 }

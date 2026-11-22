@@ -459,6 +459,12 @@ fn run(ctx: &Ctx, req: &Value) -> Result<Value, String> {
                 .get("needExtras")
                 .and_then(Value::as_bool)
                 .unwrap_or(false);
+            // Quotes are the deed-tooltip surface. Default: a bot frame (no
+            // extras) keeps them, a client frame can opt out per frame.
+            let need_quotes = req
+                .get("needQuotes")
+                .and_then(Value::as_bool)
+                .unwrap_or(!need_extras);
             let mut state = m.state();
             // Per-member prompt countdown: the table-wide `state()` reports the
             // tightest pending human pool; each client sees its own.
@@ -477,10 +483,10 @@ fn run(ctx: &Ctx, req: &Value) -> Result<Value, String> {
             // every tile through the ruleset (~120 ms on a ten-seat frame) and
             // the bot service never reads them. A human view (a client frame)
             // still carries them.
-            let quotes = if need_extras {
-                Value::Null
-            } else {
+            let quotes = if need_quotes {
                 json!(m.tile_quotes(member))
+            } else {
+                Value::Null
             };
             let mut view = json!({
                 "state": state,

@@ -563,7 +563,7 @@ async fn probe_one(
     // (a human client computes those itself -- the seat-view engine).
     let view = {
         let m = m.clone();
-        match tokio::task::spawn_blocking(move || m.view(member, true)).await {
+        match tokio::task::spawn_blocking(move || m.view(member, true, false)).await {
             Ok(Ok(v)) => v,
             Ok(Err(e)) => {
                 eprintln!("room {room_id} bot view failed: {e}");

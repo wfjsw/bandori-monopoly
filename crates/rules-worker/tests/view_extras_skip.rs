@@ -127,3 +127,19 @@ fn bot_views_skip_the_tile_quotes() {
         human["view"]
     );
 }
+
+#[test]
+fn a_client_frame_can_opt_out_of_quotes() {
+    let ctx = ctx();
+    let state = new_match(&ctx);
+    // SSE frames opt out; the attach / reconnect frame keeps them.
+    let lean = handle(
+        &ctx,
+        json!({"op": "view", "state": state, "member": 1, "needQuotes": false}),
+    );
+    assert_eq!(lean["ok"], json!(true), "view: {lean}");
+    assert_eq!(lean["view"]["tileQuotes"], Value::Null);
+
+    let rich = handle(&ctx, json!({"op": "view", "state": state, "member": 1}));
+    assert!(rich["view"]["tileQuotes"].as_array().is_some());
+}
