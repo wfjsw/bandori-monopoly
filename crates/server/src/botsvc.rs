@@ -608,10 +608,16 @@ pub struct Drive {
 }
 
 /// How soon to look again after a seat turned out to have nothing to do.
-pub const IDLE_PROBE: Duration = Duration::from_millis(200);
+/// Every probe ships the whole match frame, and a ten-seat table with a large
+/// pending snapshot made 9 idle seats x 5 probes/s starve the 20 Hz tick loop
+/// (room 56XQFP, ~0.4 Hz). With the narrowed drive list only the actor is
+/// polled while idle, so the coarse cadence costs at most 400 ms before a new
+/// turn is noticed; a seat that just acted still re-probes on the
+/// [`BUSY_PROBE`] schedule.
+pub const IDLE_PROBE: Duration = Duration::from_millis(400);
 /// How soon to look again right after applying an answer (the seat may have
 /// another decision immediately -- play a card, then roll).
-pub const BUSY_PROBE: Duration = Duration::from_millis(50);
+pub const BUSY_PROBE: Duration = Duration::from_millis(150);
 /// A probe claim lives this long without a release (the service wedged, the
 /// process died). Longer than [`crate::botsvc::MAX_ASK_TIMEOUT`] so a live
 /// probe always finishes inside its claim.

@@ -335,9 +335,14 @@ pub struct RecordMeta {
 }
 
 /// Default TTL for a cross-process lock: long enough for one match / room
-/// operation (a worker round-trip plus a store write), short enough that a
-/// dead holder's lock frees itself quickly. Single operations do not renew.
-pub const LOCK_TTL_MS: u64 = 10_000;
+/// operation (a worker round-trip plus a store write); a dead holder releases
+/// it only at expiry, so this is also the worst restart wait. Single
+/// operations do not renew, so
+/// this must stay above the worker round-trip deadline
+/// ([`crate::pool::DEFAULT_TIMEOUT`]) -- a replay of a ten-seat event card
+/// routinely runs past the old 10 s / 5 s pair and every retry was killed
+/// before it could commit, freezing the match (2026-11-22, room 56XQFP).
+pub const LOCK_TTL_MS: u64 = 60_000;
 /// How long [`with_lock`] retries before giving up. Below [`LOCK_TTL_MS`] so
 /// a waiter cannot out-wait the lock's own expiry and stampede.
 pub const LOCK_DEADLINE: Duration = Duration::from_secs(8);

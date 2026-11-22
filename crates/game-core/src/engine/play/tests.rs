@@ -866,3 +866,45 @@ fn g04_extra_steps_add_is_relative() {
         "3 rolled steps + 4 added steps walked"
     );
 }
+
+/// A probe is a whole-frame round-trip, so the drive list must name only a
+/// seat that can decide now: the actor, or the unanswered machine seats of an
+/// open prompt. Naming every bot made a ten-seat table starve its own tick loop.
+#[test]
+fn drive_names_only_the_actor_or_the_unanswered_prompt_seats() {
+    let d = data();
+    let members: Vec<RoomMember> = (1..=3)
+        .map(|i| RoomMember {
+            id: i,
+            player: format!("P{i}"),
+            bot: true,
+            ..Default::default()
+        })
+        .collect();
+    let mut m = Match::new(
+        d,
+        Arc::new(StubRules),
+        &members,
+        1,
+        MatchMode::Casual,
+        ScoreWeights::default(),
+    );
+    m.quick_start();
+    m.world.st.phase = "play".into();
+    m.world.st.turn = 0;
+    m.world.st.step = stage::OPS;
+    m.world.st.roller = 0;
+    assert_eq!(m.drive(), vec![members[0].id], "only the actor decides");
+
+    m.world.st.prompt = MatchPrompt {
+        id: 7,
+        players: vec![1, 2],
+        answers: vec![-1, 0],
+        ..Default::default()
+    };
+    assert_eq!(
+        m.drive(),
+        vec![members[1].id],
+        "only the unanswered prompt seat, not the answered one or another bot"
+    );
+}
