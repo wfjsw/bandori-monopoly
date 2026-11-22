@@ -617,11 +617,15 @@ pub struct MatchView {
 }
 
 /// Ask the worker for one member's view. Blocking; see `pool`.
-pub fn match_view(m: &crate::room::MatchHandle, member: i32) -> ApiResult<MatchView> {
+pub fn match_view(
+    m: &crate::room::MatchHandle,
+    member: i32,
+    need_quotes: bool,
+) -> ApiResult<MatchView> {
     // Human clients compute the per-viewer extras themselves (the seat-view
     // engine, `docs/BOT.md` §1) -- do not pay the worker for them here.
     let v = m
-        .view(member, false)
+        .view(member, false, need_quotes)
         .map_err(|e| ApiError::bad(e.as_str()))?;
     let mut view: MatchView =
         serde_json::from_value(v).map_err(|e| ApiError::bad(format!("view: {e}").as_str()))?;
@@ -670,7 +674,7 @@ pub async fn room_state(
     let game = match m {
         None => None,
         Some(m) => Some(
-            tokio::task::spawn_blocking(move || match_view(&m, me))
+            tokio::task::spawn_blocking(move || match_view(&m, me, true))
                 .await
                 .map_err(|e| ApiError::bad(format!("view task: {e}").as_str()))?,
         ),

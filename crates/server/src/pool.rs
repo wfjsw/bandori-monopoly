@@ -42,6 +42,10 @@ struct Worker {
     /// Lines from the reader thread. The sender drops on exit, which is how a
     /// dead worker is noticed (`RecvTimeoutError::Disconnected`).
     rx: Receiver<String>,
+    /// `(fnv1a64, len)` of the state this worker already holds, so the next
+    /// request for the same blob sends the pair instead of the blob. Reset on
+    /// spawn: the new process holds nothing.
+    cached: Option<(u64, usize)>,
 }
 
 impl Worker {
@@ -77,11 +81,16 @@ impl Worker {
                 }
             }
         });
-        Ok(Self { child, stdin, rx })
+        Ok(Self {
+            child,
+            stdin,
+            rx,
+            cached: None,
+        })
     }
 
     /// Write one request, read one response. Errors mean the worker is unusable.
-    fn roundtrip(&mut self, req: &Value, timeout: Duration) -> Result<Value, String> {
+    fn exchange(&mut self, req: &Value, timeout: Duration) -> Result<Value, String> {
         let line = serde_json::to_string(req).map_err(|e| e.to_string())?;
         writeln!(self.stdin, "{line}").map_err(|e| format!("write: {e}"))?;
         self.stdin.flush().map_err(|e| format!("flush: {e}"))?;
@@ -90,6 +99,47 @@ impl Worker {
             RecvTimeoutError::Disconnected => "worker exited".to_string(),
         })?;
         serde_json::from_str(&resp).map_err(|e| format!("bad worker response: {e}"))
+    }
+
+    /// One round-trip with the state-cache protocol: the body is sent only
+    /// when this worker does not already hold that exact string. A miss (the
+    /// worker was respawned between the bookkeeping and the call) is retried
+    /// once with the full body.
+    fn roundtrip(&mut self, req: &Value, timeout: Duration) -> Result<Value, String> {
+        let state = req.get("state").and_then(Value::as_str);
+        let mut hit = None;
+        let mut lean = req.clone();
+        if let Some(body) = state {
+            let hash = game_core::record::fnv1a64(body.as_bytes());
+            let len = body.len();
+            if let Some(obj) = lean.as_object_mut() {
+                obj.insert("stateHash".into(), json!(hash));
+                obj.insert("stateLen".into(), json!(len));
+                if self.cached == Some((hash, len)) {
+                    obj.remove("state");
+                    hit = Some((hash, len));
+                }
+            }
+        }
+        let mut resp = self.exchange(&lean, timeout)?;
+        if hit.is_some() && resp.get("ok").and_then(Value::as_bool) == Some(false) {
+            let miss = matches!(
+                resp.get("error").and_then(Value::as_str),
+                Some("state cache miss") | Some("state cache empty")
+            );
+            if miss {
+                resp = self.exchange(req, timeout)?;
+            }
+        }
+        // What the process holds after this call: the state it returned, else
+        // the one it was sent (a read-only op keeps it). An op with no state
+        // at all (`info`, the mount-time stamp) must not clear it.
+        if let Some(s) = resp.get("state").and_then(Value::as_str) {
+            self.cached = Some((game_core::record::fnv1a64(s.as_bytes()), s.len()));
+        } else if let Some(s) = state {
+            self.cached = Some((game_core::record::fnv1a64(s.as_bytes()), s.len()));
+        }
+        Ok(resp)
     }
 
     fn kill(&mut self) {
@@ -348,16 +398,26 @@ impl Pool {
     }
 
     /// `value` is whether the match changed (`"changed"` in the reply).
-    pub fn tick(&self, state: &str, dt: f32) -> Result<Out<bool>, String> {
+    /// `value` is whether the match changed; the second half is the drive
+    /// list for this state, so the tick loop does not need a second call.
+    pub fn tick(&self, state: &str, dt: f32) -> Result<(Out<bool>, Vec<i32>), String> {
         let v = self.call(json!({"op": "tick", "state": state, "dt": dt}))?;
         let (state, checkpoint, ended) = split(&v)?;
         let changed = v.get("changed").and_then(Value::as_bool).unwrap_or(false);
-        Ok(Out {
-            state,
-            value: changed,
-            checkpoint,
-            ended,
-        })
+        let drive = v
+            .get("drive")
+            .and_then(Value::as_array)
+            .map(|a| a.iter().filter_map(Value::as_i64).map(|n| n as i32).collect())
+            .unwrap_or_default();
+        Ok((
+            Out {
+                state,
+                value: changed,
+                checkpoint,
+                ended,
+            },
+            drive,
+        ))
     }
 
     pub fn quick_start(&self, state: &str) -> Result<Out<()>, String> {
@@ -420,10 +480,20 @@ impl Pool {
     /// Human clients compute those themselves from the seat view (the
     /// seat-view engine, `docs/BOT.md` §1) -- pass `false` and the worker
     /// skips the work. The bot service passes `true`.
-    pub fn view(&self, state: &str, member: i32, need_extras: bool) -> Result<Value, String> {
-        let v = self.call(
-            json!({"op": "view", "state": state, "member": member, "needExtras": need_extras}),
-        )?;
+    pub fn view(
+        &self,
+        state: &str,
+        member: i32,
+        need_extras: bool,
+        need_quotes: bool,
+    ) -> Result<Value, String> {
+        let v = self.call(json!({
+            "op": "view",
+            "state": state,
+            "member": member,
+            "needExtras": need_extras,
+            "needQuotes": need_quotes,
+        }))?;
         v.get("view")
             .cloned()
             .ok_or_else(|| "worker returned no view".to_string())

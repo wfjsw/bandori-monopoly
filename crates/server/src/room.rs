@@ -357,8 +357,17 @@ impl MatchHandle {
 
     /// Advance the clock by `dt` (`k` quanta of `header.step`). Returns whether
     /// the match changed; `k` is what the record's `Ticks` run-length counts.
-    pub fn tick(&self, dt: f32, k: u8) -> Result<bool, String> {
-        self.run(|_| Input::Ticks { k, n: 1 }, |s, e| e.tick(s, dt))
+    /// `(changed, drive)` -- the drive list is the same reply's, so a beat
+    /// needs one worker round-trip instead of `tick` plus `drive`.
+    pub fn tick(&self, dt: f32, k: u8) -> Result<(bool, Vec<i32>), String> {
+        self.run(|_| Input::Ticks { k, n: 1 }, |s, e| {
+            e.tick(s, dt).map(|(out, drive)| Out {
+                state: out.state,
+                value: (out.value, drive),
+                checkpoint: out.checkpoint,
+                ended: out.ended,
+            })
+        })
     }
 
     /// Members a driver must move now (`MatchState::drive`), without building
@@ -422,8 +431,13 @@ impl MatchHandle {
     /// One member's view frame. `need_extras` = the caller wants the
     /// per-viewer `view_extras` fields (the bot service does; a human client
     /// computes them itself from the seat view).
-    pub fn view(&self, member: i32, need_extras: bool) -> Result<Value, String> {
-        self.peek(|s, e| e.view(s, member, need_extras))
+    pub fn view(
+        &self,
+        member: i32,
+        need_extras: bool,
+        need_quotes: bool,
+    ) -> Result<Value, String> {
+        self.peek(|s, e| e.view(s, member, need_extras, need_quotes))
     }
 
     pub fn events(&self, since: i32) -> Result<Vec<Value>, String> {
@@ -587,7 +601,7 @@ impl MatchHandle {
         // Any seated view carries the whole public `MatchState`; the seats'
         // ranks and scores are what the results screen showed.
         let member = members.first().copied().unwrap_or(0);
-        let view = self.engine.view(&blob, member, false)?;
+        let view = self.engine.view(&blob, member, false, true)?;
         let st: game_core::state::MatchState =
             serde_json::from_value(view.get("state").cloned().unwrap_or(Value::Null))
                 .map_err(|e| format!("final view: {e}"))?;

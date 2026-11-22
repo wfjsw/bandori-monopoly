@@ -316,12 +316,18 @@ pub async fn tick_all(server: &Arc<Server>, jobs_in: &[(String, f32, u8)]) {
                     changed = true;
                 }
                 if playing {
-                    match m.tick(dt, k) {
-                        Ok(c) => changed |= c,
-                        Err(e) => eprintln!("room {id} tick failed: {e}"),
-                    }
+                    let ticked = match m.tick(dt, k) {
+                        Ok((c, d)) => {
+                            changed |= c;
+                            d
+                        }
+                        Err(e) => {
+                            eprintln!("room {id} tick failed: {e}");
+                            Vec::new()
+                        }
+                    };
                     ended = m.ended().unwrap_or(false);
-                    drive = claim_drive(&server, &id, m);
+                    drive = claim_drive(&server, &id, ticked);
                 }
             }
             // 3. bookkeeping, again under the room lock.
@@ -502,10 +508,7 @@ pub fn spawn_ticker(server: Arc<Server>) -> tokio::task::JoinHandle<()> {
 /// The list is seat-independent, so it needs no per-viewer frame: the worker
 /// answers `op: "drive"` straight off the match. This runs once per tick of
 /// every playing room, next to the tick itself.
-fn claim_drive(server: &Arc<Server>, room_id: &str, m: &room::MatchHandle) -> Vec<i32> {
-    let Ok(drive) = m.drive() else {
-        return Vec::new();
-    };
+fn claim_drive(server: &Arc<Server>, room_id: &str, drive: Vec<i32>) -> Vec<i32> {
     drive
         .into_iter()
         .filter(|&m| botsvc::claim_seat(server.store.as_ref(), &server.instance, room_id, m))
@@ -563,7 +566,7 @@ async fn probe_one(
     // (a human client computes those itself -- the seat-view engine).
     let view = {
         let m = m.clone();
-        match tokio::task::spawn_blocking(move || m.view(member, true)).await {
+        match tokio::task::spawn_blocking(move || m.view(member, true, false)).await {
             Ok(Ok(v)) => v,
             Ok(Err(e)) => {
                 eprintln!("room {room_id} bot view failed: {e}");
