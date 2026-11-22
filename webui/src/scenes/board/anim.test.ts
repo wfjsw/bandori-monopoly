@@ -674,6 +674,25 @@ test("flash styles: the face is chain-card sized and the hit is one animation", 
   const card = bare.match(/\.flashCard \{[^}]*\}/)?.[0] ?? "";
   assert.doesNotMatch(card, /animation:/, "the glow must not be permanently attached");
   assert.match(bare, /\.flashHit \{[^}]*var\(--hit-ms/, "the hit runs on the shared blink clock");
+  // The centre halo is the field slot's `pulse-glow`, note for note: same
+  // triangle, no held peak. Only the owner variable is named differently.
+  const keyframes = (css: string, name: string): string => {
+    const at = css.indexOf(`@keyframes ${name} {`);
+    if (at < 0) return "";
+    let depth = 0;
+    for (let i = css.indexOf("{", at); i < css.length; i++) {
+      if (css[i] === "{") depth++;
+      else if (css[i] === "}" && --depth === 0) return css.slice(at, i + 1);
+    }
+    return "";
+  };
+  const norm = (t: string) => t.replace(/flashGlow|pulse-glow/g, "glow").replace(/--owner/g, "--own").replace(/\s+/g, " ").trim();
+  const glow = norm(keyframes(bare, "flashGlow"));
+  const field = norm(keyframes(readFileSync(path.join(here, "FieldSheet.module.css"), "utf8")
+    .replace(/\/\*[\s\S]*?\*\//g, ""), "pulse-glow"));
+  assert.ok(field, "the field's pulse-glow must be found");
+  assert.equal(glow, field, "flashGlow must equal the field's pulse-glow");
+  assert.doesNotMatch(bare, /4%,\s*94%/, "no held peak");
 });
 
 test("Animator: a body line re-arms one hit, never during the fade", async () => {
