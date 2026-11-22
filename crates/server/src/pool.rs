@@ -29,7 +29,11 @@ use serde::{Deserialize, Serialize};
 use serde_json::{json, Value};
 
 /// How long one round-trip may take before the worker is treated as wedged.
-pub const DEFAULT_TIMEOUT: Duration = Duration::from_secs(5);
+/// A routine replay from a snapshot re-runs every seat's earlier hooks, so a
+/// late prompt in a ten-seat event card can take several seconds while the
+/// state is large; 5 s killed those attempts before [`crate::room::MatchHandle`]
+/// could store the result. Kept below [`crate::store::LOCK_TTL_MS`].
+pub const DEFAULT_TIMEOUT: Duration = Duration::from_secs(20);
 
 /// One worker process plus the reader thread that owns its stdout.
 struct Worker {
@@ -472,5 +476,20 @@ impl Pool {
             .ok_or_else(|| "worker returned no final_hash".to_string())?;
         let diverged = v.get("diverged").and_then(Value::as_bool).unwrap_or(false);
         Ok((hash, diverged))
+    }
+}
+
+#[cfg(test)]
+mod timeout_tests {
+    use super::DEFAULT_TIMEOUT;
+
+    /// One operation holds the match lock for the whole round-trip. If the
+    /// worker deadline outlives the lock TTL, a second op enters while the
+    /// first still runs and whichever stores last wins -- the 2026-11-22
+    /// freeze. The waiter deadline also has to stay below the TTL.
+    #[test]
+    fn worker_timeout_fits_inside_the_lock_ttl() {
+        assert!(crate::store::LOCK_TTL_MS > (DEFAULT_TIMEOUT.as_millis() as u64));
+        assert!((crate::store::LOCK_DEADLINE.as_millis() as u64) < crate::store::LOCK_TTL_MS);
     }
 }
