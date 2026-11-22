@@ -14,10 +14,9 @@ fn main() {
     let rec_path = args.next().expect("record path");
     let frac: f64 = args.next().and_then(|s| s.parse().ok()).unwrap_or(0.5);
 
-    let ctx = rules_worker::Ctx::load(
-        Path::new("/home/monopoly/bm-live/data"),
-        Path::new("/home/monopoly/bm-live/dist/cards"),
-    );
+    let data_dir = std::env::var("BM_DATA").unwrap_or_else(|_| "data".into());
+    let rules_dir = std::env::var("BM_RULES").unwrap_or_else(|_| "dist/cards".into());
+    let ctx = rules_worker::Ctx::load(Path::new(&data_dir), Path::new(&rules_dir));
     let bytes = std::fs::read(&rec_path).expect("read record");
     let rec = decode_record(&bytes).expect("decode record");
     let stamp = ctx.stamp();

@@ -19,7 +19,7 @@ use game_core::MatchMode;
 use game_rules::WasmRules;
 use serde_json::{json, Value};
 use std::path::PathBuf;
-use std::sync::Arc;
+use std::sync::{Arc, Mutex};
 
 /// Immutable content loaded once: game tables and card modules. Read-only
 /// across requests -- this is the crate's only cross-request data, and it is
@@ -30,6 +30,18 @@ pub struct Ctx {
     /// `EngineStamp::data_sha256`. Always empty on this build: the tables a
     /// replay depends on ride in `MatchSetup`, not in a host-side hash.
     pub data_sha256: String,
+    /// The last state blob this process was sent, for the hash-only protocol
+    /// ([`Ctx::resolve_state`]). One entry is enough: the pool sends the new
+    /// blob with every mutating reply, so consecutive ops carry the same
+    /// string and a hit stays hot; a miss costs one full frame, never
+    /// correctness.
+    state: Mutex<Option<CachedState>>,
+}
+
+struct CachedState {
+    hash: u64,
+    len: usize,
+    state: String,
 }
 
 impl Ctx {
@@ -39,6 +51,7 @@ impl Ctx {
             data,
             rules,
             data_sha256: String::new(),
+            state: Mutex::new(None),
         }
     }
 
@@ -94,6 +107,50 @@ impl Ctx {
             data,
             rules,
             data_sha256: String::new(),
+            state: Mutex::new(None),
+        }
+    }
+
+    /// Resolve the state a request names. A body carries `state` inline (and
+    /// optionally its `stateHash` / `stateLen` for the check) or, when the
+    /// sender knows this process already holds that exact string, only the
+    /// hash pair. A mismatched or unknown pair errors so the sender can retry
+    /// with the body -- it never guesses.
+    fn resolve_state(&self, req: &mut Value) -> Result<(), String> {
+        let Some(obj) = req.as_object_mut() else {
+            return Ok(());
+        };
+        let hash = obj.get("stateHash").and_then(Value::as_u64);
+        let len = obj
+            .get("stateLen")
+            .and_then(Value::as_u64)
+            .and_then(|n| usize::try_from(n).ok());
+        if let Some(s) = obj.get("state").and_then(Value::as_str) {
+            let state = s.to_string();
+            let (h, l) = (game_core::record::fnv1a64(state.as_bytes()), state.len());
+            if let (Some(want), Some(want_len)) = (hash, len) {
+                if want != h || want_len != l {
+                    return Err("state hash mismatch".into());
+                }
+            }
+            *self.state.lock().unwrap() = Some(CachedState {
+                hash: h,
+                len: l,
+                state,
+            });
+            return Ok(());
+        }
+        let (Some(want), Some(want_len)) = (hash, len) else {
+            return Ok(()); // the op names no state (`new`, `replay`, `info`)
+        };
+        let guard = self.state.lock().unwrap();
+        match guard.as_ref() {
+            Some(c) if c.hash == want && c.len == want_len => {
+                obj.insert("state".into(), Value::String(c.state.clone()));
+                Ok(())
+            }
+            Some(_) => Err("state cache miss".into()),
+            None => Err("state cache empty".into()),
         }
     }
 
@@ -205,6 +262,14 @@ pub fn handle(ctx: &Ctx, req: Value) -> Value {
     // another room's -- inherits them.
     game_rules::reset_resolving();
     let id = req.get("id").cloned().unwrap_or(Value::Null);
+    let mut req = req;
+    if let Err(e) = ctx.resolve_state(&mut req) {
+        let mut v = json!({"ok": false, "error": e});
+        if !id.is_null() {
+            v["id"] = id;
+        }
+        return v;
+    }
     let reply = match run(ctx, &req) {
         Ok(v) => v,
         Err(e) => json!({"ok": false, "error": e}),
