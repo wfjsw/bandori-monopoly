@@ -610,9 +610,10 @@ pub struct Drive {
 /// How soon to look again after a seat turned out to have nothing to do.
 /// Every probe ships the whole match frame, and a ten-seat table with a large
 /// pending snapshot made 9 idle seats x 5 probes/s starve the 20 Hz tick loop
-/// (room 56XQFP, ~0.4 Hz). An idle seat has no decision until its turn, so a
-/// second's delay costs nothing; a seat that just acted still re-probes on the
-/// 50 ms [`BUSY_PROBE`] schedule.
+/// (room 56XQFP, ~0.4 Hz). With the narrowed drive list only the actor is
+/// polled while idle, so the coarse cadence costs at most 400 ms before a new
+/// turn is noticed; a seat that just acted still re-probes on the
+/// [`BUSY_PROBE`] schedule.
 pub const IDLE_PROBE: Duration = Duration::from_millis(400);
 /// How soon to look again right after applying an answer (the seat may have
 /// another decision immediately -- play a card, then roll).

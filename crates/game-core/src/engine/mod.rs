@@ -1086,7 +1086,9 @@ impl Match {
         // have a decision right now: the open prompt's unanswered seats, or
         // (outside a prompt) the actor. Returning every machine seat made the
         // server probe nine idle bots several times a second and starve the
-        // tick loop on a ten-seat table (room 56XQFP, ~0.4 Hz).
+        // tick loop on a ten-seat table (room 56XQFP, ~0.4 Hz). The cost: an
+        // advanced bot away from its turn is no longer polled for `ponder`
+        // speculation; it still gets its own decisions.
         if st.prompt.id > 0 {
             return st
                 .prompt

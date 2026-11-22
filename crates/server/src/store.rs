@@ -335,8 +335,9 @@ pub struct RecordMeta {
 }
 
 /// Default TTL for a cross-process lock: long enough for one match / room
-/// operation (a worker round-trip plus a store write), short enough that a
-/// dead holder's lock frees itself quickly. Single operations do not renew, so
+/// operation (a worker round-trip plus a store write); a dead holder releases
+/// it only at expiry, so this is also the worst restart wait. Single
+/// operations do not renew, so
 /// this must stay above the worker round-trip deadline
 /// ([`crate::pool::DEFAULT_TIMEOUT`]) -- a replay of a ten-seat event card
 /// routinely runs past the old 10 s / 5 s pair and every retry was killed
