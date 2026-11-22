@@ -105,3 +105,25 @@ fn bot_views_carry_the_extras() {
     let playable = view["playable"].as_array().expect("playable");
     assert_eq!(hand.len(), playable.len());
 }
+
+#[test]
+fn bot_views_skip_the_tile_quotes() {
+    let ctx = ctx();
+    let state = new_match(&ctx);
+    // The deed-popup quotes walk every tile through the ruleset; the bot
+    // service ignores them, so a bot frame must not pay for them.
+    let v = handle(
+        &ctx,
+        json!({"op": "view", "state": state, "member": 1, "needExtras": true}),
+    );
+    assert_eq!(v["ok"], json!(true), "view: {v}");
+    assert_eq!(v["view"]["tileQuotes"], Value::Null, "bot frame paid for quotes");
+
+    let human = handle(&ctx, json!({"op": "view", "state": state, "member": 1}));
+    assert_eq!(human["ok"], json!(true), "view: {human}");
+    assert!(
+        human["view"]["tileQuotes"].as_array().is_some(),
+        "human frame lost its quotes: {}",
+        human["view"]
+    );
+}

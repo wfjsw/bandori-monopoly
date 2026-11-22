@@ -408,6 +408,15 @@ fn run(ctx: &Ctx, req: &Value) -> Result<Value, String> {
             // fork's max-plays cap and skill de-dup read it; only the live
             // world has it otherwise). Always present, extras or not.
             let (played, cards_played) = m.played_context();
+            // Tile quotes are the deed-popup UI surface: `tile_quotes` walks
+            // every tile through the ruleset (~120 ms on a ten-seat frame) and
+            // the bot service never reads them. A human view (a client frame)
+            // still carries them.
+            let quotes = if need_extras {
+                Value::Null
+            } else {
+                json!(m.tile_quotes(member))
+            };
             let mut view = json!({
                 "state": state,
                 "hand": m.hand_of(member),
@@ -417,7 +426,7 @@ fn run(ctx: &Ctx, req: &Value) -> Result<Value, String> {
                 "playerId": player_id,
                 "played": played,
                 "cardsPlayed": cards_played,
-                "tileQuotes": m.tile_quotes(member),
+                "tileQuotes": quotes,
                 // The viewer's own open look (design G11); nobody else's.
                 "inspection": m.inspection_of(member),
             });
