@@ -20,7 +20,12 @@ pub const START_MONEY: i32 = 10_000;
 /// Opening hand size.
 pub const START_HAND: usize = 2;
 /// Events kept for `events_since`.
-pub const EVENT_KEEP: usize = 400;
+/// Messages kept in the live tail (`docs/REPLAY.md` §6: the client may seed
+/// from history, `0` means "as far back as it still has"). The tail rides
+/// every worker round-trip and every pending snapshot, so 400 lines made a
+/// ten-seat match ship ~130 KB of history per tick; 200 is still far more than
+/// the visible log and halves that. The `.bdrec` keeps the full record.
+pub const EVENT_KEEP: usize = 200;
 /// Events carried in every `MatchState` snapshot.
 pub const STATE_EVENTS: usize = 80;
 

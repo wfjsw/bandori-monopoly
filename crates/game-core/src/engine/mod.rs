@@ -1082,6 +1082,28 @@ impl Match {
         if st.phase != "play" && st.prompt.id == 0 {
             return Vec::new();
         }
+        // A probe ships the whole match frame, so only name seats that can
+        // have a decision right now: the open prompt's unanswered seats, or
+        // (outside a prompt) the actor. Returning every machine seat made the
+        // server probe nine idle bots several times a second and starve the
+        // tick loop on a ten-seat table (room 56XQFP, ~0.4 Hz).
+        if st.prompt.id > 0 {
+            return st
+                .prompt
+                .players
+                .iter()
+                .enumerate()
+                .filter(|(k, _)| {
+                    st.prompt.answers.get(*k).copied().unwrap_or(-1) < 0
+                })
+                .filter_map(|(_, &s)| {
+                    let i = s as usize;
+                    let p = st.players.get(i)?;
+                    (!p.bankrupt && (p.bot || p.ai || p.out() || self.auto_player(i)))
+                        .then_some(p.member)
+                })
+                .collect();
+        }
         let actor = if st.step == stage::OPS && !st.skip_move && st.roller >= 0 {
             st.roller as usize
         } else {
@@ -1089,12 +1111,13 @@ impl Match {
         };
         let spent =
             st.phase == "play" && self.clock_hold.is_none() && self.pool_total(actor) <= 0.0;
-        st.players
-            .iter()
-            .enumerate()
-            .filter(|(i, p)| !p.bankrupt && (p.bot || p.ai || (*i == actor && spent)))
-            .map(|(_, p)| p.member)
-            .collect()
+        let Some(p) = st.players.get(actor) else {
+            return Vec::new();
+        };
+        if p.bankrupt || p.out() || !(p.bot || p.ai || spent) {
+            return Vec::new();
+        }
+        vec![p.member]
     }
 
     /// Seat `i`'s pool remaining (bonus + base), clamped at 0 for display.

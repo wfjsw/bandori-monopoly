@@ -613,10 +613,10 @@ pub struct Drive {
 /// (room 56XQFP, ~0.4 Hz). An idle seat has no decision until its turn, so a
 /// second's delay costs nothing; a seat that just acted still re-probes on the
 /// 50 ms [`BUSY_PROBE`] schedule.
-pub const IDLE_PROBE: Duration = Duration::from_millis(1000);
+pub const IDLE_PROBE: Duration = Duration::from_millis(400);
 /// How soon to look again right after applying an answer (the seat may have
 /// another decision immediately -- play a card, then roll).
-pub const BUSY_PROBE: Duration = Duration::from_millis(50);
+pub const BUSY_PROBE: Duration = Duration::from_millis(150);
 /// A probe claim lives this long without a release (the service wedged, the
 /// process died). Longer than [`crate::botsvc::MAX_ASK_TIMEOUT`] so a live
 /// probe always finishes inside its claim.
