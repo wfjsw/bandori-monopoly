@@ -357,8 +357,17 @@ impl MatchHandle {
 
     /// Advance the clock by `dt` (`k` quanta of `header.step`). Returns whether
     /// the match changed; `k` is what the record's `Ticks` run-length counts.
-    pub fn tick(&self, dt: f32, k: u8) -> Result<bool, String> {
-        self.run(|_| Input::Ticks { k, n: 1 }, |s, e| e.tick(s, dt))
+    /// `(changed, drive)` -- the drive list is the same reply's, so a beat
+    /// needs one worker round-trip instead of `tick` plus `drive`.
+    pub fn tick(&self, dt: f32, k: u8) -> Result<(bool, Vec<i32>), String> {
+        self.run(|_| Input::Ticks { k, n: 1 }, |s, e| {
+            e.tick(s, dt).map(|(out, drive)| Out {
+                state: out.state,
+                value: (out.value, drive),
+                checkpoint: out.checkpoint,
+                ended: out.ended,
+            })
+        })
     }
 
     /// Members a driver must move now (`MatchState::drive`), without building

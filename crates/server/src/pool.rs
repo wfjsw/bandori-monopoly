@@ -398,16 +398,26 @@ impl Pool {
     }
 
     /// `value` is whether the match changed (`"changed"` in the reply).
-    pub fn tick(&self, state: &str, dt: f32) -> Result<Out<bool>, String> {
+    /// `value` is whether the match changed; the second half is the drive
+    /// list for this state, so the tick loop does not need a second call.
+    pub fn tick(&self, state: &str, dt: f32) -> Result<(Out<bool>, Vec<i32>), String> {
         let v = self.call(json!({"op": "tick", "state": state, "dt": dt}))?;
         let (state, checkpoint, ended) = split(&v)?;
         let changed = v.get("changed").and_then(Value::as_bool).unwrap_or(false);
-        Ok(Out {
-            state,
-            value: changed,
-            checkpoint,
-            ended,
-        })
+        let drive = v
+            .get("drive")
+            .and_then(Value::as_array)
+            .map(|a| a.iter().filter_map(Value::as_i64).map(|n| n as i32).collect())
+            .unwrap_or_default();
+        Ok((
+            Out {
+                state,
+                value: changed,
+                checkpoint,
+                ended,
+            },
+            drive,
+        ))
     }
 
     pub fn quick_start(&self, state: &str) -> Result<Out<()>, String> {

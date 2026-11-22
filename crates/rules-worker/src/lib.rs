@@ -366,6 +366,9 @@ fn run(ctx: &Ctx, req: &Value) -> Result<Value, String> {
         "act" | "tick" | "quick_start" | "finish" | "anim_done" | "order_ready" => {
             let mut m = restore(ctx, req)?;
             let before = turn_key(&m);
+            // The drive list is what the tick loop claims for the bot service;
+            // it rides the tick reply so a beat costs one round-trip, not two.
+            let mut drive: Option<Vec<i32>> = None;
             let out = match op {
                 "act" => {
                     let member = req.get("member").and_then(Value::as_i64).unwrap_or(0) as i32;
@@ -379,6 +382,7 @@ fn run(ctx: &Ctx, req: &Value) -> Result<Value, String> {
                 "tick" => {
                     let dt = req.get("dt").and_then(Value::as_f64).unwrap_or(0.05) as f32;
                     m.tick(dt);
+                    drive = Some(m.drive());
                     Value::Null
                 }
                 "quick_start" => {
@@ -415,6 +419,9 @@ fn run(ctx: &Ctx, req: &Value) -> Result<Value, String> {
                 }
             };
             let mut v = json!({"ok": true, "state": m.save(), "changed": true, "ended": m.ended()});
+            if let Some(d) = drive {
+                v["drive"] = json!(d);
+            }
             if !out.is_null() {
                 v["error"] = out;
             }
