@@ -158,6 +158,22 @@ export class Animator {
    *  The board lights them so the destination and path read before and
    *  while the token steps. */
   route: number[] | null = null;
+  /**
+   * **The one "presentation is still running" predicate.** True while the
+   * queue has items, an animation is playing, or a walk is still being
+   * published (route lit, still in 移動, no prompt open -- the engine cuts a
+   * walk into several publishes and the queue drains between segments).
+   *
+   * It is the single source for both the clock display hold and the
+   * `anim_done` ack gate, so the two can never disagree about whether the
+   * player may act yet. Read it on every render; changes are `bump()`ed.
+   */
+  get presenting(): boolean {
+    if (this.animating || this.queue.length) return true;
+    const st = this.shownView()?.state;
+    // 3 = `stage::MOVE`; a prompt opened mid-walk is already the player's.
+    return !!st && !!this.route?.length && st.step === 3 && !st.prompt.id;
+  }
   lastDiscard = "";
   log: LogLine[] = [];
   /** Activation event id -> indent depth, for nesting a child activation

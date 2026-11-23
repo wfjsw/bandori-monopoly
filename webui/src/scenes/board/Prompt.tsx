@@ -24,6 +24,7 @@ import { SkillBody } from "../../ui/SkillBody";
 import { TextInput } from "../../ui/Form";
 import { openModal, useRaiseSheetOn } from "../../ui/Modal";
 import { act } from "./model";
+import { usePresenting } from "../../game/presentation";
 import s from "./Prompt.module.css";
 import { t as tr } from "../../i18n/t";
 import { fmtMsg, fmtMsgParts, type Msg } from "../../i18n/msg";
@@ -69,17 +70,21 @@ const PromptTimer = memo(function PromptTimer({ sess }: { sess: GameSession }) {
   // The deadline is measured against the time the prompt was first shown.
   const total = useRef(0);
   const p = view?.state.prompt;
+  // Above the early return: a hook below it would run only once a prompt
+  // exists and change the hook count on a null view / prompt.
+  // The server holds the window while the seat's animation queue catches up
+  // (`clockPaused`), and the board publishes its own presentation hold for the
+  // frames where the shown state still lags the paused commit. Either way the
+  // published remaining time is frozen: do not run the local interpolation.
+  const presenting = usePresenting();
   // Online only. Every prompt that reaches a human here has a real answer
   // deadline, the opening-hand re-roll included: it is a barrier (nothing
   // advances until every seat answers), and this window is what decides for a
   // seat that never does.
   if (sess.kind !== "online" || !view || !p) return null;
-  // The server holds the window while the seat's animation queue catches up
-  // (`clockPaused`): the published remaining time is frozen, so do not run
-  // the local interpolation through it.
   const left = Math.max(
     0,
-    Math.ceil(view.state.clockPaused ? p.timeLeft : p.timeLeft - (performance.now() - at) / 1000),
+    Math.ceil(view.state.clockPaused || presenting ? p.timeLeft : p.timeLeft - (performance.now() - at) / 1000),
   );
   if (!total.current) total.current = Math.max(1, left);
   return (

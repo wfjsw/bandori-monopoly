@@ -258,13 +258,21 @@ enum Routine {
     Ai(Box<Ask>),
 }
 
-/// The clock is held until **every** human seat with presentation pending
-/// acks `anim_done` for `seq` (or [`ANIM_HOLD_CAP`] seconds of ticks elapse).
-/// That is the acting seat on a turn surface, or every human seat the table
-/// is still waiting on for a prompt / end-match vote -- their clients are all
-/// animating the same commit. Only human seats are held; bots and Solo never
-/// hold. Recorded as [`crate::record::Input::AnimDone`] so replays reproduce
-/// the same pauses.
+/// **The one switch that stops the match clock.** `None` means the clock runs;
+/// `Some` names the presentation the table is still waiting on.
+///
+/// It is closed by [`Match::arm_clock`] after a commit, held until every
+/// human seat it names acks `anim_done` for `seq` (or [`ANIM_HOLD_CAP`] seconds
+/// of ticks elapse), and opened again by the last ack / the cap. That is the
+/// acting seat on a turn surface, or every human seat the table is still
+/// waiting on for a prompt / end-match vote -- their clients are all animating
+/// the same commit. Only human seats are ever named; bots and Solo never hold.
+///
+/// Every clock consumer goes through [`Match::clock_running`] /
+/// [`Match::clock_running_for`] / [`Match::clock_paused_any`] -- no caller
+/// tests the `Option` directly, so drain, deadline publication and the cap all
+/// agree on one predicate. Recorded as [`crate::record::Input::AnimDone`] so
+/// replays reproduce the same pauses.
 #[derive(Debug, Clone, Serialize, Deserialize)]
 struct ClockHold {
     /// Room member ids that must ack (the acting / prompted humans).
@@ -273,6 +281,14 @@ struct ClockHold {
     seq: i32,
     /// Seconds held so far (tick-fed; [`ANIM_HOLD_CAP`] releases).
     elapsed: f32,
+}
+
+impl ClockHold {
+    /// One tick of hold budget. Returns `true` when the cap released it.
+    fn advance(&mut self, dt: f32) -> bool {
+        self.elapsed += dt;
+        self.elapsed >= ANIM_HOLD_CAP
+    }
 }
 
 /// The prompt players are currently answering.
@@ -1005,8 +1021,8 @@ impl Match {
             st.prompt = Default::default();
         }
         // Not gated on a turn: the opening mulligan is a pre-turn prompt that
-        // still holds the table (`arm_clock_hold`).
-        st.clock_paused = self.clock_hold.is_some();
+        // still holds the table (`arm_clock`).
+        st.clock_paused = !self.clock_running();
         if st.phase == "play" && st.turn >= 0 {
             // Buy / build are settle-time offers only (`tile:property` /
             // `tile:ring` → `ctx::offer_buy` / `ctx::offer_build`). There is
@@ -1112,7 +1128,7 @@ impl Match {
             st.turn.max(0) as usize
         };
         let spent =
-            st.phase == "play" && self.clock_hold.is_none() && self.pool_total(actor) <= 0.0;
+            st.phase == "play" && self.clock_running() && self.pool_total(actor) <= 0.0;
         let Some(p) = st.players.get(actor) else {
             return Vec::new();
         };
@@ -1154,13 +1170,23 @@ impl Match {
         }
     }
 
-    /// True while the anim-ack hold is waiting on this seat's client -- their
-    /// clock (and prompt pool) must not consume presentation time.
-    fn clock_hold_covers(&self, seat: usize) -> bool {
+    /// The whole-match clock predicate: `false` only while a presentation is
+    /// owed on some human seat (the gate is closed). Machine seats and Solo
+    /// never close it, so this doubles as the `clockPaused` publication and the
+    /// fixed-window drain guard.
+    fn clock_running(&self) -> bool {
+        self.clock_hold.is_none()
+    }
+
+    /// The per-seat predicate: `false` while this seat still owes an anim ack.
+    /// Drain decisions use this, so a seat that is not being presented to keeps
+    /// its clock (a multi-human prompt only freezes the seats still animating).
+    fn clock_running_for(&self, seat: usize) -> bool {
         let Some(hold) = &self.clock_hold else {
-            return false;
+            return true;
         };
-        self.world
+        !self
+            .world
             .st
             .players
             .get(seat)
@@ -1170,8 +1196,8 @@ impl Match {
     /// True while any of `seats` has presentation pending. A live window
     /// (prompt soft window, end-match vote) is shared table-wide, so one held
     /// seat freezes it for everyone until every held seat has caught up.
-    fn clock_hold_covers_any(&self, seats: &[usize]) -> bool {
-        self.clock_hold.is_some() && seats.iter().any(|&s| self.clock_hold_covers(s))
+    fn clock_paused_any(&self, seats: &[usize]) -> bool {
+        seats.iter().any(|&s| !self.clock_running_for(s))
     }
 
     /// AUCTION_EXTEND is a **grant**, not a borrow: a bid tops every
@@ -1741,7 +1767,7 @@ impl Match {
             .for_each(|held| *held = false);
         self.changed = true;
         self.seq += 1;
-        self.arm_clock_hold();
+        self.arm_clock();
         r
     }
 
@@ -1832,7 +1858,7 @@ impl Match {
                 self.world = w;
                 self.pending = None;
                 self.wait = delay.min(MAX_WAIT);
-                self.arm_clock_hold();
+                self.arm_clock();
                 for s in signals {
                     match s {
                         Signal::StartTimer(i, refill, base_refill) => {
@@ -1896,7 +1922,7 @@ impl Match {
                     live: Live::new(*ask),
                     outermost,
                 });
-                self.arm_clock_hold();
+                self.arm_clock();
             }
             // STACK-01 fallback only: the pump above swallows suspensions, so
             // this arm is a guard against one escaping it. The work stack does
@@ -1911,7 +1937,7 @@ impl Match {
                 w.look_hold.iter_mut().for_each(|held| *held = false);
                 self.world = w;
                 self.pending = None;
-                self.arm_clock_hold();
+                self.arm_clock();
                 if !self.flushing_deferred {
                     self.flush_deferred();
                 }
@@ -2048,13 +2074,15 @@ impl Match {
         true
     }
 
-    /// True while the acting seat's clock is held for an anim ack
-    /// (published as [`MatchState::clock_paused`]).
+    /// True while the clock is held for an anim ack (published as
+    /// [`MatchState::clock_paused`]).
     pub fn clock_paused(&self) -> bool {
-        self.clock_hold.is_some()
+        !self.clock_running()
     }
 
-    /// Arm (or clear) the anim hold after a game commit.
+    /// Close (or open) the clock gate after a game commit. The **only** place
+    /// that closes it; [`Self::anim_done`] and the tick cap are the only
+    /// openers.
     ///
     /// Every **human** seat whose presentation is now pending is waited on:
     /// the pending human seats of an open prompt or end-match vote (their
@@ -2066,7 +2094,7 @@ impl Match {
     /// A prompt can be raised before the first turn (`turn` is -1), so this
     /// cannot key on the turn seat alone; it arms once the new world (and
     /// pending prompt / vote) is in place.
-    fn arm_clock_hold(&mut self) {
+    fn arm_clock(&mut self) {
         if self.mode == MatchMode::Solo {
             self.clock_hold = None;
             return;
@@ -2201,13 +2229,12 @@ impl Match {
                 // Anim hold covers the whole play surface (prompts and wait
                 // beats included) so the acting seat never loses clock time
                 // to presentation. Tick-fed; 10s cap releases a stalled tab.
-                if let Some(hold) = &mut self.clock_hold {
-                    hold.elapsed += dt;
-                    if hold.elapsed >= ANIM_HOLD_CAP {
-                        self.clock_hold = None;
-                        self.changed = true;
-                        self.seq += 1;
-                    }
+                if self.clock_hold.as_mut().is_some_and(|h| h.advance(dt)) {
+                    // Cap reached (stalled / hidden tab): open the gate and
+                    // bump so the published `clockPaused` flips.
+                    self.clock_hold = None;
+                    self.changed = true;
+                    self.seq += 1;
                 }
                 self.tick_vote(dt);
                 if self.world.st.phase == "play" {
@@ -2384,7 +2411,7 @@ impl Match {
             if !self.timed_out {
                 // Still held (anim ack pending, cap not yet reached): do not
                 // consume base/bonus.
-                if self.clock_hold.is_some() {
+                if !self.clock_running() {
                     return;
                 }
                 // Drain order is **bonus first, then base** (`docs/SERVER.md`
@@ -2472,7 +2499,7 @@ impl Match {
         let auto: Vec<bool> = players.iter().map(|&s| self.auto_player(s)).collect();
         // Anim-ack hold per pending seat. A held seat loses no time to the
         // presentation it is waiting for.
-        let held: Vec<bool> = players.iter().map(|&s| self.clock_hold_covers(s)).collect();
+        let held: Vec<bool> = players.iter().map(|&s| !self.clock_running_for(s)).collect();
         // Prompt pool drain (post-settings ordinary prompts only). Each
         // pending seat spends its own pool; the anim-ack hold pauses
         // consumption for the held seat so presentation never costs clock.
@@ -2982,7 +3009,7 @@ impl Match {
         self.changed = true;
         self.seq += 1;
         self.check_vote();
-        self.arm_clock_hold();
+        self.arm_clock();
         Ok(())
     }
 
@@ -3021,14 +3048,14 @@ impl Match {
         // The window is presentation too: a held voter still animating the
         // vote commit does not lose the answer window to it.
         let voters: Vec<usize> = self.vote.players.iter().map(|&s| s as usize).collect();
-        if self.mode != MatchMode::Solo && !self.clock_hold_covers_any(&voters) {
+        if self.mode != MatchMode::Solo && !self.clock_paused_any(&voters) {
             self.vote.time_left -= dt;
         }
         if self.fill_auto_votes() {
             self.changed = true;
             self.seq += 1;
             // The machine-held seats no longer need waiting on.
-            self.arm_clock_hold();
+            self.arm_clock();
         }
         if self.mode != MatchMode::Solo && self.vote.time_left <= 0.0 {
             self.end_vote(false, Msg::new("vote.timeout"));
@@ -3063,7 +3090,7 @@ impl Match {
                 Msg::new("log.vote_failed").msg("reason", reason),
             );
         }
-        self.arm_clock_hold();
+        self.arm_clock();
     }
 
     // ---------------------------------------------------------------- lifecycle

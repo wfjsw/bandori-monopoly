@@ -21,7 +21,7 @@ import { stickCard } from "../../ui/CardPreview";
 import type { LogLine } from "./anim";
 import { copiedLogText } from "./logCopy";
 import type { Model } from "./model";
-import type { MatchPlayer } from "../../core/types";
+import type { MatchPlayer, MatchState } from "../../core/types";
 import s from "./Players.module.css";
 import { borrowedBand, byTitle, cardKeys, showGraveyard, showPlayerInfo, showReveal } from "./Popups";
 import { t as tr } from "../../i18n/t";
@@ -49,9 +49,12 @@ export function statusChips(x: MatchPlayer): string[] {
  *  monotonic clock; remaining is `deadline - (performance.now() + offset)` --
  *  never counted from the view's arrival -- so animation lag cannot eat the
  *  display. While the clock is held (`clockPaused` / no deadline) it sits at
- *  full. `bonusDeadlineMs` is when the bonus pool empties (the sooner of the
- *  two); `baseDeadlineMs` is when the whole clock is gone. */
-function timerOf(m: Model, solo: boolean, elapsed: number): { value: string; caption: string; frac: number; cls: string } | null {
+ *  full. The board also passes `held` while it is still presenting a commit
+ *  (`anim.animating`, or a walk still running between engine segments): the
+ *  shown state lags the paused commit, so its `clock` deadlines are stale and
+ *  must not count down. `bonusDeadlineMs` is when the bonus pool empties (the
+ *  sooner of the two); `baseDeadlineMs` is when the whole clock is gone. */
+function timerOf(m: Model, solo: boolean, elapsed: number, held: boolean, frozen: MatchState | null): { value: string; caption: string; frac: number; cls: string } | null {
   const S = m.S;
   const cur = S.players[S.turn];
   if (solo || S.phase !== "play" || S.turn < 0 || !cur || cur.ai) return null;
@@ -61,7 +64,7 @@ function timerOf(m: Model, solo: boolean, elapsed: number): { value: string; cap
     ({ value: String(Math.max(0, Math.ceil(secs - 1e-9))), caption, frac: Math.min(1, Math.max(0, secs) / fracOf), cls });
 
   const clock = m.v.clock;
-  if (clock) {
+  if (clock && !held) {
     clockSync.step();
     const now = performance.now();
     // Expiry epsilon: the display never races ahead of the server (which is
@@ -79,12 +82,16 @@ function timerOf(m: Model, solo: boolean, elapsed: number): { value: string; cap
     return show(0, tr("board.waitingServer"), s.low, fullBonus);
   }
 
-  // Held (paused) or a path with no deadline (replay / older server): show
-  // the snapshot's remaining, frozen while busy/asking. When held at full,
-  // `clockPaused` pins the display to the un-consumed bonus/base (bonus first).
-  if (S.clockPaused) {
-    if (S.bonusTime > 0) return show(S.bonusTime, tr("board.bonusTime"), s.low, fullBonus);
-    return show(S.baseTime || fullBase, tr("board.baseTime"), s.base, fullBase);
+  // Held (paused / still presenting) or a path with no deadline (replay /
+  // older server): show the remaining, frozen while busy/asking. The held
+  // branch reads the **newest** state (`frozen`) -- the shown state lags the
+  // paused commit, so its pools can predate a refill / drain. With no newer
+  // frame the pools are the values at the commit either way, and no drain
+  // happens until the gate opens, so this never walks the clock backwards.
+  if (held || S.clockPaused) {
+    const F = (held && frozen) || S;
+    if (F.bonusTime > 0) return show(F.bonusTime, tr("board.bonusTime"), s.low, fullBonus);
+    return show(F.baseTime || fullBase, tr("board.baseTime"), s.base, fullBase);
   }
   const e = !S.busy && !m.asking ? elapsed : 0;
   const bonus = Math.max(0, S.bonusTime - e);
@@ -141,7 +148,7 @@ function markersOf(x: MatchPlayer | undefined): { label: string; n?: number | "â
  * deadline (`baseDeadlineMs`, which keeps running through the bonus phase), so
  * the displayed second flips on the boundary rather than on the tick grid.
  */
-export const Players = memo(function Players({ m, solo, at }: { m: Model; solo: boolean; at: number }) {
+export const Players = memo(function Players({ m, solo, at, held, frozen }: { m: Model; solo: boolean; at: number; held: boolean; frozen: MatchState | null }) {
   useTick(500);
   useSecondBoundary(m.v.clock ? m.v.clock.baseDeadlineMs : null);
   const elapsed = (performance.now() - at) / 1000;
@@ -156,7 +163,7 @@ export const Players = memo(function Players({ m, solo, at }: { m: Model; solo: 
   const maxH = compact ? COMPACT_SEAT_H : 70;
   const minH = compact ? COMPACT_SEAT_H : 58;
   const height = Math.max(minH, Math.min(maxH, Math.floor((avail - gap * (n - 1)) / n)));
-  const t = timerOf(m, solo, elapsed);
+  const t = timerOf(m, solo, elapsed, held, frozen);
   const order = turnOrder(S);
   // Graveyard hover peek (like the draw pile's in Side): which seat, and its
   // panel's row so the peek lines up beside it.

@@ -13,6 +13,7 @@ import { cx } from "../../core/cx";
 import { useAutoplay, useTick, useWakeLock } from "../../core/hooks";
 import { endSession, type GameSession } from "../../game/session";
 import { autoBids } from "../../game/autoBid";
+import { setPresenting } from "../../game/presentation";
 import { isAuto } from "../../game/autopilot";
 import { isModalOpen } from "../../ui/Modal";
 import { sfx } from "../../core/audio";
@@ -60,15 +61,28 @@ function useMatchDriver(opts: {
   // server the acting seat has caught up so its clock can start (or resume).
   // Replay / solo have no server clock hold. Debounced by the animating flag
   // itself -- we only fire on the false edge plus a fresh seq.
+  //
+  // `anim.presenting` is the single "still presenting" predicate: it covers
+  // the running queue *and* a walk still being published between engine
+  // segments. Acking mid-walk would release the hold in the gap and the
+  // server would spend clock while the token is still moving (the 10s engine
+  // cap still bounds a stalled tab).
+  const presenting = anim.presenting;
+  // Publish it for surfaces outside the board (the prompt sheet's timer);
+  // cleared on unmount so a stale flag never freezes the next match.
+  useEffect(() => {
+    setPresenting(presenting);
+  }, [presenting]);
+  useEffect(() => () => setPresenting(false), []);
   const ackedSeq = useRef(-1);
   useEffect(() => {
-    if (anim.animating) return;
+    if (presenting) return;
     if (sess.kind !== "online") return;
     const seq = m?.S.seq;
     if (seq == null || ackedSeq.current === seq) return;
     ackedSeq.current = seq;
     void sess.animDone(seq);
-  }, [anim.animating, m?.S.seq, sess]);
+  }, [presenting, m?.S.seq, sess]);
   useEffect(() => {
     if (!m) return;
     const S = m.S;
@@ -270,7 +284,7 @@ export const Board = memo(function Board({ sess }: { sess: GameSession }) {
       <AutoBanner sess={sess} />
       <div className={s.body}>
         <div className={s.left}>
-          <Players m={shown ?? m} solo={sess.kind !== "online"} at={at} />
+          <Players m={shown ?? m} solo={sess.kind !== "online"} at={at} held={anim.presenting} frozen={sess.view?.state ?? null} />
           <Side sess={sess} />
         </div>
         <div className={s.middle}>

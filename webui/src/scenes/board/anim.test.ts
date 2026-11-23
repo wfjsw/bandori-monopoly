@@ -729,3 +729,30 @@ test("Animator: a body line re-arms one hit, never during the fade", async () =>
   for (let i = 0; i < 300 && anim.flash; i++) await sleep(10);
   assert.equal(anim.flash, null);
 });
+
+// -- presenting: the one "still presenting" predicate ------------------------
+
+test("presenting covers a walk still being published, and only then", () => {
+  const view = (step: number, prompt: number) => ({ state: { step, prompt: { id: prompt }, players: [] } }) as never;
+  const anim = new Animator(() => {}, () => view(3, 0), false);
+  anim.shownView = () => view(3, 0);
+
+  assert.equal(anim.presenting, false, "idle: nothing owed");
+
+  anim.animating = true;
+  assert.equal(anim.presenting, true, "a running animation presents");
+  anim.animating = false;
+
+  anim.route = [4, 5];
+  assert.equal(anim.presenting, true, "a lit route mid-move presents");
+
+  anim.shownView = () => view(3, 9);
+  assert.equal(anim.presenting, false, "an opened prompt is already the player's");
+
+  anim.shownView = () => view(4, 0);
+  assert.equal(anim.presenting, false, "settlement is no longer presentation");
+
+  anim.shownView = () => view(3, 0);
+  anim.route = null;
+  assert.equal(anim.presenting, false, "route cleared: caught up");
+});

@@ -369,15 +369,24 @@ that is still animating late events does not lose clock time to the lag:
   refresh periodically / on reconnect / on `visibilitychange` to visible.
   Remaining = `deadline - (performance.now() + offset)`, repainted on each
   whole-second boundary.
-* **Anim hold.** When a human seat's presentation is pending -- their turn /
-  events commit, or a prompt / end-match vote they still owe an answer on --
-  the engine holds every pending human seat's clock and the shared prompt /
-  vote window (`state.clockPaused`, no deadline) until each held seat's client
-  posts `POST /api/rooms/{id}/anim-done {seq}`, sent once per state version
-  when that client's Animator queue has drained. The hold releases when the
-  last held seat acks. A hard cap of 10 s of ticks releases it anyway (hidden
-  tab / disconnected actor). Bots and Solo never hold. The acks are recorded
-  as `Input::AnimDone` so replays reproduce the same pauses
+* **Anim gate (one owner).** The engine has exactly one stop switch for the
+  clock: `ClockHold`, closed only by `Match::arm_clock` after a commit whose
+  presentation a human still owes (their turn / events commit, or a prompt /
+  end-match vote they have not answered). It opens when the last named seat
+  acks -- or after 10 s of ticks (hidden tab / disconnected actor). Bots and
+  Solo never close it. Every clock consumer asks one predicate
+  (`clock_running` / `clock_running_for` / `clock_paused_any`); no drain site
+  inspects the `Option` itself, so drain and publication cannot disagree.
+* **Client contract.** The board's `Animator` owns the matching client-side
+  predicate `presenting` (queue / running animation / a walk still being
+  published between engine segments). It drives both the frozen clock display
+  and the ack gate: the client posts `POST /api/rooms/{id}/anim-done {seq}` once
+  per state version only when `presenting` is false, so a walk split across
+  segments never releases the hold in the gap. `game/presentation.ts` mirrors
+  the flag for the prompt sheet's timer. The shown state lags the paused
+  commit, so its `clock` deadlines are stale while presenting and must not be
+  interpolated -- every timer displays the engine's frozen value instead.
+  Acks are recorded as `Input::AnimDone` so replays reproduce the same pauses
   (`docs/REPLAY.md`).
 
 ### Order roll (`/order-ready`)
