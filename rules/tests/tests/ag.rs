@@ -827,6 +827,41 @@ fn one_of_us_places_on_field() {
     assert!(t.on_field(0, "AG:ONE OF US"), "field {:?}", t.field_ids(0));
 }
 
+// 规则书: 「指定双方各一块地契」 -- the pair is the lasting [指定]: both
+// designated tiles carry the card instance's designate mark (the map label and
+// the field row's hover peek), and the marks die with the card.
+#[test]
+fn one_of_us_designates_both_deeds() {
+    let mut t = Table::vanilla(2);
+    t.set_character_raw(0, "美竹兰");
+    t.set_character_raw(1, "青叶摩卡");
+    t.own(0, &[HILL]);
+    t.own(1, &[FUJIMI]);
+    t.give_play(0, "AG:ONE OF US").unwrap();
+    t.answer(0, 0).unwrap(); // the partner: the only candidate, P1
+    t.answer(0, 0).unwrap(); // P0's deed: 星之鼓动山丘
+    t.answer(0, 0).unwrap(); // P1's deed: 富士见坂
+    skip_all(&mut t);
+    let uid = t
+        .field(0)
+        .iter()
+        .find(|f| f.card == "AG:ONE OF US")
+        .unwrap()
+        .uid;
+    for tile in [HILL, FUJIMI] {
+        let marks = t.marks_on(tile);
+        let n = marks
+            .iter()
+            .filter(|m| m.category == "designate" && m.instance == Some(uid))
+            .count();
+        assert_eq!(n, 1, "tile {tile} designations: {marks:?}");
+        assert!(
+            marks.iter().any(|m| m.card == "AG:ONE OF US"),
+            "tile {tile} designations: {marks:?}"
+        );
+    }
+}
+
 // 规则书: 「当其中一方破产时，将两张被指定地契放置在该卡上并转移到存活方的游戏区，该方视为拥有此地契」
 #[test]
 fn one_of_us_deeds_and_card_follow_the_survivor() {

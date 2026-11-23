@@ -277,7 +277,7 @@ export const Board = memo(function Board({ sess }: { sess: GameSession }) {
           {/* The cards in play, as a top-docked card row over this column's
               upper edge (under the FX layer). The board's roll-zone die takes
               the roll action from the old side-column button. */}
-          <FieldSheet m={m} pulse={anim.pulse} />
+          <FieldSheet m={m} pulse={anim.pulse} sess={sess} />
           {/* The viewer's own open deck look, over the upper edge. */}
           <Inspection m={m} />
           <div className={s.mapSlot}>

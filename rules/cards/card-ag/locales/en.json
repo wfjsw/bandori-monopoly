@@ -45,6 +45,7 @@
   "moca_half_pay": "{{who}}'s payment/loss is halved (0.5x Speed): {{from}} → {{to}}",
   "moca_half_placed": "{{who}} placed \"0.5x Speed\" in play",
   "moca_half_roll": "{{who}}'s move roll is halved (0.5x Speed): {{from}} → {{to}}",
+  "one_of_us_designated": "Shares this tile's income with {{who}}",
   "one_of_us_mine": "[Designate] which of your deeds? (must pick a shop-street tile if you have one)",
   "one_of_us_no_deeds": "You have no deeds yet",
   "one_of_us_no_partner": "No Afterglow character / shop-street owner to share money with",
