@@ -949,6 +949,13 @@ that storage and add the mark as the displayed record. The `MarkRef` is the
 handle back to the mark -- store it when you need to resolve / drop that one
 pick later (as `AG:ONE OF US` does with `one_of_us_mine` / `one_of_us_theirs`).
 
+A deed moved onto a card as an **attachment** keeps its tile in an instance
+prop, because the attached rule card (`tile:property` and siblings) has no face
+of its own: every property would render as the first tile of that kind. Store
+the tile as `tile + 1` (the usual "0 is unset" guard) under a stable key --
+`AG:ONE OF US` uses `one_of_us_tile`; the board's field row reads it back
+(`attachedDeedTile`) to draw and light the real tile.
+
 ## Activation arguments (`declare`, ABI v98) + cross-card applicability
 
 Two entry-level mechanisms, designed together — see **`docs/ACTIVATION.md`**.

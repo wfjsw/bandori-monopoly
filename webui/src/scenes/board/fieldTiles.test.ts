@@ -5,7 +5,7 @@
 import { strict as assert } from "node:assert";
 import { test } from "node:test";
 
-import { designatedTiles, eventTiles, fieldCardTiles } from "./fieldTiles.ts";
+import { attachedDeedTile, designatedTiles, eventTiles, fieldCardTiles } from "./fieldTiles.ts";
 import type { TileMark } from "../../core/types.ts";
 
 function mark(partial: Partial<TileMark>): TileMark {
@@ -55,4 +55,10 @@ test("an event binds by rule id or bare roster id", () => {
   assert.deepEqual(designatedTiles(marks, eventTiles("event:修复公告")), [1, 2]);
   assert.deepEqual(designatedTiles(marks, eventTiles("别的")), [3]);
   assert.deepEqual(designatedTiles(marks, eventTiles("没有的")), []);
+});
+test("a tile attachment answers its recorded deed tile", () => {
+  assert.equal(attachedDeedTile("tile:property", { one_of_us_tile: 12 }), 11);
+  assert.equal(attachedDeedTile("tile:ring", { one_of_us_tile: 1 }), 0);
+  assert.equal(attachedDeedTile("tile:property", {}), -1);
+  assert.equal(attachedDeedTile("AG:ONE OF US", { one_of_us_tile: 12 }), -1);
 });

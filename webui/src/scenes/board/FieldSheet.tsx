@@ -27,15 +27,18 @@ import { useLatestRef } from "../../hooks/latest";
 import { sceneImg } from "../../core/assets";
 import { cx } from "../../core/cx";
 import { D } from "../../core/data";
+import { plain } from "../../core/format";
 import { namesOf } from "../../core/names";
 import { fmtMsg } from "../../i18n/msg";
 import type { Model } from "./model";
 import type { FieldCard } from "../../core/types";
+import type { GameSession } from "../../game/session";
 import { InspectCard, showCard, type CardAction } from "../../ui/Card";
 import { pickCard, type CardPill } from "../../ui/CardPreview";
 import { Avatar } from "../../ui/Character";
 import { setHoverCardTiles, useHoverSeat } from "./hoverSeat";
-import { designatedTiles, eventTiles, fieldCardTiles } from "./fieldTiles";
+import { attachedDeedTile, designatedTiles, eventTiles, fieldCardTiles } from "./fieldTiles";
+import { openDeed } from "./Popups";
 import { eventMarkers, fieldMarkers, markerNote, type Marker } from "./markers";
 import { MarkerChip } from "./MarkerChip";
 import { t as tr } from "../../i18n/t";
@@ -133,7 +136,32 @@ export const FieldFace = memo(function FieldFace({ slotKey, card, title, note, m
   );
 });
 
-export const FieldSheet = memo(function FieldSheet({ m, pulse }: { m: Model; pulse?: { uid: number; id: number; ms: number } | null }) {
+/**
+ * A parked deed attachment: the tile the instance records, not the rule card
+ * it is filed under. `tile:property` (and its siblings) has no face of its
+ * own, so a bare face would title every deed with the first tile of that kind
+ * -- every property read as the same 购物中心. The wrapper's hold lights the
+ * tile; a click opens the deed's own popup.
+ */
+const DeedChip = memo(function DeedChip({ tile, width, on }: { tile: number; width: number; on: boolean }) {
+  const t = D.tiles[tile];
+  if (!t) return null;
+  return (
+    <div
+      className={cx(s.deed, on && s.deedPicked)}
+      style={{ ["--card-w" as string]: `${width}px`, ["--deed" as string]: t.color }}
+      role="button"
+      tabIndex={0}
+      title={plain(t.name)}
+    >
+      <img className={s.deedArt} src={sceneImg(`area_${t.area}`)} alt="" decoding="async" draggable={false} />
+      <span className={s.deedNum}>{t.index}</span>
+      <span className={s.deedName}>{plain(t.shortName || t.name)}</span>
+    </div>
+  );
+});
+
+export const FieldSheet = memo(function FieldSheet({ m, pulse, sess }: { m: Model; pulse?: { uid: number; id: number; ms: number } | null; sess: GameSession }) {
   const S = m.S;
   const names = namesOf(S);
   const dock = useDockRaise();
@@ -286,13 +314,22 @@ export const FieldSheet = memo(function FieldSheet({ m, pulse }: { m: Model; pul
                     const aOwn = mine(aOwner);
                     const aMarkers = fieldMarkers(a);
                     const aNote = markerNote(a.note ? fmtMsg(a.note, names) : "", aMarkers);
-                    const aTiles = designatedTiles(S.marks, fieldCardTiles(a.uid));
+                    // A parked deed (`tile:*`) carries its own tile; the rule
+                    // card it is filed under has no face. The host's own hold
+                    // already lights everything inside its slot -- the chips
+                    // hang inside it -- so a chip never binds its own (a chip
+                    // leave would otherwise clear the host's light).
+                    const aDeed = attachedDeedTile(a.card, a.props);
                     const aKey = `c${a.uid}`;
                     const aName = D.card(a.card)?.name;
                     return (
-                      <div key={aKey} {...{ [PICK_ATTR]: aKey }} className={cx(s.attach, picked === aKey && s.picked, hoverSeat >= 0 && s[aOwner === hoverSeat ? "hot" : "dim"])} {...tileHold(aTiles)} style={{ ["--own" as string]: m.colorOf(aOwner) }}>
+                      <div key={aKey} {...{ [PICK_ATTR]: aKey }} className={cx(s.attach, picked === aKey && s.picked, hoverSeat >= 0 && s[aOwner === hoverSeat ? "hot" : "dim"])} style={{ ["--own" as string]: m.colorOf(aOwner) }}>
                         {a.faceDown && !aOwn ? (
                           <div className={s.attachBack} title={tr("board.faceDown")}><img src={sceneImg("card_back")} alt="" /></div>
+                        ) : aDeed >= 0 ? (
+                          <div onClick={() => openDeed(sess, aDeed)} onKeyDown={(e) => { if (e.key === "Enter" || e.key === " ") { e.preventDefault(); openDeed(sess, aDeed); } }}>
+                            <DeedChip tile={aDeed} width={54} on={picked === aKey} />
+                          </div>
                         ) : (
                           <>
                             {a.faceDown && <span className={cx(fd.tag, s.attachTag)}>{tr("board.faceDownTag")}</span>}

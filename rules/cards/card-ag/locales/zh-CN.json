@@ -45,6 +45,7 @@
   "moca_half_pay": "{{who}} 的支付/消耗减半（0.5倍速）：{{from}} → {{to}}",
   "moca_half_placed": "{{who}} 将「0.5倍速」放置在场上",
   "moca_half_roll": "{{who}} 的移动掷骰 ÷2（0.5倍速）：{{from}} → {{to}}",
+  "one_of_us_designated": "与 {{who}} 平分此格收益",
   "one_of_us_mine": "[指定] 自己的哪块地契？（有商店街格子时必须选商店街）",
   "one_of_us_no_deeds": "你还没有地契",
   "one_of_us_no_partner": "没有能一起分钱的 Afterglow 角色 / 拥有商店街格子的角色",

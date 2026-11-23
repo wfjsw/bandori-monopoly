@@ -188,10 +188,24 @@ fn play(player_id: i32) -> card_sdk::Asked {
     ctx::set_prop(PARTNER, partner + 1);
 
     // 规则书: 「指定双方各一块地契」 -- the pair of deeds is the lasting [指定]
-    // while this card is in play: one parked attachment per deed, on this
-    // instance (「放置在该卡上」), so it dies with the card. Each attachment
-    // records its tile; the `one_of_us_mine` / `one_of_us_theirs` props hold the
-    // attachment uids.
+    // while this card is in play: one designation mark per deed (the map label)
+    // plus one parked attachment per deed, on this instance (「放置在该卡上」),
+    // so both die with the card. Each attachment records its tile; the
+    // `one_of_us_mine` / `one_of_us_theirs` props hold the attachment uids.
+    ctx::designate_tile(
+        a,
+        player_id,
+        &Msg::new(key!("one_of_us_designated"))
+            .player_id("who", partner)
+            .tile("tile", a),
+    );
+    ctx::designate_tile(
+        b,
+        player_id,
+        &Msg::new(key!("one_of_us_designated"))
+            .player_id("who", partner)
+            .tile("tile", b),
+    );
     let a_uid = park_deed(player_id, a);
     let b_uid = park_deed(player_id, b);
     ctx::set_prop(MINE, a_uid + 1);

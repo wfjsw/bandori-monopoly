@@ -263,6 +263,57 @@
   display: block;
 }
 
+/* A parked deed: the tile's own area art at chip width, its number and short
+   name. Reads as a deed, not as the rule card the instance is filed under. */
+.deed {
+  position: relative;
+  width: var(--card-w, 54px);
+  min-height: 81px;
+  border-radius: var(--r-sm);
+  overflow: hidden;
+  background: var(--deed, var(--surface));
+  box-shadow: 0 0 0 2.5px var(--own, var(--line)), var(--card-shadow);
+  cursor: pointer;
+}
+
+.deedPicked {
+  box-shadow: 0 0 0 4px var(--pink), var(--card-shadow);
+}
+
+.deedArt {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  opacity: 0.55;
+  display: block;
+}
+
+.deedNum {
+  position: absolute;
+  top: 2px;
+  left: 2px;
+  padding: 0 3px;
+  border-radius: var(--r-sm);
+  background: var(--deed, var(--surface));
+  color: var(--ink);
+  font-size: 9px;
+  line-height: 13px;
+}
+
+.deedName {
+  position: absolute;
+  inset: auto 0 0 0;
+  padding: 2px 3px;
+  background: linear-gradient(transparent, var(--surface));
+  color: var(--ink);
+  font-size: 9px;
+  line-height: 1.15;
+  text-align: center;
+  overflow-wrap: anywhere;
+}
+
 /* 盖着 tag on a chip: the same corner as the row's, pulled in for the width. */
 .attachTag {
   left: 0;
