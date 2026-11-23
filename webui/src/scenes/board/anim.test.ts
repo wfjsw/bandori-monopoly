@@ -661,7 +661,7 @@ test("Animator: the flash hits once, then restores before fading", async () => {
   assert.equal(anim.flash, null);
 });
 
-test("flash styles: the face is chain-card sized and the hit is one animation", () => {
+test("flash styles: the halo is a composited triangle on a chain-sized face", () => {
   const here = path.dirname(fileURLToPath(import.meta.url));
   const css = readFileSync(path.join(here, "Board.module.css"), "utf8");
   const bare = css.replace(/\/\*[\s\S]*?\*\//g, "");
@@ -673,9 +673,22 @@ test("flash styles: the face is chain-card sized and the hit is one animation", 
   assert.match(board, /\["--card-w" as string\]: `\$\{flashW\}px`/, "the flash face is given that width inline");
   const card = bare.match(/\.flashCard \{[^}]*\}/)?.[0] ?? "";
   assert.doesNotMatch(card, /animation:/, "the glow must not be permanently attached");
-  assert.match(bare, /\.flashHit \{[^}]*var\(--hit-ms/, "the hit runs on the shared blink clock");
-  // The centre halo is the field slot's `pulse-glow`, note for note: same
-  // triangle, no held peak. Only the owner variable is named differently.
+  // The halo runs on its own composited layer: animating `filter` on the card
+  // re-rasterises the art and title every frame and stuttered at 150px.
+  const glowLayer = bare.match(/\.flashCard::after \{[^}]*\}/)?.[0] ?? "";
+  assert.match(glowLayer, /position:\s*absolute/, "the halo leaves the flex flow");
+  assert.match(glowLayer, /inset:\s*0/, "the halo covers the face");
+  assert.match(glowLayer, /border-radius:\s*inherit/, "the halo follows the face's radius");
+  assert.match(glowLayer, /will-change:\s*opacity/, "the halo needs its own layer");
+  assert.match(glowLayer, /opacity:\s*0/, "it starts dark");
+  assert.match(glowLayer, /box-shadow:/, "the halo carries the ring and bloom");
+  const hitRule = bare.match(/\.flashHit::after \{[^}]*\}/)?.[0] ?? "";
+  assert.match(hitRule, /var\(--hit-ms/, "the hit runs on the shared blink clock");
+  assert.match(hitRule, /ease-in-out/, "the hit keeps the field blink's easing");
+  assert.doesNotMatch(hitRule, /filter:/, "no filter animation on the hit");
+  const field = readFileSync(path.join(here, "FieldSheet.module.css"), "utf8");
+  assert.match(field, /@keyframes pulse-glow/, "the field blink the hit is copied from still exists");
+  // Same 0/50/100 triangle as the field slot's `pulse-glow`: no held peak.
   const keyframes = (css: string, name: string): string => {
     const at = css.indexOf(`@keyframes ${name} {`);
     if (at < 0) return "";
@@ -686,13 +699,20 @@ test("flash styles: the face is chain-card sized and the hit is one animation", 
     }
     return "";
   };
-  const norm = (t: string) => t.replace(/flashGlow|pulse-glow/g, "glow").replace(/--owner/g, "--own").replace(/\s+/g, " ").trim();
-  const glow = norm(keyframes(bare, "flashGlow"));
-  const field = norm(keyframes(readFileSync(path.join(here, "FieldSheet.module.css"), "utf8")
-    .replace(/\/\*[\s\S]*?\*\//g, ""), "pulse-glow"));
-  assert.ok(field, "the field's pulse-glow must be found");
-  assert.equal(glow, field, "flashGlow must equal the field's pulse-glow");
+  const glow = keyframes(bare, "flashGlow").replace(/\s+/g, " ");
+  assert.match(glow, /0%, 100% \{ opacity: 0; \}/);
+  assert.match(glow, /50% \{ opacity: 1; \}/);
   assert.doesNotMatch(bare, /4%,\s*94%/, "no held peak");
+});
+
+test("big cards: the title is at least 1.5x the old scale", () => {
+  const css = readFileSync(path.join(path.dirname(fileURLToPath(import.meta.url)), "../../ui/Card.module.css"), "utf8");
+  const bare = css.replace(/\/\*[\s\S]*?\*\//g, "");
+  const title = bare.match(/\.big \.title \{[^}]*\}/)?.[0] ?? "";
+  assert.ok(title, "the big title rule exists");
+  const m = /font-size:\s*calc\(var\(--card-w, 240px\) \* ([\d.]+)\)/.exec(title);
+  assert.ok(m, "the big title must scale with --card-w");
+  assert.ok(+m[1] >= 0.18, `title scale ${m[1]} is under 1.5x the old 0.12`);
 });
 
 test("Animator: a body line re-arms one hit, never during the fade", async () => {

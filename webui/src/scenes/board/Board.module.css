@@ -260,19 +260,27 @@
   box-shadow: 0 0 0 2.5px var(--owner, var(--pink)), var(--card-shadow);
   background: color-mix(in srgb, var(--owner, var(--white)) 12%, var(--white));
 }
-/* The 「效果适用」 beat: the field slot's `pulse-glow` (`FieldSheet.module.css`)
-   note for note -- same 25% delay and 40% length via `--hit-ms`, same
-   `ease-in-out`, same brightness and halo, peaking at the halfway point and
-   returning to the owner ring. No plateau: a held peak read as a stuck state. */
-.flashHit {
-  animation: flashGlow var(--hit-ms, 600ms) ease-in-out 1;
+/* The halo is painted on this overlay, not animated through the card's
+   `filter`: a filter re-rasterises the face (art, title) every frame and read
+   as stutter at 150px. The overlay only changes `opacity`, which the
+   compositor runs on its own layer -- same 25% delay and 40% length as the
+   field slot's `pulse-glow`, same `ease-in-out`, same 0/50/100 triangle, so
+   the light itself is the pulse-glow note for note. */
+.flashCard::after {
+  content: "";
+  position: absolute;
+  inset: 0;
+  border-radius: inherit;
+  pointer-events: none;
+  opacity: 0;
+  background: rgba(255, 255, 255, 0.4);
+  box-shadow: 0 0 0 3px #fff, 0 0 18px 6px var(--owner, #fff), 0 0 34px 10px rgba(255, 255, 255, 0.7);
+  will-change: opacity;
 }
+.flashHit::after { animation: flashGlow var(--hit-ms, 600ms) ease-in-out 1; }
 @keyframes flashGlow {
-  0%, 100% { filter: brightness(1); }
-  50% {
-    filter: brightness(1.45);
-    box-shadow: 0 0 0 3px #fff, 0 0 18px 6px var(--owner, #fff), 0 0 34px 10px rgba(255, 255, 255, 0.7);
-  }
+  0%, 100% { opacity: 0; }
+  50% { opacity: 1; }
 }
 .flashCaption {
   margin-top: -2px;
