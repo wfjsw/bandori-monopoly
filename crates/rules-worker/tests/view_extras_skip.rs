@@ -132,7 +132,7 @@ fn bot_views_skip_the_tile_quotes() {
 fn a_client_frame_can_opt_out_of_quotes() {
     let ctx = ctx();
     let state = new_match(&ctx);
-    // SSE frames opt out; the attach / reconnect frame keeps them.
+    // A frame may still opt out explicitly; a bare human frame keeps them.
     let lean = handle(
         &ctx,
         json!({"op": "view", "state": state, "member": 1, "needQuotes": false}),

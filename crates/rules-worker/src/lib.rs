@@ -466,8 +466,10 @@ fn run(ctx: &Ctx, req: &Value) -> Result<Value, String> {
                 .get("needExtras")
                 .and_then(Value::as_bool)
                 .unwrap_or(false);
-            // Quotes are the deed-tooltip surface. Default: a bot frame (no
-            // extras) keeps them, a client frame can opt out per frame.
+            // Quotes are the deed-caption surface: the board draws every
+            // caption from them, so a client frame keeps them by default. A
+            // caller can opt out per frame (`needQuotes: false`) and a bot
+            // frame skips them (`needExtras` alone would otherwise pay it).
             let need_quotes = req
                 .get("needQuotes")
                 .and_then(Value::as_bool)

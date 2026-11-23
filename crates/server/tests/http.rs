@@ -897,6 +897,79 @@ async fn a_match_over_http_and_sse() {
     assert_eq!(n, last_id.1 + 1, "no duplicates, no gaps");
 }
 
+/// A live `match` frame carries the per-tile quotes, on every state change and
+/// not just the attach snapshot: the board's captions are drawn from them
+/// (seat-relative), so a frame without `tileQuotes` leaves the board on the
+/// static price fallback and never updates as ownership / turn moves.
+#[tokio::test]
+async fn live_frames_carry_the_tile_quotes() {
+    let (base, _) = spawn(Duration::from_secs(20)).await;
+    let a = Client::new(&base, "Kasumi").await;
+    let made = a.ok("/api/rooms", json!({})).await;
+    let id = made["room"]["id"].as_str().unwrap().to_string();
+    a.ok(&format!("/api/rooms/{id}/bots"), json!({ "op": "add" }))
+        .await;
+    a.ok(&format!("/api/rooms/{id}/bots"), json!({ "op": "add" }))
+        .await;
+    let mut sse = a.stream(&id, None).await;
+    a.fair_nonce(&id).await;
+    a.ok(&format!("/api/rooms/{id}/start"), json!({ "force": true }))
+        .await;
+
+    // Any live frame (the board may still be in pick / deck) must carry the
+    // quote row, parallel to the board's slots. An unowned land slot reads a
+    // `buy` quote, so the row is not all nulls.
+    let frames = sse
+        .until(Duration::from_secs(10), |f| {
+            f.event == "match" && f.data["tileQuotes"].as_array().is_some()
+        })
+        .await;
+    let frame = frames
+        .iter()
+        .rev()
+        .find(|f| f.event == "match")
+        .expect("a match frame");
+    let quotes = frame.data["tileQuotes"]
+        .as_array()
+        .unwrap_or_else(|| panic!("match frame without tileQuotes: {}", frame.data));
+    assert_eq!(
+        quotes.len(),
+        data().tiles.len(),
+        "quotes must be parallel to the board"
+    );
+    assert!(
+        quotes.iter().filter(|q| !q.is_null()).any(|q| q["kind"] == "buy"),
+        "an open land slot must quote its buy price: {quotes:?}"
+    );
+
+    // The row keeps riding later frames, not only the first one: a fresh
+    // recompute, so the quote kind still agrees with the ownership it sees.
+    let before = frame.data["state"]["seq"].as_i64().unwrap();
+    let mut later = None;
+    let deadline = Instant::now() + Duration::from_secs(20);
+    while Instant::now() < deadline {
+        let f = sse.next(Duration::from_secs(10)).await.expect("stream ended");
+        if f.event == "match"
+            && f.data["state"]["seq"].as_i64().unwrap_or(before) > before
+        {
+            later = Some(f);
+            break;
+        }
+    }
+    let later = later.expect("no later frame");
+    let owners = later.data["state"]["owners"].as_array().expect("owners");
+    let quotes = later.data["tileQuotes"].as_array().expect("later frame lost the quotes");
+    for (t, q) in quotes.iter().enumerate() {
+        let Some(q) = q.as_object() else { continue };
+        let owned = owners.get(t).and_then(Value::as_i64).unwrap_or(-1) >= 0;
+        assert_eq!(
+            q["kind"] == "buy",
+            !owned,
+            "quote/ownership mismatch at tile {t}: {q:?}"
+        );
+    }
+}
+
 /// The order roll leaves on every seat's ack, not on its 4s cap. The host is
 /// the only human seat; its client's ack alone must end the phase.
 #[tokio::test]
@@ -979,7 +1052,7 @@ async fn silent_players_are_handed_to_the_ai_and_come_back() {
         let room = server.room(&id).unwrap();
         let r = room.lock().unwrap();
         let m = r.game.as_ref().unwrap();
-        let v = m.view(b_member as i32, false).unwrap();
+        let v = m.view(b_member as i32, false, true).unwrap();
         let pid = v["playerId"].as_i64().expect("member seated") as usize;
         assert!(
             v["state"]["players"][pid]["ai"].as_bool().expect("player"),
@@ -1002,7 +1075,7 @@ async fn silent_players_are_handed_to_the_ai_and_come_back() {
     let room = server.room(&id).unwrap();
     let r = room.lock().unwrap();
     let m = r.game.as_ref().unwrap();
-    let v = m.view(b_member as i32, false).unwrap();
+    let v = m.view(b_member as i32, false, true).unwrap();
     let pid = v["playerId"].as_i64().expect("member seated") as usize;
     assert!(
         !v["state"]["players"][pid]["ai"].as_bool().expect("player"),
@@ -2111,7 +2184,7 @@ async fn the_openings_never_reach_a_client_payload() {
         let r = room.lock().unwrap();
         let m = r.game.as_ref().expect("match started");
         for member in r.info.members.iter().map(|x| x.id) {
-            let v = m.view(member, true).unwrap();
+            let v = m.view(member, true, false).unwrap();
             payloads.push(v.to_string());
         }
     }

@@ -560,10 +560,11 @@ async fn probe_one(
     member: i32,
     m: &Arc<room::MatchHandle>,
 ) -> bool {
-    // The view is the exact frame the client gets (`MatchHandle::view`), so
-    // the service never sees anything a player would not (§1). `need_extras`:
-    // the bot service reads `playable` / `estCost` / `aiAnswer` off the frame
-    // (a human client computes those itself -- the seat-view engine).
+    // The view is the exact frame the client gets (`MatchHandle::view`) minus
+    // the board quotes (the service never reads them), so the service never
+    // sees anything a player would not (§1). `need_extras`: the bot service
+    // reads `playable` / `estCost` / `aiAnswer` off the frame (a human client
+    // computes those itself -- the seat-view engine).
     let view = {
         let m = m.clone();
         match tokio::task::spawn_blocking(move || m.view(member, true, false)).await {
