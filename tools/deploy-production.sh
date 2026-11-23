@@ -180,7 +180,11 @@ step "webui (static root for nginx)"
 rsync -a --delete webui/dist/ "$WEBUI_DIR/dist/"
 setfacl -R -m u:www-data:rX "$WEBUI_DIR/dist"
 setfacl -R -d -m u:www-data:rX "$WEBUI_DIR/dist"
-chmod -R g+rwX "$WEBUI_DIR" "$LIVE_DIR"
+# `records/` is owned by the service user and this deploy runs as the deploy
+# user, which cannot chmod files it does not own; nothing here writes records.
+# Tighten only the top level and the trees this run actually rewrote.
+chmod g+rwX "$LIVE_DIR"
+chmod -R g+rwX "$WEBUI_DIR" "$LIVE_DIR/bin" "$LIVE_DIR/dist" "$LIVE_DIR/data"
 
 step "start $SERVICE"
 sudo monopoly-systemctl start "$SERVICE"
