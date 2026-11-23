@@ -22,6 +22,7 @@ import { formula, showScoreWeights } from "../../ui/ScoreWeights";
 import { DEFAULT_CLOCK, showClockSettings } from "../../ui/ClockSettings";
 import { toast } from "../../ui/Toast";
 import { showReplayArchive } from "./replayArchive";
+import { shouldEnterMatch } from "./enterMatch";
 import { TopBar } from "../../ui/TopBar";
 import s from "./Room.module.css";
 import { t as tr } from "../../i18n/t";
@@ -94,14 +95,18 @@ export function Room({ id }: { id: string }) {
   useEffect(() => {
     if (!sess) return;
     return sess.subscribe((v) => {
-      // A seat that forfeited / went bankrupt left the match screen on purpose;
-      // do not bounce it straight back into the match. A spectator is `out` by
-      // construction (`playerId` -1) but has no seat to abandon — they came to
-      // watch, so send them in.
+      // A finished match is not entered again: back from the results screen
+      // the player chose the room, and `playing` may still be true for the
+      // tick between the seal and the server's reset (see `shouldEnterMatch`).
       const spectating = sess.spectator;
-      if (v && matchScene(v) && sess.room?.playing && (spectating || !model(v).out)) {
-        navigate({ name: "play", id }, { replace: true });
-      }
+      const enter = !!v && shouldEnterMatch({
+        scene: matchScene(v),
+        phase: v.state.phase,
+        playing: !!sess.room?.playing,
+        spectator: spectating,
+        out: model(v).out,
+      });
+      if (enter) navigate({ name: "play", id }, { replace: true });
     });
   }, [sess, id]);
 

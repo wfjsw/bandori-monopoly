@@ -1483,6 +1483,52 @@ async fn the_record_endpoint_serves_the_last_finished_match() {
     assert_eq!(hash_save(&rp.match_ref().save()), want, "same final hash");
 }
 
+/// A finished room resets: `playing` is written through (a later request
+/// reloads the record and must still see it false), the sealed match is no
+/// longer handed out, and the table can start the next one. A room left
+/// `playing` after the seal keeps bouncing the results screen back into the
+/// finished match and keeps the record endpoint on `409`.
+#[tokio::test]
+async fn a_finished_room_resets_and_can_start_again() {
+    let (base, server) = spawn(Duration::from_secs(30)).await;
+    let a = Client::new(&base, "Host").await;
+    let id = a.ok("/api/rooms", json!({ "name": "Rematch" })).await["room"]["id"]
+        .as_str()
+        .unwrap()
+        .to_string();
+    a.ok(&format!("/api/rooms/{id}/bots"), json!({ "op": "add" }))
+        .await;
+    a.ok(&format!("/api/rooms/{id}/bots"), json!({ "op": "add" }))
+        .await;
+    a.ok(&format!("/api/rooms/{id}/start"), json!({ "force": true }))
+        .await;
+    let handle = {
+        let room = server.room(&id).unwrap();
+        let r = room.lock().unwrap();
+        r.game.as_ref().expect("match started").clone()
+    };
+    handle.quick_start().unwrap();
+    handle.finish().unwrap();
+    assert!(
+        wait_ended(&a, &id, Duration::from_secs(10)).await,
+        "the match ended"
+    );
+
+    // Every request re-reads the room record before answering, so this proves
+    // the reset reached the store rather than only the tick's local copy.
+    tokio::time::sleep(Duration::from_millis(200)).await;
+    let (s, st) = a.get(&format!("/api/rooms/{id}/state")).await;
+    assert_eq!(s, StatusCode::OK, "{st}");
+    assert_eq!(st["room"]["playing"], false, "the reset survived a reload");
+    assert_eq!(st["match"], Value::Null, "the sealed match is not live");
+
+    // The next match can start straight from the results / room screen.
+    let started = a
+        .ok(&format!("/api/rooms/{id}/start"), json!({ "force": true }))
+        .await;
+    assert_eq!(started["playing"], true, "{started}");
+}
+
 /// The durable archive (`docs/REPLAY.md` §1): an online record is written to
 /// disk at seal, listed by match, and still downloads after the store's live
 /// copy is gone. The full record stays participants-only.

@@ -335,6 +335,13 @@ pub async fn tick_all(server: &Arc<Server>, jobs_in: &[(String, f32, u8)]) {
             let _ = server.with_room(&id, |r| {
                 if ended {
                     r.info.playing = false;
+                    // Write the reset through now: every later `with_room`
+                    // reloads the record, so an unsaved `playing = false`
+                    // would be overwritten on the very next call and the room
+                    // would stay "playing" forever (a sealed match, the
+                    // results screen bouncing back into it, the record
+                    // endpoint stuck on 409).
+                    r.persist();
                     changed = true;
                     server.bot_drive.lock().unwrap().forget_room(&id);
                 }

@@ -824,7 +824,7 @@ impl Room {
 
     /// Write the durable half back. Called after anything that changes it, so a
     /// restart can rebuild the room (see [`Room::from_record`]).
-    fn persist(&self) {
+    pub(crate) fn persist(&self) {
         if let Err(e) = self.store.room_put(&self.record()) {
             eprintln!("room {} persist failed: {e}", self.info.id);
         }
