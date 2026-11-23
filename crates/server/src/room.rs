@@ -1417,6 +1417,23 @@ impl Room {
             .map(|f| (fair::hex32(&f.seed), fair::hex32(&f.salt)))
     }
 
+    /// Test-only: replace the consumed commit-reveal slot with a fresh,
+    /// unconsumed one (persisted) -- the post-roll shape a finished match
+    /// leaves behind, where `fair_needs_roll()` is already false. Proves the
+    /// end reset is not carried by `roll_fair`'s own persist.
+    #[doc(hidden)]
+    pub fn debug_fresh_fair(&mut self) {
+        let Ok(stamp) = self.engine.info() else {
+            return;
+        };
+        let f = FairState::fresh(&stamp);
+        self.info.fair = Some(FairPublic {
+            commit: f.commit.clone(),
+        });
+        self.fair = Some(f);
+        self.persist();
+    }
+
     /// Draw a fresh commit-reveal slot for the next match and publish its
     /// commitment (`docs/FAIRNESS.md`). Called at room creation and again
     /// whenever a match ends -- always before that match's nonces can arrive,
@@ -1445,6 +1462,17 @@ impl Room {
     /// lock** before calling into it -- the round-trip must not hold the lock.
     pub fn match_handle(&self) -> Option<Arc<MatchHandle>> {
         self.game.clone().filter(|_| self.info.playing)
+    }
+
+    /// The match a **viewer frame** may be built from: the live one, or the
+    /// sealed one the room still holds after the end reset. `playing = false`
+    /// lands before the SSE pump's next poll, so `match_handle` alone would
+    /// stop the final `ended` frame -- the results screen, its reward write
+    /// and the replay download with it. The handle is stateless over the
+    /// store's blob, so a stale one still reads the current match. No
+    /// worker round-trip; the caller drops the room lock before `frames`.
+    pub fn frame_handle(&self) -> Option<Arc<MatchHandle>> {
+        self.game.clone()
     }
 
     // ---------------------------------------------------------------- presence

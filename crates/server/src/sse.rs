@@ -195,7 +195,9 @@ async fn pump(
                     (r.info.clone(), None, r.dissolved.clone(), true)
                 } else {
                     r.stream_opened(member, &stream_key); // refresh only
-                    (r.info.clone(), r.match_handle(), r.dissolved.clone(), false)
+                    // `frame_handle`, not `match_handle`: a sealed match must
+                    // still ship its `ended` frame after the room's reset.
+                    (r.info.clone(), r.frame_handle(), r.dissolved.clone(), false)
                 }
             };
             if gone_room && dissolved.is_none() {

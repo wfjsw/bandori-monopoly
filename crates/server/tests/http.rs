@@ -1484,10 +1484,11 @@ async fn the_record_endpoint_serves_the_last_finished_match() {
 }
 
 /// A finished room resets: `playing` is written through (a later request
-/// reloads the record and must still see it false), the sealed match is no
-/// longer handed out, and the table can start the next one. A room left
-/// `playing` after the seal keeps bouncing the results screen back into the
-/// finished match and keeps the record endpoint on `409`.
+/// reloads the record and must still see it false), the room no longer
+/// hands the match out as live (its snapshot stays for the results screen),
+/// and the table can start the next one. A room left `playing` after the
+/// seal keeps bouncing the results screen back into the finished match and
+/// keeps the record endpoint on `409`.
 #[tokio::test]
 async fn a_finished_room_resets_and_can_start_again() {
     let (base, server) = spawn(Duration::from_secs(30)).await;
@@ -1504,7 +1505,10 @@ async fn a_finished_room_resets_and_can_start_again() {
         .await;
     let handle = {
         let room = server.room(&id).unwrap();
-        let r = room.lock().unwrap();
+        let mut r = room.lock().unwrap();
+        // Roll the slot forward now: `roll_fair` persists on its own, and its
+        // run at the end would mask a reset the tick failed to write.
+        r.debug_fresh_fair();
         r.game.as_ref().expect("match started").clone()
     };
     handle.quick_start().unwrap();
@@ -1516,17 +1520,59 @@ async fn a_finished_room_resets_and_can_start_again() {
 
     // Every request re-reads the room record before answering, so this proves
     // the reset reached the store rather than only the tick's local copy.
-    tokio::time::sleep(Duration::from_millis(200)).await;
     let (s, st) = a.get(&format!("/api/rooms/{id}/state")).await;
     assert_eq!(s, StatusCode::OK, "{st}");
     assert_eq!(st["room"]["playing"], false, "the reset survived a reload");
-    assert_eq!(st["match"], Value::Null, "the sealed match is not live");
+    assert_eq!(
+        st["match"]["state"]["phase"], "ended",
+        "the sealed snapshot is still served, but not as live: {st}"
+    );
 
     // The next match can start straight from the results / room screen.
     let started = a
         .ok(&format!("/api/rooms/{id}/start"), json!({ "force": true }))
         .await;
     assert_eq!(started["playing"], true, "{started}");
+}
+
+/// The reset clears `playing` before the SSE pump's next poll, and the pump
+/// used to build frames only for a live match: a bot- or clock-ended match
+/// then never shipped its final `ended` frame, so the results screen, its
+/// reward write and the replay download were lost. A stream opened after the
+/// reset must still receive the sealed frame.
+#[tokio::test]
+async fn the_ended_frame_reaches_a_late_watcher() {
+    let (base, server) = spawn(Duration::from_secs(30)).await;
+    let a = Client::new(&base, "Host").await;
+    let id = a.ok("/api/rooms", json!({ "name": "Afterglow" })).await["room"]["id"]
+        .as_str()
+        .unwrap()
+        .to_string();
+    a.ok(&format!("/api/rooms/{id}/bots"), json!({ "op": "add" }))
+        .await;
+    a.ok(&format!("/api/rooms/{id}/bots"), json!({ "op": "add" }))
+        .await;
+    a.ok(&format!("/api/rooms/{id}/start"), json!({ "force": true }))
+        .await;
+    let handle = {
+        let room = server.room(&id).unwrap();
+        let r = room.lock().unwrap();
+        r.game.as_ref().expect("match started").clone()
+    };
+    handle.quick_start().unwrap();
+    // `finish` notifies nobody itself: the pump's next poll must still find
+    // the sealed match after the room's own reset.
+    handle.finish().unwrap();
+    assert!(
+        wait_ended(&a, &id, Duration::from_secs(10)).await,
+        "the match ended"
+    );
+
+    let mut sse = a.stream(&id, None).await;
+    sse.until(Duration::from_secs(5), |f| {
+        f.event == "match" && f.data["state"]["phase"] == "ended"
+    })
+    .await;
 }
 
 /// The durable archive (`docs/REPLAY.md` §1): an online record is written to

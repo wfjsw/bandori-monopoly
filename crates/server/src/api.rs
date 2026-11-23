@@ -667,9 +667,11 @@ pub async fn room_state(
 ) -> ApiResult<Json<RoomState>> {
     // Fresh roster under the room lock; the match view is a worker call and
     // runs after the lock is dropped (the handle is stateless). Spectators may
-    // read: their frame is the public view (`playerId` -1, no hand).
+    // read: their frame is the public view (`playerId` -1, no hand). The
+    // sealed match stays in the snapshot (`frame_handle`) so a refresh on the
+    // results screen finds it again after the room's reset.
     let (info, me, m) = as_viewer(&s, &sess, &id, |r, me| {
-        Ok((r.info.clone(), me, r.match_handle()))
+        Ok((r.info.clone(), me, r.frame_handle()))
     })?;
     let game = match m {
         None => None,

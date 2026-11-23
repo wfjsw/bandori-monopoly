@@ -334,16 +334,24 @@ pub async fn tick_all(server: &Arc<Server>, jobs_in: &[(String, f32, u8)]) {
             let mut gone = false;
             let _ = server.with_room(&id, |r| {
                 if ended {
-                    r.info.playing = false;
-                    // Write the reset through now: every later `with_room`
-                    // reloads the record, so an unsaved `playing = false`
-                    // would be overwritten on the very next call and the room
-                    // would stay "playing" forever (a sealed match, the
-                    // results screen bouncing back into it, the record
-                    // endpoint stuck on 409).
-                    r.persist();
-                    changed = true;
                     server.bot_drive.lock().unwrap().forget_room(&id);
+                    // `ended` was read off a handle checked out before this
+                    // lock: another instance's tick may already have reset the
+                    // room and a rematch may have started. Re-check the
+                    // current match (the handle is stateless over the store's
+                    // blob) so the stale bit cannot stop a fresh match, and
+                    // cannot roll the new match's fair slot away.
+                    if r.match_handle().is_some_and(|cur| cur.ended().unwrap_or(false)) {
+                        r.info.playing = false;
+                        // Write the reset through now: every later `with_room`
+                        // reloads the record, so an unsaved `playing = false`
+                        // would be overwritten on the very next call and the
+                        // room would stay "playing" forever (a sealed match,
+                        // the results screen bouncing back into it, the record
+                        // endpoint stuck on 409).
+                        r.persist();
+                        changed = true;
+                    }
                 }
                 // A finished match rolls the next commit-reveal slot right
                 // here, in the same breath as `playing = false`
