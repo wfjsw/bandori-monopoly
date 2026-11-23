@@ -507,7 +507,7 @@ pinned by the same test under `cargo test --release -p game-core --test debug`.
 | `hello` | | `{you, room}` |
 | `room` | | `RoomInfo`, whenever it changes |
 | `event` | `<matchId>:<eventId>` | `MatchEvent` (one per log line / animation step) |
-| `match` | | `{state, hand, handNotes, you, player_id}`, whenever the state changes |
+| `match` | | `{state, hand, handNotes, you, player_id, tileQuotes}`, whenever the state changes |
 | `dissolve` | | `{reason}` — the room is gone |
 
 * `hand` / `handNotes` are only ever your own; `state.players[*].hand` is just a count.

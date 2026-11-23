@@ -7,7 +7,7 @@
 //! | `hello`    |                     | `{you, room}` |
 //! | `room`     |                     | `RoomInfo` (when it changes) |
 //! | `event`    | `<matchId>:<eventId>` | `MatchEvent` |
-//! | `match`    |                     | `{state, hand, handNotes, you, player_id}` (when it changes) |
+//! | `match`    |                     | `{state, hand, handNotes, you, player_id, tileQuotes}` (when it changes) |
 //! | `dissolve` |                     | `{reason}` |
 //!
 //! Only `event` frames carry an id, so a browser's automatic reconnect sends the
@@ -72,8 +72,13 @@ fn frames(info: &RoomInfo, m: Option<&MatchHandle>, member: i32, cur: &mut Curso
     }
     if let Some(m) = m {
         // Two round-trips through the worker pool: this member's view, and the
-        // events since the cursor.
-        let Ok(view) = match_view(m, member, false) else {
+        // events since the cursor. The quotes ride the frame: the board
+        // captions are seat-relative, so the attach frame alone would leave
+        // every later state change drawn with the old figures (or the static
+        // fallback). Measured ~60 us per view on a release worker with the
+        // real ruleset. The view is built on every poll (the 2 s idle timer
+        // included); only the frame itself waits for the seq to move.
+        let Ok(view) = match_view(m, member, true) else {
             cur.retry = true;
             return out;
         };
