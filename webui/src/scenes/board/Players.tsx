@@ -29,7 +29,7 @@ import { stateLabel } from "../../i18n/stateLabel";
 import { setHoverSeat } from "./hoverSeat";
 import { fieldMarkers } from "./markers";
 import { holdPeek } from "../../hooks/hold";
-import { clockSync, displayRemainingMs } from "../../game/clockSync";
+import { clockText, freshHold, turnClock } from "./turnClock";
 
 /** A player's status chips: [停留] / [眩晕] / [除外] / 托管 (the engine's takeover). */
 export function statusChips(x: MatchPlayer): string[] {
@@ -40,64 +40,6 @@ export function statusChips(x: MatchPlayer): string[] {
     stateOf(x, "exile") ? tr("board.exiled") : "",
     x.ai && !x.bot && !out ? tr("board.afk") : "",
   ].filter(Boolean);
-}
-
-/** The turn clock of the player whose turn it is: **bonus first, then base**
- *  (`docs/SERVER.md` §Turn clock). Solo has no deadlines (the engine never
- *  expires one), and a machine-driven turn has none either, so both show no
- *  clock. Online, the server publishes absolute deadlines (`m.v.clock`) on its
- *  monotonic clock; remaining is `deadline - (performance.now() + offset)` --
- *  never counted from the view's arrival -- so animation lag cannot eat the
- *  display. While the clock is held (`clockPaused` / no deadline) it sits at
- *  full. The board also passes `held` while it is still presenting a commit
- *  (`anim.animating`, or a walk still running between engine segments): the
- *  shown state lags the paused commit, so its `clock` deadlines are stale and
- *  must not count down. `bonusDeadlineMs` is when the bonus pool empties (the
- *  sooner of the two); `baseDeadlineMs` is when the whole clock is gone. */
-function timerOf(m: Model, solo: boolean, elapsed: number, held: boolean, frozen: MatchState | null): { value: string; caption: string; frac: number; cls: string } | null {
-  const S = m.S;
-  const cur = S.players[S.turn];
-  if (solo || S.phase !== "play" || S.turn < 0 || !cur || cur.ai) return null;
-  const fullBase = S.baseTime > 0 ? S.baseTime : 15;
-  const fullBonus = S.bonusTime > 0 ? S.bonusTime : 30;
-  const show = (secs: number, caption: string, cls: string, fracOf: number) =>
-    ({ value: String(Math.max(0, Math.ceil(secs - 1e-9))), caption, frac: Math.min(1, Math.max(0, secs) / fracOf), cls });
-
-  const clock = m.v.clock;
-  if (clock && !held) {
-    clockSync.step();
-    const now = performance.now();
-    // Expiry epsilon: the display never races ahead of the server (which is
-    // the sole authority for actually expiring a turn).
-    const baseMs = displayRemainingMs(clock.baseDeadlineMs, now, clockSync.offset);
-    const bonusMs = displayRemainingMs(clock.bonusDeadlineMs, now, clockSync.offset);
-    const rawBase = clock.baseDeadlineMs - clockSync.toServer(now);
-    const rawBonus = clock.bonusDeadlineMs - clockSync.toServer(now);
-    // Bonus drains first: show 免费时间 while the bonus pool has anything left,
-    // then 恢复时间 for the base pool underneath it.
-    if (rawBonus > 0 && bonusMs > 0) return show(bonusMs / 1000, tr("board.bonusTime"), bonusMs < 10_000 ? s.low : "", fullBonus);
-    if (rawBase > 0 && baseMs > 0) return show(baseMs / 1000, tr("board.baseTime"), s.base, fullBase);
-    // At / past the local estimate of the deadline: hold at 0 and say so --
-    // the server may not have expired the turn yet.
-    return show(0, tr("board.waitingServer"), s.low, fullBonus);
-  }
-
-  // Held (paused / still presenting) or a path with no deadline (replay /
-  // older server): show the remaining, frozen while busy/asking. The held
-  // branch reads the **newest** state (`frozen`) -- the shown state lags the
-  // paused commit, so its pools can predate a refill / drain. With no newer
-  // frame the pools are the values at the commit either way, and no drain
-  // happens until the gate opens, so this never walks the clock backwards.
-  if (held || S.clockPaused) {
-    const F = (held && frozen) || S;
-    if (F.bonusTime > 0) return show(F.bonusTime, tr("board.bonusTime"), s.low, fullBonus);
-    return show(F.baseTime || fullBase, tr("board.baseTime"), s.base, fullBase);
-  }
-  const e = !S.busy && !m.asking ? elapsed : 0;
-  const bonus = Math.max(0, S.bonusTime - e);
-  const base = Math.max(0, S.baseTime - Math.max(0, e - S.bonusTime));
-  if (bonus > 0) return show(bonus, tr("board.bonusTime"), bonus < 10 ? s.low : "", fullBonus);
-  return show(base, tr("board.baseTime"), s.base, fullBase);
 }
 
 /** Seats in the order they act from now: the current turn first, then the
@@ -163,7 +105,12 @@ export const Players = memo(function Players({ m, solo, at, held, frozen }: { m:
   const maxH = compact ? COMPACT_SEAT_H : 70;
   const minH = compact ? COMPACT_SEAT_H : 58;
   const height = Math.max(minH, Math.min(maxH, Math.floor((avail - gap * (n - 1)) / n)));
-  const t = timerOf(m, solo, elapsed, held, frozen);
+  // The acting seat's turn clock (`./turnClock`): never a machine seat or
+  // solo, held while presenting, `frozen` (the newest frame) as the held
+  // reading. `hold` carries the turn's ring maximum and the shown value, so
+  // the count only moves down within a turn unless an effect grants time.
+  const hold = useRef(freshHold());
+  const t = turnClock({ state: S, clock: m.v.clock, asking: m.asking, solo, elapsed, held, frozen, hold: hold.current });
   const order = turnOrder(S);
   // Graveyard hover peek (like the draw pile's in Side): which seat, and its
   // panel's row so the peek lines up beside it.
@@ -194,7 +141,7 @@ export const Players = memo(function Players({ m, solo, at, held, frozen }: { m:
             <div className={s.av}>
               <Avatar c={c} size={height < 58 ? 40 : 54} />
               {clock && (
-                <span className={cx(s.clock, clock.cls)} style={{ ["--frac" as string]: clock.frac }} title={clock.caption}>{clock.value}</span>
+                <span className={cx(s.clock, s[clock.tone])} style={{ ["--frac" as string]: clock.frac }} title={tr(clock.captionKey)}>{clockText(clock)}</span>
               )}
               {x.bot && (
                 <span

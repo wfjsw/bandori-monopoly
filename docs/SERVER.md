@@ -386,6 +386,12 @@ that is still animating late events does not lose clock time to the lag:
   the flag for the prompt sheet's timer. The shown state lags the paused
   commit, so its `clock` deadlines are stale while presenting and must not be
   interpolated -- every timer displays the engine's frozen value instead.
+  Because the newest frame is drawn while the ring still sits on the presented
+  seat, the display also holds itself monotonic: within one turn it only moves
+  down, and a value may exceed the shown one only when that seat's pool of the
+  same kind actually grew (an effect granted time) -- the bonus → base handover
+  is not a reset. The ring's full mark is the turn's biggest pool of that kind,
+  never the latest frame's pool (`board/turnClock.ts`).
   Acks are recorded as `Input::AnimDone` so replays reproduce the same pauses
   (`docs/REPLAY.md`).
 
