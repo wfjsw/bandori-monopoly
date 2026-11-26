@@ -1,5 +1,0 @@
-# Millsage
-
-## Characters
-
-## Cards
