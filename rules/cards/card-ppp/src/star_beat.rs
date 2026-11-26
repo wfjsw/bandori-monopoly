@@ -15,14 +15,16 @@ use card_sdk::{para, sec, steps, CardText};
 pub const STAR_BEAT: CardDef = CardDef::new(
     "PPP:STAR BEAT!",
     &[
-        // 规则书: 「下次结算后可选择在绝对距离5格以内自己拥有的格子上进行一次盖房」
-        // -- the offer exists only with a layer banked and a tile passing
-        // `can_build_on` within 5 (affordability is re-checked inside
-        // `card_offer_build`), dispatched only while the card rides the field as
-        // its carrier (see `play`). The layer is CEL (`slot`); the near-buildable
-        // scan is residual (owned ∩ dist ≤ 5 ∩ can_build_on). The slot is per
-        // player, so only the first placed copy dispatches it (see
-        // `settle_offer_applies`).
+        // 规则书: 「下次[结算]后，可选择在[绝对距离]5格以内自己拥有的格子上进行
+        // 1次盖房。本次盖房机会处理完毕后减少1层；放弃、无合法目标或未实际盖房也
+        // 减少，不保留该次机会。」 -- the chance fires on every settle while a
+        // layer is banked, whether or not a legal tile exists; only the carrier
+        // copy dispatches it (see `play` / `settle_offer_applies`). The layer is
+        // CEL (`slot`); the near-buildable scan (owned ∩ dist ≤ 5 ∩
+        // `can_build_on`, affordability re-checked inside `card_offer_build`) is
+        // residual and only shapes the offer's pool -- it no longer gates the
+        // hook. The slot is per player, so only the first placed copy dispatches
+        // it.
         On::Action(Action::SettleAfter("actor == owner && slot('star_beat.layers') > 0", Some(settle_offer_applies), after_settle)),
         On::Play("", Some(cant_play), play),
     ],
@@ -140,8 +142,8 @@ fn near_owned(player_id: i32) -> alloc::vec::Vec<i32> {
 }
 
 /// [`near_owned`] narrowed to what can actually be built now: `can_build_on`
-/// does not test affordability, so the offer checks the cost too. A tile left
-/// out this way must not burn the layer.
+/// does not test affordability, so the offer checks the cost too. This is the
+/// offer's pool only -- an empty pool still runs the settle's decrement.
 fn near_buildable(player_id: i32) -> alloc::vec::Vec<i32> {
     let money = ctx::money_of(player_id);
     near_owned(player_id)
@@ -150,34 +152,43 @@ fn near_buildable(player_id: i32) -> alloc::vec::Vec<i32> {
         .collect()
 }
 
-/// Residual guard for [`after_settle`]: at least one such tile exists, and this
-/// copy carries the offer. The layer slot is per player, so a single placed
-/// copy dispatches it -- the first face-up one in placement order; two copies
-/// would otherwise offer twice per settle and burn two layers.
+/// Residual guard for [`after_settle`]: this copy carries the chance. The
+/// layer slot is per player, so a single placed copy dispatches it -- the first
+/// face-up one in placement order; two copies would otherwise consume two
+/// layers per settle. No legal tile does not skip it: 「无合法目标…也减少」.
 fn settle_offer_applies(player_id: i32) -> bool {
     let me = ctx::self_uid();
-    let carrier = ctx::field_instances(player_id)
+    ctx::field_instances(player_id)
         .into_iter()
         // A face-down card runs no hook, so it is no carrier either.
         .find(|(uid, id)| *id == "PPP:STAR BEAT!" && !ctx::is_face_down_at(*uid))
-        .is_some_and(|(uid, _)| uid == me);
-    carrier && !near_buildable(player_id).is_empty()
+        .is_some_and(|(uid, _)| uid == me)
 }
 
-/// 规则书: 「下次结算后可选择在绝对距离5格以内自己拥有的格子上进行一次盖房，随后减少1层」.
-/// Applicability is the entry's condition + `settle_offer_applies`.
+/// 规则书: 「下次[结算]后，可选择…进行1次盖房。本次盖房机会处理完毕后减少1层；
+/// 放弃、无合法目标或未实际盖房也减少，不保留该次机会。」
+/// Applicability is the entry's condition + `settle_offer_applies`. The
+/// decrement is unconditional and lands exactly once: an empty pool, a decline
+/// and a completed offer all spend the layer.
 fn after_settle(player_id: i32) -> card_sdk::Asked {
+    // 「无合法目标…也减少」 -- nothing to offer, but the chance is still spent.
     let pool = near_buildable(player_id);
-    if !ctx::ask_yes(
+    if pool.is_empty() {
+        ctx::inc_slot(player_id, "star_beat.layers", -1);
+        return Ok(());
+    }
+    // 「可选择」 -- the offer runs its own tile pick over the pool.
+    let asked = ctx::ask_yes(
         player_id,
         &Msg::new(key!("star_beat_title")),
         &Msg::new(key!("star_beat_build")),
-    )? {
-        return Ok(());
+    )?;
+    if asked {
+        // 「未实际盖房也减少」 -- the decrement does not wait on the build
+        // succeeding, so it is not folded into the offer's own outcome.
+        ctx::card_offer_build(player_id, &pool);
     }
-    // 规则书: 「可选择在绝对距离5格以内自己拥有的格子上进行一次盖房，随后减少1层」 --
-    // the offer runs its own tile pick over the pool.
-    ctx::card_offer_build(player_id, &pool);
+    // 「放弃…也减少」 -- taken or declined, the chance is spent.
     ctx::inc_slot(player_id, "star_beat.layers", -1);
     Ok(())
 }

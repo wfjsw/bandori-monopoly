@@ -1257,3 +1257,91 @@ fn saaya_sky_pass_hook_is_silent_off_its_tile() {
         "no 「（无事发生）」: {keys:?}"
     );
 }
+
+// ============================================================= STAR BEAT! 标记
+// 规则书: 「下次[结算]后，可选择…进行1次盖房。本次盖房机会处理完毕后减少1层；
+// 放弃、无合法目标或未实际盖房也减少，不保留该次机会。」
+
+const STAR_BEAT: &str = "PPP:STAR BEAT!";
+const LAYERS: &str = "star_beat.layers";
+
+/// Bank a layer and put the carrier on the field (no [手] body -- the play's
+/// own move would eat the layer under test).
+fn star_beat_armed(t: &mut Table, layers: i32) {
+    t.place_raw(0, STAR_BEAT);
+    t.set_state(0, LAYERS, layers);
+}
+
+/// Walk P0 from 12 onto the café at 15: a settle with no prompt of its own.
+fn settle_p0(t: &mut Table) {
+    t.begin_turn(0);
+    t.set_pos(0, 12);
+    t.dice(&[3]);
+    t.roll(0).unwrap();
+}
+
+#[test]
+fn star_beat_declining_burns_the_layer() {
+    let mut t = Table::vanilla(2);
+    t.own(0, &[18]); // a legal target, dist 3 from 15
+    star_beat_armed(&mut t, 1);
+    settle_p0(&mut t);
+    t.expect_prompt();
+    assert!(
+        t.prompt_refers("star_beat_build"),
+        "no build chance offered: {}",
+        t.dump_prompt()
+    );
+    t.decline(); // 「放弃…也减少」
+    assert_eq!(t.state(0, LAYERS), 0, "the decline must spend the layer");
+    assert_eq!(t.houses(18), 0, "declined: no house");
+}
+
+#[test]
+fn star_beat_no_legal_tile_burns_the_layer_without_an_offer() {
+    let mut t = Table::vanilla(2);
+    // No owned tiles at all.
+    star_beat_armed(&mut t, 1);
+    settle_p0(&mut t);
+    assert!(
+        !t.prompt_refers("star_beat_build"),
+        "no legal target must not offer: {}",
+        t.dump_prompt()
+    );
+    assert_eq!(t.state(0, LAYERS), 0, "「无合法目标…也减少」");
+}
+
+#[test]
+fn star_beat_accepting_builds_and_burns_the_layer() {
+    let mut t = Table::vanilla(2);
+    t.own(0, &[18]);
+    star_beat_armed(&mut t, 1);
+    settle_p0(&mut t);
+    t.expect_prompt();
+    assert!(
+        t.prompt_refers("star_beat_build"),
+        "no build chance offered: {}",
+        t.dump_prompt()
+    );
+    t.answer(0, 0).unwrap(); // yes
+    t.build(0).unwrap();
+    skip_all(&mut t);
+    assert_eq!(t.houses(18), 1, "the accepted chance built");
+    assert_eq!(t.state(0, LAYERS), 0, "the chance is spent");
+}
+
+#[test]
+fn star_beat_two_layers_need_two_settles() {
+    let mut t = Table::vanilla(2);
+    t.own(0, &[18]);
+    star_beat_armed(&mut t, 2);
+    settle_p0(&mut t);
+    // First settle spends one layer (decline the build).
+    t.decline();
+    assert_eq!(t.state(0, LAYERS), 1, "one settle, one layer");
+    // Second settle (a new turn -- the roll is once per turn).
+    settle_p0(&mut t);
+    t.expect_prompt();
+    t.decline();
+    assert_eq!(t.state(0, LAYERS), 0, "two settles, two layers");
+}

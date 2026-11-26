@@ -123,7 +123,7 @@ counted under the first tag; the dual is named in the row.)
 
 | clause ID | unit | class | what the book says | what the implementation does | evidence | status |
 |---|---|---|---|---|---|---|
-| C-PP-first-accident-02 | pp | MORE | 「[拥有者]不可使用任何Pastel✽Palettes角色的（2）技能」 | `skillBlock` token is written, but 丸山彩's (2) prompt still opens and the pay-discount runs. | `first_accident_blocks_pp_skill_2` | REGRESSION-ONLY |
+| C-PP-first-accident-02 | pp | MORE | 「[拥有者]不可使用丸山彩、若宫伊芙、白鹭千圣或大和麻弥的[主动]（1）技能，也不可使用冰川日菜的[自动]（2）技能」 | Per-entry seals written; the four (1) bodies and 日菜's (2) refuse, the four (2)s and 日菜's (1) stay open. | `accident_blocks_the_named_active_1`, `accident_blocks_hina_automatic_2` | — |
 | C-PP-band-idol-02 | pp | LESS | 「X大于拥有的反面的[P✽P粉丝]时可为此卡添加等量溢出的[奇迹水晶]」 (cap 10) | No flip-effect trigger; overflow never becomes crystals. | `band_overflow_to_crystals` | REGRESSION-ONLY |
 | C-PP-hina-lottery-02 | pp | LESS | turn start 1d4, borrow that character's (2) | `skill.hinaLottery.borrowed` stays -1 (never rolls / never borrows). | `hina_skill_2_borrows_skill` | REGRESSION-ONLY |
 | C-PP-shine-again-01 | pp | LESS | 「同色地契的购买价格」÷5 **and** 「1个正面[P✽P粉丝]」 | Money leg lands (+600) but the positive fan is never granted. | `shine_again_rescue_on_short_pay` | REGRESSION-ONLY |

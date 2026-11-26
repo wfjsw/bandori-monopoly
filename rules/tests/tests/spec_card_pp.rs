@@ -493,9 +493,9 @@ fn first_accident_blocks_pp_skill_2() {
             let hit = |k: &str| {
                 p.title.key().contains(k) || p.options.iter().any(|o| format!("{o:?}").contains(k))
             };
-            // 「maya」 first: `maya_title` also contains 「aya」, so an aya-first
-            // list reports every 大和麻弥 prompt as 丸山彩's.
-            ["maya", "hina", "aya"]
+            // 「maya」 first: `maya_title` also contains 「aya」. 丸山彩's (2)
+            // is usable under the new text and stays out of the set.
+            ["maya", "hina"]
                 .into_iter()
                 .find(|&k| hit(k))
                 .map(|k| k.to_string())
@@ -523,7 +523,8 @@ fn first_accident_blocks_pp_skill_2() {
             if let Some(k) = pp_skill_prompt(&t) {
                 return Err(format!(
                     "C-PP-first-accident-02: PP (2) skill {k} offered under 初次演出事故: {} blk={}",
-                    t.dump_prompt(), t.token(0, "skillBlock:Pastel✽Palettes")
+                    t.dump_prompt(),
+                    t.token(0, "skillBlock:skill:冰川日菜:日菜抽中的大奖:2")
                 ));
             }
             t.decline();

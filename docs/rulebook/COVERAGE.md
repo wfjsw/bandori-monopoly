@@ -572,7 +572,7 @@ assert the clause (or the reason it is not).
 | `PP:同一个梦想#2` | flip every face-up fan down, gain 100 * (flipped count) | **ok** | dream_steps_without_echo |
 | `PP:同一个梦想#3` | flip every face-down fan up; with [共鸣] this hits every PP character | **ok** | dream_echo_flips_all_pp_characters |
 | `PP:初次演出事故#1` | place on user's [场地], add 1 重叠的声音 to the draw pile, shuffle, draw 1 | **ok** | accident_places_shuffles_overlap_draws |
-| `PP:初次演出事故#2` | [持续] owner cannot use any PP character's (2) skill | **ign** | accident_blocks_pp_skill_2 (DISCREPANCY: skillBlock not seen by the hook) |
+| `PP:初次演出事故#2` | [持续] owner cannot use 丸山彩/若宫伊芙/白鹭千圣/大和麻弥 active (1) or 冰川日菜 automatic (2) | **ok** | accident_blocks_the_named_active_1, accident_blocks_hina_automatic_2, accident_leaves_the_named_active_2_usable, accident_leaves_a_band_skill_usable |
 | `PP:[衍生]重叠的声音#1` | [特] entering the owner's discard: [移除] their 初次演出事故 | **ok** | overlap_play_removes_accident |
 | `PP:[衍生]重叠的声音#2` | [手] [移除] this and the user's 初次演出事故 | **ok** | overlap_play_removes_accident |
 | `PP:[衍生]重叠的声音#3` | enter move phase; main move = teleport to bandori station, no settle | **ok** | overlap_play_teleports_and_turn_end |
@@ -1440,7 +1440,7 @@ Widen with `Q4_SAMPLE=0 Q4_SEEDS=4 Q4_PAIRS=120 cargo test -p game-rules
 | (engine play-ctx) `TurnCtx.play_from_hand` | turn ctx | `unintended_found::play_from_hand_flag_leaks_past_the_turn` | **fixed** (scoped to the play) |
 | `Mujica:心の雨` | `turn.abnormal` | `unintended_found::kokoro_no_ame_leaves_turn_abnormal` | **fixed** (zeroed at turn start) |
 | `通用:登上武道馆` | `targeted[]` | `unintended_found::budokan_leaves_targeted_counters` | **fixed** (the repro's turn lap now rolls first; `targeted[i]` was already zeroed at `i`'s turn start) |
-| `PP:初次演出事故` | token names (`skillBlock:Pastel✽Palettes` vs `skillBlock:PP2`) | `unintended_found::stage_accident_writes_two_skillblock_names` | medium |
+| `PP:初次演出事故` | seal tags (`skillBlock:skill:<id>:<clause>`; the old band / `PP2` spellings are gone) | `accident_seals_the_named_entries_only` | fixed |
 | `HHW:爱心义演` | `state:charity_extra_total`, `state:charity_show_turn` | `unintended_found::charity_writes_undeclared_state` | low |
 | `RAS:EXIST` | `state:exist_used` | `unintended_found::exist_writes_undeclared_state` | low |
 
@@ -1462,12 +1462,10 @@ What they are:
   targeted it since its own turn last started") is still `[0, 1, 1]` after
   a full turn lap, so every player's own turn-start reset failed to zero
   it.
-* **`PP:初次演出事故` writes two spellings of one token.** The Pastel Palettes
-  (2)-skill suppression is recorded under both `skillBlock:Pastel✽Palettes`
-  (the band name, star glyph included) and `skillBlock:PP2` (an
-  abbreviation). A later reader that looks up one of the two misses the
-  other; a third spelling (`Pastel*Palettes` / `PastelPalettes`) is one
-  rename away. This is the P-star-P fan-name variant the registry is for.
+* **`PP:初次演出事故` seals entries, not the band.** The [持续] writes one
+  `skillBlock:skill:<id>:<clause>` tag per named entry (the four (1) actives
+  and 日菜's (2)); the old `skillBlock:Pastel✽Palettes` / `skillBlock:PP2`
+  pair and its spelling drift are gone.
 * **`HHW:爱心义演` / `RAS:EXIST` write undeclared keyed state.** Each stamps
   a scratch slot (`charity_extra_total` + `charity_show_turn`,
   `exist_used`) that its `footprints.json` `writes` list does not declare.
@@ -1516,9 +1514,10 @@ re-file them):
   footprint gaps above). The engine-owned keys (`state:exile`,
   `state:exileTo`, `state:skillState`, `state:stay`) are a frozen wire
   contract and are excluded from the typo scan.
-* **Near-duplicates:** the `skillBlock:Pastel✽Palettes` /
-  `skillBlock:PP2` pair (filed above). `state:exile` vs `state:exileTo` is
-  an engine key pair, not a content typo.
+* **Near-duplicates:** none from 初次演出事故 any more -- its seals are
+  per-entry `skillBlock:skill:<id>:<clause>` tags (filed above).
+  `state:exile` vs `state:exileTo` is an engine key pair, not a content
+  typo.
 
 ### Allowlist (engine bookkeeping)
 

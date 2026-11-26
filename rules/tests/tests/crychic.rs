@@ -216,9 +216,8 @@ fn haruhikage_plays_as_counter() {
     assert!(t.hand(0).contains(&"CRYCHIC:春日影".to_string()));
 }
 
-/// 规则书（1）: 「[特] 若抽到此卡时你的总资产大于等于20000且手牌不多于5张，
-/// 可选择使其直接从抽牌堆打出」 -- the offer exists only when *both* gates hold
-/// at the `Drawn` moment (the card itself is already in hand).
+/// 规则书（1）: 「[特] 若抽到此卡时你的总资产大于等于20000：可选择使其直接从抽牌堆打出」
+/// -- the offer exists at that asset threshold; the hand size is no gate.
 ///
 /// Drives a real `Drawn` of 春日影 via 「10次招募」 ([手] pays 1500, draws 1)
 /// and returns the live prompt dump if the [特] offer is open, else `None`.
@@ -258,38 +257,58 @@ fn haruhikage_draw_special(money: i32, spare: &[&str]) -> Option<String> {
     None
 }
 
-#[test]
-fn haruhikage_special_offered_when_hand_le_5() {
-    // 4 spare cards + the drawn 春日影 = 5, which is 「不多于5张」.
-    let spare = ["R:[衍生] 压", "R:[衍生] 压", "R:[衍生] 压", "R:[衍生] 压"];
-    let got = haruhikage_draw_special(25_000, &spare);
-    assert!(
-        got.is_some(),
-        "assets ≥ 20000 and hand ≤ 5 must offer the [特]"
-    );
+/// Same shape as [`haruhikage_draw_special`], but the draw is one `TEST:drawTwo`
+/// instruction of 2 cards: the hand is at 5 for the first and 6 for the second,
+/// which puts the `Drawn` of 春日影 over 5 even though the CRYCHIC band play
+/// gate refuses a play at a 6-card hand.
+fn haruhikage_draw_two_special() -> Option<String> {
+    let mut t = Table::vanilla(2);
+    t.set_money(0, 25_000);
+    t.set_hand(0, &["R:[衍生] 压", "R:[衍生] 压", "R:[衍生] 压", "R:[衍生] 压"]);
+    t.set_draw(0, &["R:[衍生] 压", "CRYCHIC:春日影", "R:[衍生] 压"]);
+    drain(&mut t);
+    t.give(0, &["TEST:drawTwo"]);
+    let r = t.play(0, "TEST:drawTwo");
+    for _ in 0..30 {
+        let p = t.dump_prompt();
+        if p.contains("haruhikage_special_ask") {
+            return Some(p);
+        }
+        if t.prompt().is_none() {
+            break;
+        }
+        if p.contains("haruhikage") {
+            return Some(p);
+        }
+        decline_q(&mut t);
+    }
+    let _ = r;
+    None
 }
 
 #[test]
-fn haruhikage_special_not_offered_when_hand_over_5() {
-    // 6 spare cards + the drawn 春日影 = 7, which is over 「不多于5张」.
-    let spare = [
-        "R:[衍生] 压",
-        "R:[衍生] 压",
-        "R:[衍生] 压",
-        "R:[衍生] 压",
-        "R:[衍生] 压",
-        "R:[衍生] 压",
-    ];
+fn haruhikage_special_offered_when_hand_le_5() {
+    // 4 spare cards + the drawn 春日影 = 5.
+    let spare = ["R:[衍生] 压", "R:[衍生] 压", "R:[衍生] 压", "R:[衍生] 压"];
     let got = haruhikage_draw_special(25_000, &spare);
+    assert!(got.is_some(), "assets ≥ 20000 must offer the [特]");
+}
+
+#[test]
+fn haruhikage_special_offered_when_hand_over_5() {
+    // The `Drawn` lands at hand 6 (5 before the second card of the draw): the
+    // sheet dropped 「不多于5张」, so the hand size no longer suppresses the
+    // offer.
+    let got = haruhikage_draw_two_special();
     assert!(
-        got.is_none(),
-        "hand over 5 must not offer the [特]: {got:?}"
+        got.is_some(),
+        "hand over 5 must still offer the [特]: {got:?}"
     );
 }
 
 #[test]
 fn haruhikage_special_not_offered_under_assets() {
-    // 4 spare cards (hand ≤ 5 holds) but assets under 20000.
+    // 4 spare cards, but assets under 20000.
     let spare = ["R:[衍生] 压", "R:[衍生] 压", "R:[衍生] 压", "R:[衍生] 压"];
     let got = haruhikage_draw_special(3_000, &spare);
     assert!(

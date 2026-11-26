@@ -221,11 +221,11 @@ fn soul_places_and_loads_crystals() {
     assert_eq!(x, 3, "3 crystals");
 }
 
-// 规则书（2）: 「[拥有者]使用自己原有的技能（2）时移除此卡的1个[奇迹水晶]」 --
+// 规则书（2）: 「[拥有者]使用自己原有的[主动]（1）技能时：移除此卡的1个[奇迹水晶]」 --
 // a placed card's own activation press (`cardUsed`, id without `skill:`) is not
-// 「使用技能」, so it leaves the crystals alone. The body then loads fresh ones;
-// the strip would show as the `crimson_soul_skill` log (and an empty-card pass),
-// so assert on the log.
+// a skill press, so it leaves the crystals alone. The body then loads fresh
+// ones; the strip would show as the `crimson_soul_skill` log (and an
+// empty-card pass), so assert on the log.
 #[test]
 fn soul_crystal_survives_a_placed_card_activation() {
     let mut t = Table::vanilla(2);
@@ -247,6 +247,63 @@ fn soul_crystal_survives_a_placed_card_activation() {
         !keys.iter().any(|k| k.contains("crimson_soul_empty")),
         "the crystal was not spent: {keys:?}"
     );
+}
+
+/// Play the soul at a known 2-crystal stock on 美竹兰. Table helper.
+fn soul_two_crystals() -> Table {
+    let mut t = Table::new(&["美竹兰", "户山香澄"]);
+    t.clean();
+    t.give_play(0, "AG:绯红之魂").unwrap();
+    t.answer(0, 1).unwrap(); // 2 crystals
+    skip_all(&mut t);
+    assert_eq!(t.crystals(0, "AG:绯红之魂"), Some(2), "loaded 2");
+    t
+}
+
+// 规则书（2）: 「[拥有者]使用自己原有的[主动]（1）技能时」 -- the owner's own
+// character skill press is exactly one crystal. 美竹兰's press entry is the
+// persona skill's [主动]（1） (`skill:美竹兰:叛逆的红挑染`).
+#[test]
+fn soul_crystal_spent_on_owner_persona_skill() {
+    let mut t = soul_two_crystals();
+    t.set_fire(0, 1, 1);
+    t.begin_turn(0);
+    let sid = t.skill_id(0, "叛逆的红挑染");
+    let mark = t.mark();
+    t.skill(0, &sid).unwrap();
+    skip_all(&mut t);
+    assert!(
+        t.keys_since(mark)
+            .iter()
+            .any(|k| k.contains("crimson_soul_skill")),
+        "the persona press must strip a crystal: {:?}",
+        t.keys_since(mark)
+    );
+    assert_eq!(t.crystals(0, "AG:绯红之魂"), Some(1), "exactly one");
+    assert!(t.on_field(0, "AG:绯红之魂"), "one crystal is left");
+}
+
+// 规则书（2）: 「自己原有」 -- the *band* skill is another `skill:` press but not
+// the character's own [主动]（1） entry, so it leaves the crystals alone.
+#[test]
+fn soul_crystal_survives_a_band_skill_press() {
+    let mut t = soul_two_crystals();
+    t.begin_turn(0);
+    let band = t.skill_id(0, "商店街的宠儿");
+    assert!(band.starts_with("skill:Afterglow:"), "{band}");
+    let mark = t.mark();
+    // The band skill is hook-only (no press body); the `cardUsed` raise is
+    // what this asserts on.
+    t.skill(0, &band).unwrap();
+    skip_all(&mut t);
+    assert!(
+        !t.keys_since(mark)
+            .iter()
+            .any(|k| k.contains("crimson_soul_skill")),
+        "a band skill press must not strip a crystal: {:?}",
+        t.keys_since(mark)
+    );
+    assert_eq!(t.crystals(0, "AG:绯红之魂"), Some(2), "untouched");
 }
 
 // 规则书: 「（1）[反击][拥有者]因导致的[消耗]或[支付]时可选择移除此卡的1个[奇迹水晶]，此次[消耗]或[支付]金额减少1000（最少为0，若为[支付]则被[支付]玩家[获得]500资金）」
@@ -1560,4 +1617,70 @@ fn g04_detour_parity_lands_on_odd_or_even_tiles() {
     t.roll(0).unwrap();
     skip_all(&mut t);
     assert_eq!(t.pos(0), 9, "the next (main) walk goes 3 backwards");
+}
+
+// 规则书（2）: the persona's `[主动]（2）` is a different clause of the *same*
+// skill id. A press carries only the bare id (no entry index -- `use_skill`
+// rides `trigger::cards` verbatim), so the `:2` clause alias must stay out.
+#[test]
+fn soul_crystal_survives_persona_active_2_press() {
+    let mut t = soul_two_crystals();
+    t.set_fire(0, 1, 1);
+    t.begin_turn(0);
+    let id = format!("{}:2", t.skill_id(0, "叛逆的红挑染"));
+    let mark = t.mark();
+    t.skill(0, &id).unwrap();
+    skip_all(&mut t);
+    assert!(
+        !t.keys_since(mark)
+            .iter()
+            .any(|k| k.contains("crimson_soul_skill")),
+        "an active-(2) press must not strip a crystal: {:?}",
+        t.keys_since(mark)
+    );
+    assert_eq!(t.crystals(0, "AG:绯红之魂"), Some(2), "untouched");
+}
+
+// 规则书（2）: 「自己原有」 -- a *borrowed* character skill (another persona's
+// `skill:` instance placed on this owner) is still a press of the same shape,
+// but not the owner's own [主动]（1）.
+#[test]
+fn soul_crystal_survives_a_borrowed_character_skill_press() {
+    let mut t = soul_two_crystals();
+    t.set_fire(0, 1, 1);
+    t.begin_turn(0);
+    let borrowed = "skill:上原绯玛丽:大家一起迈出新的一步";
+    t.place_raw(0, borrowed);
+    let mark = t.mark();
+    t.skill(0, borrowed).unwrap();
+    skip_all(&mut t);
+    assert!(
+        !t.keys_since(mark)
+            .iter()
+            .any(|k| k.contains("crimson_soul_skill")),
+        "a borrowed character skill must not strip a crystal: {:?}",
+        t.keys_since(mark)
+    );
+    assert_eq!(t.crystals(0, "AG:绯红之魂"), Some(2), "untouched");
+}
+
+// 规则书（2）: the library spells the clause as `:1` (`skillBlock:skill:<id>:1`);
+// a press that carries that alias still books the crystal.
+#[test]
+fn soul_crystal_spent_on_persona_active_1_alias() {
+    let mut t = soul_two_crystals();
+    t.set_fire(0, 1, 1);
+    t.begin_turn(0);
+    let id = format!("{}:1", t.skill_id(0, "叛逆的红挑染"));
+    let mark = t.mark();
+    t.skill(0, &id).unwrap();
+    skip_all(&mut t);
+    assert!(
+        t.keys_since(mark)
+            .iter()
+            .any(|k| k.contains("crimson_soul_skill")),
+        "the :1 alias must strip a crystal: {:?}",
+        t.keys_since(mark)
+    );
+    assert_eq!(t.crystals(0, "AG:绯红之魂"), Some(1), "exactly one");
 }

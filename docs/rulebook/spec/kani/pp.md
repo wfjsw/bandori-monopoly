@@ -90,7 +90,7 @@ behind the machine-wide 3-slot cap (`~/.kani-slots`). Re-run with:
 | C-PP-shine-again-01 | [反击] rescue picked-deed price/5 + 1 fan | PROTOCOL-LEVEL | `shine_again_01_formula` (pure) | pending | [反击] window; owner picks the deed when several match; regression hint: fan leg missing in engine | — |
 | C-PP-shine-again-02 | [共鸣] record colour + 1 fan | OPEN | — | — | | OPEN-共鸣 |
 | C-PP-first-accident-01 | place + 重叠的声音→deck + draw 1 | PROVEN* | `first_accident_01_place_deck_draw_iff` | triage3: FAILED was **B** spec rejected 持续 `SetToken`; fixed, re-time pending | — | — |
-| C-PP-first-accident-02 | owner cannot use PP (2) skills | FAILS | `first_accident_02_blocks_pp_skill_2_iff` (skills_pp) | triage3: FAILED 8.9 s was **B** harness cfg'd on skills-personas (pp unit lacks it) → 'Failed to match'. Moved to skills_pp.rs, re-time pending | book: no PP (2); body writes a skillBlock token but 丸山彩 (2) still opens | — |
+| C-PP-first-accident-02 | owner cannot use the four named (1) actives / 日菜's (2) | re-time pending | `first_accident_02_blocks_pp_skill_2_iff` (skills_pp) | body writes five per-entry seal tags; proof pins all five and 日菜's (2) refusing | seal tag is `skillBlock:skill:<id>:<clause>` | — |
 | C-PP-flower-01 | place on owned tile + band +2 | PROVEN* (formula) | `flower_01_band_after` (spec) | — | ask_tile prompt is expensive | — |
 | C-PP-flower-02 | pass → force stop, move becomes settle | OPEN | — | — | definition of [强制停下] truncated | OPEN-强制停下 |
 | C-PP-flower-03 | [共鸣] +1500; card → discard | OPEN | — | — | | OPEN-共鸣 |
@@ -147,9 +147,10 @@ behind the machine-wide 3-slot cap (`~/.kani-slots`). Re-run with:
 
 ## FAILS (book vs body)
 
-1. **C-PP-first-accident-02** — book: 「[拥有者]不可使用任何Pastel✽Palettes角色的（2）技能」.
-   Body writes a `skillBlock` token, but 丸山彩's (2) prompt still opens and the
-   pay-discount runs. (Regression `first_accident_blocks_pp_skill_2`.)
+1. **C-PP-first-accident-02** — book: 「[拥有者]不可使用丸山彩、若宫伊芙、白鹭千圣或
+   大和麻弥的[主动]（1）技能，也不可使用冰川日菜的[自动]（2）技能」. Body writes one
+   `skillBlock:skill:<id>:<clause>` seal per named entry. (Regression
+   `accident_blocks_the_named_active_1` / `accident_blocks_hina_automatic_2`.)
 2. **C-PP-band-idol-02** — book: any flip-to-positive with `X > down` grants
    `min(X-down, 10)` crystals. Body: the only flip it sees is its own press,
    which asks for `X ∈ 1..=have`, so overflow is unreachable; no listener on

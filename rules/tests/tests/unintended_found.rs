@@ -216,14 +216,10 @@ fn exist_writes_undeclared_state() {
 // shared-name registry: a P✽P fan-name variant
 // =====================================================================
 
-/// `PP:初次演出事故` suppresses Pastel✽Palettes (2) skills and records the
-/// suppression as a token. The token is written under **two** names in the
-/// same activation -- `skillBlock:Pastel✽Palettes` (the band's real name,
-/// with the star glyph) and `skillBlock:PP2` (an abbreviation). Any later
-/// reader that looks up one of the two will miss the other, and the star
-/// glyph is a third spelling (`Pastel*Palettes` / `PastelPalettes`) a
-/// different rule could easily use. This is the P✽P fan-name variant the
-/// registry is meant to catch.
+/// `PP:初次演出事故` seals one entry per named skill. Each seal is a
+/// `skillBlock:skill:<owner>:<name>:<clause>` tag -- identity from the skill
+/// id, so no band-name spelling (`Pastel✽Palettes` / `PP2` / star glyph
+/// variants) is involved any more, and no two entries share a stem.
 #[test]
 fn stage_accident_writes_two_skillblock_names() {
     let mut t = Table::vanilla(3);
@@ -235,17 +231,21 @@ fn stage_accident_writes_two_skillblock_names() {
         .filter(|n| n.starts_with("skillBlock"))
         .cloned()
         .collect();
-    // One concept, one name. Two names for the same suppression is the bug.
+    // One stem per sealed entry: the four (1)s and 日菜's (2).
     let mut stems: Vec<String> = blocks
         .iter()
         .map(|n| n.trim_start_matches("skillBlock:").to_string())
         .collect();
     stems.sort();
     stems.dedup();
+    assert_eq!(
+        stems.len(),
+        5,
+        "expected five per-entry seals, got {stems:?}"
+    );
     assert!(
-        stems.len() <= 1,
-        "PP:初次演出事故 writes {} distinct skillBlock stems {stems:?} -- a name collision",
-        stems.len()
+        stems.iter().all(|s| s.starts_with("skill:")),
+        "seals must name skill entries: {stems:?}"
     );
 }
 

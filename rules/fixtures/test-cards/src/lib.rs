@@ -1104,6 +1104,29 @@ fn total_cut(player_id: i32, value: i32) -> i32 {
     out
 }
 
+/// The other direction of the same `PIPELINE-AUDIT` Q2 probe: `payCombinedAdd`
+/// **adds** 100 to the command total. A 「[分摊][支付]2000」 across three payers
+/// becomes ceil10(2100/3) = 700 each; a per-share +100 would give 710.
+const TOTAL_ADD: CardDef = CardDef::new(
+    "TEST:totalAdd",
+    &[On::Filter(Filter::PayCombinedAdd(
+        "",
+        Some(total_cut_yes),
+        total_add,
+    ))],
+);
+
+fn total_add(player_id: i32, value: i32) -> i32 {
+    let out = value + 100;
+    ctx::log(
+        player_id,
+        &Msg::new(key!("total_add_done"))
+            .i("from", value as i64)
+            .i("to", out as i64),
+    );
+    out
+}
+
 /// `G02` §9 row 19 -- a 分摊 command whose **command total** is 12,000:
 /// every other live player is designated and the total divides by the
 /// designated count (three payers of 4,000 each). No shipped 分摊 card prints
@@ -4816,6 +4839,7 @@ card_sdk::ruleset!(&[
     DEST_NOW,
     DEST_TO,
     TOTAL_CUT,
+    TOTAL_ADD,
     DEAD_PAY,
     SELF_CHARGE,
     PAY_ADD_ANY,

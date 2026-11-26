@@ -55,7 +55,7 @@ pub const CRIMSON_SOUL: CardDef = CardDef::new(
         //   the payee 500.
         On::Action(Action::PaySplitChooseBefore("actor == owner && card.placed && card.counter('crystals') > 0", None, pay_choose).counter_reason(key!("crimson_soul_when"))).label("（1）"),
 
-        // > （2）[拥有者]使用自己原有的技能（2）时移除此卡的1个[奇迹水晶]。
+        // > （2）[拥有者]使用自己原有的[主动]（1）技能时：移除此卡的1个[奇迹水晶]。
         On::Action(Action::CardUsed("", Some(skill_used_guard), skill_used)).label("（2）"),
 
         // > （3）此卡上不再拥有[奇迹水晶]时将此卡放入[使用者]弃卡区。
@@ -149,21 +149,37 @@ fn pay_choose(player_id: i32) -> card_sdk::Asked {
     Ok(())
 }
 
-/// 规则书[持续]（2）: 「[拥有者]使用自己原有的技能（2）时移除此卡的1个[奇迹水晶]」 --
+/// 规则书[持续]（2）: 「[拥有者]使用自己原有的[主动]（1）技能时：移除此卡的1个[奇迹水晶]」 --
 /// Pure guard for [`skill_used`] -- the activation gate. `false`
 /// means the card is not activated at all.
 fn skill_used_guard(player_id: i32) -> bool {
-    // TODO(规则书)（[拥有者]使用自己原有的技能）: a skill press is `skill:*`, which
-    //   excludes a placed-card declaration (`cardUsed` carries the card id
-    //   there); 「自己原有的技能（2）」 is the *persona* skill (2) -- a band skill
-    //   (`skill:<group>:*`) still strips a crystal too.
+    // 规则书（[拥有者]使用自己原有的[主动]（1）技能）:
+    // * a press carries the pressed rule id on `trigger::cards` (`use_skill`,
+    //   `play.rs`: `t.cards = vec![card]`), and nothing else -- there is no
+    //   entry index on the trigger (`Trigger` has none; `trig_cards` is the id
+    //   verbatim);
+    // * 「自己原有」 is the owner's *persona* skill instance
+    //   (`ctx::persona_skill(owner)`), so a band skill (`skill:<group>:*`) and a
+    //   borrowed character skill placed here both fall out;
+    // * 「[主动]（1）」 is the persona sheet's `[主动]`（1） entry, and its press
+    //   entry is the only `On::Play` a persona skill declares -- the
+    //   `[自动]`（1） clause is a hook and never raises `cardUsed`. So the bare
+    //   id *is* the active-1 press; the library's own `:1` clause alias
+    //   (`skillBlock:skill:<id>:1`, 初次演出事故) is accepted too, while the
+    //   same persona's `:2` stays out.
     // TODO: Can this be ported to CEL?
     ctx::is_placed()
         && trigger::player_id() == player_id
         && ctx::crystals() > 0
-        && trigger::cards()
-            .first()
-            .is_some_and(|c| c.as_str().starts_with("skill:"))
+        && trigger::cards().first().is_some_and(|c| {
+            ctx::persona_skill(player_id).is_some_and(|p| is_own_active_1(c.as_str(), &p))
+        })
+}
+
+/// Is `pressed` the owner's own `[主动]（1）` press? Either the persona skill id
+/// itself (the press entry) or that id's `:1` clause alias.
+fn is_own_active_1(pressed: &str, persona: &str) -> bool {
+    pressed == persona || pressed.strip_prefix(persona) == Some(":1")
 }
 
 fn skill_used(player_id: i32) -> card_sdk::Asked {
