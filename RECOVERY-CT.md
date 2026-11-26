@@ -48,3 +48,10 @@ Continuation cues: continue / 继续 / 照做
     known pre-existing reds NOT ours: `ab_cond::a_slot_condition_sees_an_earlier_entry_write_in_the_same_window`; `roselia::yukina_pass_hook_announces_the_pot_loss` (stale expectation after aa868ee0 made the entry silent); `cargo test --workspace` link (`ruleset_*` undefined)
     gates run green: game-rules 191, 510 ruleset-test assertions across the touched binaries, spec suites, roster_equiv, autoresearch harness
     next action: finish the remaining full-suite binaries (/tmp/verify5/unrun.txt) and decide on the two stale reds
+
+  2026-11-26 event + persona/band skill faces synced; 17 audited behaviour deltas implemented across skill bodies
+    event faces 28/28; persona/band skill faces 54/54 + 12/12
+    deltas: anon, kanon, kaoru, mana, masking, mutsumi, mutsumi_crychic, nanami, rinko, sakiko, taki, tomoe, tomori, uika_sumimi, crychic/hhw/ras bands; mygo confirmed
+    split-leg engine fix extended with `target_set` -- a rewritten total target governs the legs, plain per-payee splits keep their own
+    fixtures/metrics added: event_pairs.json, persona_pairs.json, group_pairs.json
+    pre-existing reds unchanged: `yukina_pass_hook_announces_the_pot_loss`, q4_unintended hang, ab_cond, two_donuts/teleport set, `cargo test --workspace` link
