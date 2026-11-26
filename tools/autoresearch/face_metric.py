@@ -3,7 +3,10 @@
 
 Reads only the ``## Cards`` sections of ``--library/*.md``; a body is the
 following non-empty lines (trailing whitespace removed) up to the next heading.
-``events.md`` is skipped (event faces are a follow-up; pairs cover roster faces).
+``events.md`` is skipped by the card parse; ``--event-pairs`` switches on the
+event metrics, which read ``display.events`` against events.md alone (local
+event ids drop the library's ``[衍生]`` marker, so the title compare ignores
+the derived flag; no tags exist on events, so ``event_full`` is ``event_synced``).
 Both sides are normalized: an optional ``[衍生]`` derived marker, an optional
 leading ``[character]``, and a leading/trailing balanced ``（...）`` annotation
 are stripped before comparison.
@@ -46,6 +49,7 @@ HEADING = re.compile(r"#{1,6}\s")
 # Event faces live in events.md's own `## Cards` section; pairs.json covers the
 # roster only, so event entries would masquerade as unpaired library rows.
 EXCLUDED_FILES = {"events.md"}
+EVENT_FILE = "events.md"
 ALLOWED_TAGS = {"手", "场地", "反击", "持续", "特", "限", "衍生"}
 # A label token counts at a clause boundary: a body line start or after a
 # `（N）` marker, and every token in a leading run (`[反击][特]`). Reaction
@@ -168,6 +172,61 @@ def normalize_text(text: str) -> str:
     return re.sub(r"\s+", "", text)
 
 
+def _parse_card_file(path: Path) -> list[tuple[str, bool, str, str]]:
+    """(raw title, derived, normalized title, body) in file order."""
+    try:
+        lines = path.read_text(encoding="utf-8").splitlines()
+    except OSError as exc:
+        raise fail(f"cannot read {path}: {exc}") from exc
+
+    entries: list[tuple[str, bool, str, str]] = []
+    seen: set[str] = set()
+    in_cards = False
+    current: str | None = None
+    body: list[str] = []
+
+    def close() -> None:
+        nonlocal current, body
+        if current is None:
+            return
+        derived, norm = normalize_title(current)
+        # `unnamed` is upstream's placeholder for untitled cards and may
+        # legitimately repeat (Sumimi has two, both pair targets); every
+        # other repeated title makes the body index ambiguous.
+        if current in seen and current != "unnamed":
+            raise fail(f"duplicate card title in {path.name}: {current!r}")
+        seen.add(current)
+        entries.append((current, derived, norm, "\n".join(body)))
+        current = None
+        body = []
+
+    for line in lines:
+        if not in_cards:
+            if line.rstrip() == "## Cards":
+                in_cards = True
+            continue
+        if CARD_HEADING.fullmatch(line.rstrip()):
+            continue
+        if line.startswith("### "):
+            close()
+            match = ENTRY_HEADING.fullmatch(line.rstrip())
+            if not match:
+                raise fail(f"empty card title in {path.name}")
+            current = match.group(1)
+            continue
+        if SUBHEADING.match(line):
+            close()
+            continue
+        if HEADING.match(line):  # next level-2 section ends ## Cards
+            close()
+            in_cards = False
+            continue
+        if current is not None and line.strip():
+            body.append(line.rstrip())
+    close()
+    return entries
+
+
 def parse_library(library: Path) -> tuple[list[str], dict[tuple[bool, str], list[str]]]:
     """Parse ``*.md`` into ordered raw titles and a normalized-title body index."""
     if not library.is_dir():
@@ -180,59 +239,28 @@ def parse_library(library: Path) -> tuple[list[str], dict[tuple[bool, str], list
 
     titles: list[str] = []
     index: dict[tuple[bool, str], list[str]] = {}
-
     for path in files:
-        try:
-            lines = path.read_text(encoding="utf-8").splitlines()
-        except OSError as exc:
-            raise fail(f"cannot read {path}: {exc}") from exc
+        for raw, derived, norm, body in _parse_card_file(path):
+            titles.append(raw)
+            index.setdefault((derived, norm), []).append(body)
+    return titles, index
 
-        seen: set[str] = set()
-        in_cards = False
-        current: str | None = None
-        body: list[str] = []
 
-        def close() -> None:
-            nonlocal current, body
-            if current is None:
-                return
-            derived, norm = normalize_title(current)
-            # `unnamed` is upstream's placeholder for untitled cards and may
-            # legitimately repeat (Sumimi has two, both pair targets); every
-            # other repeated title makes the body index ambiguous.
-            if current in seen and current != "unnamed":
-                raise fail(f"duplicate card title in {path.name}: {current!r}")
-            seen.add(current)
-            titles.append(current)
-            index.setdefault((derived, norm), []).append("\n".join(body))
-            current = None
-            body = []
+def parse_event_library(library: Path) -> tuple[list[str], dict[str, list[str]]]:
+    """Parse events.md alone into raw titles and a derived-agnostic body index.
 
-        for line in lines:
-            if not in_cards:
-                if line.rstrip() == "## Cards":
-                    in_cards = True
-                continue
-            if CARD_HEADING.fullmatch(line.rstrip()):
-                continue
-            if line.startswith("### "):
-                close()
-                match = ENTRY_HEADING.fullmatch(line.rstrip())
-                if not match:
-                    raise fail(f"empty card title in {path.name}")
-                current = match.group(1)
-                continue
-            if SUBHEADING.match(line):
-                close()
-                continue
-            if HEADING.match(line):  # next level-2 section ends ## Cards
-                close()
-                in_cards = False
-                continue
-            if current is not None and line.strip():
-                body.append(line.rstrip())
-        close()
+    Local event ids drop the library's ``[衍生]`` marker, so the index key is
+    the normalized title only; two entries normalizing alike make it ambiguous.
+    """
+    path = library / EVENT_FILE
+    if not path.is_file():
+        raise fail(f"event library not found: {path}")
 
+    titles: list[str] = []
+    index: dict[str, list[str]] = {}
+    for raw, _derived, norm, body in _parse_card_file(path):
+        titles.append(raw)
+        index.setdefault(norm, []).append(body)
     return titles, index
 
 
@@ -353,12 +381,45 @@ def find_mismatches(pairs, cards, index) -> list[str]:
     ]
 
 
+def load_event_pairs(path: Path) -> dict[str, str]:
+    data = load_json(path, "event pairs")
+    pairs: dict[str, str] = {}
+    for local_id, title in data.items():
+        if not local_id.startswith("event:"):
+            raise fail(f"event pair id lacks an 'event:' prefix: {local_id!r}")
+        if not isinstance(title, str):
+            raise fail(f"event pair {local_id!r} does not map to a title")
+        pairs[local_id] = title
+    return pairs
+
+
+def event_pair_state(
+    pairs: dict[str, str], events: dict, index: dict[str, list[str]], local_id: str
+) -> tuple[bool, bool]:
+    """(title_ok, text_ok) for one paired event; same normalization as cards.
+
+    The compare ignores the derived flag: local event names drop ``[衍生]``.
+    """
+    _derived, norm = normalize_local_id(local_id)
+    _t_derived, t_norm = normalize_title(pairs[local_id])
+    bodies = index.get(t_norm)
+    bare = local_id.split(":", 1)[1]
+    if bare not in events or not bodies:
+        return False, False
+    title_ok = norm == t_norm
+    event = events[bare]
+    text = event.get("text", "") if isinstance(event, dict) else ""
+    text_ok = any(normalize_text(body) == normalize_text(text) for body in bodies)
+    return title_ok, text_ok
+
+
 def compute() -> int:
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--display", required=True, type=Path)
     parser.add_argument("--pairs", required=True, type=Path)
     parser.add_argument("--library", required=True, type=Path)
     parser.add_argument("--roster", required=True, type=Path)
+    parser.add_argument("--event-pairs", required=True, type=Path)
     args = parser.parse_args()
 
     display = load_json(args.display, "display")
@@ -429,6 +490,33 @@ def compute() -> int:
         1 for title in titles if normalize_title(title) not in used_keys
     )
 
+    events = display.get("events")
+    if not isinstance(events, dict):
+        raise fail(f"display has no object 'events' map: {args.display}")
+    event_pairs = load_event_pairs(args.event_pairs)
+    event_titles, event_index = parse_event_library(args.library)
+
+    event_paired = 0
+    event_title_match = 0
+    event_text_match = 0
+    event_synced = 0
+    for local_id in event_pairs:
+        if local_id.split(":", 1)[1] not in events:
+            continue
+        event_paired += 1
+        title_ok, text_ok = event_pair_state(event_pairs, events, event_index, local_id)
+        event_title_match += int(title_ok)
+        event_text_match += int(text_ok)
+        event_synced += int(title_ok and text_ok)
+
+    event_unpaired_local = sorted(
+        bare for bare in events if f"event:{bare}" not in event_pairs
+    )
+    used_event_keys = {normalize_title(title)[1] for title in event_pairs.values()}
+    event_unpaired_library = sum(
+        1 for title in event_titles if normalize_title(title)[1] not in used_event_keys
+    )
+
     print(f"METRIC face_paired={paired}")
     print(f"METRIC face_full={full}")
     print(f"METRIC face_title_match={title_match}")
@@ -447,6 +535,27 @@ def compute() -> int:
         print(f"ASI full=0 id={local_id}")
     for local_id in find_mismatches(pairs, cards, index)[:MAX_ASI]:
         print(f"ASI synced=0 id={local_id}")
+
+    print(f"METRIC event_paired={event_paired}")
+    print(f"METRIC event_full={event_synced}")
+    print(f"METRIC event_title_match={event_title_match}")
+    print(f"METRIC event_text_match={event_text_match}")
+    print(f"METRIC event_synced={event_synced}")
+    print(f"METRIC event_unpaired_local={len(event_unpaired_local)}")
+    print(f"METRIC event_unpaired_library={event_unpaired_library}")
+    print(f"METRIC events_present={len(events)}")
+
+    for local_id in sorted(event_pairs):
+        if local_id.split(":", 1)[1] not in events:
+            print(f"ASI event_paired=0 id={local_id}")
+    event_bad = [
+        local_id
+        for local_id in sorted(event_pairs)
+        if local_id.split(":", 1)[1] in events
+        and not all(event_pair_state(event_pairs, events, event_index, local_id))
+    ]
+    for local_id in event_bad[:MAX_ASI]:
+        print(f"ASI event_synced=0 id={local_id}")
     return 0
 
 

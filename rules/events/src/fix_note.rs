@@ -30,7 +30,7 @@ pub const FIX_NOTE: CardDef = CardDef::new(
 ).rule()
         .meta(&card_sdk::meta::CardMeta::new()
             .name(r#"修复公告"#)
-            .text(CardText::para(r#"前2个房屋造价为2000的格子和前1个房屋造价为1500的格子的加盖金额减半，且累计在上述格子上加盖后将此卡移除。"#))
+            .text(CardText::para(r#"前2个房屋造价为2000的格子和前1个房屋造价为1500的格子的加盖金额减半，且累计在上述格子上加盖后被将此卡移除。"#))
             // sheet cell A25
             .derived(true));
 

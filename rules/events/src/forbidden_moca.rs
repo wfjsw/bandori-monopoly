@@ -30,9 +30,7 @@ pub const FORBIDDEN_MOCA: CardDef = CardDef::new(
 .meta(
     &card_sdk::meta::CardMeta::new()
         .name(r#"Forbidden Moca"#)
-        .text(CardText::para(
-            r#"直到你的下个回合结束，场上所有移动掷骰/2，在你的下个回合结束时永久移除此事件！"#,
-        ))
+        .text(CardText::para(r#"直到你的下个回合结束，场上所有移动掷骰/2，在你的下个回合结束时永久移除此事件！"#))
         // sheet cell A20
         .derived(false),
 );

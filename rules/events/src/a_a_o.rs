@@ -26,7 +26,7 @@ pub const A_A_O: CardDef = CardDef::new(
 .props(&[(bandori_std::marker::TURNS_LEFT, 1)])
         .meta(&card_sdk::meta::CardMeta::new()
             .name(r#"A！A！O！"#)
-            .text(CardText::para(r#"将此卡放置于场地中央，抽到的玩家的下回合结束时放入事件弃牌。此卡在场时全场玩家不能使用卡牌的[手]效果。"#))
+            .text(CardText::para(r#"将此卡放置于场地中央，抽到的玩家的下回合结束时放入事件弃卡区。此卡在场时全场玩家不能使用卡牌的[手]效果。"#))
             // sheet cell A15
             .derived(false));
 
