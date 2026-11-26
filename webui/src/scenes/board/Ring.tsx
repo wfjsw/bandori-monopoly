@@ -69,6 +69,8 @@ export interface RollControl {
   enabled: boolean;
   rolling: boolean;
   dice: number;
+  /** The current round, shown above the die. */
+  round: number;
   /** Caption under the die; "skip movement" / "continue" when the same button advances instead of rolling. */
   caption: string;
   hint: string;
@@ -645,6 +647,7 @@ const Center = memo(function Center({ m, roll }: { m: Model; roll?: RollControl 
           the spot the board names for it. Hidden in replays (`roll` null). */}
       {roll && (
         <div className={s.rollDock}>
+          <div className={s.roundTag}>{tr("board.round", { n: Math.max(1, roll.round) })}</div>
           <button
             type="button"
             className={cx(s.roll, roll.enabled && s.can, roll.rolling && s.rolling)}

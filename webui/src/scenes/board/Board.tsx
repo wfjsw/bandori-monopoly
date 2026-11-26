@@ -211,6 +211,7 @@ export const Board = memo(function Board({ sess }: { sess: GameSession }) {
       enabled: control !== null,
       rolling: anim.rolling,
       dice: anim.dice,
+      round: S.round,
       caption: advance ? tr(S.skipMove ? "board.skipMovement" : "board.continueTurn") : tr("board.dice"),
       hint,
       onClick: onRoll,
@@ -287,7 +288,7 @@ export const Board = memo(function Board({ sess }: { sess: GameSession }) {
         compact
         help={false}
         section={tr("board.mode", { mode: modeName(S.mode), n: S.players.length })}
-        title={tr("board.round", { n: Math.max(1, S.round) })}
+        title=""
         onBack={onBack}
         titleRight={titleRight}
         right={NO_RIGHT}

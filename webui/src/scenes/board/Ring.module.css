@@ -701,6 +701,20 @@
    gap: 8px;
 }
 
+/* The round counter, above the die: a small pill reading 「第 N 轮」. */
+.roundTag {
+   padding: 2px 14px;
+   border-radius: 999px;
+   background: var(--surface);
+   box-shadow: 0 2px 8px rgba(60, 20, 40, 0.18);
+   color: var(--pink-deep);
+   font-size: 13px;
+   font-weight: 700;
+   line-height: 1.5;
+   white-space: nowrap;
+   pointer-events: none;
+}
+
 .rollHint {
    max-width: 100%;
    text-align: center;
