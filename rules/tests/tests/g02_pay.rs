@@ -1593,6 +1593,9 @@ fn g02_tomori_skill_only() {
     t.place_raw(0, TOMORI);
     t.place_raw(0, MOCA); // something on the field for 立希 to charge
     t.set_crystals(0, TOMORI, 2);
+    // Library (2): the charge target must already own a [奇迹水晶]; seed one
+    // on moca too so the pick still offers it at index 1.
+    t.set_crystals(0, MOCA, 1);
     t.set_fire(0, 2, 5);
     t.give_play(0, "skill:椎名立希:决定练习日的会议").unwrap();
     // 立希 asks which card to charge; then the cover asks.

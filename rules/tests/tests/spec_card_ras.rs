@@ -68,6 +68,24 @@ fn drain(t: &mut Table) {
     }
 }
 
+/// Advance until it is `who`'s 运营 stage (`stage::OPS` = 2).
+fn until_turn(t: &mut Table, who: usize) {
+    for _ in 0..80 {
+        if t.turn() == who && t.step() == 2 {
+            return;
+        }
+        let cur = t.turn();
+        if cur == who {
+            t.end(who).unwrap();
+        } else {
+            t.m.world_mut().st.skip_move = true;
+            t.end(cur).unwrap();
+        }
+        drain(t);
+    }
+    panic!("never reached turn {who} 运营 (at {} step {})", t.turn(), t.step());
+}
+
 /// A livehouse tile per OPEN-livehouse (board `group == 6`).
 fn is_livehouse(tile: usize) -> bool {
     matches!(
@@ -1476,9 +1494,11 @@ fn rio_reroll_contract() {
     assert_eq!(t.charge(0), 0, "C-RAS-rio-02: 使用一个[火罐]");
 }
 
-/// C-RAS-masking-01 -- [经过] 白雪学园 +1 [火罐], cap 2.
+/// C-RAS-masking-01 -- the **first** [经过] 白雪学园 after a CiRCLE reward
+/// gives 1 [火罐]; a later pass without a fresh reward gives nothing.
 ///
-/// Quote (the roster#佐藤益木): 「（1）每次[经过]"白雪学园"或"银河拉面馆"时获得1个[火罐]（初始0，上限2）」
+/// Quote (the roster#佐藤益木): 「（1）每次领取完CiRCLE奖励后首次[经过]“白雪学园”或
+/// “银河拉面馆”之一时：获得1个[火罐]」
 #[test]
 fn masking_fire_contract() {
     let mut t = Table::new(&["佐藤益木", "和奏瑞依"]);
@@ -1486,13 +1506,38 @@ fn masking_fire_contract() {
     drain(&mut t);
     t.begin_turn(0);
     drain(&mut t);
-    t.set_fire(0, 0, 2);
-    t.set_pos(0, 12);
-    t.dice(&[7]);
+    t.set_fire(0, 0, 3);
+    // Start behind CiRCLE (0); 20 steps pass it (taking the reward arms the
+    // latch) and then land on 白雪学园 (18) -- the first qualifying pass.
+    t.set_pos(0, 58);
+    t.dice(&[20]);
+    t.roll(0).unwrap();
+    let mut took = false;
+    for _ in 0..16 {
+        let Some(p) = t.prompt() else { break };
+        if p.title.key().contains("pass_reward") {
+            let _ = t.answer_one(0);
+            took = true;
+        } else {
+            t.decline();
+        }
+    }
+    assert!(took, "the CiRCLE reward was offered: {}", t.dump_prompt());
+    drain(&mut t);
+    assert_eq!(t.pos(0), 18, "landed on 白雪学园");
+    assert_eq!(t.charge(0), 1, "the first pass after the reward pays");
+    assert_eq!(t.state(0, "skill.maskingBurn.after"), 0, "the latch is spent");
+
+    // Negative: a second pass with no fresh CiRCLE reward gives nothing.
+    t.begin_turn(1);
+    drain(&mut t);
+    t.begin_turn(0);
+    drain(&mut t);
+    t.set_pos(0, 17);
+    t.dice(&[2]); // 17 -> 18 -> 19, passes 白雪学园
     t.roll(0).unwrap();
     drain(&mut t);
-    assert_eq!(t.pos(0), 19);
-    assert_eq!(t.charge(0), 1, "C-RAS-masking-01: 「每次[经过]“白雪学园”」");
+    assert_eq!(t.charge(0), 1, "a pass without a reward gives nothing");
 }
 
 /// C-RAS-masking-02 -- spend X fire → +Xd10 on the main roll.
@@ -1690,12 +1735,12 @@ fn rokka_first_deed_contract() {
 // Band skill
 // ===========================================================================
 
-/// C-RAS-band-02 -- a livehouse settle leaves a teleport offer for the next
-/// main move.
+/// C-RAS-band-02 -- a livehouse settle leaves a teleport press for the next
+/// turn's 运营 phase.
 ///
-/// Quote (roster#RAISE A SUILEN): 「（2）因该技能以外的效果在livehouse格子
-/// [触发结算]时，若你的下回合开始时仍在那个格子上，你的下一次主要移动可变为传送至
-/// 你拥有的一个livehouse格子。」
+/// Quote (roster#RAISE A SUILEN): 「（1）自己的下回合开始时，如果自己仍在此卡
+/// [自动]（2）记录的格子上：可在运营阶段选择立刻进入移动阶段并将自己的[主要移动]
+/// 改为[传送]至自己拥有的1个Live House格子。」
 #[test]
 fn band_teleport_offer_contract() {
     let mut t = Table::new(&["和奏瑞依", "珠手知由", "朝日六花"]);
@@ -1719,52 +1764,19 @@ fn band_teleport_offer_contract() {
     t.roll(2).unwrap();
     drain(&mut t);
     t.end(2).unwrap();
-    // Do NOT drain: that would decline the offer. Ring-up may sit at turn
-    // start or at the next main move.
-    let mut accepted = false;
-    let accept_if_offer = |t: &mut Table| -> bool {
-        let mut took = false;
-        for _ in 0..10 {
-            let Some(p) = t.prompt() else { break };
-            let k = format!("{}{}", p.title.key(), p.text.key());
-            if k.contains("ras_")
-                || k.contains("unstoppable")
-                || k.contains("live")
-                || k.contains("teleport")
-                || k.contains("传送")
-            {
-                t.answer_one(0).unwrap();
-                took = true;
-            } else {
-                t.decline();
-            }
-        }
-        took
-    };
-    accepted |= accept_if_offer(&mut t);
+    // P0's next turn opens; the press is a 运营 act (no turn-start prompt).
+    drain(&mut t);
+    until_turn(&mut t, 0);
     let before = t.pos(0);
-    if !accepted {
-        // Maybe the offer rides the roll itself.
-        t.dice(&[3]);
-        let r = t.roll(0);
-        accepted |= accept_if_offer(&mut t);
-        drain(&mut t);
-        let _ = r;
-    } else {
-        t.dice(&[3]);
-        t.roll(0).unwrap();
-        drain(&mut t);
-    }
-    assert!(
-        accepted,
-        "C-RAS-band-02: teleport offer never came up (pos {} was {before}): {:?}",
-        t.pos(0),
-        t.recent_keys(24)
-    );
+    let band = t.skill_id(0, "UNSTOPPABLE");
+    t.skill(0, &band).unwrap();
+    // The press runs the planned teleport itself: no dice are cast.
+    drain(&mut t);
     assert!(
         t.pos(0) == SPACE || t.pos(0) == BUDOKAN,
-        "C-RAS-band-02: teleport should land on an owned livehouse, pos {} (was {before})",
-        t.pos(0)
+        "C-RAS-band-02: teleport should land on an owned livehouse, pos {} (was {before}): {:?}",
+        t.pos(0),
+        t.recent_keys(24)
     );
 }
 

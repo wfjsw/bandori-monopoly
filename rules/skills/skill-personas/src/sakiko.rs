@@ -19,15 +19,25 @@
 
 use bandori_std::ctx::{self, state, trigger, CardPile};
 use bandori_std::state_key;
-use card_sdk::abi::ActionKind;
+use card_sdk::abi::{AbKind, ActionKind};
 use card_sdk::{key, Action, CardDef, Msg, On};
 
 /// 「自己[获得](X+Y)×500资金」 -- per transferred layer.
 const BOUNTY_PER_LAYER: i32 = 500;
 
+/// Received layers of each kind already paid by the pot clause. 「自然减少
+/// 层数时」 is the clause; a received layer is paid as it lands (one per layer,
+/// the same total), and the wear only pays layers it did not already pay -- so
+/// a layer that predates the skill still pays at its own wear. Tracked per
+/// kind because a wear drops one layer of each kind at most.
+const PAID_STAY: &str = "skill.sakiko.paidStay";
+const PAID_STUN: &str = "skill.sakiko.paidStun";
+const PAID_EXILE: &str = "skill.sakiko.paidExile";
+
 pub const SAKIKO: CardDef = CardDef::new(
     "skill:丰川祥子:请把你们的人生交给我",
     &[
+        On::Action(Action::Abnormal("", None, on_hit)),
         On::Action(Action::TurnStartBefore("", None, declare_cap)).silent(),
         On::Action(Action::DeckAtGameStart("", None, declare_cap)).silent(),
         // 状态1's 「火罐数达到上限时可在回合开始时选择进入状态2」 -- the offer
@@ -47,11 +57,15 @@ pub const SAKIKO: CardDef = CardDef::new(
             on_pass_player,
         )),
         // 「自己未处于[人偶模式]，自己的[停留]、[眩晕]、[除外]自然减少层数时：
-        // 获得1个[火罐]」 -- the **natural wear**, not an effect landing. Each
-        // kind that will drop a layer this turn end pays one pot; 停留/眩晕 tick
-        // at this very hook, so the pre-decrement count is read. 除外 ticks at
-        // the next turn start, so a live exile pays one pot per turn end here
-        // (one layer late, but one-per-turn either way).
+        // 获得1个[火罐]」 -- a layer that lands is paid as it is received (one
+        // per layer), so the clause's total is kept without waiting for the
+        // owner's turn end; the wear hook below pays layers it did not already
+        // pay (a layer that predates the skill, or one received in 状态2).
+        // The wear half of the clause: each kind that will drop a layer at this
+        // turn end pays one pot if it was not already paid on receipt; 停留/
+        // 眩晕 tick at this very hook, so the pre-decrement count is read.
+        // 除外 ticks at the next turn start, so a live exile is caught one turn
+        // end late (one-per-turn either way).
         On::Action(Action::TurnEndBefore(
             card_sdk::condition::MINE,
             Some(state1_wear),
@@ -66,14 +80,44 @@ pub const SAKIKO: CardDef = CardDef::new(
     (bandori_std::fire::FIRE_CAP, 3),
 ]);
 
-/// Guard for [`on_wear`]: 状态1 only (`Abnormal`'s old `im_hit`, now also
-/// covering the 状态2 exclusion) and something is about to wear.
+/// 状态1 only -- shared by both halves of the pot clause.
+fn state1_recipient(player_id: i32) -> bool {
+    state::get(player_id, state_key::SKILL_STATE) != 2
+}
+
+/// Receipt half's guard: this player is the *recipient* of a stay/stun/exile
+/// landing, in 状态1.
+fn state1_hit(player_id: i32) -> bool {
+    trigger::target() == player_id
+        && state1_recipient(player_id)
+        && matches!(
+            trigger::abnormal_kind(),
+            Some(
+                bandori_std::kind::abnormal::Stay
+                    | bandori_std::kind::abnormal::Stun
+                    | bandori_std::kind::abnormal::Exile
+            )
+        )
+}
+
+/// Guard for [`on_wear`]: 状态1 and something is about to wear. The body pays
+/// only the kinds it did not already pay.
 fn state1_wear(player_id: i32) -> bool {
-    if state::get(player_id, state_key::SKILL_STATE) == 2 {
-        return false;
+    state1_recipient(player_id)
+        && (rules_status::stay::get(player_id) > 0
+            || rules_status::stun::get(player_id) > 0
+            || state::get(player_id, state_key::EXILE) > 0)
+}
+
+/// The kind's paid ledger key.
+fn paid_key(kind: AbKind) -> Option<&'static str> {
+    use bandori_std::kind::abnormal as ab;
+    match kind {
+        ab::Stay => Some(PAID_STAY),
+        ab::Stun => Some(PAID_STUN),
+        ab::Exile => Some(PAID_EXILE),
+        _ => None,
     }
-    rules_status::stay::get(player_id) + rules_status::stun::get(player_id) > 0
-        || state::get(player_id, state_key::EXILE) > 0
 }
 
 /// 「初始0，上限3」.
@@ -173,6 +217,19 @@ fn on_pass_player(player_id: i32) -> card_sdk::Asked {
         state::add(other, state_key::STUN, -stun);
         rules_status::stun::add(player_id, stun);
     }
+    // The receipt hook pays one pot per landing, i.e. one per kind; the
+    // remaining layers of a multi-layer transfer are paid here (the landing
+    // carries no layer count).
+    let extra_stay = (stay - i32::from(stay > 0)).max(0);
+    let extra_stun = (stun - i32::from(stun > 0)).max(0);
+    if extra_stay > 0 {
+        let got = bandori_std::fire::gain(player_id, extra_stay, &Msg::new(key!("sakiko_gain")))?;
+        state::add(player_id, PAID_STAY, got);
+    }
+    if extra_stun > 0 {
+        let got = bandori_std::fire::gain(player_id, extra_stun, &Msg::new(key!("sakiko_gain")))?;
+        state::add(player_id, PAID_STUN, got);
+    }
     // 「自己[获得](X+Y)×500资金」
     ctx::gain(
         player_id,
@@ -188,15 +245,43 @@ fn on_pass_player(player_id: i32) -> card_sdk::Asked {
     Ok(())
 }
 
-/// 「自己的[停留]、[眩晕]、[除外]自然减少层数时：获得1个[火罐]」 -- one pot per
-/// kind about to lose a layer (the guard already pinned 状态1 and a live layer).
+/// Receipt half: a layer of [停留]/[眩晕]/[除外] landed on this player (the
+/// hook fires for every landing; the guard is checked here, the way 立希's
+/// counterpart does).
+fn on_hit(player_id: i32) -> card_sdk::Asked {
+    if !state1_hit(player_id) {
+        return Ok(());
+    }
+    let Some(pk) = trigger::abnormal_kind().and_then(paid_key) else {
+        return Ok(());
+    };
+    let got = bandori_std::fire::gain(player_id, 1, &Msg::new(key!("sakiko_gain")))?;
+    state::add(player_id, pk, got);
+    Ok(())
+}
+
+/// Wear half: one pot per kind about to lose a layer that was not already
+/// paid on receipt.
 fn on_wear(player_id: i32) -> card_sdk::Asked {
-    let stay = rules_status::stay::get(player_id);
-    let stun = rules_status::stun::get(player_id);
-    let exile = state::get(player_id, state_key::EXILE);
-    let n = i32::from(stay > 0) + i32::from(stun > 0) + i32::from(exile > 0);
-    if n > 0 {
-        bandori_std::fire::gain(player_id, n, &Msg::new(key!("sakiko_gain")))?;
+    let mut pay = 0;
+    for (layers, pk) in [
+        (rules_status::stay::get(player_id), PAID_STAY),
+        (rules_status::stun::get(player_id), PAID_STUN),
+        (state::get(player_id, state_key::EXILE), PAID_EXILE),
+    ] {
+        if layers <= 0 {
+            continue;
+        }
+        // An externally removed layer must not leave a phantom credit.
+        let paid = state::get(player_id, pk).min(layers);
+        if paid > 0 {
+            state::set(player_id, pk, paid - 1);
+        } else {
+            pay += 1;
+        }
+    }
+    if pay > 0 {
+        bandori_std::fire::gain(player_id, pay, &Msg::new(key!("sakiko_gain")))?;
     }
     Ok(())
 }
@@ -248,6 +333,18 @@ pub fn on_pass_player_kani(player_id: i32) -> card_sdk::Asked {
 #[inline(always)]
 pub fn state1_wear_kani(player_id: i32) -> bool {
     state1_wear(player_id)
+}
+
+#[cfg(kani)]
+#[inline(always)]
+pub fn state1_hit_kani(player_id: i32) -> bool {
+    state1_hit(player_id)
+}
+
+#[cfg(kani)]
+#[inline(always)]
+pub fn on_hit_kani(player_id: i32) -> card_sdk::Asked {
+    on_hit(player_id)
 }
 
 #[cfg(kani)]

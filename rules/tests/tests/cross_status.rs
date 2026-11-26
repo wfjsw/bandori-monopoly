@@ -310,13 +310,15 @@ fn s08_sakiko_absorbs_statuses() {
     assert_eq!(t.state(0, "stay"), 2, "P0 = 2");
     // 「自己[获得](X+Y)×500资金」 -- 2 layers × 500.
     assert_eq!(t.money(0), 10_000 + 1000, "500 per layer");
-    // The pot is on the *natural wear*, not on the landing: nothing yet.
-    assert_eq!(t.charge(0), 0, "no pot on the landing itself");
-    // End the turn: 停留 + 眩晕 each wear a layer → one pot per kind.
+    // The pot clause is one per layer; the two received stay layers paid as
+    // they landed.
+    assert_eq!(t.charge(0), 2, "one pot per received stay layer");
+    // A layer the receipt did not see (the stun is arranged directly here)
+    // pays at its natural wear; the paid stay layers do not pay twice.
     t.set_state(0, "stun", 1);
     t.end(0).unwrap();
     drain(&mut t);
-    assert_eq!(t.charge(0), 2, "one pot per wearing kind");
+    assert_eq!(t.charge(0), 3, "the wear tops up the unpaid stun layer only");
 }
 
 // =====================================================================
