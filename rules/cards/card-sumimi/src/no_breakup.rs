@@ -1,9 +1,10 @@
+//! settle-teleport that must leave money with a repeated digit, else fully
 //!
 //! 规则书（docs/rulebook/cards.json, id `Sumimi:Sumimi不会解散哦`）:
 //! > Sumimi不会解散哦：
-//! >  当你本回合未进行过抵押/赎回操作且资金不含有相同数字时可打出，进行一次可使你的资金变动为拥有相同数字的传送，视为你的主要移动；若传送并触发结算后未能使资金变为拥有相同数字，回到原处并取消所有受到的效果
+//! > 你本回合未进行过抵押或赎回操作，且资金数额不含相同数字时：可打出此卡，进行1次可使你的资金数额变为含有相同数字的[传送]。此次[传送]视为你的[主要移动]。
+//! > 若[传送]并[结算]后，资金数额未能变为含有相同数字：回到原处，并取消所有受到的效果。
 //!
-//! settle-teleport that must leave money with a repeated digit, else fully
 //! revert (`world_restore`, armed by [`no_breakup`] and run by [`revert`]).
 
 use alloc::vec::Vec;
@@ -11,7 +12,7 @@ use alloc::vec::Vec;
 use bandori_std::zones::ZoneChangeCause;
 use card_sdk::abi::ActionKind;
 use card_sdk::CardText;
-use card_sdk::{ctx, key, Action, CardDef, Msg, On};
+use card_sdk::{ctx, key, para, sec, Action, CardDef, Msg, On};
 
 pub const NO_BREAKUP: CardDef = CardDef::new(
     "Sumimi:Sumimi不会解散哦",
@@ -45,7 +46,7 @@ pub const NO_BREAKUP: CardDef = CardDef::new(
         .name(r#"Sumimi不会解散哦"#)
         .raw_name(r#"Sumimi不会解散哦"#)
         .tags(&[])
-        .text(CardText::para(r#"当你本回合未进行过抵押/赎回操作且资金不含有相同数字时可打出，进行一次可使你的资金变动为拥有相同数字的传送，视为你的主要移动；若传送并触发结算后未能使资金变为拥有相同数字，回到原处并取消所有受到的效果"#))
+        .text(CardText::of(&[sec(r#""#, &[para(r#"你本回合未进行过抵押或赎回操作，且资金数额不含相同数字时：可打出此卡，进行1次可使你的资金数额变为含有相同数字的[传送]。此次[传送]视为你的[主要移动]。"#), para(r#"若[传送]并[结算]后，资金数额未能变为含有相同数字：回到原处，并取消所有受到的效果。"#)])]))
         // sheet cell L3
         .fields(&[("group", r#"Sumimi"#), ("owner", "")]));
 

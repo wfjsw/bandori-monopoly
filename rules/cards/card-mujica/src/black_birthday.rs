@@ -1,13 +1,15 @@
+//! 800 when they have at most 1,000, otherwise 200 twice (the second only
 //!
 //! 规则书（docs/rulebook/cards.json, id `Mujica:黑色生日`）:
 //! > 黑色生日：
-//! >  每名你以外的资金不多于1000的玩家支付你800资金，每名你以外的资金严格在1000以上的玩家支付你两次200资金。
+//! > 你以外的每名玩家，根据其资金数额进行对应操作：
+//! > - 资金不多于1000：向你[支付]800资金。
+//! > - 资金大于1000：向你分别进行2次[支付]，每次200资金。
 //!
-//! 800 when they have at most 1,000, otherwise 200 twice (the second only
 //! while they are still in).
 
 use card_sdk::CardText;
-use card_sdk::{ctx, key, CardDef, Msg, On};
+use card_sdk::{ctx, key, para, sec, CardDef, Msg, On};
 
 pub const BLACK_BIRTHDAY: CardDef = CardDef::new(
     "Mujica:黑色生日",
@@ -17,7 +19,7 @@ pub const BLACK_BIRTHDAY: CardDef = CardDef::new(
         .name(r#"黑色生日"#)
         .raw_name(r#"黑色生日"#)
         .tags(&[])
-        .text(CardText::para(r#"每名你以外的资金不多于1000的玩家支付你800资金，每名你以外的资金严格在1000以上的玩家支付你两次200资金。"#))
+        .text(CardText::of(&[sec(r#""#, &[para(r#"你以外的每名玩家，根据其资金数额进行对应操作："#), para(r#"- 资金不多于1000：向你[支付]800资金。"#), para(r#"- 资金大于1000：向你分别进行2次[支付]，每次200资金。"#)])]))
         // sheet cell J14
         .fields(&[("group", r#"Ave Mujica"#), ("owner", "")]));
 

@@ -1,17 +1,19 @@
+//! crystals for 2,000 + 500·X, then stays in play as [持续] while the owner
 //!
 //! 规则书（docs/rulebook/cards.json, id `CRYCHIC:如果能一直持续下去...`）:
 //! > 如果能一直持续下去...：
 //!
-//! > （1）[手] 移除你乐队技能卡上的奇迹水晶，获得2000+500*X资金，X为移除的奇迹水晶数量。
+//! > （1）[手]依次进行以下操作：
+//! > 1. 移除你乐队技能卡上的[奇迹水晶]。
+//! > 2. 获得2000+500×X资金；X为上述操作移除的[奇迹水晶]数量。
 //!
-//! > （2）[持续] 若你的手牌大于等于7，此卡立即置入弃牌堆。
+//! > （2）[持续]你的手牌数大于等于7时：立即将此卡置入弃卡区。
 //!
-//! crystals for 2,000 + 500·X, then stays in play as [持续] while the owner
 //! holds fewer than 7 cards.
 
 use bandori_std::ctx;
 use card_sdk::abi::ActionKind;
-use card_sdk::{it, CardText};
+use card_sdk::{it, it_sub, items, CardText};
 use card_sdk::{key, Action, CardDef, Msg, On};
 
 pub const FOREVER: CardDef = CardDef::new(
@@ -44,10 +46,7 @@ pub const FOREVER: CardDef = CardDef::new(
         .name(r#"如果能一直持续下去..."#)
         .raw_name(r#"如果能一直持续下去..."#)
         .tags(&[r#"手"#, r#"持续"#])
-        .text(CardText::items(&[
-            it(r#"[手] 移除你乐队技能卡上的奇迹水晶，获得2000+500*X资金，X为移除的奇迹水晶数量。"#),
-            it(r#"[持续] 若你的手牌大于等于7，此卡立即置入弃牌堆。"#),
-        ]))
+        .text(CardText::items(&[it_sub(r#"[手]依次进行以下操作："#, &[r#"移除你乐队技能卡上的[奇迹水晶]。"#, r#"获得2000+500×X资金；X为上述操作移除的[奇迹水晶]数量。"#]), it(r#"[持续]你的手牌数大于等于7时：立即将此卡置入弃卡区。"#)]))
         // sheet cell M8
         .fields(&[("group", r#"CRYCHIC"#), ("owner", "")]),
 );

@@ -1,11 +1,16 @@
 //!
+//!
+//! 规则书（docs/rulebook/cards.json, id `AG:Y.O.L.O`）:
+//! > Y.O.L.O：
+//! > 你的任意[投掷]结果结算前：打出此卡，并[投掷]1d4，使原[投掷]结果增加此次1d4的结果。
+//!
 //! Sheet 2026-10-06 新卡组卡 C3: 「你的**任意**掷骰结算前」 (was 「你的掷骰
 //! 结算前」) -- any of the user's rolls, not only the main move roll.
 
 use bandori_std::ctx::{self, trigger};
 use card_sdk::abi::{roll_source, ChainKind, RollPurpose};
 use card_sdk::CardText;
-use card_sdk::{key, CardDef, Msg, On};
+use card_sdk::{key, para, CardDef, Msg, On};
 
 pub const YOLO: CardDef = CardDef::new(
     "AG:Y.O.L.O",
@@ -28,9 +33,7 @@ pub const YOLO: CardDef = CardDef::new(
         .name(r#"Y.O.L.O"#)
         .raw_name(r#"Y.O.L.O"#)
         .tags(&[])
-        .text(CardText::para(
-            r#"你的任意掷骰结算前打出此卡，使结果增加1d4结果的数字"#,
-        ))
+        .text(CardText::para(r#"你的任意[投掷]结果结算前：打出此卡，并[投掷]1d4，使原[投掷]结果增加此次1d4的结果。"#))
         // sheet cell C3
         .fields(&[("group", r#"Afterglow"#), ("owner", "")]),
 );

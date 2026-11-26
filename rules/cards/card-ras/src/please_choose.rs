@@ -1,11 +1,11 @@
+//! [反击] the settler picks a forced play at you, or you teleport onto them.
 //!
 //! 规则书（docs/rulebook/cards.json, id `RAS:PLEASE CHOOSE`）:
 //! > PLEASE CHOOSE：
-//! >  [反击] 当有玩家在livehouse格子上结算时，使对方选择以下效果之一执行：
-//! > （1）立即打出一张可将你指定为目标的牌并将你指定为目标（之一），
-//! > （2）使你立即传送至对方所在格子（不触发结算但视为可触发乐队技能）
+//! > [反击]有玩家在Live House格子上[结算]时：使对方选择以下一个效果执行：
+//! > - 立即打出1张可将你[指定]为目标的卡，并将你[指定]为目标之一。
+//! > - 使你立即[传送]至对方所在格子，不触发[结算]，但视为可触发乐队技能。
 //!
-//! [反击] the settler picks a forced play at you, or you teleport onto them.
 
 use alloc::vec::Vec;
 
@@ -27,16 +27,7 @@ pub const PLEASE_CHOOSE: CardDef = CardDef::new(
         .name(r#"PLEASE CHOOSE"#)
         .raw_name(r#"PLEASE CHOOSE"#)
         .tags(&[r#"反击"#])
-        .text(CardText::of(&[sec(
-            "",
-            &[
-                para(r#"[反击] 当有玩家在livehouse格子上结算时，使对方选择以下效果之一执行："#),
-                items(&[
-                    it(r#"立即打出一张可将你指定为目标的牌并将你指定为目标（之一），"#),
-                    it(r#"使你立即传送至对方所在格子（不触发结算但视为可触发乐队技能）"#),
-                ]),
-            ],
-        )]))
+        .text(CardText::of(&[sec(r#""#, &[para(r#"[反击]有玩家在Live House格子上[结算]时：使对方选择以下一个效果执行："#), para(r#"- 立即打出1张可将你[指定]为目标的卡，并将你[指定]为目标之一。"#), para(r#"- 使你立即[传送]至对方所在格子，不触发[结算]，但视为可触发乐队技能。"#)])]))
         // sheet cell H7
         .fields(&[("group", r#"RAISE A SUILEN"#), ("owner", "")]),
 );

@@ -1,13 +1,16 @@
+
 //!
 //! 规则书（docs/rulebook/cards.json, id `HHW:运动的天赋`）:
 //! > 运动的天赋：
-//! >  将此卡放置于自己场上并放置3个奇迹水晶，每回合结束时失去一个，为0时置入弃牌堆。此卡位于场上时，每次掷骰获得一次资金，起始为700，每次减少100，奖励下限为100。每次移动掷骰时，重骰移动掷骰直至结果至少为10为止。
+//! > 将此卡放置于自己的场上，并在此卡上放置3个[奇迹水晶]。每回合结束时，失去此卡的1个[奇迹水晶]；数量为0时，将此卡置入弃卡区。
+//! > 此卡在场上时：
+//! > - 每次[投掷]，获得1次资金。起始金额为700，每次减少100，奖励下限为100。
+//! > - 每次进行用于确定移动步数的[投掷]时，重新[投掷]，直至结果至少为10。
 //!
-
 use bandori_std::ctx::{self, trigger};
 use card_sdk::abi::{ActionKind, FilterKind};
 use card_sdk::CardText;
-use card_sdk::{key, Action, CardDef, Filter, Msg, On, PlanValue};
+use card_sdk::{key, para, sec, Action, CardDef, Filter, Msg, On, PlanValue};
 
 const ID: &str = "HHW:运动的天赋";
 
@@ -45,7 +48,7 @@ pub const SPORTS_TALENT: CardDef = CardDef::new(
         .name(r#"运动的天赋"#)
         .raw_name(r#"运动的天赋"#)
         .tags(&[])
-        .text(CardText::para(r#"将此卡放置于自己场上并放置3个奇迹水晶，每回合结束时失去一个，为0时置入弃牌堆。此卡位于场上时，每次掷骰获得一次资金，起始为700，每次减少100，奖励下限为100。每次移动掷骰时，重骰移动掷骰直至结果至少为10为止。"#))
+        .text(CardText::of(&[sec(r#""#, &[para(r#"将此卡放置于自己的场上，并在此卡上放置3个[奇迹水晶]。每回合结束时，失去此卡的1个[奇迹水晶]；数量为0时，将此卡置入弃卡区。"#), para(r#"此卡在场上时："#), para(r#"- 每次[投掷]，获得1次资金。起始金额为700，每次减少100，奖励下限为100。"#), para(r#"- 每次进行用于确定移动步数的[投掷]时，重新[投掷]，直至结果至少为10。"#)])]))
         // sheet cell F9
         .fields(&[("group", r#"Hello, Happy World!"#), ("owner", "")]));
 

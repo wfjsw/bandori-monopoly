@@ -1,10 +1,11 @@
+//! payment to a junior or same-grade character, or boost a senior or
 //!
 //! 规则书（docs/rulebook/cards.json, id `Mor:秘密与青春的虹彩`）:
-//! > 秘密与青春的虹彩：[反击]
+//! > 秘密与青春的虹彩：
+//! > [反击]
 //! > （1）当你向学妹或同级生支付时，打出此卡，此次支付金额减半。
 //! > （2）当学姐或同级生向你支付的时候，打出此卡，使此次支付资金变成1.5倍。
 //!
-//! payment to a junior or same-grade character, or boost a senior or
 //! same-grade character's payment to you.
 //!
 //! Counteraction-only (`Normal => false`). Grades are static data shipped with
@@ -37,13 +38,7 @@ pub const SECRET_RAINBOW: CardDef = CardDef::new(
         .name(r#"秘密与青春的虹彩"#)
         .raw_name(r#"秘密与青春的虹彩"#)
         .tags(&[r#"反击"#])
-        .text(CardText::of(&[sec(
-            r#"[反击]"#,
-            &[items(&[
-                it(r#"当你向学妹或同级生支付时，打出此卡，此次支付金额减半。"#),
-                it(r#"当学姐或同级生向你支付的时候，打出此卡，使此次支付资金变成1.5倍。"#),
-            ])],
-        )]))
+        .text(CardText::para(r#"[反击]（1）当你向学妹或同级生支付时，打出此卡，此次支付金额减半。（2）当学姐或同级生向你支付的时候，打出此卡，使此次支付资金变成1.5倍。"#))
         // sheet cell G14
         .fields(&[("group", r#"Morfonica"#), ("owner", "")]),
 );

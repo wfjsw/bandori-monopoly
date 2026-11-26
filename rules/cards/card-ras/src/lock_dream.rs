@@ -1,16 +1,16 @@
+//! pre-game field card that exiles to 东京外 and reroutes a Bandori车站 pass.
 //!
 //! 规则书（docs/rulebook/cards.json, id `RAS:（LOCK）追逐梦想的步伐`）:
 //! > （LOCK）追逐梦想的步伐：
 //!
-//! > （1）抽取游戏开始的2手牌前将此卡从卡组展示给所有玩家并放置在自身场上，游戏开始时[传送]到“东京外”获得3层[除外]
+//! > （1）抽取游戏开始的2张手牌前：将此卡从卡组展示给所有玩家，并放置在自身场上。游戏开始时，[传送]到“东京外”，并获得3层[除外]。
 //!
-//! > （2）如果此卡拥有者的主要移动[经过]了“Bandori车站”则在触发结算前将行动终点改为“旭汤澡堂”，然后此卡[移除]
+//! > （2）若此卡[拥有者]的[主要移动][经过]了“Bandori车站”：在[结算]前，将[移动终点]改为“旭汤澡堂”，然后[移除]此卡。
 //!
-//! pre-game field card that exiles to 东京外 and reroutes a Bandori车站 pass.
 
 use bandori_std::ctx;
 use card_sdk::abi::{ActionKind, CardPile};
-use card_sdk::{it, CardText};
+use card_sdk::{it, items, CardText};
 use card_sdk::{key, Action, CardDef, Msg, On};
 
 pub const LOCK_DREAM: CardDef = CardDef::new(
@@ -29,12 +29,9 @@ pub const LOCK_DREAM: CardDef = CardDef::new(
     ],
 ).meta(&card_sdk::meta::CardMeta::new()
         .name(r#"追逐梦想的步伐"#)
-        .raw_name(r#"（LOCK）追逐梦想的步伐"#)
+        .raw_name(r#"（朝日六花）追逐梦想的步伐"#)
         .tags(&[])
-        .text(CardText::items(&[
-            it(r#"抽取游戏开始的2手牌前将此卡从卡组展示给所有玩家并放置在自身场上，游戏开始时[传送]到“东京外”获得3层[除外]"#),
-            it(r#"如果此卡拥有者的主要移动[经过]了“Bandori车站”则在触发结算前将行动终点改为“旭汤澡堂”，然后此卡[移除]"#),
-        ]))
+        .text(CardText::items(&[it(r#"抽取游戏开始的2张手牌前：将此卡从卡组展示给所有玩家，并放置在自身场上。游戏开始时，[传送]到“东京外”，并获得3层[除外]。"#), it(r#"若此卡[拥有者]的[主要移动][经过]了“Bandori车站”：在[结算]前，将[移动终点]改为“旭汤澡堂”，然后[移除]此卡。"#)]))
         // sheet cell H13
         .fields(&[("group", r#"RAISE A SUILEN"#), ("owner", r#"朝日六花"#)]));
 

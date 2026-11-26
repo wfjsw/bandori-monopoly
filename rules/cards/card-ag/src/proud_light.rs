@@ -1,16 +1,18 @@
+//! swap half of each side's most expensive deed price with **each** character
 //!
 //! 规则书（docs/rulebook/cards.json, id `AG:刻入天穹傲岸的烈光`）:
 //! > 刻入天穹傲岸的烈光：
-//! > [反击] 当你经过一名角色时，你可以打出此卡，你从对方处获得等于对方最贵格子基础购买价格一半数额的资金，之后对方从你处获得等于你最贵格子基础购买价格一半数额的资金。
+//! > [反击]当你[经过]一名角色时：你可以打出此卡，依次进行以下操作：
+//! > 1. 对方[支付]你等于对方最贵格子基础购买价格一半的资金。
+//! > 2. 你[支付]对方等于你最贵格子基础购买价格一半的资金。
 //!
-//! swap half of each side's most expensive deed price with **each** character
 //! passed (every occupant counts as 「一名角色」).
 
 use alloc::vec::Vec;
 use bandori_std::ctx::{self, trigger};
 use card_sdk::abi::{ChainKind, TriggerKind};
 use card_sdk::CardText;
-use card_sdk::{key, CardDef, Msg, On};
+use card_sdk::{key, para, sec, steps, CardDef, Msg, On};
 
 pub const PROUD_LIGHT: CardDef = CardDef::new(
     "AG:刻入天穹傲岸的烈光",
@@ -31,7 +33,7 @@ pub const PROUD_LIGHT: CardDef = CardDef::new(
         .name(r#"刻入天穹傲岸的烈光"#)
         .raw_name(r#"刻入天穹傲岸的烈光"#)
         .tags(&[r#"反击"#])
-        .text(CardText::para(r#"[反击] 当你经过一名角色时，你可以打出此卡，你从对方处获得等于对方最贵格子基础购买价格一半数额的资金，之后对方从你处获得等于你最贵格子基础购买价格一半数额的资金。"#))
+        .text(CardText::of(&[sec(r#""#, &[para(r#"[反击]当你[经过]一名角色时：你可以打出此卡，依次进行以下操作："#), steps(&[r#"对方[支付]你等于对方最贵格子基础购买价格一半的资金。"#, r#"你[支付]对方等于你最贵格子基础购买价格一半的资金。"#])])]))
         // sheet cell C13
         .fields(&[("group", r#"Afterglow"#), ("owner", "")]));
 

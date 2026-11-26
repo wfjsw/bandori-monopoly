@@ -1,9 +1,10 @@
+//! CiRCLE, drop a crystal on 弦卷集团 so that tile borrows CiRCLE's effect.
 //!
 //! 规则书（docs/rulebook/cards.json, id `HHW:黑衣人的补给`）:
 //! > 黑衣人的补给：
-//! > [反击] 经过“CiRCLE”格子（#1）时可打出此卡，在“弦卷集团”（#29格）格子上放置一个奇迹水晶，该格上拥有奇迹水晶时，该格获得“CiRCLE”格子的全部效果。你经过“弦卷集团”格子后，移除那格的一个奇迹水晶。
+//! > [反击][经过]“CiRCLE”（1号格子）时：可打出此卡，在“弦卷集团”（29号格子）上放置1个[奇迹水晶]。
+//! > “弦卷集团”格子上拥有[奇迹水晶]时，该格子获得“CiRCLE”格子的全部效果。你[经过]“弦卷集团”格子后，移除该格子的1个[奇迹水晶]。
 //!
-//! CiRCLE, drop a crystal on 弦卷集团 so that tile borrows CiRCLE's effect.
 //!
 //! `SETTLE-STAGES.md` §4 M3 / `docs/TILES.md`: 「该格获得"CiRCLE"格子的全部
 //! 效果」 is the tile **gaining CiRCLE's effect-list entry** -- a card attaching
@@ -15,7 +16,7 @@ use bandori_std::ctx::{self, trigger};
 use bandori_std::zones::ZoneChangeCause;
 use card_sdk::abi::{ActionKind, ChainKind, MarkFilter};
 use card_sdk::CardText;
-use card_sdk::{key, Action, CardDef, Msg, On};
+use card_sdk::{key, para, sec, Action, CardDef, Msg, On};
 
 /// It is a locale key so the placement line reads as a 奇迹水晶, not as the card's
 /// own name.
@@ -70,7 +71,7 @@ pub const BLACK_SUITS: CardDef = CardDef::new(
         .name(r#"黑衣人的补给"#)
         .raw_name(r#"黑衣人的补给"#)
         .tags(&[r#"反击"#])
-        .text(CardText::para(r#"[反击] 经过“CiRCLE”格子（#1）时可打出此卡，在“弦卷集团”（#29格）格子上放置一个奇迹水晶，该格上拥有奇迹水晶时，该格获得“CiRCLE”格子的全部效果。你经过“弦卷集团”格子后，移除那格的一个奇迹水晶。"#))
+        .text(CardText::of(&[sec(r#""#, &[para(r#"[反击][经过]“CiRCLE”（1号格子）时：可打出此卡，在“弦卷集团”（29号格子）上放置1个[奇迹水晶]。"#), para(r#"“弦卷集团”格子上拥有[奇迹水晶]时，该格子获得“CiRCLE”格子的全部效果。你[经过]“弦卷集团”格子后，移除该格子的1个[奇迹水晶]。"#)])]))
         // sheet cell F8
         .fields(&[("group", r#"Hello, Happy World!"#), ("owner", "")]));
 

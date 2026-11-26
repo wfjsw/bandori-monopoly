@@ -1,13 +1,13 @@
+//! lap without settling, then pay 1,000 at end of turn.
 //!
 //! 规则书（docs/rulebook/cards.json, id `PPP:向着未来的路标`）:
 //! > 向着未来的路标：
-//! > 本回合的主要移动设为移动60格子并不触发结算，回合结束时[失去]1000资金
+//! > 将本回合的[主要移动]设为移动60格，不触发[结算]。回合结束时，[消耗]1000资金。
 //!
-//! lap without settling, then pay 1,000 at end of turn.
 
 use card_sdk::abi::ActionKind;
 use card_sdk::CardText;
-use card_sdk::{ctx, key, Action, CardDef, Msg, On};
+use card_sdk::{ctx, key, para, Action, CardDef, Msg, On};
 
 pub const SIGNPOST: CardDef = CardDef::new(
     "PPP:向着未来的路标",
@@ -27,9 +27,7 @@ pub const SIGNPOST: CardDef = CardDef::new(
         .name(r#"向着未来的路标"#)
         .raw_name(r#"向着未来的路标"#)
         .tags(&[])
-        .text(CardText::para(
-            r#"本回合的主要移动设为移动60格子并不触发结算，回合结束时[失去]1000资金"#,
-        ))
+        .text(CardText::para(r#"将本回合的[主要移动]设为移动60格，不触发[结算]。回合结束时，[消耗]1000资金。"#))
         // sheet cell B14
         .fields(&[("group", r#"Poppin' Party"#), ("owner", "")]),
 );

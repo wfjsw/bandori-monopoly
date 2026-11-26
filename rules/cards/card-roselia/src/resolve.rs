@@ -1,9 +1,10 @@
+
 //!
 //! 规则书（docs/rulebook/cards.json, id `R:[衍生] 觉悟`）:
 //! > [衍生] 觉悟：
 //! > [特]：此卡[移除]时获得1000资金。
 //! > [手]：[移除]此卡。
-
+//!
 use bandori_std::zones::ZoneChangeCause;
 use card_sdk::{ctx, key, Action, CardDef, Msg, On};
 use card_sdk::{para, sec, CardText};
@@ -23,10 +24,7 @@ pub const RESOLVE: CardDef = CardDef::new(
         .raw_name(r#"[衍生] 觉悟"#)
         .derived(true)
         .tags(&[r#"手"#, r#"特"#, r#"衍生"#])
-        .text(CardText::of(&[
-            sec("[特]：", &[para("此卡[移除]时获得1000资金。")]),
-            sec("[手]：", &[para("[移除]此卡。")]),
-        ]))
+        .text(CardText::of(&[sec(r#""#, &[para(r#"[特]：此卡[移除]时获得1000资金。"#), para(r#"[手]：[移除]此卡。"#)])]))
         // sheet cell E17
         .fields(&[("group", r#"Roselia"#), ("owner", "")]),
 );

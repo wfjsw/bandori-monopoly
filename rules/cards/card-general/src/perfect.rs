@@ -5,7 +5,7 @@
 //! > [手]：
 //! > 依次进行以下操作：
 //! > 1. [移除]此卡；
-//! > 2. 将一张“FEVER!“加入弃卡区；
+//! > 2. 将一张“FEVER!”加入弃卡区；
 //! > 3. [获得]3000资金。
 //!
 
@@ -19,17 +19,7 @@ pub const PERFECT: CardDef = CardDef::new("通用:[衍生]PERFECT", &[On::Play("
             .raw_name(r#"[衍生]PERFECT"#)
             .derived(true)
             .tags(&[r#"手"#, r#"衍生"#])
-            .text(CardText::of(&[sec(
-                r#"[手]："#,
-                &[
-                    para(r#"依次进行以下操作："#),
-                    steps(&[
-                        r#"[移除]此卡；"#,
-                        r#"将一张“FEVER!“加入弃卡区；"#,
-                        r#"[获得]3000资金。"#,
-                    ]),
-                ],
-            )]))
+            .text(CardText::of(&[sec(r#"[手]："#, &[para(r#"依次进行以下操作："#), steps(&[r#"[移除]此卡；"#, r#"将一张“FEVER!”加入弃卡区；"#, r#"[获得]3000资金。"#])])]))
             // sheet cell A5
             .fields(&[("group", r#"通用"#), ("owner", "")]),
     );

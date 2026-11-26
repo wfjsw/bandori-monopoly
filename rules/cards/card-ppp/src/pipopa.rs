@@ -1,13 +1,16 @@
+//! the created Popipapapipopa stays on the field; this card is banished.
 //!
 //! 规则书（docs/rulebook/cards.json, id `PPP:[衍生]Pipopa`）:
 //! > [衍生]Pipopa：
 //! > [手]：
-//! > 获得1000资金，然后将一张“Popipapapipopa”放置在自身场上，然后此卡[移除]
+//! > 依次进行以下操作：
+//! > 1. 获得1000资金。
+//! > 2. 将1张“Popipapapipopa”放置在自身场上。
+//! > 3. [移除]此卡。
 //!
-//! the created Popipapapipopa stays on the field; this card is banished.
 
 use card_sdk::{ctx, key, CardDef, Msg, On};
-use card_sdk::{para, sec, CardText};
+use card_sdk::{para, sec, steps, CardText};
 
 pub const PIPOPA: CardDef = CardDef::new("PPP:[衍生]Pipopa", &[On::Play("", None, pipopa)]).meta(
     &card_sdk::meta::CardMeta::new()
@@ -15,12 +18,7 @@ pub const PIPOPA: CardDef = CardDef::new("PPP:[衍生]Pipopa", &[On::Play("", No
         .raw_name(r#"[衍生]Pipopa"#)
         .derived(true)
         .tags(&[r#"手"#, r#"衍生"#])
-        .text(CardText::of(&[sec(
-            r#"[手]："#,
-            &[para(
-                r#"获得1000资金，然后将一张“Popipapapipopa”放置在自身场上，然后此卡[移除]"#,
-            )],
-        )]))
+        .text(CardText::of(&[sec(r#"[手]："#, &[para(r#"依次进行以下操作："#), steps(&[r#"获得1000资金。"#, r#"将1张“Popipapapipopa”放置在自身场上。"#, r#"[移除]此卡。"#])])]))
         // sheet cell B3
         .fields(&[("group", r#"Poppin' Party"#), ("owner", "")]),
 );

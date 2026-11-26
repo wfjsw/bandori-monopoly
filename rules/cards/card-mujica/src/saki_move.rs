@@ -1,13 +1,16 @@
+//! 3 tiles in a chosen direction, settling at half price.
 //!
 //! 规则书（docs/rulebook/cards.json, id `Mujica:祥，移动`）:
 //! > 祥，移动：
-//! >  强制一名玩家向你选择的方向移动3格并[触发结算]（可在掷骰前选择自己以代替主要移动），触发结算时进行的支付价格减半
+//! > 选择1名玩家和移动方向，依次进行以下操作：
+//! > 1. 强制那名玩家向你选择的方向移动3格。
+//! > 2. 那名玩家进行[结算]；此次[结算]中进行的[支付]金额减半。
+//! > 你可在用于确定[主要移动]步数的[投掷]前选择自己，以此次移动代替自己的[主要移动]。
 //!
-//! 3 tiles in a chosen direction, settling at half price.
 
 use card_sdk::abi::{prop, PayFactorScope};
 use card_sdk::CardText;
-use card_sdk::{ctx, key, CardDef, Msg, On};
+use card_sdk::{ctx, key, para, sec, steps, CardDef, Msg, On};
 
 pub const SAKI_MOVE: CardDef = CardDef::new("Mujica:祥，移动", &[On::Play("", None, saki_move)])
     // 规则书: 「强制一名玩家」 -- one named player, so the play has a [指定]
@@ -17,7 +20,7 @@ pub const SAKI_MOVE: CardDef = CardDef::new("Mujica:祥，移动", &[On::Play(""
         .name(r#"祥，移动"#)
         .raw_name(r#"祥，移动"#)
         .tags(&[])
-        .text(CardText::para(r#"强制一名玩家向你选择的方向移动3格并[触发结算]（可在掷骰前选择自己以代替主要移动），触发结算时进行的支付价格减半"#))
+        .text(CardText::of(&[sec(r#""#, &[para(r#"选择1名玩家和移动方向，依次进行以下操作："#), steps(&[r#"强制那名玩家向你选择的方向移动3格。"#, r#"那名玩家进行[结算]；此次[结算]中进行的[支付]金额减半。"#]), para(r#"你可在用于确定[主要移动]步数的[投掷]前选择自己，以此次移动代替自己的[主要移动]。"#)])]))
         // sheet cell J4
         .fields(&[("group", r#"Ave Mujica"#), ("owner", "")]));
 

@@ -1,15 +1,17 @@
+//! incoming rent, pay double rent at one rival tile to subsidise the payer.
 //!
 //! 规则书（docs/rulebook/cards.json, id `HHW:梦幻的回礼`）:
-//! > 梦幻的回礼：[反击] 在场上其他玩家即将被不属于你的格子收费时打出，向场上你以外的任意一名玩家的一个格子进行一次支付。若成功进行支付，则自动使用一次你的乐队技能进行双倍支付并为乐队技能卡上添加两个分别记录这两名玩家的奇迹水晶，并为将要进行支付的那名玩家减免相当于你支付金额的数额。
+//! > 梦幻的回礼：
+//! > [反击]场上其他玩家即将被不属于你的格子收费时：打出此卡，向场上你以外任意1名玩家的1个格子进行1次[支付]。
+//! > 若成功进行[支付]：自动使用1次你的乐队技能进行双倍[支付]，为乐队技能卡添加2个分别记录这两名玩家的[奇迹水晶]，并为将要进行[支付]的那名玩家减免等于你[支付]金额的资金。
 //!
-//! incoming rent, pay double rent at one rival tile to subsidise the payer.
 
 use alloc::vec::Vec;
 
 use bandori_std::ctx::{self, trigger};
 use card_sdk::abi::ChainKind;
 use card_sdk::CardText;
-use card_sdk::{key, CardDef, Msg, On};
+use card_sdk::{key, para, sec, CardDef, Msg, On};
 
 pub const DREAM_RETURN: CardDef = CardDef::new(
     "HHW:梦幻的回礼",
@@ -23,7 +25,7 @@ pub const DREAM_RETURN: CardDef = CardDef::new(
         .name(r#"梦幻的回礼"#)
         .raw_name(r#"梦幻的回礼"#)
         .tags(&[r#"反击"#])
-        .text(CardText::para(r#"[反击] 在场上其他玩家即将被不属于你的格子收费时打出，向场上你以外的任意一名玩家的一个格子进行一次支付。若成功进行支付，则自动使用一次你的乐队技能进行双倍支付并为乐队技能卡上添加两个分别记录这两名玩家的奇迹水晶，并为将要进行支付的那名玩家减免相当于你支付金额的数额。"#))
+        .text(CardText::of(&[sec(r#""#, &[para(r#"[反击]场上其他玩家即将被不属于你的格子收费时：打出此卡，向场上你以外任意1名玩家的1个格子进行1次[支付]。"#), para(r#"若成功进行[支付]：自动使用1次你的乐队技能进行双倍[支付]，为乐队技能卡添加2个分别记录这两名玩家的[奇迹水晶]，并为将要进行[支付]的那名玩家减免等于你[支付]金额的资金。"#)])]))
         // sheet cell F16
         .fields(&[("group", r#"Hello, Happy World!"#), ("owner", "")]));
 

@@ -1,3 +1,4 @@
+//! then flip every face-down fan back up. Step 2's face-up -> face-down move is
 //!
 //! 规则书（docs/rulebook/cards.json, id `PP:同一个梦想`）:
 //! > 同一个梦想：
@@ -7,7 +8,6 @@
 //! > 2. 将所有正面[P✽P粉丝]变反，[获得]变反数量乘100的资金；
 //! > 3. 将自己的所有反面[P✽P粉丝]变正，如果[共鸣]则此效果对所有Pastel✽Palettes角色生效。
 //!
-//! then flip every face-down fan back up. Step 2's face-up -> face-down move is
 //! `fans::flip_down` (state dict only -- no `FansFlip` raise); step 3's move is
 //! `fans::flip_up`, which raises it, and its widened target (the other
 //! Pastel✽Palettes seats) is [共鸣]-gated.
@@ -23,16 +23,7 @@ pub const SAME_DREAM: CardDef =
             .name(r#"同一个梦想"#)
             .raw_name(r#"同一个梦想"#)
             .tags(&[r#"手"#])
-            .text(CardText::of(&[
-                sec(r#"[手]："#, &[
-                    para(r#"依次进行以下操作："#),
-                    steps(&[
-                        r#"为自己的Pastel✽Palettes乐队卡添加3个[奇迹水晶]；"#,
-                        r#"将所有正面[P✽P粉丝]变反，[获得]变反数量乘100的资金；"#,
-                        r#"将自己的所有反面[P✽P粉丝]变正，如果[共鸣]则此效果对所有Pastel✽Palettes角色生效。"#,
-                    ]),
-                ]),
-            ]))
+            .text(CardText::of(&[sec(r#"[手]："#, &[para(r#"依次进行以下操作："#), steps(&[r#"为自己的Pastel✽Palettes乐队卡添加3个[奇迹水晶]；"#, r#"将所有正面[P✽P粉丝]变反，[获得]变反数量乘100的资金；"#, r#"将自己的所有反面[P✽P粉丝]变正，如果[共鸣]则此效果对所有Pastel✽Palettes角色生效。"#])])]))
             // sheet cell D3
             .fields(&[("group", r#"Pastel✽Palettes"#), ("owner", "")]),
     );

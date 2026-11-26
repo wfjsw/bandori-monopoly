@@ -1,10 +1,10 @@
+
 //!
 //! 规则书（docs/rulebook/cards.json, id `通用:[月岛麻里奈]今天也要加油工作喔`）:
 //! > [月岛麻里奈]今天也要加油工作喔：
 //! > [手]：
 //! > [反击][使用者][经过]#1格子且#1格子受到其他效果影响时：[使用者]本次对#1格子的[经过]或[结算]正常进行而不受到其上的额外效果。
 //!
-
 use bandori_std::ctx;
 use card_sdk::abi::ChainKind;
 use card_sdk::{key, CardDef, Msg, On};
@@ -29,14 +29,9 @@ pub const MARINA_WORK: CardDef = CardDef::new(
     ],
 ).meta(&card_sdk::meta::CardMeta::new()
         .name(r#"今天也要加油工作喔"#)
-        .raw_name(r#"[月岛麻里奈]今天也要加油工作喔"#)
-        // 规则书: 「[手]：」 -- and 「[反击]」, the [手] card's own counter window.
+        .raw_name(r#"（月岛麻里奈）今天也要加油工作喔"#)
         .tags(&[r#"手"#, r#"反击"#])
-        .text(CardText::of(&[
-            sec(r#"[手]："#, &[
-                para(r#"[反击][使用者][经过]#1格子且#1格子受到其他效果影响时：[使用者]本次对#1格子的[经过]或[结算]正常进行而不受到其上的额外效果。"#),
-            ]),
-        ]))
+        .text(CardText::of(&[sec(r#"[手]："#, &[para(r#"[反击][使用者][经过]#1格子且#1格子受到其他效果影响时：[使用者]本次对#1格子的[经过]或[结算]正常进行而不受到其上的额外效果。"#)])]))
         // sheet cell A14
         .fields(&[("group", r#"通用"#), ("owner", r#"月岛麻里奈"#)]));
 

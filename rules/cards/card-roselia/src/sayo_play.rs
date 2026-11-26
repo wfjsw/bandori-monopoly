@@ -1,9 +1,9 @@
+//! Counteraction after your non-teleport main distance is determined, before
 //!
 //! 规则书（docs/rulebook/cards.json, id `R:（纱夜）弹奏弹奏弹奏，继续弹奏`）:
 //! > （纱夜）弹奏弹奏弹奏，继续弹奏：
-//! > [反击] 时机合适时打出，打出时视为使用一次此卡使用者的技能。
+//! > [反击]时机合适时打出此卡，视为使用1次此卡[使用者]的技能。
 //!
-//! Counteraction after your non-teleport main distance is determined, before
 //! moving (same timing as Sayo's skill; the printed card text is unchanged). The
 //! skill's press body is not invoked, so the card currently runs the extension
 //! without the skill's 6-[火罐] cost.
@@ -11,7 +11,7 @@
 use bandori_std::ctx::{self, plan, state, trigger};
 use card_sdk::abi::{prop, ChainKind};
 use card_sdk::CardText;
-use card_sdk::{key, CardDef, Msg, On};
+use card_sdk::{key, para, CardDef, Msg, On};
 
 pub const SAYO_PLAY: CardDef = CardDef::new(
     "R:（纱夜）弹奏弹奏弹奏，继续弹奏",
@@ -29,9 +29,9 @@ pub const SAYO_PLAY: CardDef = CardDef::new(
 .props(&[(prop::COUNTERACT_GROUP, 1)])
 .meta(&card_sdk::meta::CardMeta::new()
         .name(r#"弹奏弹奏弹奏，继续弹奏"#)
-        .raw_name(r#"（纱夜）弹奏弹奏弹奏，继续弹奏"#)
+        .raw_name(r#"（冰川纱夜）弹奏弹奏弹奏，继续弹奏"#)
         .tags(&[r#"反击"#])
-        .text(CardText::para(r#"[反击] 时机合适时打出，打出时视为使用一次此卡使用者的技能。"#))
+        .text(CardText::para(r#"[反击]时机合适时打出此卡，视为使用1次此卡[使用者]的技能。"#))
         // sheet cell E10
         .fields(&[("group", r#"Roselia"#), ("owner", r#"冰川纱夜"#)]));
 

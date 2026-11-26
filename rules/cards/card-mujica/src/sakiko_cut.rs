@@ -1,22 +1,26 @@
+//! mortgage your best deed, discard a hand card, teleport with settle as main move.
 //!
 //! 规则书（docs/rulebook/cards.json, id `Mujica:（祥子）斩断留恋，忘却一切`）:
 //! > （祥子）斩断留恋，忘却一切：
-//! >  抵押一张你拥有且未抵押的最贵地契并弃置一张手牌（若无手牌则弃掉下一张抽到的牌），立刻传送至任意可购买或已拥有的格子并触发结算，作为你的主要移动。若直接从抽牌堆打出，可不弃置手牌发动，或选择不发动此卡
+//! > 抵押1张你拥有且未抵押的最贵地契，并弃置1张手牌；若无手牌，改为弃掉下一张抽到的卡。然后依次进行以下操作：
+//! > 1. 立刻[传送]至任意可购买或已拥有的格子。
+//! > 2. 进行[结算]。
+//! > 此次[传送]作为你的[主要移动]。
+//! > 若此卡直接从抽卡区打出，你可不弃置手牌发动，或选择不发动此卡。
 //!
-//! mortgage your best deed, discard a hand card, teleport with settle as main move.
 
 use bandori_std::ctx::{self, CardPile};
 use card_sdk::CardText;
-use card_sdk::{key, CardDef, Msg, On};
+use card_sdk::{key, para, sec, steps, CardDef, Msg, On};
 
 pub const SAKIKO_CUT: CardDef = CardDef::new(
     "Mujica:（祥子）斩断留恋，忘却一切",
     &[On::Play("", Some(cant_play), sakiko_cut)],
 ).meta(&card_sdk::meta::CardMeta::new()
         .name(r#"斩断留恋，忘却一切"#)
-        .raw_name(r#"（祥子）斩断留恋，忘却一切"#)
+        .raw_name(r#"（丰川祥子）斩断留恋，忘却一切"#)
         .tags(&[])
-        .text(CardText::para(r#"抵押一张你拥有且未抵押的最贵地契并弃置一张手牌（若无手牌则弃掉下一张抽到的牌），立刻传送至任意可购买或已拥有的格子并触发结算，作为你的主要移动。若直接从抽牌堆打出，可不弃置手牌发动，或选择不发动此卡"#))
+        .text(CardText::of(&[sec(r#""#, &[para(r#"抵押1张你拥有且未抵押的最贵地契，并弃置1张手牌；若无手牌，改为弃掉下一张抽到的卡。然后依次进行以下操作："#), steps(&[r#"立刻[传送]至任意可购买或已拥有的格子。"#, r#"进行[结算]。"#]), para(r#"此次[传送]作为你的[主要移动]。"#), para(r#"若此卡直接从抽卡区打出，你可不弃置手牌发动，或选择不发动此卡。"#)])]))
         // sheet cell J9
         .fields(&[("group", r#"Ave Mujica"#), ("owner", r#"丰川祥子"#)]));
 

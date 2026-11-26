@@ -1,9 +1,12 @@
+//! settle-teleport onto any unmortgaged tile of the 周边精选 / 商店街 / 东京外
 //!
 //! 规则书（docs/rulebook/cards.json, id `Sumimi:Sweet Escape`）:
 //! > Sweet Escape：
-//! >  回合开始时，若自身前后两格内的地块[收费标价]之和大于等于2000，可打出此卡，传送至“周边精选”，“商店街”或“东京外”对应颜色的除地产商以外任一不属于你的未抵押格子并触发结算，若为可购买格子则必须购买，视为你的主要移动。
+//! > 回合开始时，若自身前后2格内的地块[收费标价]之和大于等于2000（RiNG按当前收费乘数计入）：可打出此卡，依次进行以下操作：
+//! > 1. [传送]至与“周边精选”、“商店街”或“东京外”对应颜色的、除地产商以外任意1个不属于你的未抵押格子。
+//! > 2. 进行[结算]；若该格子可购买，必须购买。
+//! > 此次[传送]视为你的[主要移动]。
 //!
-//! settle-teleport onto any unmortgaged tile of the 周边精选 / 商店街 / 东京外
 //! colour groups that the user does not own -- another player's tile is legal
 //! and its settle charges rent.
 
@@ -11,7 +14,7 @@ use alloc::vec::Vec;
 
 use bandori_std::ctx;
 use card_sdk::CardText;
-use card_sdk::{key, CardDef, Msg, On};
+use card_sdk::{key, para, sec, steps, CardDef, Msg, On};
 
 pub const SWEET_ESCAPE: CardDef = CardDef::new(
     "Sumimi:Sweet Escape",
@@ -20,7 +23,7 @@ pub const SWEET_ESCAPE: CardDef = CardDef::new(
         .name(r#"Sweet Escape"#)
         .raw_name(r#"Sweet Escape"#)
         .tags(&[])
-        .text(CardText::para(r#"回合开始时，若自身前后两格内的地块[收费标价]之和大于等于2000，可打出此卡，传送至“周边精选”，“商店街”或“东京外”对应颜色的除地产商以外任一不属于你的未抵押格子并触发结算，若为可购买格子则必须购买，视为你的主要移动。"#))
+        .text(CardText::of(&[sec(r#""#, &[para(r#"回合开始时，若自身前后2格内的地块[收费标价]之和大于等于2000（RiNG按当前收费乘数计入）：可打出此卡，依次进行以下操作："#), steps(&[r#"[传送]至与“周边精选”、“商店街”或“东京外”对应颜色的、除地产商以外任意1个不属于你的未抵押格子。"#, r#"进行[结算]；若该格子可购买，必须购买。"#]), para(r#"此次[传送]视为你的[主要移动]。"#)])]))
         // sheet cell L8
         .fields(&[("group", r#"Sumimi"#), ("owner", "")]));
 

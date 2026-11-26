@@ -1,17 +1,18 @@
+//! runs a CRYCHIC character skill (reroll / step toward / cancel a rent).
 //!
 //! 规则书（docs/rulebook/cards.json, id `CRYCHIC:春日影`）:
-//! > 春日影
-//! >  ：
-//! > （1）[特] 若抽到此卡时你的总资产大于等于20000且手牌不多于5张，可选择使其直接从抽牌堆打出，依次抽牌直至你的手牌数为6，若受到弃牌效果则中断此效果。
-//! > （2）（此卡可作为[反击]打出）使用一次Crychic角色的技能
+//! > 春日影：
 //!
-//! runs a CRYCHIC character skill (reroll / step toward / cancel a rent).
+//! > （1）[特]抽到此卡时，若你的总资产大于等于20000：可选择使此卡直接从抽卡区打出，依次抽卡直至你的手牌数为6。若受到弃卡效果，中断此效果。
+//!
+//! > （2）此卡可作为[反击]打出。使用1次CRYCHIC角色的技能。
+//!
 
 use alloc::vec::Vec;
 
 use bandori_std::ctx::{self, trigger};
 use card_sdk::abi::{ActionKind, ChainKind, TriggerKind};
-use card_sdk::{it, CardText};
+use card_sdk::{it, items, CardText};
 use card_sdk::{key, Action, CardDef, Msg, On};
 
 pub const HARUHIKAGE: CardDef = CardDef::new(
@@ -67,10 +68,7 @@ pub const HARUHIKAGE: CardDef = CardDef::new(
         .name(r#"春日影"#)
         .raw_name(r#"春日影"#)
         .tags(&[r#"反击"#, r#"特"#])
-        .text(CardText::items(&[
-            it(r#"[特] 若抽到此卡时你的总资产大于等于20000且手牌不多于5张，可选择使其直接从抽牌堆打出，依次抽牌直至你的手牌数为6，若受到弃牌效果则中断此效果。"#),
-            it(r#"（此卡可作为[反击]打出）使用一次Crychic角色的技能"#),
-        ]))
+        .text(CardText::items(&[it(r#"[特]抽到此卡时，若你的总资产大于等于20000：可选择使此卡直接从抽卡区打出，依次抽卡直至你的手牌数为6。若受到弃卡效果，中断此效果。"#), it(r#"此卡可作为[反击]打出。使用1次CRYCHIC角色的技能。"#)]))
         // sheet cell M3
         .fields(&[("group", r#"CRYCHIC"#), ("owner", "")]));
 

@@ -1,10 +1,10 @@
+//! jump 1-4 tiles (either way) as the main move, unstoppable.
 //!
 //! 规则书（docs/rulebook/cards.json, id `PPP:（里美）我的心就像巧克力螺`）:
 //! > （里美）我的心就像巧克力螺：
 //! > [手]：
-//! > 立刻进入移动阶段，本回合的[主要移动]改为移动到当前格子绝对距离1到4格或以内的任何格子并[结算]，期间[不可阻挡]。
+//! > 立刻进入移动阶段，本回合的[主要移动]改为移动到当前格子[绝对距离]1到4格或以内的任何格子并[结算]，期间[不可阻挡]。
 //!
-//! jump 1-4 tiles (either way) as the main move, unstoppable.
 
 use alloc::vec::Vec;
 use card_sdk::{ctx, key, CardDef, Msg, On};
@@ -15,13 +15,9 @@ pub const RIMI_CHOCO: CardDef = CardDef::new(
     &[On::Play("", Some(cant_play), play)],
 ).meta(&card_sdk::meta::CardMeta::new()
         .name(r#"我的心就像巧克力螺"#)
-        .raw_name(r#"（里美）我的心就像巧克力螺"#)
+        .raw_name(r#"（牛込里美）我的心就像巧克力螺"#)
         .tags(&[r#"手"#])
-        .text(CardText::of(&[
-            sec(r#"[手]："#, &[
-                para(r#"立刻进入移动阶段，本回合的[主要移动]改为移动到当前格子绝对距离1到4格或以内的任何格子并[结算]，期间[不可阻挡]。"#),
-            ]),
-        ]))
+        .text(CardText::of(&[sec(r#"[手]："#, &[para(r#"立刻进入移动阶段，本回合的[主要移动]改为移动到当前格子[绝对距离]1到4格或以内的任何格子并[结算]，期间[不可阻挡]。"#)])]))
         // sheet cell B19
         .fields(&[("group", r#"Poppin' Party"#), ("owner", r#"牛込里美"#)]));
 

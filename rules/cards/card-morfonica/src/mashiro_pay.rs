@@ -1,16 +1,16 @@
+//! into a pure loss and make the payee lose half.
 //!
 //! 规则书（docs/rulebook/cards.json, id `Mor:（小白）`）:
 //! > （小白）：
-//! > [反击]当你将要向其他玩家支付时打出此卡，此次支付改为失去同等的资金并令此次支付的对象失去此次金额一半的资金
+//! > [反击]当你将要向其他玩家支付时打出此卡，此次支付改为失去同等的资金并令此次支付的对象失去此次金额一半的资金。
 //!
-//! into a pure loss and make the payee lose half.
 //!
 //! Counteraction-only (`Normal => false`).
 
 use bandori_std::ctx::{self, trigger};
 use card_sdk::abi::{ChainKind, PayKind, PayShape};
 use card_sdk::CardText;
-use card_sdk::{key, CardDef, Msg, On};
+use card_sdk::{key, para, CardDef, Msg, On};
 
 pub const MASHIRO_PAY: CardDef = CardDef::new(
     "Mor:（小白）",
@@ -21,10 +21,10 @@ pub const MASHIRO_PAY: CardDef = CardDef::new(
         None,
         counteract).counter_reason(key!("mashiro_pay_when"))],
 ).meta(&card_sdk::meta::CardMeta::new()
-        .name("")
-        .raw_name(r#"（小白）"#)
+        .name(r#""#)
+        .raw_name(r#"（仓田真白）unnamed"#)
         .tags(&[r#"反击"#])
-        .text(CardText::para(r#"[反击]当你将要向其他玩家支付时打出此卡，此次支付改为失去同等的资金并令此次支付的对象失去此次金额一半的资金"#))
+        .text(CardText::para(r#"[反击]当你将要向其他玩家支付时打出此卡，此次支付改为失去同等的资金并令此次支付的对象失去此次金额一半的资金。"#))
         // sheet cell G9
         .fields(&[("group", r#"Morfonica"#), ("owner", r#"仓田真白"#)]));
 

@@ -1,12 +1,12 @@
+//! There are **two kinds of [CP点]** (user ruling 2026-10-07: 「自己[场上]1个
 //!
 //! 规则书（docs/rulebook/cards.json, id `通用:该清CP了`）:
 //! > 该清CP了：
 //!
 //! > （1）[使用者]使用此卡后的下2回合开始时，此卡在格子上添加的[CP点]及其产物将在相邻的没有[CP点]的格子添加1个[CP点]。
 //! > [手]：
-//! > 在任意一个没有角色和[CP点]的格子上添加1个[CP点]并在自己[场上]添加6个[CP点]。在拥有[CP]点的格子上[结算]时移除格子上的个[CP点]和自己[场上]1个[CP点]，[获得]800资金。
+//! > 在任意一个没有角色和[CP点]的格子上添加1个[CP点]并在自己[场地]添加6个[CP点]。在有[CP点]的格子[结算]时，使用该格1个[CP点]及自己[场地]上1个[CP点]，[获得]800资金。任一处不足1个时，不使用任一处资源，也不取得该笔资金。
 //!
-//! There are **two kinds of [CP点]** (user ruling 2026-10-07: 「自己[场上]1个
 //! [CP点] referred to the cp point attached to the card. There are points on
 //! the tile (which mandated by tilemark) and points on the card (mandated by
 //! the card rule)」):
@@ -48,20 +48,8 @@ pub const CLEAR_CP: CardDef = CardDef::new(
 ).meta(&card_sdk::meta::CardMeta::new()
         .name(r#"该清CP了"#)
         .raw_name(r#"该清CP了"#)
-        // 规则书: 「[手]」 -- the sheet carries no [特]： section (dropped 2026-10-06
-        // `A8`); the tag stays as the carrier of the 2026-10-07 「[特] still
-        // pending」 play gate and of the `special_live` message.
         .tags(&[r#"手"#, r#"特"#])
-        .text(CardText::of(&[
-            sec("", &[
-                items(&[
-                    it(r#"[使用者]使用此卡后的下2回合开始时，此卡在格子上添加的[CP点]及其产物将在相邻的没有[CP点]的格子添加1个[CP点]。"#),
-                ]),
-            ]),
-            sec(r#"[手]："#, &[
-                para(r#"在任意一个没有角色和[CP点]的格子上添加1个[CP点]并在自己[场上]添加6个[CP点]。在拥有[CP]点的格子上[结算]时移除格子上的个[CP点]和自己[场上]1个[CP点]，[获得]800资金。"#),
-            ]),
-        ]))
+        .text(CardText::of(&[sec(r#""#, &[items(&[it(r#"[使用者]使用此卡后的下2回合开始时，此卡在格子上添加的[CP点]及其产物将在相邻的没有[CP点]的格子添加1个[CP点]。"#)])]), sec(r#"[手]："#, &[para(r#"在任意一个没有角色和[CP点]的格子上添加1个[CP点]并在自己[场地]添加6个[CP点]。在有[CP点]的格子[结算]时，使用该格1个[CP点]及自己[场地]上1个[CP点]，[获得]800资金。任一处不足1个时，不使用任一处资源，也不取得该笔资金。"#)])]))
         // sheet cell A8
         .fields(&[("group", r#"通用"#), ("owner", "")]));
 

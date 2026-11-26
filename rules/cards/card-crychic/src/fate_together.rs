@@ -1,18 +1,19 @@
+//! until your next turn start, hop to the next player's tile on every collection
 //!
 //! 规则书（docs/rulebook/cards.json, id `CRYCHIC:一起演奏音乐的命运共同体`）:
-//! > 一起演奏音乐的命运共同体
-//! >  ：
-//! > （1）[手] 直到你的下回合开始，每当场上任意格子发生一次收款时，你移动到你前方的下一个属于行动序列后一名玩家的格子（不触发结算）。
-//! > （2）若此卡打出后
-//! > （1）效果未产生作用，将此卡返回手牌（不触发乐队技能的
-//! > （3）效果）。
+//! > 一起演奏音乐的命运共同体：
 //!
-//! until your next turn start, hop to the next player's tile on every collection
+//! > （1）[手]直到你的下回合开始，每当场上任意格子发生1次收款时：你移动到前方下一个属于行动序列后一名玩家的格子，不触发[结算]。
+//!
+//! > （2）若此卡打出后
+//! > （1）效果未产生作用，将此卡返回手牌，不触发乐队技能的[自动]
+//! > （3）效果。
+//!
 //! (rent legs only at present -- see the TODO at the hook).
 
 use bandori_std::ctx::{self, trigger};
 use card_sdk::abi::{ActionKind, TriggerKind};
-use card_sdk::{it, CardText};
+use card_sdk::{it, items, CardText};
 use card_sdk::{key, Action, CardDef, Msg, On};
 
 pub const FATE_TOGETHER: CardDef = CardDef::new(
@@ -33,10 +34,7 @@ pub const FATE_TOGETHER: CardDef = CardDef::new(
         .name(r#"一起演奏音乐的命运共同体"#)
         .raw_name(r#"一起演奏音乐的命运共同体"#)
         .tags(&[r#"手"#])
-        .text(CardText::items(&[
-            it(r#"[手] 直到你的下回合开始，每当场上任意格子发生一次收款时，你移动到你前方的下一个属于行动序列后一名玩家的格子（不触发结算）。"#),
-            it(r#"若此卡打出后（1）效果未产生作用，将此卡返回手牌（不触发乐队技能的（3）效果）。"#),
-        ]))
+        .text(CardText::items(&[it(r#"[手]直到你的下回合开始，每当场上任意格子发生1次收款时：你移动到前方下一个属于行动序列后一名玩家的格子，不触发[结算]。"#), it(r#"若此卡打出后（1）效果未产生作用，将此卡返回手牌，不触发乐队技能的[自动]（3）效果。"#)]))
         // sheet cell M9
         .fields(&[("group", r#"CRYCHIC"#), ("owner", "")]));
 

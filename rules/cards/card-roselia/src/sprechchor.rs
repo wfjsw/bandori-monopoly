@@ -1,13 +1,15 @@
+
 //!
 //! 规则书（docs/rulebook/cards.json, id `R:Sprechchor`）:
 //! > Sprechchor：
-//! >  在Livehouse地块开始回合时，可打出此卡并投掷1d20，获得1000+X*120的资金，X为本次掷骰出目
+//! > 在Live House格子开始回合时：可打出此卡，依次进行以下操作：
+//! > 1. [投掷]1d20。
+//! > 2. 获得1000+X×120资金；X为此次[投掷]结果。
 //!
-
 use bandori_std::ctx;
 use card_sdk::abi::{roll_source, RollPurpose};
 use card_sdk::CardText;
-use card_sdk::{key, CardDef, Msg, On};
+use card_sdk::{key, para, sec, steps, CardDef, Msg, On};
 
 pub const SPRECHCHOR: CardDef =
     CardDef::new("R:Sprechchor", &[On::Play("", Some(cant_play), sprechchor)])
@@ -15,7 +17,7 @@ pub const SPRECHCHOR: CardDef =
         .name(r#"Sprechchor"#)
         .raw_name(r#"Sprechchor"#)
         .tags(&[])
-        .text(CardText::para(r#"在Livehouse地块开始回合时，可打出此卡并投掷1d20，获得1000+X*120的资金，X为本次掷骰出目"#))
+        .text(CardText::of(&[sec(r#""#, &[para(r#"在Live House格子开始回合时：可打出此卡，依次进行以下操作："#), steps(&[r#"[投掷]1d20。"#, r#"获得1000+X×120资金；X为此次[投掷]结果。"#])])]))
         // sheet cell E14
         .fields(&[("group", r#"Roselia"#), ("owner", "")]));
 

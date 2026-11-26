@@ -1,15 +1,15 @@
+//! turn's main move to roll up to 5 times and keep one face.
 //!
 //! 规则书（docs/rulebook/cards.json, id `CRYCHIC:去唱卡拉ok吧`）:
 //! > 去唱卡拉ok吧：
-//! >  进行至多5次掷骰，并选择其中一个结果作为你本回合的移动掷骰数，视为正常掷骰移动。
+//! > 进行至多5次[投掷]，并选择其中1个结果，作为本回合用于确定你的移动步数的[投掷]结果。此次移动视为正常[投掷]移动。
 //!
-//! turn's main move to roll up to 5 times and keep one face.
 
 use alloc::vec::Vec;
 
 use card_sdk::abi::{roll_source, RollPurpose};
 use card_sdk::CardText;
-use card_sdk::{ctx, key, CardDef, Msg, On};
+use card_sdk::{ctx, key, para, CardDef, Msg, On};
 
 pub const KARAOKE: CardDef = CardDef::new(
     "CRYCHIC:去唱卡拉ok吧",
@@ -20,9 +20,7 @@ pub const KARAOKE: CardDef = CardDef::new(
         .name(r#"去唱卡拉ok吧"#)
         .raw_name(r#"去唱卡拉ok吧"#)
         .tags(&[])
-        .text(CardText::para(
-            r#"进行至多5次掷骰，并选择其中一个结果作为你本回合的移动掷骰数，视为正常掷骰移动。"#,
-        ))
+        .text(CardText::para(r#"进行至多5次[投掷]，并选择其中1个结果，作为本回合用于确定你的移动步数的[投掷]结果。此次移动视为正常[投掷]移动。"#))
         // sheet cell M4
         .fields(&[("group", r#"CRYCHIC"#), ("owner", "")]),
 );

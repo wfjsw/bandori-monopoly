@@ -1,16 +1,20 @@
+//! joins the draw pile, draw 1.
 //!
 //! 规则书（docs/rulebook/cards.json, id `PP:初次演出事故`）:
 //! > 初次演出事故：
 //! > [手]：
-//! > 将此卡放置在[使用者]的[场地]并将1张“重叠的声音”加入抽卡区并洗切，然后抽1张卡。
+//! > 依次进行以下操作：
+//! > 1. 将此卡放置在[使用者]的[场地]。
+//! > 2. 将1张“重叠的声音”加入抽卡区，并洗切。
+//! > 3. 抽1张卡。
 //! > [持续]：
-//! > [拥有者]不可使用任何Pastel✽Palettes角色的
+//! > [拥有者]不可使用丸山彩、若宫伊芙、白鹭千圣或大和麻弥的[主动]
+//! > （1）技能，也不可使用冰川日菜的[自动]
 //! > （2）技能。
 //!
-//! joins the draw pile, draw 1.
 
 use card_sdk::{ctx, key, CardDef, Msg, On};
-use card_sdk::{para, sec, CardText};
+use card_sdk::{para, sec, steps, CardText};
 
 pub const FIRST_LIVE_ACCIDENT: CardDef = CardDef::new(
     "PP:初次演出事故",
@@ -21,14 +25,7 @@ pub const FIRST_LIVE_ACCIDENT: CardDef = CardDef::new(
         .name(r#"初次演出事故"#)
         .raw_name(r#"初次演出事故"#)
         .tags(&[r#"手"#, r#"持续"#])
-        .text(CardText::of(&[
-            sec(r#"[手]："#, &[
-                para(r#"将此卡放置在[使用者]的[场地]并将1张“重叠的声音”加入抽卡区并洗切，然后抽1张卡。"#),
-            ]),
-            sec(r#"[持续]："#, &[
-                para(r#"[拥有者]不可使用任何Pastel✽Palettes角色的（2）技能。"#),
-            ]),
-        ]))
+        .text(CardText::of(&[sec(r#"[手]："#, &[para(r#"依次进行以下操作："#), steps(&[r#"将此卡放置在[使用者]的[场地]。"#, r#"将1张“重叠的声音”加入抽卡区，并洗切。"#, r#"抽1张卡。"#])]), sec(r#"[持续]："#, &[para(r#"[拥有者]不可使用丸山彩、若宫伊芙、白鹭千圣或大和麻弥的[主动]（1）技能，也不可使用冰川日菜的[自动]（2）技能。"#)])]))
         // sheet cell D4
         .fields(&[("group", r#"Pastel✽Palettes"#), ("owner", "")]),
 );

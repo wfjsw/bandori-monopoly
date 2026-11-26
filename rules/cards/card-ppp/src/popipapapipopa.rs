@@ -1,13 +1,16 @@
+//! placed card that banks [奇迹水晶] when its owner passes five named tiles and
 //!
 //! 规则书（docs/rulebook/cards.json, id `PPP:[衍生]Popipapapipopa`）:
 //! > [衍生]Popipapapipopa：
-//! > [持续]
+//! > [资源]：
 //!
-//! > （1）此卡拥有者每次[经过]“东京外”，“江户川乐器店”，“山吹面包房”，“星之鼓动山丘”或“流星堂”时为此卡添加1个[奇迹水晶]（上限10个）。
+//! > （1）此卡的[奇迹水晶]：上限10。
+//! > [持续]：
 //!
-//! > （2）消耗或支付时可使用此卡多个奇迹水晶，每个将资金变动减少150（最少0）。
+//! > （1）[拥有者]每次[经过]“东京外”，“江户川乐器店”，“山吹面包房”，“星之鼓动山丘”或“流星堂”时为此卡添加1个[奇迹水晶]。
 //!
-//! placed card that banks [奇迹水晶] when its owner passes five named tiles and
+//! > （2）[消耗]或[支付]时：可使用此卡的多个[奇迹水晶]，每个使此次资金变动减少150，最低为0。
+//!
 //! spends them to shrink payments. Both continuous clauses are hooks.
 
 use bandori_std::ctx::{self, trigger};
@@ -39,14 +42,7 @@ pub const POPIPAPAPIPOPA: CardDef = CardDef::new(
         .raw_name(r#"[衍生]Popipapapipopa"#)
         .derived(true)
         .tags(&[r#"持续"#, r#"衍生"#])
-        .text(CardText::of(&[
-            sec(r#"[持续]"#, &[
-                items(&[
-                    it(r#"此卡拥有者每次[经过]“东京外”，“江户川乐器店”，“山吹面包房”，“星之鼓动山丘”或“流星堂”时为此卡添加1个[奇迹水晶]（上限10个）。"#),
-                    it(r#"消耗或支付时可使用此卡多个奇迹水晶，每个将资金变动减少150（最少0）。"#),
-                ]),
-            ]),
-        ]))
+        .text(CardText::of(&[sec(r#"[资源]："#, &[items(&[it(r#"此卡的[奇迹水晶]：上限10。"#)])]), sec(r#"[持续]："#, &[items(&[it(r#"[拥有者]每次[经过]“东京外”，“江户川乐器店”，“山吹面包房”，“星之鼓动山丘”或“流星堂”时为此卡添加1个[奇迹水晶]。"#), it(r#"[消耗]或[支付]时：可使用此卡的多个[奇迹水晶]，每个使此次资金变动减少150，最低为0。"#)])])]))
         // sheet cell B4
         .fields(&[("group", r#"Poppin' Party"#), ("owner", "")]));
 

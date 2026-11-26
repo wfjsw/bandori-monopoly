@@ -1,15 +1,15 @@
+//! tile, take 2 [exile] layers, and teleport there when the exile runs out.
 //!
 //! 规则书（docs/rulebook/cards.json, id `MyGO:无路矢`）:
 //! > 无路矢：
-//! >  指定场上自己以外的一位玩家所在格子，获得2层[除外]并在[除外]层数归0后[传送]至该格子，视为当回合的主要移动。[除外]期间本应获得的格子收入由此前指定的那名玩家获得。
+//! > 指定场上自己以外的一位玩家所在格子，获得2层[除外]并在[除外]层数归0后[传送]至该格子，视为当回合的主要移动。[除外]期间本应获得的格子收入由此前指定的那名玩家获得。
 //!
-//! tile, take 2 [exile] layers, and teleport there when the exile runs out.
 
 use alloc::vec::Vec;
 
 use card_sdk::abi::{prop, FilterKind, Payee, Seat};
 use card_sdk::CardText;
-use card_sdk::{ctx, key, Action, CardDef, Filter, Msg, On, PayAddValue};
+use card_sdk::{ctx, key, para, Action, CardDef, Filter, Msg, On, PayAddValue};
 
 pub const NO_ROAD: CardDef = CardDef::new(
     "MyGO:无路矢",

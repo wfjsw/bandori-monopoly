@@ -2,9 +2,13 @@
 //!
 //! 规则书（docs/rulebook/cards.json, id `AG:回家的路上绕个道`）:
 //! > 回家的路上绕个道：
-//! > (1)此卡可作为反击使用
-//! > (2)进行一次 “afterglow”式的移动（视为使用一次初始Afterglow角色的
-//! > （2）效果），并将下一次的移动掷骰变更为1d6
+//!
+//! > （1）此卡可作为[反击]使用。
+//!
+//! > （2）依次进行以下操作：
+//! > 1. 进行1次“Afterglow”式的移动，视为使用1次初始Afterglow角色的[主动]
+//! > （1）效果。
+//! > 2. 将用于确定下一次移动步数的[投掷]变更为1d6。
 //!
 //! an Afterglow-style move plan (or reverse a move) plus next roll 1d6.
 //!
@@ -13,7 +17,7 @@
 use bandori_std::ctx::{self, trigger};
 use card_sdk::abi::{prop, ChainKind, Dice};
 use card_sdk::serde;
-use card_sdk::{it, Activation, CardText};
+use card_sdk::{it, it_sub, items, Activation, CardText};
 use card_sdk::{key, Action, CardDef, Declared, Filter, Msg, On, PlanValue};
 
 ///
@@ -88,10 +92,7 @@ pub const DETOUR: CardDef = CardDef::new(
         .name(r#"回家的路上绕个道"#)
         .raw_name(r#"回家的路上绕个道"#)
         .tags(&[r#"手"#, r#"反击"#])
-        .text(CardText::items(&[
-            it(r#"此卡可作为反击使用"#),
-            it(r#"进行一次 “afterglow”式的移动（视为使用一次初始Afterglow角色的（2）效果），并将下一次的移动掷骰变更为1d6"#),
-        ]))
+        .text(CardText::items(&[it(r#"此卡可作为[反击]使用。"#), it_sub(r#"依次进行以下操作："#, &[r#"进行1次“Afterglow”式的移动，视为使用1次初始Afterglow角色的[主动]（1）效果。"#, r#"将用于确定下一次移动步数的[投掷]变更为1d6。"#])]))
         // sheet cell C9
         .fields(&[("group", r#"Afterglow"#), ("owner", "")]));
 

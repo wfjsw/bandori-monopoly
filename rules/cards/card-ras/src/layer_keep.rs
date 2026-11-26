@@ -1,16 +1,17 @@
+//! keep the unpicked fire-pot die and later spend fire to reuse it.
 //!
 //! 规则书（docs/rulebook/cards.json, id `RAS:（和奏瑞依）寄于指尖的执念`）:
 //! > （和奏瑞依）寄于指尖的执念：
-//! >  [反击] 当你使用火罐进行掷骰时，可打出此卡并保留（写下）未被选择的另一个骰点，在后续任意回合中消耗一个火罐以用于替代当回合的移动掷骰，随后删去该骰点。可保留多个骰点。
+//! > [反击]你使用[火罐]进行[投掷]时：可打出此卡，保留并写下未被选择的另一个结果。可保留多个结果。
+//! > 在后续任意回合中，可使用1个[火罐]，将保留的结果用于替代当回合用于确定移动步数的[投掷]结果，随后删去该保留结果。
 //!
-//! keep the unpicked fire-pot die and later spend fire to reuse it.
 
 use alloc::vec::Vec;
 use card_sdk::abi::{roll_source, ActionKind, ChainKind};
 use card_sdk::CardText;
 
 use bandori_std::ctx::{self, trigger};
-use card_sdk::{key, Action, CardDef, Msg, On};
+use card_sdk::{key, para, sec, Action, CardDef, Msg, On};
 
 pub const LAYER_KEEP: CardDef = CardDef::new(
     "RAS:（和奏瑞依）寄于指尖的执念",
@@ -52,7 +53,7 @@ pub const LAYER_KEEP: CardDef = CardDef::new(
         .name(r#"寄于指尖的执念"#)
         .raw_name(r#"（和奏瑞依）寄于指尖的执念"#)
         .tags(&[r#"反击"#])
-        .text(CardText::para(r#"[反击] 当你使用火罐进行掷骰时，可打出此卡并保留（写下）未被选择的另一个骰点，在后续任意回合中消耗一个火罐以用于替代当回合的移动掷骰，随后删去该骰点。可保留多个骰点。"#))
+        .text(CardText::of(&[sec(r#""#, &[para(r#"[反击]你使用[火罐]进行[投掷]时：可打出此卡，保留并写下未被选择的另一个结果。可保留多个结果。"#), para(r#"在后续任意回合中，可使用1个[火罐]，将保留的结果用于替代当回合用于确定移动步数的[投掷]结果，随后删去该保留结果。"#)])]))
         // sheet cell H16
         .fields(&[("group", r#"RAISE A SUILEN"#), ("owner", r#"和奏瑞依"#)]));
 

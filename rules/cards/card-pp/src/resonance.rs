@@ -3,7 +3,10 @@
 //! 规则书（docs/rulebook/cards.json, id `PP:[衍生]共鸣`）:
 //! > [衍生]共鸣：
 //! > [特]：
-//! > 拥有此卡的玩家的卡可发动[共鸣]时将此卡放入弃卡区，发动那张卡的[共鸣]效果并为拥有此卡的玩家的Pastel✽Palettes乐队卡添加2[奇迹水晶]。
+//! > 拥有此卡的玩家的卡可发动[共鸣]时，依次进行以下操作：
+//! > 1. 将此卡放入弃卡区。
+//! > 2. 发动那张卡的[共鸣]效果。
+//! > 3. 为拥有此卡的玩家的Pastel✽Palettes乐队卡添加2个[奇迹水晶]。
 //!
 //! Not a hand play (no `Play`): the [特] is what every other card's [共鸣] branch
 //! calls, and it is [`try_resonance`] below. The clause is one sentence with
@@ -18,7 +21,7 @@
 
 use bandori_std::ctx;
 use card_sdk::{key, CardDef, Msg};
-use card_sdk::{para, sec, CardText};
+use card_sdk::{para, sec, steps, CardText};
 
 /// The [共鸣] fuel card. Empty `On`: it has no hand play and no hook of its own
 /// -- it is fuel for other cards' [共鸣] branches, offered by [`try_resonance`].
@@ -27,11 +30,7 @@ pub const RESONANCE: CardDef = CardDef::new("PP:[衍生]共鸣", &[]).meta(&card
         .raw_name(r#"[衍生]共鸣"#)
         .derived(true)
         .tags(&[r#"特"#, r#"衍生"#])
-        .text(CardText::of(&[
-            sec(r#"[特]："#, &[
-                para(r#"拥有此卡的玩家的卡可发动[共鸣]时将此卡放入弃卡区，发动那张卡的[共鸣]效果并为拥有此卡的玩家的Pastel✽Palettes乐队卡添加2[奇迹水晶]。"#),
-            ]),
-        ]))
+        .text(CardText::of(&[sec(r#"[特]："#, &[para(r#"拥有此卡的玩家的卡可发动[共鸣]时，依次进行以下操作："#), steps(&[r#"将此卡放入弃卡区。"#, r#"发动那张卡的[共鸣]效果。"#, r#"为拥有此卡的玩家的Pastel✽Palettes乐队卡添加2个[奇迹水晶]。"#])])]))
         // sheet cell D8
         .fields(&[("group", r#"Pastel✽Palettes"#), ("owner", "")]));
 

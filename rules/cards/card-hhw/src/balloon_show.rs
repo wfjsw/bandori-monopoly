@@ -1,20 +1,23 @@
+
 //!
 //! 规则书（docs/rulebook/cards.json, id `HHW:热气球演出`）:
 //! > 热气球演出：
-//! >  投掷4次3d20mod60并记录其结果，选择其中之一，传送至结果对应序号的格子，视为你的主要移动
+//! > 依次进行以下操作：
+//! > 1. [投掷]4次3d20mod60，并记录各次结果。
+//! > 2. 选择其中1个结果，[传送]至该结果对应序号的格子。
+//! > 此次[传送]视为你的[主要移动]。
 //!
-
 use alloc::vec::Vec;
 use card_sdk::abi::{roll_source, MoveKind, RollPurpose};
 use card_sdk::CardText;
-use card_sdk::{ctx, key, CardDef, Msg, On};
+use card_sdk::{ctx, key, para, sec, steps, CardDef, Msg, On};
 
 pub const BALLOON_SHOW: CardDef =
     CardDef::new("HHW:热气球演出", &[On::Play("", Some(cant_play), play)]).meta(&card_sdk::meta::CardMeta::new()
         .name(r#"热气球演出"#)
         .raw_name(r#"热气球演出"#)
         .tags(&[])
-        .text(CardText::para(r#"投掷4次3d20mod60并记录其结果，选择其中之一，传送至结果对应序号的格子，视为你的主要移动"#))
+        .text(CardText::of(&[sec(r#""#, &[para(r#"依次进行以下操作："#), steps(&[r#"[投掷]4次3d20mod60，并记录各次结果。"#, r#"选择其中1个结果，[传送]至该结果对应序号的格子。"#]), para(r#"此次[传送]视为你的[主要移动]。"#)])]))
         // sheet cell F11
         .fields(&[("group", r#"Hello, Happy World!"#), ("owner", "")]));
 

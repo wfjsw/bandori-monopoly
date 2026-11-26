@@ -1,14 +1,17 @@
+//! +2 steps the first time you pass each of your tiles, and half pay to others.
 //!
 //! 规则书（docs/rulebook/cards.json, id `HHW:爱心义演`）:
 //! > 爱心义演：
-//! > 打出此卡的回合内，你若进行掷骰移动，每初次经过一个属于你的格子，使你的总移动数+2，本回合中向其他玩家支付时你的付款减半（向上取整10）（若弦卷心已将专属卡置于CiRCLE上，则CiRCLE也算作属于弦卷心的格子）
+//! > 打出此卡的回合内：
+//! > - 你进行[投掷]移动时，每初次[经过]1个属于你的格子，使你的总移动数增加2。
+//! > - 你向其他玩家[支付]时，付款金额减半，向上取整10。
+//! > 若弦卷心已将专属卡置于CiRCLE上，CiRCLE也算作属于弦卷心的格子。
 //!
-//! +2 steps the first time you pass each of your tiles, and half pay to others.
 
 use bandori_std::ctx::{self, trigger};
 use card_sdk::abi::{ActionKind, FilterKind};
 use card_sdk::CardText;
-use card_sdk::{key, Action, CardDef, Filter, Msg, On};
+use card_sdk::{key, para, sec, Action, CardDef, Filter, Msg, On};
 
 const ID: &str = "HHW:爱心义演";
 const KOKORO_ID: &str = "HHW:（kkr）前往笑容集结的地方！";
@@ -39,7 +42,7 @@ pub const CHARITY_SHOW: CardDef = CardDef::new(
         .name(r#"爱心义演"#)
         .raw_name(r#"爱心义演"#)
         .tags(&[])
-        .text(CardText::para(r#"打出此卡的回合内，你若进行掷骰移动，每初次经过一个属于你的格子，使你的总移动数+2，本回合中向其他玩家支付时你的付款减半（向上取整10）（若弦卷心已将专属卡置于CiRCLE上，则CiRCLE也算作属于弦卷心的格子）"#))
+        .text(CardText::of(&[sec(r#""#, &[para(r#"打出此卡的回合内："#), para(r#"- 你进行[投掷]移动时，每初次[经过]1个属于你的格子，使你的总移动数增加2。"#), para(r#"- 你向其他玩家[支付]时，付款金额减半，向上取整10。"#), para(r#"若弦卷心已将专属卡置于CiRCLE上，CiRCLE也算作属于弦卷心的格子。"#)])]))
         // sheet cell F12
         .fields(&[("group", r#"Hello, Happy World!"#), ("owner", "")]));
 

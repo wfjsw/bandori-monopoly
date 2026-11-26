@@ -1,15 +1,20 @@
+//! park on another player; their buys pay the user and pass the card along.
 //!
 //! 规则书（docs/rulebook/cards.json, id `RAS:（chuchu）演奏我的音乐吧`）:
 //! > （chuchu）演奏我的音乐吧：
-//! >  将此卡放置于你以外的一名玩家场上并为其添加3个奇迹水晶，那名玩家的每个回合结束时失去一个；场上存在此卡的玩家下次购买地契时，[使用者]获得100资金，将此卡移至除[使用者]外行动序列下一名玩家的场上并将奇迹水晶补充至3个；此卡进入弃牌堆前每触发一次该效果，此卡获得资金时额外获得100（上限500）。此卡奇迹水晶为0时，放入[使用者]的弃牌堆并使[使用者]抽一张卡。
+//! > 将此卡放置于你以外1名玩家的场上，并为此卡添加3个[奇迹水晶]。那名玩家的每个回合结束时，失去此卡的1个[奇迹水晶]。
+//! > 场上存在此卡的玩家下次购买地契时，依次进行以下操作：
+//! > 1. [使用者]获得100资金。
+//! > 2. 将此卡移至除[使用者]外行动序列下一名玩家的场上，并将此卡的[奇迹水晶]补充至3个。
+//! > 此卡进入弃卡区前，每触发1次上述效果，此卡获得资金时额外获得100资金，上限500。
+//! > 此卡的[奇迹水晶]为0时：将此卡放入[使用者]的弃卡区，并使[使用者]抽1张卡。
 //!
-//! park on another player; their buys pay the user and pass the card along.
 
 use bandori_std::counter;
 use bandori_std::ctx::{self, trigger};
 use card_sdk::abi::{prop, ActionKind};
 use card_sdk::CardText;
-use card_sdk::{key, Action, CardDef, Msg, On};
+use card_sdk::{key, para, sec, steps, Action, CardDef, Msg, On};
 
 pub const CHUCHU_MUSIC: CardDef = CardDef::new(
     "RAS:（chuchu）演奏我的音乐吧",
@@ -31,9 +36,9 @@ pub const CHUCHU_MUSIC: CardDef = CardDef::new(
 ])
 .meta(&card_sdk::meta::CardMeta::new()
         .name(r#"演奏我的音乐吧"#)
-        .raw_name(r#"（chuchu）演奏我的音乐吧"#)
+        .raw_name(r#"（珠手知由）演奏我的音乐吧"#)
         .tags(&[])
-        .text(CardText::para(r#"将此卡放置于你以外的一名玩家场上并为其添加3个奇迹水晶，那名玩家的每个回合结束时失去一个；场上存在此卡的玩家下次购买地契时，[使用者]获得100资金，将此卡移至除[使用者]外行动序列下一名玩家的场上并将奇迹水晶补充至3个；此卡进入弃牌堆前每触发一次该效果，此卡获得资金时额外获得100（上限500）。此卡奇迹水晶为0时，放入[使用者]的弃牌堆并使[使用者]抽一张卡。"#))
+        .text(CardText::of(&[sec(r#""#, &[para(r#"将此卡放置于你以外1名玩家的场上，并为此卡添加3个[奇迹水晶]。那名玩家的每个回合结束时，失去此卡的1个[奇迹水晶]。"#), para(r#"场上存在此卡的玩家下次购买地契时，依次进行以下操作："#), steps(&[r#"[使用者]获得100资金。"#, r#"将此卡移至除[使用者]外行动序列下一名玩家的场上，并将此卡的[奇迹水晶]补充至3个。"#]), para(r#"此卡进入弃卡区前，每触发1次上述效果，此卡获得资金时额外获得100资金，上限500。"#), para(r#"此卡的[奇迹水晶]为0时：将此卡放入[使用者]的弃卡区，并使[使用者]抽1张卡。"#)])]))
         // sheet cell H12
         .fields(&[("group", r#"RAISE A SUILEN"#), ("owner", r#"珠手知由"#)]));
 

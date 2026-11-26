@@ -1,20 +1,22 @@
+//! place on Space, hand its houses to your other tiles, settle becomes a
 //!
 //! 规则书（docs/rulebook/cards.json, id `通用:[都筑诗船]Parking Space`）:
 //! > [都筑诗船]Parking Space：
 //! > [手]：
-//! > 将此卡放置于“Space”格子上，将其上的房屋转移至其他你拥有的格子上（每个格子因此效果最多获得1层）。
+//! > 依次进行以下操作：
+//! > 1. 将此卡放置于“Space”格子上。
+//! > 2. 将该格子上的房屋转移至其他你拥有的格子上；每个格子因此效果最多获得1层房屋。
 //! > [持续]：
 //!
-//! > （1）此卡所在格子的[结算]改为回合结束后获得一层[停留]。
+//! > （1）此卡所在格子的[结算]改为回合结束后获得1层[停留]。
 //!
 //! > （2）位于此卡所在格子上的玩家无法使用角色及乐队技能。
 //!
-//! place on Space, hand its houses to your other tiles, settle becomes a
 //! turn-end [停留].
 
 use bandori_std::ctx::{self, trigger};
 use card_sdk::abi::{ActionKind, TriggerKind};
-use card_sdk::{it, items, para, sec, CardText};
+use card_sdk::{it, items, para, sec, steps, CardText};
 use card_sdk::{key, Action, CardDef, Msg, On};
 
 const ID: &str = "通用:[都筑诗船]Parking Space";
@@ -38,19 +40,9 @@ pub const PARKING_SPACE: CardDef = CardDef::new(
 .meta(
     &card_sdk::meta::CardMeta::new()
         .name(r#"Parking Space"#)
-        .raw_name(r#"[都筑诗船]Parking Space"#)
+        .raw_name(r#"（都筑诗船）Parking Space"#)
         .tags(&[r#"手"#, r#"持续"#])
-        .text(CardText::of(&[
-            sec(r#"[手]："#, &[
-                para(r#"将此卡放置于“Space”格子上，将其上的房屋转移至其他你拥有的格子上（每个格子因此效果最多获得1层）。"#),
-            ]),
-            sec(r#"[持续]："#, &[
-                items(&[
-                    it(r#"此卡所在格子的[结算]改为回合结束后获得一层[停留]。"#),
-                    it(r#"位于此卡所在格子上的玩家无法使用角色及乐队技能。"#),
-                ]),
-            ]),
-        ]))
+        .text(CardText::of(&[sec(r#"[手]："#, &[para(r#"依次进行以下操作："#), steps(&[r#"将此卡放置于“Space”格子上。"#, r#"将该格子上的房屋转移至其他你拥有的格子上；每个格子因此效果最多获得1层房屋。"#])]), sec(r#"[持续]："#, &[items(&[it(r#"此卡所在格子的[结算]改为回合结束后获得1层[停留]。"#), it(r#"位于此卡所在格子上的玩家无法使用角色及乐队技能。"#)])])]))
         // sheet cell A15
         .fields(&[("group", r#"通用"#), ("owner", r#"都筑诗船"#)]),
 );

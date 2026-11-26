@@ -1,15 +1,15 @@
+//! on an abnormal move (not [除外]): choose whether this move (or the end of a
 //!
 //! 规则书（docs/rulebook/cards.json, id `R:选择自己的舞台`）:
 //! > 选择自己的舞台：
-//! > [反击] 受到[除外]以外的异常移动效果影响时可打出此卡，选择自己的本次移动（或无法移动的回合结束时）是否触发结算
+//! > [反击]受到[除外]以外的[异常移动效果]影响时：可打出此卡，选择自己的本次移动是否触发[结算]；若无法移动，则选择在该回合结束时是否触发[结算]。
 //!
-//! on an abnormal move (not [除外]): choose whether this move (or the end of a
 //! movement-locked turn) settles.
 
 use bandori_std::ctx::{self, AbKind};
 use card_sdk::abi::{ChainKind, TriggerKind};
 use card_sdk::CardText;
-use card_sdk::{key, CardDef, Msg, On};
+use card_sdk::{key, para, CardDef, Msg, On};
 
 pub const OWN_STAGE: CardDef = CardDef::new(
     "R:选择自己的舞台",
@@ -25,7 +25,7 @@ pub const OWN_STAGE: CardDef = CardDef::new(
         .name(r#"选择自己的舞台"#)
         .raw_name(r#"选择自己的舞台"#)
         .tags(&[r#"反击"#])
-        .text(CardText::para(r#"[反击] 受到[除外]以外的异常移动效果影响时可打出此卡，选择自己的本次移动（或无法移动的回合结束时）是否触发结算"#))
+        .text(CardText::para(r#"[反击]受到[除外]以外的[异常移动效果]影响时：可打出此卡，选择自己的本次移动是否触发[结算]；若无法移动，则选择在该回合结束时是否触发[结算]。"#))
         // sheet cell E9
         .fields(&[("group", r#"Roselia"#), ("owner", "")]));
 

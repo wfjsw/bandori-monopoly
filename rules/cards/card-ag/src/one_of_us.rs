@@ -1,9 +1,14 @@
+//! pair two deeds with a partner and split their rent income.
 //!
 //! 规则书（docs/rulebook/cards.json, id `AG:ONE OF US`）:
 //! > ONE OF US：
-//! > 将此卡放置在场上，选择场上的另一个Afterglow角色或者拥有商店街格子的角色，指定双方各一块地契，触发结算收益平分，被指定的地块不会有第三方参与分钱，必须优先指定商店街格子（先在地契原主人方结算完成，之后被分享方资金直接增加，不受其他任何效果影响）当其中一方破产时，将两张被指定地契放置在该卡上并转移到存活方的游戏区，该方视为拥有此地契
+//! > 依次进行以下操作：
+//! > 1. 将此卡放置在场上。
+//! > 2. 选择场上的另一个Afterglow角色，或拥有商店街格子的角色。
+//! > 3. [指定]双方各1块地契，必须优先[指定]商店街格子。
+//! > 被[指定]格子的[结算]收益由双方平分，第三方不参与分钱。先在地契原主人方完成[结算]，之后直接增加被分享方的资金；这次资金增加不受其他任何效果影响。
+//! > 其中一方破产时：将两张被[指定]的地契放置在此卡上，并转移到存活方的游戏区。存活方视为拥有这两张地契。
 //!
-//! pair two deeds with a partner and split their rent income.
 
 use alloc::vec::Vec;
 
@@ -11,7 +16,7 @@ use bandori_std::ctx::{self, trigger};
 use bandori_std::zones::ZoneChangeCause;
 use card_sdk::abi::{prop, OutCause};
 use card_sdk::CardText;
-use card_sdk::{key, Action, CardDef, Msg, On};
+use card_sdk::{key, para, sec, steps, Action, CardDef, Msg, On};
 
 /// Instance props, not per-player slots: a second copy of this card must not
 /// overwrite the first copy's pair. `one_of_us_partner` is stored `+1` so seat
@@ -80,7 +85,7 @@ pub const ONE_OF_US: CardDef = CardDef::new(
         .name(r#"ONE OF US"#)
         .raw_name(r#"ONE OF US"#)
         .tags(&[])
-        .text(CardText::para(r#"将此卡放置在场上，选择场上的另一个Afterglow角色或者拥有商店街格子的角色，指定双方各一块地契，触发结算收益平分，被指定的地块不会有第三方参与分钱，必须优先指定商店街格子（先在地契原主人方结算完成，之后被分享方资金直接增加，不受其他任何效果影响）当其中一方破产时，将两张被指定地契放置在该卡上并转移到存活方的游戏区，该方视为拥有此地契"#))
+        .text(CardText::of(&[sec(r#""#, &[para(r#"依次进行以下操作："#), steps(&[r#"将此卡放置在场上。"#, r#"选择场上的另一个Afterglow角色，或拥有商店街格子的角色。"#, r#"[指定]双方各1块地契，必须优先[指定]商店街格子。"#]), para(r#"被[指定]格子的[结算]收益由双方平分，第三方不参与分钱。先在地契原主人方完成[结算]，之后直接增加被分享方的资金；这次资金增加不受其他任何效果影响。"#), para(r#"其中一方破产时：将两张被[指定]的地契放置在此卡上，并转移到存活方的游戏区。存活方视为拥有这两张地契。"#)])]))
         // sheet cell C10
         .fields(&[("group", r#"Afterglow"#), ("owner", "")]));
 

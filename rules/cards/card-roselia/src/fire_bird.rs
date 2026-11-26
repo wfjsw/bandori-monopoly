@@ -1,16 +1,20 @@
+//! place this card with X self-chosen miracle crystals. While it is in play:
 //!
 //! 规则书（docs/rulebook/cards.json, id `R:Fire bird`）:
 //! > Fire bird：
-//! >  支付1600资金将此卡放置在自己场地上并为其添加X（自选）个奇迹水晶，自己场地上存在此卡时，每回合结束时失去400资金并移除1个奇迹水晶，自己的所有格子收费变成1.5倍，奇迹水晶耗尽时将此卡放入弃牌堆
+//! > 支付1600资金，将此卡放置在自己的场地上，并为此卡添加X个[奇迹水晶]；X由自己选择。
+//! > 自己的场地上存在此卡时：
+//! > - 每回合结束时：失去400资金，并移除此卡的1个[奇迹水晶]。
+//! > - 自己的所有格子收费变为原本的1.5倍。
+//! > 此卡的[奇迹水晶]耗尽时，将此卡放入弃卡区。
 //!
-//! place this card with X self-chosen miracle crystals. While it is in play:
 //! pay 400 and burn one crystal at every turn end, all your tiles charge 1.5x
 //! rent, and the card hits the discard when the crystals run out.
 
 use bandori_std::ctx::{self, trigger};
 use card_sdk::abi::{ActionKind, FilterKind, TriggerKind};
 use card_sdk::CardText;
-use card_sdk::{key, Action, CardDef, Filter, Msg, On};
+use card_sdk::{key, para, sec, Action, CardDef, Filter, Msg, On};
 
 pub const FIRE_BIRD: CardDef = CardDef::new(
     "R:Fire bird",
@@ -35,7 +39,7 @@ pub const FIRE_BIRD: CardDef = CardDef::new(
         .name(r#"Fire bird"#)
         .raw_name(r#"Fire bird"#)
         .tags(&[])
-        .text(CardText::para(r#"支付1600资金将此卡放置在自己场地上并为其添加X（自选）个奇迹水晶，自己场地上存在此卡时，每回合结束时失去400资金并移除1个奇迹水晶，自己的所有格子收费变成1.5倍，奇迹水晶耗尽时将此卡放入弃牌堆"#))
+        .text(CardText::of(&[sec(r#""#, &[para(r#"支付1600资金，将此卡放置在自己的场地上，并为此卡添加X个[奇迹水晶]；X由自己选择。"#), para(r#"自己的场地上存在此卡时："#), para(r#"- 每回合结束时：失去400资金，并移除此卡的1个[奇迹水晶]。"#), para(r#"- 自己的所有格子收费变为原本的1.5倍。"#), para(r#"此卡的[奇迹水晶]耗尽时，将此卡放入弃卡区。"#)])]))
         // sheet cell E6
         .fields(&[("group", r#"Roselia"#), ("owner", "")]));
 

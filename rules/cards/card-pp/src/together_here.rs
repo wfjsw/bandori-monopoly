@@ -1,10 +1,11 @@
+//! X is 5, +ceil((down - up)/2) while down > up; [共鸣] cuts X by 5 and draws.
 //!
 //! 规则书（docs/rulebook/cards.json, id `PP:有你与我在这里共度`）:
 //! > 有你与我在这里共度：
 //! > [手]：
-//! > 将X个反面[P✽P粉丝]变正；X为5，如果[使用者]拥有的正面[P✽P粉丝]数量少于反面[P✽P粉丝]数量则X额外添加反面和正面[P✽P粉丝]数量的差的一半（向上取整），如果[共鸣]则X减少5并抽1张卡。
+//! > X为5。若[使用者]拥有的正面[P✽P粉丝]数量少于反面数量，X额外增加“反面数量减去正面数量”的一半，向上取整。若[共鸣]，X减少5。
+//! > 将X个反面[P✽P粉丝]变正；若[共鸣]，另抽1张卡。
 //!
-//! X is 5, +ceil((down - up)/2) while down > up; [共鸣] cuts X by 5 and draws.
 //! The flip goes through `skill_groups::fans::flip_up` (state-dict +
 //! `FansFlip` raise; `docs/CARDS.md`), which band clause （2） listens to.
 
@@ -18,11 +19,7 @@ pub const TOGETHER_HERE: CardDef =
         .name(r#"有你与我在这里共度"#)
         .raw_name(r#"有你与我在这里共度"#)
         .tags(&[r#"手"#])
-        .text(CardText::of(&[
-            sec(r#"[手]："#, &[
-                para(r#"将X个反面[P✽P粉丝]变正；X为5，如果[使用者]拥有的正面[P✽P粉丝]数量少于反面[P✽P粉丝]数量则X额外添加反面和正面[P✽P粉丝]数量的差的一半（向上取整），如果[共鸣]则X减少5并抽1张卡。"#),
-            ]),
-        ]))
+        .text(CardText::of(&[sec(r#"[手]："#, &[para(r#"X为5。若[使用者]拥有的正面[P✽P粉丝]数量少于反面数量，X额外增加“反面数量减去正面数量”的一半，向上取整。若[共鸣]，X减少5。"#), para(r#"将X个反面[P✽P粉丝]变正；若[共鸣]，另抽1张卡。"#)])]))
         // sheet cell D9
         .fields(&[("group", r#"Pastel✽Palettes"#), ("owner", "")]));
 

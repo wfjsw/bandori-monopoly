@@ -1,22 +1,23 @@
+//! and teleport to the matching Live House tile. The die is cast before the
 //!
 //! 规则书（docs/rulebook/cards.json, id `RAS:成为最强`）:
 //! > 成为最强：
-//! >  roll 1d10，传送到livehouse对应的格子（按格子编号排序，若为10或以上传送到“Live House”），若你没有Livehouse格子，传送到“Live House”。视为你的主要移动。
+//! > [投掷]1d10，[传送]到Live House对应的格子，按格子编号排序。若结果为10或以上，或你没有Live House格子，改为[传送]到“Live House”。
+//! > 此次[传送]视为你的[主要移动]。
 //!
-//! and teleport to the matching Live House tile. The die is cast before the
 //! 若 clause, so the no-livehouse fallback still rolls (its face is ignored).
 
 use bandori_std::ctx;
 use card_sdk::abi::{roll_source, RollPurpose};
 use card_sdk::CardText;
-use card_sdk::{key, CardDef, Msg, On};
+use card_sdk::{key, para, sec, CardDef, Msg, On};
 
 pub const BE_STRONGEST: CardDef =
     CardDef::new("RAS:成为最强", &[On::Play("", Some(cant_play), be_strongest)]).meta(&card_sdk::meta::CardMeta::new()
         .name(r#"成为最强"#)
         .raw_name(r#"成为最强"#)
         .tags(&[])
-        .text(CardText::para(r#"roll 1d10，传送到livehouse对应的格子（按格子编号排序，若为10或以上传送到“Live House”），若你没有Livehouse格子，传送到“Live House”。视为你的主要移动。"#))
+        .text(CardText::of(&[sec(r#""#, &[para(r#"[投掷]1d10，[传送]到Live House对应的格子，按格子编号排序。若结果为10或以上，或你没有Live House格子，改为[传送]到“Live House”。"#), para(r#"此次[传送]视为你的[主要移动]。"#)])]))
         // sheet cell H6
         .fields(&[("group", r#"RAISE A SUILEN"#), ("owner", "")]));
 

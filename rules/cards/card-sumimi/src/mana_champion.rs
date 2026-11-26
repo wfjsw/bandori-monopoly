@@ -1,9 +1,11 @@
+//! [反击] that lets the other players counteract as if they were the target.
 //!
 //! 规则书（docs/rulebook/cards.json, id `Sumimi:（真奈）歌唱大赛5连冠`）:
 //! > （真奈）歌唱大赛5连冠：
-//! > [反击]当你或你的格子即将受到来自你以外的效果影响时打出此卡，此时场上其他玩家可如同自身的对应目标被指定一般打出[反击]卡，且其反击卡中针对打出玩家自身的效果改为你。若以此种方式使你免于受到该影响，打出那张[反击]卡的玩家可抽一张卡。若没有人在此卡的效果期间打出[反击]卡，你抽一张卡。
+//! > [反击]当你或你的格子即将受到来自你以外的效果影响时：打出此卡。此时场上其他玩家可如同自身的对应目标被指定一般打出[反击]卡，且其反击卡中针对打出玩家自身的效果改为你。
+//! > 若以此种方式使你免于受到该影响，打出那张[反击]卡的玩家可抽1张卡。
+//! > 若没有人在此卡的效果期间打出[反击]卡，你抽1张卡。
 //!
-//! [反击] that lets the other players counteract as if they were the target.
 //!
 //! CH-05 join: the `SELF_REDIRECT` property *arms* the join -- the engine
 //! opens the answering window on the answered link when this counter is
@@ -16,7 +18,7 @@
 use bandori_std::ctx::{self, trigger};
 use card_sdk::abi::{prop, ChainKind};
 use card_sdk::CardText;
-use card_sdk::{key, CardDef, Msg, On};
+use card_sdk::{key, para, sec, CardDef, Msg, On};
 
 pub const MANA_CHAMPION: CardDef = CardDef::new(
     "Sumimi:（真奈）歌唱大赛5连冠",
@@ -39,9 +41,9 @@ pub const MANA_CHAMPION: CardDef = CardDef::new(
 // 规则书[反击]: 「其反击卡中针对打出玩家自身的效果改为你」
 .props(&[(prop::SELF_REDIRECT, 1)]).meta(&card_sdk::meta::CardMeta::new()
         .name(r#"歌唱大赛5连冠"#)
-        .raw_name(r#"（真奈）歌唱大赛5连冠"#)
+        .raw_name(r#"（纯田真奈）歌唱大赛5连冠"#)
         .tags(&[r#"反击"#])
-        .text(CardText::para(r#"[反击]当你或你的格子即将受到来自你以外的效果影响时打出此卡，此时场上其他玩家可如同自身的对应目标被指定一般打出[反击]卡，且其反击卡中针对打出玩家自身的效果改为你。若以此种方式使你免于受到该影响，打出那张[反击]卡的玩家可抽一张卡。若没有人在此卡的效果期间打出[反击]卡，你抽一张卡。"#))
+        .text(CardText::of(&[sec(r#""#, &[para(r#"[反击]当你或你的格子即将受到来自你以外的效果影响时：打出此卡。此时场上其他玩家可如同自身的对应目标被指定一般打出[反击]卡，且其反击卡中针对打出玩家自身的效果改为你。"#), para(r#"若以此种方式使你免于受到该影响，打出那张[反击]卡的玩家可抽1张卡。"#), para(r#"若没有人在此卡的效果期间打出[反击]卡，你抽1张卡。"#)])]))
         // sheet cell L10
         .fields(&[("group", r#"Sumimi"#), ("owner", r#"纯田真奈"#)]));
 

@@ -1,14 +1,14 @@
+//! `PassPlayer` / `SettleBefore` / `TurnStart` are hook kinds; both moves run
 //!
 //! 规则书（docs/rulebook/cards.json, id `CRYCHIC:想要抓住...`）:
 //! > 想要抓住...：
-//! >
-//! > （1）获得一层[停留]。
 //!
-//! > （2）你的下回合开始前，当第一位其他玩家经过你，在那名玩家[触发结算]前，你立刻向前移动一格并[触发结算]。
+//! > （1）获得1层[停留]。
 //!
-//! > （3）你的下回合开始前，若没有玩家经过你，你在回合开始时立即选择并[传送]至一个与自身所在格正上，正下，正左，正右直线距离最近的格子（可穿过地图，不可为自身所在格）并[触发结算]，视为你的主要移动。
+//! > （2）你的下回合开始前，当第一位其他玩家[经过]你时：在那名玩家[结算]前，你立刻向前移动1格并[结算]。
 //!
-//! `PassPlayer` / `SettleBefore` / `TurnStart` are hook kinds; both moves run
+//! > （3）你的下回合开始前，若没有玩家[经过]你，你在回合开始时立即选择并[传送]至一个与自身所在格正上，正下，正左，正右[直线距离]最近的格子（可穿过地图，不可为自身所在格）并[结算]，视为你的[主要移动]。
+//!
 //! through `run_planned_move`, and the card stays in play (`Dest::Field`) so
 //! those hooks attach.
 
@@ -17,7 +17,7 @@ use alloc::vec::Vec;
 use bandori_std::ctx;
 use bandori_std::ctx::{plan, trigger};
 use card_sdk::abi::ActionKind;
-use card_sdk::{it, CardText};
+use card_sdk::{it, items, CardText};
 use card_sdk::{key, Action, CardDef, Msg, On};
 
 /// The passer this card is waiting for. A slot rather than a `GrabFx`
@@ -50,11 +50,7 @@ pub const WANT_TO_GRAB: CardDef = CardDef::new(
         .name(r#"想要抓住..."#)
         .raw_name(r#"想要抓住..."#)
         .tags(&[])
-        .text(CardText::items(&[
-            it(r#"获得一层[停留]。"#),
-            it(r#"你的下回合开始前，当第一位其他玩家经过你，在那名玩家[触发结算]前，你立刻向前移动一格并[触发结算]。"#),
-            it(r#"你的下回合开始前，若没有玩家经过你，你在回合开始时立即选择并[传送]至一个与自身所在格正上，正下，正左，正右直线距离最近的格子（可穿过地图，不可为自身所在格）并[触发结算]，视为你的主要移动。"#),
-        ]))
+        .text(CardText::items(&[it(r#"获得1层[停留]。"#), it(r#"你的下回合开始前，当第一位其他玩家[经过]你时：在那名玩家[结算]前，你立刻向前移动1格并[结算]。"#), it(r#"你的下回合开始前，若没有玩家[经过]你，你在回合开始时立即选择并[传送]至一个与自身所在格正上，正下，正左，正右[直线距离]最近的格子（可穿过地图，不可为自身所在格）并[结算]，视为你的[主要移动]。"#)]))
         // sheet cell M5
         .fields(&[("group", r#"CRYCHIC"#), ("owner", "")]));
 

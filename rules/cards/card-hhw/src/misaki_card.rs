@@ -1,15 +1,18 @@
+//! move roll, teleport to a rival standing between start and end, then collect 500.
 //!
 //! 规则书（docs/rulebook/cards.json, id `HHW:（美咲）`）:
-//! > （美咲）[反击] 使用火罐进行移动掷骰后，触发结算前可打出此卡，消耗所有火罐使你传送至你选择的一名位于你的移动起点与预定移动终点之间的玩家所在的格子并触发结算（视为你的主要移动），随后那格及相邻2格上的所有其他玩家[支付]你500资金。
+//! > （美咲）：
+//! > [反击]使用[火罐]进行用于确定移动步数的[投掷]后、[结算]前：可打出此卡，使用所有[火罐]，依次进行以下操作：
+//! > 1. 选择1名位于你的[移动起点]与预定[移动终点]之间的玩家，[传送]至那名玩家所在的格子，并进行[结算]。此次[传送]视为你的[主要移动]。
+//! > 2. 那格及相邻2格上的所有其他玩家各[支付]你500资金。
 //!
-//! move roll, teleport to a rival standing between start and end, then collect 500.
 
 use alloc::vec::Vec;
 
 use bandori_std::ctx::{self, trigger};
 use card_sdk::abi::{ChainKind, MoveKind};
 use card_sdk::CardText;
-use card_sdk::{key, CardDef, Msg, On};
+use card_sdk::{key, para, sec, steps, CardDef, Msg, On};
 
 pub const MISAKI_CARD: CardDef = CardDef::new(
     "HHW:（美咲）",
@@ -26,10 +29,10 @@ pub const MISAKI_CARD: CardDef = CardDef::new(
         None,
         counteract).declares_negation().counter_reason(key!("misaki_card_when"))],
 ).meta(&card_sdk::meta::CardMeta::new()
-        .name("")
-        .raw_name(r#"（美咲）"#)
+        .name(r#""#)
+        .raw_name(r#"（奥泽美咲）unnamed"#)
         .tags(&[r#"反击"#])
-        .text(CardText::para(r#"[反击] 使用火罐进行移动掷骰后，触发结算前可打出此卡，消耗所有火罐使你传送至你选择的一名位于你的移动起点与预定移动终点之间的玩家所在的格子并触发结算（视为你的主要移动），随后那格及相邻2格上的所有其他玩家[支付]你500资金。"#))
+        .text(CardText::of(&[sec(r#""#, &[para(r#"[反击]使用[火罐]进行用于确定移动步数的[投掷]后、[结算]前：可打出此卡，使用所有[火罐]，依次进行以下操作："#), steps(&[r#"选择1名位于你的[移动起点]与预定[移动终点]之间的玩家，[传送]至那名玩家所在的格子，并进行[结算]。此次[传送]视为你的[主要移动]。"#, r#"那格及相邻2格上的所有其他玩家各[支付]你500资金。"#])])]))
         // sheet cell F15
         .fields(&[("group", r#"Hello, Happy World!"#), ("owner", r#"奥泽美咲"#)]));
 

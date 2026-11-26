@@ -1,22 +1,28 @@
+//! pick (2) burn crystals + band skill, or (3) shuffle back and redraw.
 //!
 //! 规则书（docs/rulebook/cards.json, id `CRYCHIC:（睦）从没有觉得...`）:
-//! > （睦）从没有觉得... ：
+//! > （睦）从没有觉得...：
 //!
-//! > （1）打出此卡时，使用者可以选择
+//! > （1）打出此卡时，[使用者]可以选择
 //! > （2）或
 //! > （3）效果之一发动。
 //!
-//! > （2）消耗乐队技能卡上的3个奇迹水晶（不足3个则改为全部消耗），立即执行乐队技能的
-//! > （2）效果，然后弃一张卡。
+//! > （2）使用乐队技能卡上的3个[奇迹水晶]；不足3个时，改为全部使用。然后依次进行以下操作：
+//! > 1. 立即执行乐队技能的[自动]
+//! > （2）效果。
+//! > 2. 弃1张卡。
 //!
-//! > （3）此卡[移除]并向抽牌堆中加入一张“表演的本能”，将手牌与弃牌堆全部放入抽牌堆并洗切，然后抽2张卡。你本回合的移动以“CiRCLE”为起点（不触发起点地块效果）
+//! > （3）依次进行以下操作：
+//! > 1. [移除]此卡，并向抽卡区加入1张“表演的本能”。
+//! > 2. 将手牌与弃卡区的全部卡放入抽卡区，并洗切。
+//! > 3. 抽2张卡。
+//! > 你本回合的移动以“CiRCLE”为起点，不触发起点地块效果。
 //!
-//! pick (2) burn crystals + band skill, or (3) shuffle back and redraw.
 
 use alloc::vec::Vec;
 
 use bandori_std::ctx;
-use card_sdk::{it, CardText};
+use card_sdk::{it, it_sub, items, para, sec, CardText};
 use card_sdk::{key, CardDef, Msg, On};
 
 pub const MUTSUMI_NEVER: CardDef = CardDef::new(
@@ -24,13 +30,9 @@ pub const MUTSUMI_NEVER: CardDef = CardDef::new(
     &[On::Play("", None, mutsumi_never)],
 ).meta(&card_sdk::meta::CardMeta::new()
         .name(r#"从没有觉得..."#)
-        .raw_name(r#"（睦）从没有觉得..."#)
+        .raw_name(r#"（若叶睦）从没有觉得..."#)
         .tags(&[])
-        .text(CardText::items(&[
-            it(r#"打出此卡时，使用者可以选择（2）或（3）效果之一发动。"#),
-            it(r#"消耗乐队技能卡上的3个奇迹水晶（不足3个则改为全部消耗），立即执行乐队技能的（2）效果，然后弃一张卡。"#),
-            it(r#"此卡[移除]并向抽牌堆中加入一张“表演的本能”，将手牌与弃牌堆全部放入抽牌堆并洗切，然后抽2张卡。你本回合的移动以“CiRCLE”为起点（不触发起点地块效果）"#),
-        ]))
+        .text(CardText::of(&[sec(r#""#, &[items(&[it(r#"打出此卡时，[使用者]可以选择（2）或（3）效果之一发动。"#), it_sub(r#"使用乐队技能卡上的3个[奇迹水晶]；不足3个时，改为全部使用。然后依次进行以下操作："#, &[r#"立即执行乐队技能的[自动]（2）效果。"#, r#"弃1张卡。"#]), it_sub(r#"依次进行以下操作："#, &[r#"[移除]此卡，并向抽卡区加入1张“表演的本能”。"#, r#"将手牌与弃卡区的全部卡放入抽卡区，并洗切。"#, r#"抽2张卡。"#])]), para(r#"你本回合的移动以“CiRCLE”为起点，不触发起点地块效果。"#)])]))
         // sheet cell M12
         .fields(&[("group", r#"CRYCHIC"#), ("owner", r#"若叶睦（CRYCHIC）"#)]));
 

@@ -1,3 +1,4 @@
+//! another player's field; when the owner passes 偶像经纪公司 the user pays 400, the
 //!
 //! 规则书（docs/rulebook/cards.json, id `PP:找回珍妮弗`）:
 //! > 找回珍妮弗：
@@ -9,7 +10,6 @@
 //! > 2. [使用者]获得1个正面的[P✽P粉丝]，[拥有者]将一个[P✽P粉丝]变为正面；
 //! > 3. 此卡[移除]，然后将1张“魔法战队Pastel✽Ranger”加入[使用者]手卡。
 //!
-//! another player's field; when the owner passes 偶像经纪公司 the user pays 400, the
 //! user gains a positive P✽P fan, the owner flips one up, the card is removed and
 //! a Pastel✽Ranger goes to the user's hand. The steps have no exit condition: a
 //! user bankrupted by the 400 still gets the fan and the Ranger.
@@ -40,23 +40,7 @@ pub const JENNIFER: CardDef = CardDef::new(
         .name(r#"找回珍妮弗"#)
         .raw_name(r#"找回珍妮弗"#)
         .tags(&[r#"手"#, r#"持续"#])
-        .text(CardText::of(&[
-            sec(
-                r#"[手]："#,
-                &[para(r#"将此卡放置在除[使用者]以外的一名玩家的[场地]。"#)],
-            ),
-            sec(
-                r#"[持续]："#,
-                &[
-                    para(r#"[拥有者][经过]“偶像经纪公司”时依次进行以下操作："#),
-                    steps(&[
-                        r#"[使用者][支付][拥有者]400资金；"#,
-                        r#"[使用者]获得1个正面的[P✽P粉丝]，[拥有者]将一个[P✽P粉丝]变为正面；"#,
-                        r#"此卡[移除]，然后将1张“魔法战队Pastel✽Ranger”加入[使用者]手卡。"#,
-                    ]),
-                ],
-            ),
-        ]))
+        .text(CardText::of(&[sec(r#"[手]："#, &[para(r#"将此卡放置在除[使用者]以外的一名玩家的[场地]。"#)]), sec(r#"[持续]："#, &[para(r#"[拥有者][经过]“偶像经纪公司”时依次进行以下操作："#), steps(&[r#"[使用者][支付][拥有者]400资金；"#, r#"[使用者]获得1个正面的[P✽P粉丝]，[拥有者]将一个[P✽P粉丝]变为正面；"#, r#"此卡[移除]，然后将1张“魔法战队Pastel✽Ranger”加入[使用者]手卡。"#])])]))
         // sheet cell D13
         .fields(&[("group", r#"Pastel✽Palettes"#), ("owner", "")]),
 );

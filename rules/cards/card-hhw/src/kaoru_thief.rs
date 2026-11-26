@@ -1,14 +1,15 @@
+//! Place this card in play and put a thief mark on one other player.
 //!
 //! 规则书（docs/rulebook/cards.json, id `HHW:（薰）怪盗hello happy`）:
 //! > （薰）怪盗hello happy：
-//! >  将此卡放置于场上（充能3，衰减1）并向一名玩家场上放置一个怪盗标记，你本回合的移动阶段可以选择在经过该玩家时使自己强制停下并触发结算。此卡在场上时所有在薰所在格子的人如果可以移动，则主要移动改为投掷1d2（前后）和1d10（距离）进行结算。
+//! > 将此卡放置于场上（充能3，衰减1），并向1名玩家的场上放置1个[怪盗标记]。你本回合的移动阶段，可以选择在[经过]那名玩家时使自己[强制停下]，并进行[结算]。
+//! > 此卡在场上时，所有位于薰所在格子的玩家，如果可以移动，则其[主要移动]改为[投掷]1d2确定前后方向、[投掷]1d10确定距离，并进行[结算]。
 //!
-//! Place this card in play and put a thief mark on one other player.
 
 use bandori_std::ctx::{self, trigger};
 use card_sdk::abi::{prop, ActionKind, Dice, FilterKind};
 use card_sdk::CardText;
-use card_sdk::{key, Action, CardDef, Filter, Msg, On, PlanValue};
+use card_sdk::{key, para, sec, Action, CardDef, Filter, Msg, On, PlanValue};
 
 const ID: &str = "HHW:（薰）怪盗hello happy";
 
@@ -44,9 +45,9 @@ pub const KAORU_THIEF: CardDef = CardDef::new(
 ])
 .meta(&card_sdk::meta::CardMeta::new()
         .name(r#"怪盗hello happy"#)
-        .raw_name(r#"（薰）怪盗hello happy"#)
+        .raw_name(r#"（濑田薰）怪盗hello happy"#)
         .tags(&[])
-        .text(CardText::para(r#"将此卡放置于场上（充能3，衰减1）并向一名玩家场上放置一个怪盗标记，你本回合的移动阶段可以选择在经过该玩家时使自己强制停下并触发结算。此卡在场上时所有在薰所在格子的人如果可以移动，则主要移动改为投掷1d2（前后）和1d10（距离）进行结算。"#))
+        .text(CardText::of(&[sec(r#""#, &[para(r#"将此卡放置于场上（充能3，衰减1），并向1名玩家的场上放置1个[怪盗标记]。你本回合的移动阶段，可以选择在[经过]那名玩家时使自己[强制停下]，并进行[结算]。"#), para(r#"此卡在场上时，所有位于薰所在格子的玩家，如果可以移动，则其[主要移动]改为[投掷]1d2确定前后方向、[投掷]1d10确定距离，并进行[结算]。"#)])]))
         // sheet cell F5
         .fields(&[("group", r#"Hello, Happy World!"#), ("owner", r#"濑田薰"#)]));
 

@@ -1,13 +1,13 @@
+//! [停留] layer and book an extra [触发结算] at this turn's end.
 //!
 //! 规则书（docs/rulebook/cards.json, id `MyGO:轮符雨`）:
 //! > 轮符雨：
-//! >  使自己获得一层[停留]并在回合结束时额外进行一次[触发结算]
+//! > 使自己获得一层[停留]并在回合结束时额外进行一次[结算]。
 //!
-//! [停留] layer and book an extra [触发结算] at this turn's end.
 
 use card_sdk::abi::ActionKind;
 use card_sdk::CardText;
-use card_sdk::{ctx, key, Action, CardDef, Msg, On};
+use card_sdk::{ctx, key, para, Action, CardDef, Msg, On};
 
 pub const RINNE_RAIN: CardDef = CardDef::new(
     "MyGO:轮符雨",
@@ -27,9 +27,7 @@ pub const RINNE_RAIN: CardDef = CardDef::new(
         .name(r#"轮符雨"#)
         .raw_name(r#"轮符雨"#)
         .tags(&[])
-        .text(CardText::para(
-            r#"使自己获得一层[停留]并在回合结束时额外进行一次[触发结算]"#,
-        ))
+        .text(CardText::para(r#"使自己获得一层[停留]并在回合结束时额外进行一次[结算]。"#))
         // sheet cell I4
         .fields(&[("group", r#"MyGO!!!!!"#), ("owner", "")]),
 );

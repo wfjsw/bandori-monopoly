@@ -1,16 +1,16 @@
+//! this card in play when another player's card hits you; a placed offer later
 //!
 //! 规则书（docs/rulebook/cards.json, id `MyGO:即使迷茫着`）:
 //! > 即使迷茫着：
-//! >
-//! > （1）[反击] 当你被其他人的卡的效果影响时，你将此卡放置在自己场上。
-//! > （2）[持续] 主要阶段中，你可将此卡置入弃牌堆并进入移动阶段，使你的此次主要移动格数为你当前手牌张数。
 //!
-//! this card in play when another player's card hits you; a placed offer later
+//! > （1）[反击]当你被其他人的卡的效果影响时，你将此卡放置在自己场上。
+//! > （2）[持续] 主要阶段中，你可将此卡置入弃卡区并进入移动阶段，使你的此次主要移动格数为你当前手牌张数。
+//!
 //! discards it to move as many tiles as your hand size.
 
 use bandori_std::ctx;
 use card_sdk::abi::{roll_source, ChainKind};
-use card_sdk::{it, Action, Activation, CardText, Declared};
+use card_sdk::{it, items, Action, Activation, CardText, Declared};
 use card_sdk::{key, CardDef, Msg, On};
 
 pub const EVEN_LOST: CardDef = CardDef::new(
@@ -37,10 +37,7 @@ pub const EVEN_LOST: CardDef = CardDef::new(
         .name(r#"即使迷茫着"#)
         .raw_name(r#"即使迷茫着"#)
         .tags(&[r#"反击"#, r#"持续"#])
-        .text(CardText::items(&[
-            it(r#"[反击] 当你被其他人的卡的效果影响时，你将此卡放置在自己场上。"#),
-            it(r#"[持续] 主要阶段中，你可将此卡置入弃牌堆并进入移动阶段，使你的此次主要移动格数为你当前手牌张数。"#),
-        ]))
+        .text(CardText::items(&[it(r#"[反击]当你被其他人的卡的效果影响时，你将此卡放置在自己场上。（2）[持续] 主要阶段中，你可将此卡置入弃卡区并进入移动阶段，使你的此次主要移动格数为你当前手牌张数。"#)]))
         // sheet cell I2
         .fields(&[("group", r#"MyGO!!!!!"#), ("owner", "")]));
 

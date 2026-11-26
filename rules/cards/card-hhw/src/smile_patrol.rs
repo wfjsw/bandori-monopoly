@@ -1,22 +1,25 @@
+//! on one of your tiles, then roll 3d20 and maybe build free on the tile the
 //!
 //! 规则书（docs/rulebook/cards.json, id `HHW:微笑巡逻队`）:
 //! > 微笑巡逻队：
-//! >  付款并在任意自己的格子加盖一层房屋，投掷3d20并在投掷结果数字对应的格子额外免费加盖一层房屋（若为可建造格子）
+//! > 依次进行以下操作：
+//! > 1. 付款，在任意1个自己的格子加盖1层房屋。
+//! > 2. [投掷]3d20。
+//! > 3. 若结果数字对应的格子可建造，在该格子额外免费加盖1层房屋。
 //!
-//! on one of your tiles, then roll 3d20 and maybe build free on the tile the
 //! roll points at (a different tile, which need not be yours).
 
 use bandori_std::ctx;
 use card_sdk::abi::{roll_source, BuildCharge, RollPurpose};
 use card_sdk::CardText;
-use card_sdk::{key, CardDef, Msg, On};
+use card_sdk::{key, para, sec, steps, CardDef, Msg, On};
 
 pub const SMILE_PATROL: CardDef =
     CardDef::new("HHW:微笑巡逻队", &[On::Play("", Some(cant_play), play)]).meta(&card_sdk::meta::CardMeta::new()
         .name(r#"微笑巡逻队"#)
         .raw_name(r#"微笑巡逻队"#)
         .tags(&[])
-        .text(CardText::para(r#"付款并在任意自己的格子加盖一层房屋，投掷3d20并在投掷结果数字对应的格子额外免费加盖一层房屋（若为可建造格子）"#))
+        .text(CardText::of(&[sec(r#""#, &[para(r#"依次进行以下操作："#), steps(&[r#"付款，在任意1个自己的格子加盖1层房屋。"#, r#"[投掷]3d20。"#, r#"若结果数字对应的格子可建造，在该格子额外免费加盖1层房屋。"#])])]))
         // sheet cell F6
         .fields(&[("group", r#"Hello, Happy World!"#), ("owner", "")]));
 

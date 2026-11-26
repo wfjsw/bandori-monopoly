@@ -1,22 +1,25 @@
+//! A roll ≤3 grants 2 stay layers (not 1+2), 4-12 grants 1. The grant is
 //!
 //! 规则书（docs/rulebook/cards.json, id `Mujica:心の雨`）:
 //! > 心の雨：
-//! >  使你前方20格内的所有玩家各自骰1d20，骰点小于等于12的玩家获得一层[停留]，小于等于3的玩家变为获得2层[停留]。若未能使任何玩家获得[停留]，自身获得一层[晕眩]并获得1000资金
+//! > 使你前方20格内的所有玩家各自[投掷]1d20，并根据各自的结果获得对应效果：
+//! > - 结果小于等于3：获得2层[停留]。
+//! > - 结果大于3且小于等于12：获得1层[停留]。
+//! > 若未能使任何玩家获得[停留]，自己获得1层[眩晕]，并获得1000资金。
 //!
-//! A roll ≤3 grants 2 stay layers (not 1+2), 4-12 grants 1. The grant is
 //! `rules_status::stay::add`, which the abnormal [反击] window / guard /
 //! untargetable / immune gate can refuse and write no layer, so "granted" and
 //! "gained" do not coincide; the fallback keys off layers that actually landed.
 
 use card_sdk::abi::{roll_source, RollPurpose};
 use card_sdk::CardText;
-use card_sdk::{ctx, key, CardDef, Msg, On};
+use card_sdk::{ctx, key, para, sec, CardDef, Msg, On};
 
 pub const HEART_RAIN: CardDef = CardDef::new("Mujica:心の雨", &[On::Play("", None, heart_rain)]).meta(&card_sdk::meta::CardMeta::new()
         .name(r#"心の雨"#)
         .raw_name(r#"心の雨"#)
         .tags(&[])
-        .text(CardText::para(r#"使你前方20格内的所有玩家各自骰1d20，骰点小于等于12的玩家获得一层[停留]，小于等于3的玩家变为获得2层[停留]。若未能使任何玩家获得[停留]，自身获得一层[晕眩]并获得1000资金"#))
+        .text(CardText::of(&[sec(r#""#, &[para(r#"使你前方20格内的所有玩家各自[投掷]1d20，并根据各自的结果获得对应效果："#), para(r#"- 结果小于等于3：获得2层[停留]。"#), para(r#"- 结果大于3且小于等于12：获得1层[停留]。"#), para(r#"若未能使任何玩家获得[停留]，自己获得1层[眩晕]，并获得1000资金。"#)])]))
         // sheet cell J10
         .fields(&[("group", r#"Ave Mujica"#), ("owner", "")]));
 

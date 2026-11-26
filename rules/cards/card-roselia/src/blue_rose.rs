@@ -1,11 +1,13 @@
+//! Livehouse deeds, else teleport to the next free Livehouse (or RiNG 4) as your
 //!
 //! 规则书（docs/rulebook/cards.json, id `R:蓝玫瑰的骄傲`）:
 //! > 蓝玫瑰的骄傲：
-//! >  打出此卡时，
-//! > （1）若你拥有的Livehouse格子多于或等于你拥有的其他格子，获得相当于这些Livehouse格子地契价值20%的资金 。
-//! > （2）若严格少于，则传送至下一个未被购买的Livehouse格子；若此时已没有未被购买的Livehouse格子，则传送至“RiNG 4”（不触发结算），均视为你的主要移动。
+//! > 打出此卡时，根据你拥有的Live House格子数量与其他格子数量，进行对应操作：
 //!
-//! Livehouse deeds, else teleport to the next free Livehouse (or RiNG 4) as your
+//! > （1）若Live House格子数量大于等于其他格子数量：获得等于这些Live House格子地契价值20%的资金。
+//!
+//! > （2）若Live House格子数量少于其他格子数量：[传送]至下一个未被购买的Live House格子。若已没有未被购买的Live House格子，改为[传送]至“RiNG 4”，不触发[结算]。两种情况均视为你的[主要移动]。
+//!
 //! main move.
 
 use alloc::vec::Vec;
@@ -18,15 +20,7 @@ pub const BLUE_ROSE: CardDef = CardDef::new("R:蓝玫瑰的骄傲", &[On::Play("
         .name(r#"蓝玫瑰的骄傲"#)
         .raw_name(r#"蓝玫瑰的骄傲"#)
         .tags(&[])
-        .text(CardText::of(&[
-            sec("", &[
-                para(r#"打出此卡时，"#),
-                items(&[
-                    it(r#"若你拥有的Livehouse格子多于或等于你拥有的其他格子，获得相当于这些Livehouse格子地契价值20%的资金 。"#),
-                    it(r#"若严格少于，则传送至下一个未被购买的Livehouse格子；若此时已没有未被购买的Livehouse格子，则传送至“RiNG 4”（不触发结算），均视为你的主要移动。"#),
-                ]),
-            ]),
-        ]))
+        .text(CardText::of(&[sec(r#""#, &[para(r#"打出此卡时，根据你拥有的Live House格子数量与其他格子数量，进行对应操作："#), items(&[it(r#"若Live House格子数量大于等于其他格子数量：获得等于这些Live House格子地契价值20%的资金。"#), it(r#"若Live House格子数量少于其他格子数量：[传送]至下一个未被购买的Live House格子。若已没有未被购买的Live House格子，改为[传送]至“RiNG 4”，不触发[结算]。两种情况均视为你的[主要移动]。"#)])])]))
         // sheet cell E13
         .fields(&[("group", r#"Roselia"#), ("owner", "")]));
 

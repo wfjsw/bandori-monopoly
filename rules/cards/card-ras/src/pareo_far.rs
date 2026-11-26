@@ -1,14 +1,16 @@
+//! (cap 3).
 //!
 //! 规则书（docs/rulebook/cards.json, id `RAS:（PAREO）渐渐远去的你`）:
 //! > （PAREO）渐渐远去的你：
-//! > 获得2个PAREO标记，然后视为你的房屋总数增加且可选择移除任意你拥有的格子上的一层房屋
+//! > 依次进行以下操作：
+//! > 1. 获得2个[PAREO标记]。
+//! > 2. 视为你的房屋总数增加，且可选择移除任意1个你拥有的格子上的1层房屋。
 //!
-//! (cap 3).
 
 use alloc::vec::Vec;
 use bandori_std::ctx;
 use card_sdk::CardText;
-use card_sdk::{key, CardDef, Msg, On};
+use card_sdk::{key, para, sec, steps, CardDef, Msg, On};
 
 /// The shared mark name. `skill:鳰原令王那:梦幻可爱♪女仆` (2) reads and spends
 /// 「PAREO标记」 by that literal, so the card must add under the same name --
@@ -24,11 +26,9 @@ pub const PAREO_FAR: CardDef = CardDef::new(
 .meta(
     &card_sdk::meta::CardMeta::new()
         .name(r#"渐渐远去的你"#)
-        .raw_name(r#"（PAREO）渐渐远去的你"#)
+        .raw_name(r#"（鳰原令王那）渐渐远去的你"#)
         .tags(&[])
-        .text(CardText::para(
-            r#"获得2个PAREO标记，然后视为你的房屋总数增加且可选择移除任意你拥有的格子上的一层房屋"#,
-        ))
+        .text(CardText::of(&[sec(r#""#, &[para(r#"依次进行以下操作："#), steps(&[r#"获得2个[PAREO标记]。"#, r#"视为你的房屋总数增加，且可选择移除任意1个你拥有的格子上的1层房屋。"#])])]))
         // sheet cell H15
         .fields(&[("group", r#"RAISE A SUILEN"#), ("owner", r#"鳰原令王那"#)]),
 );

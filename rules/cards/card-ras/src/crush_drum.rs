@@ -1,12 +1,12 @@
+//! [手] +Xd20 from the discard pile and [特] immunity for dice-adding cards.
 //!
 //! 规则书（docs/rulebook/cards.json, id `RAS:（MASKING）CRUSH ON THE DRUM!!!`）:
 //! > （MASKING）CRUSH ON THE DRUM!!!：
 //! > [特]：
-//! > 打出此卡的回合任何[使用者]使用的卡包含添加骰效果的卡不受任何其他效果影响。
+//! > 打出此卡的回合内，[使用者]使用的任何包含添加骰效果的卡，不受任何其他效果影响。
 //! > [手]：
-//! > 移动阶段前打出此卡，本回合主要移动掷骰额外添加Xd20，X为你弃牌堆的卡数
+//! > 移动阶段前打出此卡，为本回合用于确定[主要移动]步数的[投掷]额外添加X个d20骰子；X为你弃卡区的卡数。
 //!
-//! [手] +Xd20 from the discard pile and [特] immunity for dice-adding cards.
 
 use card_sdk::{ctx, key, CardDef, Msg, On};
 use card_sdk::{para, sec, CardText};
@@ -25,22 +25,9 @@ pub const CRUSH_DRUM: CardDef = CardDef::new(
 .meta(
     &card_sdk::meta::CardMeta::new()
         .name(r#"CRUSH ON THE DRUM!!!"#)
-        .raw_name(r#"（MASKING）CRUSH ON THE DRUM!!!"#)
+        .raw_name(r#"（佐藤益木）CRUSH ON THE DRUM!!!"#)
         .tags(&[r#"手"#, r#"特"#])
-        .text(CardText::of(&[
-            sec(
-                r#"[特]："#,
-                &[para(
-                    r#"打出此卡的回合任何[使用者]使用的卡包含添加骰效果的卡不受任何其他效果影响。"#,
-                )],
-            ),
-            sec(
-                r#"[手]："#,
-                &[para(
-                    r#"移动阶段前打出此卡，本回合主要移动掷骰额外添加Xd20，X为你弃牌堆的卡数"#,
-                )],
-            ),
-        ]))
+        .text(CardText::of(&[sec(r#"[特]："#, &[para(r#"打出此卡的回合内，[使用者]使用的任何包含添加骰效果的卡，不受任何其他效果影响。"#)]), sec(r#"[手]："#, &[para(r#"移动阶段前打出此卡，为本回合用于确定[主要移动]步数的[投掷]额外添加X个d20骰子；X为你弃卡区的卡数。"#)])]))
         // sheet cell H14
         .fields(&[("group", r#"RAISE A SUILEN"#), ("owner", r#"佐藤益木"#)]),
 );

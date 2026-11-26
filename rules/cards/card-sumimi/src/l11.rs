@@ -1,4 +1,11 @@
 //!
+//!
+//! 规则书（docs/rulebook/cards.json, id `Sumimi:#L11`）:
+//! > #L11：
+//! > 将此卡置于自身场上，并为此卡添加2个[奇迹水晶]。
+//! > 每当乐队技能需要移除[奇迹水晶]时：可改为移除此卡上的1个[奇迹水晶]。
+//! > 此卡的[奇迹水晶]数量为0时，将此卡放入弃卡区。
+//!
 //! 规则书（the roster, id `Sumimi:#L11`）:
 //! > 将此卡置于自身场上，为其添加2个[奇迹水晶]，每当乐队技能需要移除[奇迹水晶]时，可移除此卡上的一个[奇迹水晶]代替，此卡[奇迹水晶]数为0时放入弃牌堆。
 //!
@@ -6,7 +13,7 @@
 
 use bandori_std::ctx;
 use card_sdk::CardText;
-use card_sdk::{key, Action, CardDef, Msg, On};
+use card_sdk::{key, para, sec, Action, CardDef, Msg, On};
 
 pub const L11: CardDef = CardDef::new(
     "Sumimi:#L11",
@@ -23,11 +30,10 @@ pub const L11: CardDef = CardDef::new(
             sweep)),
     ],
 ).meta(&card_sdk::meta::CardMeta::new()
-        // sheet cell L11 -- the name line is blank; `#L11` is the name.
-        .name("#L11")
-        .raw_name("")
+        .name(r#""#)
+        .raw_name(r#"unnamed"#)
         .tags(&[])
-        .text(CardText::para(r#"将此卡置于自身场上，为其添加2个[奇迹水晶]，每当乐队技能需要移除[奇迹水晶]时，可移除此卡上的一个[奇迹水晶]代替，此卡[奇迹水晶]数为0时放入弃牌堆。"#))
+        .text(CardText::of(&[sec(r#""#, &[para(r#"将此卡置于自身场上，并为此卡添加2个[奇迹水晶]。"#), para(r#"每当乐队技能需要移除[奇迹水晶]时：可改为移除此卡上的1个[奇迹水晶]。"#), para(r#"此卡的[奇迹水晶]数量为0时，将此卡放入弃卡区。"#)])]))
         .fields(&[("group", r#"Sumimi"#), ("owner", "")]));
 
 fn l11(player_id: i32) -> card_sdk::Asked {
