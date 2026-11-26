@@ -1,16 +1,18 @@
+//! placed card, 3 crystals decaying each own turn end; halve rolls and payments.
 //!
 //! 规则书（docs/rulebook/cards.json, id `AG:（摩卡）0.5倍速`）:
 //! > （摩卡）0.5倍速：
-//! > (1)  将此卡放置在场上并获得3个奇迹水晶，你的回合结束时移除一个奇迹水晶，奇迹水晶为0时此卡放入弃牌堆。
-//! > (2) 此卡在场时，你的移动掷骰的最终结算/2（向上取整）且你的所有资金支付与消耗减半。
 //!
-//! placed card, 3 crystals decaying each own turn end; halve rolls and payments.
+//! > （1）将此卡放置在场上，并获得3个[奇迹水晶]。你的回合结束时，移除1个[奇迹水晶]。[奇迹水晶]为0时，将此卡放入弃卡区。
+//!
+//! > （2）此卡在场时，用于确定你的移动步数的[投掷]的最终结果除以2，向上取整；你的所有资金[支付]与[消耗]减半。
+//!
 //!
 //! Reviewed 10/24/2026
 
 use bandori_std::ctx;
 use card_sdk::abi::ZoneChangeCause;
-use card_sdk::{it, CardText};
+use card_sdk::{it, items, CardText};
 use card_sdk::{key, Action, CardDef, Filter, Msg, On, RollValue};
 
 const ID: &str = "AG:（摩卡）0.5倍速";
@@ -64,12 +66,9 @@ pub const MOCA_HALF: CardDef = CardDef::new(
 .props(&[(bandori_std::marker::TURNS_LEFT, 3)])
 .meta(&card_sdk::meta::CardMeta::new()
         .name(r#"0.5倍速"#)
-        .raw_name(r#"（摩卡）0.5倍速"#)
+        .raw_name(r#"（青叶摩卡）0.5倍速"#)
         .tags(&[r#"手"#, r#"场地"#])
-        .text(CardText::items(&[
-            it(r#"将此卡放置在场上并获得3个奇迹水晶，你的回合结束时移除一个奇迹水晶，奇迹水晶为0时此卡放入弃牌堆。"#),
-            it(r#"此卡在场时，你的移动掷骰的最终结算/2（向上取整）且你的所有资金支付与消耗减半。"#),
-        ]))
+        .text(CardText::items(&[it(r#"将此卡放置在场上，并获得3个[奇迹水晶]。你的回合结束时，移除1个[奇迹水晶]。[奇迹水晶]为0时，将此卡放入弃卡区。"#), it(r#"此卡在场时，用于确定你的移动步数的[投掷]的最终结果除以2，向上取整；你的所有资金[支付]与[消耗]减半。"#)]))
         // sheet cell C7
         .fields(&[("group", r#"Afterglow"#), ("owner", r#"青叶摩卡"#)]));
 

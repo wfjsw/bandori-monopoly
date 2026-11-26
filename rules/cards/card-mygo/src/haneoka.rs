@@ -1,15 +1,15 @@
+//! Sheet 2026-10-06: every threshold is inclusive (「至少为」), and the
 //!
 //! 规则书（docs/rulebook/cards.json, id `MyGO:羽丘的不可思议女孩`）:
 //! > 羽丘的不可思议女孩：
-//! >  位于属于自己的格子上时，投掷1d20，若出目至少为10则在当前格子免费加盖一层房屋，若出目至少为15，则额外抽一张卡，至少为20，则将此卡放置在自己场上，在后续任何时刻可将其置入弃牌堆并抵消一次任意付款。若小于10，此卡放入弃牌堆且视为此卡未生效
+//! > 位于属于自己的格子上时，投掷1d20，若出目至少为10则在当前格子免费加盖一层房屋，若出目至少为15，则额外抽一张卡，至少为20，则将此卡放置在自己场上，在后续任何时刻可将其置入弃卡区并抵消一次任意付款。若小于10，此卡放入弃卡区且视为此卡未生效。
 //!
-//! Sheet 2026-10-06: every threshold is inclusive (「至少为」), and the
 //! ineffective branch is 「小于10」. So 10 builds, 15 draws, 20 places.
 
 use bandori_std::ctx::{self, trigger};
 use card_sdk::abi::{roll_source, ActionKind, BuildCharge, RollPurpose};
 use card_sdk::CardText;
-use card_sdk::{key, Action, CardDef, Msg, On};
+use card_sdk::{key, para, Action, CardDef, Msg, On};
 
 pub const HANEOKA: CardDef = CardDef::new(
     "MyGO:羽丘的不可思议女孩",
@@ -25,7 +25,7 @@ pub const HANEOKA: CardDef = CardDef::new(
         .name(r#"羽丘的不可思议女孩"#)
         .raw_name(r#"羽丘的不可思议女孩"#)
         .tags(&[])
-        .text(CardText::para(r#"位于属于自己的格子上时，投掷1d20，若出目至少为10则在当前格子免费加盖一层房屋，若出目至少为15，则额外抽一张卡，至少为20，则将此卡放置在自己场上，在后续任何时刻可将其置入弃牌堆并抵消一次任意付款。若小于10，此卡放入弃牌堆且视为此卡未生效"#))
+        .text(CardText::para(r#"位于属于自己的格子上时，投掷1d20，若出目至少为10则在当前格子免费加盖一层房屋，若出目至少为15，则额外抽一张卡，至少为20，则将此卡放置在自己场上，在后续任何时刻可将其置入弃卡区并抵消一次任意付款。若小于10，此卡放入弃卡区且视为此卡未生效。"#))
         // sheet cell I7
         .fields(&[("group", r#"MyGO!!!!!"#), ("owner", "")]));
 

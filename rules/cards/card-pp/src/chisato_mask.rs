@@ -1,22 +1,24 @@
+//! player split-pays you 2,000. The reshuffle split runs on `Reshuffled`; the
 //!
 //! 规则书（docs/rulebook/cards.json, id `PP:[白鹭千圣]微笑的铁假面`）:
 //! > [白鹭千圣]微笑的铁假面：
 //! > [手]：
-//! > 将此卡放置在[使用者]的[场地]，其他玩家[分摊][支付][使用者]2000资金。
+//! > 依次进行以下操作：
+//! > 1. 将此卡放置在[使用者]的[场地]。
+//! > 2. 其他玩家[分摊][支付][使用者]2000资金。
 //! > [持续]：
 //!
 //! > （1）[拥有者]的弃卡区洗入抽卡区时其他玩家[分摊][支付][拥有者]500资金。
 //!
 //! > （2）[共鸣]其他玩家[分摊][支付][拥有者]1500资金。
 //!
-//! player split-pays you 2,000. The reshuffle split runs on `Reshuffled`; the
 //! [共鸣] branch is a second, larger split offered at the owner's turn start.
 
 use alloc::vec::Vec;
 
 use bandori_std::ctx::{self, trigger};
 use card_sdk::abi::ActionKind;
-use card_sdk::{it, items, para, sec, CardText};
+use card_sdk::{it, items, para, sec, steps, CardText};
 use card_sdk::{key, Action, CardDef, Msg, On};
 
 pub const CHISATO_MASK: CardDef = CardDef::new(
@@ -39,23 +41,9 @@ pub const CHISATO_MASK: CardDef = CardDef::new(
 .meta(
     &card_sdk::meta::CardMeta::new()
         .name(r#"微笑的铁假面"#)
-        .raw_name(r#"[白鹭千圣]微笑的铁假面"#)
+        .raw_name(r#"（白鹭千圣）微笑的铁假面"#)
         .tags(&[r#"手"#, r#"持续"#])
-        .text(CardText::of(&[
-            sec(
-                r#"[手]："#,
-                &[para(
-                    r#"将此卡放置在[使用者]的[场地]，其他玩家[分摊][支付][使用者]2000资金。"#,
-                )],
-            ),
-            sec(
-                r#"[持续]："#,
-                &[items(&[
-                    it(r#"[拥有者]的弃卡区洗入抽卡区时其他玩家[分摊][支付][拥有者]500资金。"#),
-                    it(r#"[共鸣]其他玩家[分摊][支付][拥有者]1500资金。"#),
-                ])],
-            ),
-        ]))
+        .text(CardText::of(&[sec(r#"[手]："#, &[para(r#"依次进行以下操作："#), steps(&[r#"将此卡放置在[使用者]的[场地]。"#, r#"其他玩家[分摊][支付][使用者]2000资金。"#])]), sec(r#"[持续]："#, &[items(&[it(r#"[拥有者]的弃卡区洗入抽卡区时其他玩家[分摊][支付][拥有者]500资金。"#), it(r#"[共鸣]其他玩家[分摊][支付][拥有者]1500资金。"#)])])]))
         // sheet cell D18
         .fields(&[("group", r#"Pastel✽Palettes"#), ("owner", r#"白鹭千圣"#)]),
 );

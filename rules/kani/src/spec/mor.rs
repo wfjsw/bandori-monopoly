@@ -563,7 +563,7 @@ pub fn starry_05_effects_ok(effects: &[Effect], owner: i32) -> bool {
 // 「（2）获得x次经过CiRCLE时的资金奖励」
 // 「（3）将此卡放置在场上并放置x个奇迹水晶…」
 // 「（4）当奇迹水晶耗尽时，将此卡置入弃牌堆」
-// OPEN-角色标记. The multi-branch pick is ruled (C-Q6, 2026-11-20: the player
+// OPEN-模仿标记. The multi-branch pick is ruled (C-Q6, 2026-11-20: the player
 // picks; only the chosen branch runs).
 // Sheet 2026-10-06 新卡组卡 G7 rewords (2) from 「x*2000资金」 to x times the
 // current CiRCLE money reward (Morfonica cycle 1000/1500/2000).

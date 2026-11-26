@@ -1,22 +1,23 @@
+//! record the players sharing your tile; they follow your next main move.
 //!
 //! 规则书（docs/rulebook/cards.json, id `CRYCHIC:（祥子）带领着大家`）:
 //! > （祥子）带领着大家：
-//! >  回合开始时若你与其他玩家重合，可打出此卡并记录那些玩家，使你的下次主要移动结果对那些玩家一起执行，你先触发结算，此后其他玩家按行动顺序依次触发结算；触发结算时进行的[支付]价格减半。
+//! > 回合开始时，若你与其他玩家[重叠]：可打出此卡，并记录那些玩家。你的下次[主要移动]结果对那些玩家一起执行。
+//! > 你先进行[结算]，此后其他玩家按行动顺序依次进行[结算]。上述[结算]中进行的[支付]金额减半。
 //!
-//! record the players sharing your tile; they follow your next main move.
 
 use card_sdk::abi::PayFactorScope;
 use card_sdk::CardText;
-use card_sdk::{ctx, key, CardDef, Msg, On};
+use card_sdk::{ctx, key, para, sec, CardDef, Msg, On};
 
 pub const SAKIKO_LEAD: CardDef = CardDef::new(
     "CRYCHIC:（祥子）带领着大家",
     &[On::Play("", Some(cant_play), sakiko_lead)],
 ).meta(&card_sdk::meta::CardMeta::new()
         .name(r#"带领着大家"#)
-        .raw_name(r#"（祥子）带领着大家"#)
+        .raw_name(r#"（丰川祥子）带领着大家"#)
         .tags(&[])
-        .text(CardText::para(r#"回合开始时若你与其他玩家重合，可打出此卡并记录那些玩家，使你的下次主要移动结果对那些玩家一起执行，你先触发结算，此后其他玩家按行动顺序依次触发结算；触发结算时进行的[支付]价格减半。"#))
+        .text(CardText::of(&[sec(r#""#, &[para(r#"回合开始时，若你与其他玩家[重叠]：可打出此卡，并记录那些玩家。你的下次[主要移动]结果对那些玩家一起执行。"#), para(r#"你先进行[结算]，此后其他玩家按行动顺序依次进行[结算]。上述[结算]中进行的[支付]金额减半。"#)])]))
         // sheet cell M14
         .fields(&[("group", r#"CRYCHIC"#), ("owner", r#"丰川祥子（CRYCHIC）"#)]));
 

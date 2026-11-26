@@ -1,13 +1,15 @@
+//! whole discard pile back into the deck and gain 500 per returned card.
 //!
 //! 规则书（docs/rulebook/cards.json, id `R:曲奇时间`）:
 //! > 曲奇时间：
-//! >  将自己弃牌堆的卡全部返回抽牌堆并洗切，获得500*X资金，X为返回卡的总数。
+//! > 依次进行以下操作：
+//! > 1. 将自己弃卡区的全部卡返回抽卡区，并洗切。
+//! > 2. 获得500×X资金；X为上述操作返回的卡的总数。
 //!
-//! whole discard pile back into the deck and gain 500 per returned card.
 
 use bandori_std::ctx;
 use card_sdk::CardText;
-use card_sdk::{key, CardDef, Msg, On};
+use card_sdk::{key, para, sec, steps, CardDef, Msg, On};
 
 pub const COOKIE_TIME: CardDef = CardDef::new("R:曲奇时间", &[On::Play("", Some(cant_play), play)])
     .meta(
@@ -15,9 +17,7 @@ pub const COOKIE_TIME: CardDef = CardDef::new("R:曲奇时间", &[On::Play("", S
             .name(r#"曲奇时间"#)
             .raw_name(r#"曲奇时间"#)
             .tags(&[])
-            .text(CardText::para(
-                r#"将自己弃牌堆的卡全部返回抽牌堆并洗切，获得500*X资金，X为返回卡的总数。"#,
-            ))
+            .text(CardText::of(&[sec(r#""#, &[para(r#"依次进行以下操作："#), steps(&[r#"将自己弃卡区的全部卡返回抽卡区，并洗切。"#, r#"获得500×X资金；X为上述操作返回的卡的总数。"#])])]))
             // sheet cell E5
             .fields(&[("group", r#"Roselia"#), ("owner", "")]),
     );

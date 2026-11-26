@@ -1,15 +1,17 @@
+
 //!
 //! 规则书（docs/rulebook/cards.json, id `CRYCHIC:（soyo）回到曾经`）:
 //! > （soyo）回到曾经：
-//! > （1）[特] 抽到此卡时立刻从抽牌堆打出并执行以下操作之一 ：
-//! > 1. 将你的所有手牌放入弃牌堆，然后获得弃牌数*500的资金，抽1张卡，为你的一个格子付费加盖一间房屋，然后[移除]此卡；
-//! > 2. 获得1000资金并将此卡加入手牌
-//! > （2）[手] 获得500资金
 //!
-
+//! > （1）[特]抽到此卡时，立刻从抽卡区打出，并选择以下一个操作执行：
+//! > - 将你的所有手牌放入弃卡区，然后获得弃卡数×500的资金，抽1张卡，为你的1个格子付费加盖1间房屋，然后[移除]此卡。
+//! > - 获得1000资金，并将此卡加入手牌。
+//!
+//! > （2）[手]获得500资金。
+//!
 use bandori_std::ctx;
 use card_sdk::abi::ActionKind;
-use card_sdk::{it, it_sub, CardText};
+use card_sdk::{it, it_sub, items, CardText};
 use card_sdk::{key, Action, CardDef, Msg, On};
 
 pub const SOYO_BACK: CardDef = CardDef::new(
@@ -20,18 +22,11 @@ pub const SOYO_BACK: CardDef = CardDef::new(
     ],
 ).meta(&card_sdk::meta::CardMeta::new()
         .name(r#"回到曾经"#)
-        .raw_name(r#"（soyo）回到曾经"#)
+        .raw_name(r#"（长崎素世）回到曾经"#)
         .tags(&[r#"手"#, r#"特"#])
-        .text(CardText::items(&[
-            it_sub(
-                r#"[特] 抽到此卡时立刻从抽牌堆打出并执行以下操作之一 ："#,
-                &[
-                r#"将你的所有手牌放入弃牌堆，然后获得弃牌数*500的资金，抽1张卡，为你的一个格子付费加盖一间房屋，然后[移除]此卡；"#,
-                r#"获得1000资金并将此卡加入手牌"#,
-                ],
-            ),
-            it(r#"[手] 获得500资金"#),
-        ]))
+        .text(CardText::items(&[it(r#"[特]抽到此卡时，立刻从抽卡区打出，并选择以下一个操作执行：
+- 将你的所有手牌放入弃卡区，然后获得弃卡数×500的资金，抽1张卡，为你的1个格子付费加盖1间房屋，然后[移除]此卡。
+- 获得1000资金，并将此卡加入手牌。"#), it(r#"[手]获得500资金。"#)]))
         // sheet cell M15
         .fields(&[("group", r#"CRYCHIC"#), ("owner", r#"长崎素世（CRYCHIC）"#)]));
 

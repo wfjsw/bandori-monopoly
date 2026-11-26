@@ -9,13 +9,14 @@
 //!
 //! （2） 「该角色的标记」 is a counter named for the character whose skill is
 //! running -- which the `skillUsed` trigger carries as the skill's id, so the
-//! mark name is `角色标记:<skill id>` (the 「角色标记」 namespace NNM also spends).
+//! mark name is `模仿标记:<skill id>` (the 「模仿标记」 namespace NNM also spends).
 //! 「每种角色标记上限1」 is a per-kind cap, and
 //! 「该技能对被动技能存在3回合CD」 is a per-kind cooldown.
 //!
 //! （3） 「视为使用该角色的技能」 is `ctx::play_card(skill_id, player_id)?`, the
 //! same invocation haruhikage uses; the skill id is the mark name minus the
-//! `角色标记:` prefix. 「尽力补齐资源消耗」 is advice on paying the
+//! `模仿标记:` prefix (or the legacy `角色标记:`: replays and saves still hold
+//! it, so every read accepts both). 「尽力补齐资源消耗」 is advice on paying the
 //! invoked skill's cost, not a rule -- the sheet's `思路` column is play advice
 //! and is not implemented.
 
@@ -24,14 +25,29 @@ use card_sdk::abi::ActionKind;
 use card_sdk::ctx::NameId;
 use card_sdk::{key, Action, CardDef, Msg, On};
 
-/// The 「角色标记」 namespace every consumer agrees on (NNM's `角色标记:*` too).
-/// A mark's name is `角色标记:<skill id>`, so (3) can hand the id to `play_card`.
-const MARK_PREFIX: &str = "角色标记:";
+/// The 「模仿标记」 namespace every consumer agrees on (NNM's `模仿标记:*` too).
+/// A mark's name is `模仿标记:<skill id>`, so (3) can hand the id to `play_card`.
+const MARK_PREFIX: &str = "模仿标记:";
 
-/// The skill id a mark stands for (`角色标记:<skill id>` -> `<skill id>`).
+/// The pre-rename prefix. Replays and saves still hold `角色标记:*` marks, so
+/// every read takes either prefix; writes always use [`MARK_PREFIX`].
+const LEGACY_PREFIX: &str = "角色标记:";
+
+/// The skill id a mark stands for, under the new prefix or the legacy one
+/// (`模仿标记:<skill id>` / `角色标记:<skill id>` -> `<skill id>`).
 fn mark_skill(name: NameId) -> &'static str {
     let s = name.as_str();
-    s.strip_prefix(MARK_PREFIX).unwrap_or(s)
+    s.strip_prefix(MARK_PREFIX)
+        .or_else(|| s.strip_prefix(LEGACY_PREFIX))
+        .unwrap_or(s)
+}
+
+/// Held mark names, both prefixes (new writing convention first, legacy
+/// after), so a save made before the rename still counts.
+fn held_marks(player_id: i32) -> alloc::vec::Vec<NameId> {
+    let mut names = ctx::held_names(player_id, MARK_PREFIX);
+    names.extend(ctx::held_names(player_id, LEGACY_PREFIX));
+    names
 }
 
 /// The mark name for a skill id.
@@ -148,7 +164,7 @@ fn on_skill(player_id: i32) -> card_sdk::Asked {
 
 /// 「3回合CD」 counts down.
 fn tick(player_id: i32) -> card_sdk::Asked {
-    for name in ctx::held_names(player_id, MARK_PREFIX) {
+    for name in held_marks(player_id) {
         let cd = cd_key(mark_skill(name));
         let left = state::get(player_id, &cd);
         if left > 0 {
@@ -167,7 +183,7 @@ fn can_use(player_id: i32) -> Option<Msg> {
     if bandori_std::ctx::skill_blocked(player_id, "") {
         return Some(Msg::new(key!("skill_blocked")));
     }
-    if ctx::held_names(player_id, MARK_PREFIX).is_empty() {
+    if held_marks(player_id).is_empty() {
         return Some(Msg::new(key!("nanami_no_mark")));
     }
     None
@@ -175,7 +191,7 @@ fn can_use(player_id: i32) -> Option<Msg> {
 
 /// （3）「视为使用该角色的技能」 -- `ctx::play_card` runs that skill's `On::Play`.
 fn use_skill(player_id: i32) -> card_sdk::Asked {
-    let marks = ctx::held_names(player_id, MARK_PREFIX);
+    let marks = held_marks(player_id);
     if marks.is_empty() {
         return Ok(());
     }

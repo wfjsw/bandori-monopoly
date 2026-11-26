@@ -1148,6 +1148,44 @@ fn wacha_mocha_jump_offered_while_stayed() {
 }
 
 #[test]
+fn wacha_mocha_jump_offered_on_an_end_turn_from_the_operation_phase() {
+    // 「运营阶段中」 -- the offer belongs to the whole phase, not only to a
+    // declared main move. With the move gate closed (`skip_move`, the only way
+    // to end straight from 运营) the offer still comes at the phase's close,
+    // and it runs the teleport itself since no `main_move` follows.
+    let mut t = Table::new(&["松原花音", "户山香澄"]);
+    t.begin_turn(0);
+    drain(&mut t);
+    t.place_raw(0, "HHW:（花音）Wacha Mocha 啪嗒进行曲");
+    set_held(&mut t, 0, "水母标记", 9);
+    t.m.world_mut().st.skip_move = true;
+    t.end(0).unwrap();
+    for _ in 0..40 {
+        let Some(p) = t.prompt() else {
+            t.settle();
+            continue;
+        };
+        if p.kind == "tile" {
+            break;
+        }
+        t.decline();
+    }
+    let p = t.expect_prompt();
+    assert_eq!(p.kind, "tile", "{}", t.dump_prompt());
+    let aquarium = tile("水族馆");
+    let k = p
+        .items
+        .iter()
+        .position(|s| s == &aquarium.to_string())
+        .expect("aquarium offered");
+    t.answer(0, k as i32).unwrap();
+    drain(&mut t);
+    assert_eq!(t.pos(0), aquarium, "the phase-end offer teleported: {:?}", t.recent_keys(15));
+    assert!(!t.on_field(0, "HHW:（花音）Wacha Mocha 啪嗒进行曲"));
+    assert_eq!(t.token(0, "水母标记"), 0, "markers cleared");
+}
+
+#[test]
 fn wacha_mocha_second_copy_not_offered_after_a_claim() {
     // The first accepted copy claims the move; the second stands down without
     // asking (the markers are the player's, so both copies would qualify).

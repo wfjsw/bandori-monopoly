@@ -35,15 +35,15 @@ const TSUKINOMORI: &str = "月之森女子学院";
 // ---------------------------------------------------------------- helpers
 
 /// Give `who` one hand mark for the skill whose id contains `needle` -- the
-/// `角色标记:<skill id>` counter a 稍微努力了一下 press spends.
+/// `模仿标记:<skill id>` counter a 稍微努力了一下 press spends.
 fn give_hand_mark(t: &mut Table, who: usize, needle: &str) {
     give_hand_marks(t, who, needle, 1);
 }
 
-/// `n` 角色标记 of one skill, the x NNM (3) asks the player to choose.
+/// `n` 模仿标记 of one skill, the x NNM (3) asks the player to choose.
 fn give_hand_marks(t: &mut Table, who: usize, needle: &str, n: i32) {
     let id = t.skill_id(who, needle);
-    let name = format!("角色标记:{id}");
+    let name = format!("模仿标记:{id}");
     t.m.world_mut()
         .set_held(who as i32, &name, n, i32::MAX, i32::MAX);
 }
@@ -2503,12 +2503,12 @@ fn nnm_hand_play_spends_marks_and_draws() {
         let mut t = Table::new(&["广町七深", "户山香澄", "花园多惠"]);
         t.clean();
         t.begin_turn(0);
-        // Arrange one 角色标记 (namespace `角色标记:<skill id>`, what
+        // Arrange one 模仿标记 (namespace `模仿标记:<skill id>`, what
         // 广町七深 (2) writes).
         t.m.world_mut().st.players[0]
             .tokens
             .push(game_core::state::Counter {
-                name: "角色标记:skill:户山香澄:鼓动".into(),
+                name: "模仿标记:skill:户山香澄:鼓动".into(),
                 value: 1,
                 instance: None,
                 max: 0,

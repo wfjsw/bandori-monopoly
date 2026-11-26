@@ -199,7 +199,7 @@ fn g09_suppression_matrix() {
             place_on_tile(&mut t, 0, "TEST:tile_id_probe", g as i32);
             place_event(&mut t, "火种燃尽之后会怎么样呢？", 0);
             push_ember(&mut t, g as i32);
-            place_on_tile(&mut t, 0, "status:no_hand", -1);
+            place_on_tile(&mut t, 0, "event:飞鸟山之战", -1);
             if tagged {
                 t.give(1, &[SUPPRESSER]);
             }
@@ -233,7 +233,7 @@ fn g09_suppression_matrix() {
                 t.money(0)
             );
             assert!(
-                t.on_field(0, "status:no_hand"),
+                t.on_field(0, "event:飞鸟山之战"),
                 "the status is untouched (swapped={swapped}, tagged={tagged})"
             );
         }

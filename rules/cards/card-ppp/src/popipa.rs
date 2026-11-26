@@ -1,25 +1,23 @@
+//! draw 1.
 //!
 //! 规则书（docs/rulebook/cards.json, id `PPP:Popipa`）:
 //! > Popipa：
 //! > [手]：
-//! > 获得1000资金并将一张“Pipopa”加入抽牌堆，然后抽一张牌，然后此卡[移除]
+//! > 依次进行以下操作：
+//! > 1. 获得1000资金，并将1张“Pipopa”加入抽卡区。
+//! > 2. 抽1张卡。
+//! > 3. [移除]此卡。
 //!
-//! draw 1.
 
 use card_sdk::{ctx, key, CardDef, Msg, On};
-use card_sdk::{para, sec, CardText};
+use card_sdk::{para, sec, steps, CardText};
 
 pub const POPIPA: CardDef = CardDef::new("PPP:Popipa", &[On::Play("", None, popipa)]).meta(
     &card_sdk::meta::CardMeta::new()
         .name(r#"Popipa"#)
         .raw_name(r#"Popipa"#)
         .tags(&[r#"手"#])
-        .text(CardText::of(&[sec(
-            r#"[手]："#,
-            &[para(
-                r#"获得1000资金并将一张“Pipopa”加入抽牌堆，然后抽一张牌，然后此卡[移除]"#,
-            )],
-        )]))
+        .text(CardText::of(&[sec(r#"[手]："#, &[para(r#"依次进行以下操作："#), steps(&[r#"获得1000资金，并将1张“Pipopa”加入抽卡区。"#, r#"抽1张卡。"#, r#"[移除]此卡。"#])])]))
         // sheet cell B2
         .fields(&[("group", r#"Poppin' Party"#), ("owner", "")]),
 );

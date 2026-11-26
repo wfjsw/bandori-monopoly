@@ -324,49 +324,227 @@ fn review_return_teleport_offers_buy() {
 }
 
 // =====================================================================
-// noHand 2 -> 1 -> 0 (`status:no_hand` host hooks)
+// noHand 2 -> 1 -> 0 (`event:飞鸟山之战`'s own clause)
 // =====================================================================
 
-/// The host's turn-start fold: `noHand == 2` drops to `1` at the owner's
-/// `TurnStart`.
+/// Advance until it is `who`'s 运营 stage (setup only -- before observe).
+fn until_turn(t: &mut Table, who: usize) {
+    for _ in 0..60 {
+        if t.turn() == who && t.step() == 2 {
+            return;
+        }
+        if t.turn() == who {
+            t.end(who).unwrap();
+            drain(t);
+            continue;
+        }
+        let cur = t.turn();
+        pass(t, cur);
+    }
+    panic!("never reached turn {who} (at {})", t.turn());
+}
+
+/// Put `event` on top of the event deck and draw it with `who` on CiRCLE 咖啡厅
+/// (「抽取一张手卡，然后抽取一个事件卡」), then decline everything. `faces` are
+/// the dice after the landing face. The *next* seat is the one the veto lands on.
+fn draw_event_quiet(t: &mut Table, who: usize, event: &str, faces: &[i32]) {
+    // Keep the rest of the deck so the draw does not empty it.
+    let mut deck: Vec<String> = t.event_deck().into_iter().filter(|e| e != event).collect();
+    deck.insert(0, event.to_string());
+    let deck: Vec<&str> = deck.iter().map(String::as_str).collect();
+    t.set_event_deck(&deck);
+    until_turn(t, who);
+    let corner = tile("CiRCLE 咖啡厅");
+    t.set_pos(who, (corner + 59) % 60);
+    let mut all = vec![1];
+    all.extend_from_slice(faces);
+    t.dice(&all);
+    let _ = t.roll(who);
+    drain(t);
+}
+
+/// End turns until it is `who`'s turn (the event's walk / a stun skip may
+/// already have moved the clock on).
+fn pass_until_turn(t: &mut Table, who: usize) {
+    for _ in 0..20 {
+        if t.turn() == who {
+            return;
+        }
+        let cur = t.turn();
+        pass(t, cur);
+    }
+    panic!("never reached turn {who} (at {})", t.turn());
+}
+
+/// The event grants `noHand = 2` and stays in play; the holder's turn start
+/// folds it to 1 (「下个」 half spent) without filing the event.
 #[test]
 fn no_hand_folds_at_turn_start() {
-    let mut t = Table::vanilla(2);
-    t.set_state(0, state_key::NO_HAND, 2);
-    pass(&mut t, 0);
-    pass(&mut t, 1);
+    let mut t = Table::vanilla(3);
+    draw_event_quiet(&mut t, 1, "飞鸟山之战", &[7]);
+    assert!(t.event_in_play("飞鸟山之战"), "the veto keeps the event in play");
+    pass_until_turn(&mut t, 2);
     assert_eq!(
-        t.state(0, state_key::NO_HAND),
+        t.state(2, state_key::NO_HAND),
         1,
         "2 folds to 1 at turn start"
     );
-}
-
-/// The host's turn-end clear: `noHand == 1` drops to `0` at the owner's
-/// `TurnEnd`.
-#[test]
-fn no_hand_clears_at_turn_end() {
-    let mut t = Table::vanilla(2);
-    t.set_state(0, state_key::NO_HAND, 1);
-    pass(&mut t, 0);
-    assert_eq!(
-        t.state(0, state_key::NO_HAND),
-        0,
-        "1 clears to 0 at turn end"
+    assert!(
+        t.event_in_play("飞鸟山之战"),
+        "the event still has the clear to do"
     );
 }
 
-/// `noHand == 2` is *not* cleared at turn end (only `1 -> 0` runs); it
-/// survives to fold at the next turn start.
+/// The holder's turn end clears 1 -> 0 and the event files itself into the
+/// discard (its clause is spent).
+#[test]
+fn no_hand_clears_at_turn_end() {
+    let mut t = Table::vanilla(3);
+    draw_event_quiet(&mut t, 1, "飞鸟山之战", &[7]);
+    pass_until_turn(&mut t, 2); // their turn start: 2 -> 1
+    pass(&mut t, 2); // their turn end: 1 -> 0
+    assert_eq!(
+        t.state(2, state_key::NO_HAND),
+        0,
+        "1 clears to 0 at turn end"
+    );
+    assert!(
+        !t.event_in_play("飞鸟山之战"),
+        "the spent event left the board"
+    );
+    assert_eq!(
+        t.event_discard(),
+        vec!["飞鸟山之战".to_string()],
+        "filed into the event discard"
+    );
+}
+
+/// `noHand == 2` is *not* cleared at turn end (only `1 -> 0` runs); it survives
+/// to fold at the next turn start, so the event must stay too.
 #[test]
 fn no_hand_two_survives_turn_end() {
-    let mut t = Table::vanilla(2);
-    t.set_state(0, state_key::NO_HAND, 2);
-    pass(&mut t, 0);
+    let mut t = Table::vanilla(3);
+    draw_event_quiet(&mut t, 1, "飞鸟山之战", &[7]);
+    pass_until_turn(&mut t, 2); // 2 -> 1 at their turn start
+    t.set_state(2, state_key::NO_HAND, 2); // a second grant mid-turn
+    pass(&mut t, 2);
     assert_eq!(
-        t.state(0, state_key::NO_HAND),
+        t.state(2, state_key::NO_HAND),
         2,
         "2 is not the clear target; it waits for the next turn start"
+    );
+    assert!(
+        t.event_in_play("飞鸟山之战"),
+        "the re-armed veto keeps the event in play"
+    );
+}
+
+/// A turn that exile auto-skips still spends the veto: the deadline passes
+/// with that turn's end, so the event is not stretched by the skip. Driven by
+/// the skip's own log line, so the assertion is "right after the skip" -- under
+/// a `TurnStart` fold the value would still be 2 there.
+#[test]
+fn no_hand_spends_on_an_exile_skipped_turn() {
+    let mut t = Table::vanilla(3);
+    draw_event_quiet(&mut t, 1, "飞鸟山之战", &[7]);
+    // Two layers: their turn start peels one and still auto-skips.
+    grant_layer(&mut t, 2, state_key::EXILE, 2, Tick::TurnStart);
+    let mut skipped = false;
+    for _ in 0..6 {
+        let cur = t.turn();
+        pass(&mut t, cur);
+        if t.recent_keys(60).iter().any(|k| k == "log.exiled_skip") {
+            skipped = true;
+            break;
+        }
+    }
+    assert!(skipped, "the turn was exile-skipped: {:?}", t.recent_keys(80));
+    assert_eq!(
+        t.state(2, state_key::NO_HAND),
+        0,
+        "the skipped turn spent the veto"
+    );
+    assert!(
+        !t.event_in_play("飞鸟山之战"),
+        "the event lapsed with the skipped turn"
+    );
+}
+
+/// A holder who is knocked out owes no turn end any more: the owed veto is
+/// dropped with them and the event files instead of sitting in play forever.
+#[test]
+fn no_hand_files_the_event_when_the_holder_is_bankrupted() {
+    let mut t = Table::vanilla(3);
+    draw_event_quiet(&mut t, 1, "飞鸟山之战", &[7]);
+    assert_eq!(t.state(2, state_key::NO_HAND), 2, "seat 2 owes the veto");
+    // Bankrupt the holder on a five-house 购物中心 before their next turn.
+    // The owner is the drawer (seat 1): the stunned seat 0 would close the
+    // pay gate on both sides and no rent would ever land.
+    t.set_money(2, 0);
+    let mall = tile("购物中心");
+    t.own(1, &[mall]);
+    t.set_houses(mall, 5);
+    t.begin_turn(2);
+    t.set_pos(2, mall - 1);
+    t.dice(&[1]);
+    t.roll(2).unwrap();
+    while t.prompt().is_some() {
+        t.decline();
+    }
+    assert!(t.p(2).bankrupt, "{:?}", t.recent_keys(20));
+    assert_eq!(
+        t.state(2, state_key::NO_HAND),
+        0,
+        "the out seat's veto is dropped"
+    );
+    assert!(
+        !t.event_in_play("飞鸟山之战"),
+        "the event files with the holder"
+    );
+}
+
+/// Two holders over one instance: the event must survive the first clear and
+/// file only when the last holder is clear. Order-agnostic -- the draw's walk
+/// may already have moved the turn on.
+#[test]
+fn no_hand_stays_until_every_holder_is_clear() {
+    let mut t = Table::vanilla(3);
+    draw_event_quiet(&mut t, 1, "飞鸟山之战", &[7]);
+    // Both seats owe (the shape a re-activation leaves: one shared instance).
+    t.set_state(2, state_key::NO_HAND, 2);
+    t.set_state(0, state_key::NO_HAND, 2);
+    // Drop the event's 2 `stunStart` on seat 0: a stun-skipped turn ends inside
+    // the same `pass` that ends seat 2's, leaving no observable point between
+    // the two clears.
+    t.set_state(0, state_key::STUN_START, 0);
+    let mut clears = 0;
+    let mut survived_first = false;
+    for _ in 0..10 {
+        let cur = t.turn();
+        pass(&mut t, cur);
+        let n = [0usize, 2]
+            .iter()
+            .filter(|p| t.state(**p, state_key::NO_HAND) == 0)
+            .count();
+        if n > clears {
+            clears = n;
+            if clears == 1 {
+                survived_first = t.event_in_play("飞鸟山之战");
+            }
+        }
+        if clears == 2 {
+            break;
+        }
+    }
+    assert_eq!(clears, 2, "both holders spent their veto");
+    assert!(
+        survived_first,
+        "the first clear must not file the event: {:?}",
+        t.recent_keys(60)
+    );
+    assert!(
+        !t.event_in_play("飞鸟山之战"),
+        "the last holder's clear files it"
     );
 }
 

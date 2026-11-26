@@ -1,14 +1,16 @@
+//! swap to the other Sumimi character (play or [反击] after own move roll).
 //!
 //! 规则书（docs/rulebook/cards.json, id `Sumimi:Sumimi是二人一体的`）:
 //! > Sumimi是二人一体的：
-//! > （1）打出此卡，将自己的角色卡替换为sumimi的另一名角色及其初始火罐数
-//! > （2）此卡可在你的移动掷骰后作为[反击]使用。
 //!
-//! swap to the other Sumimi character (play or [反击] after own move roll).
+//! > （1）打出此卡时：将自己的角色卡替换为Sumimi的另一名角色，并将[火罐]数量设为该角色的初始[火罐]数量。
+//!
+//! > （2）你进行用于确定移动步数的[投掷]后，可将此卡作为[反击]使用。
+//!
 
 use bandori_std::ctx;
 use card_sdk::abi::ChainKind;
-use card_sdk::{it, CardText};
+use card_sdk::{it, items, CardText};
 use card_sdk::{key, CardDef, Msg, On};
 
 pub const TWO_IN_ONE: CardDef = CardDef::new(
@@ -29,10 +31,7 @@ pub const TWO_IN_ONE: CardDef = CardDef::new(
         .name(r#"Sumimi是二人一体的"#)
         .raw_name(r#"Sumimi是二人一体的"#)
         .tags(&[r#"反击"#])
-        .text(CardText::items(&[
-            it(r#"打出此卡，将自己的角色卡替换为sumimi的另一名角色及其初始火罐数"#),
-            it(r#"此卡可在你的移动掷骰后作为[反击]使用。"#),
-        ]))
+        .text(CardText::items(&[it(r#"打出此卡时：将自己的角色卡替换为Sumimi的另一名角色，并将[火罐]数量设为该角色的初始[火罐]数量。"#), it(r#"你进行用于确定移动步数的[投掷]后，可将此卡作为[反击]使用。"#)]))
         // sheet cell L6
         .fields(&[("group", r#"Sumimi"#), ("owner", "")]));
 

@@ -1,14 +1,14 @@
+//! [反击] on a pay, gain the tile's price tag.
 //!
 //! 规则书（docs/rulebook/cards.json, id `Sumimi:现在她是Sumimi的小初啦`）:
 //! > 现在她是Sumimi的小初啦：
-//! > [反击] 当你在你的本回合开始后到下回合开始前之间失去资金的总额即将超过你所在格子的[收费标价]时打出此卡，获得相当于你所在格子[收费标价]数额的资金（RiNG则为其基础乘数）
+//! > [反击]从你的本回合开始后，到下回合开始前，若你失去资金的总额即将超过你所在格子的[收费标价]：打出此卡，获得等于该格子[收费标价]的资金。RiNG取当前收费乘数，不固定使用初始值。
 //!
-//! [反击] on a pay, gain the tile's price tag.
 
 use bandori_std::ctx::{self, trigger};
 use card_sdk::abi::ChainKind;
 use card_sdk::CardText;
-use card_sdk::{key, CardDef, Msg, On};
+use card_sdk::{key, para, CardDef, Msg, On};
 
 pub const NOW_SUMIMI: CardDef = CardDef::new(
     "Sumimi:现在她是Sumimi的小初啦",
@@ -32,7 +32,7 @@ pub const NOW_SUMIMI: CardDef = CardDef::new(
         .name(r#"现在她是Sumimi的小初啦"#)
         .raw_name(r#"现在她是Sumimi的小初啦"#)
         .tags(&[r#"反击"#])
-        .text(CardText::para(r#"[反击] 当你在你的本回合开始后到下回合开始前之间失去资金的总额即将超过你所在格子的[收费标价]时打出此卡，获得相当于你所在格子[收费标价]数额的资金（RiNG则为其基础乘数）"#))
+        .text(CardText::para(r#"[反击]从你的本回合开始后，到下回合开始前，若你失去资金的总额即将超过你所在格子的[收费标价]：打出此卡，获得等于该格子[收费标价]的资金。RiNG取当前收费乘数，不固定使用初始值。"#))
         // sheet cell L5
         .fields(&[("group", r#"Sumimi"#), ("owner", "")]));
 

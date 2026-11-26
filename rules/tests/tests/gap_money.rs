@@ -216,6 +216,57 @@ fn g02_half_speed_plus_expectations_floor_on_a_rent() {
 }
 
 // =====================================================================
+// G02b. multiply x additive: Fire bird 1.5x over 不要背负期待's +100
+// =====================================================================
+
+// 规则书 (Fire bird): 「自己的所有格子收费变为原本的1.5倍」.
+// 规则书 (不要背负期待): 「[支付]资金时金额提高100」.
+// RULING (MONEY-01 / C-Q1, 2026-10-31): 原本 is the charge at the mul input --
+// the fixed-value row is its own, earlier stage and every scale reads that
+// composed input (G02's `(R+100)/2`), so the live +100 is raised first and the
+// ×1.5 covers `charge + 100`, once rounded: ceil10((R+100)*3/2). The
+// base-relative alternative would leave the add unscaled (`R*1.5+100`).
+#[test]
+fn g02b_fire_bird_scales_the_added_figure() {
+    let mut t = Table::new(&["三角初华", "仓田真白"]);
+    t.clean();
+    t.begin_turn(1);
+    drain(&mut t);
+    // P0 holds Fire bird, so P0's tiles charge 1.5x.
+    t.place_raw(0, "R:Fire bird");
+    t.set_crystals(0, "R:Fire bird", 3);
+    // P1 pays an extra 100 per pay (one 「生效2次」 charge).
+    let ne = t.place_raw(1, "PP:不要背负期待");
+    t.m.world_mut().set_prop_at(ne, "no_expectation.stacks", 1);
+    let tile = tile("江户川公园");
+    let rent = data().tiles[tile].rent[0];
+    t.set_owner(tile, Some(0));
+    // 真白 rolls 2d20 backwards; 不要背负期待 shaves 2 off the roll, so [2,2]
+    // settles to 2 steps back from two tiles past the tile.
+    t.set_pos(1, (tile + 2) % 60);
+    t.dice(&[2, 2]);
+    t.roll(1).unwrap();
+    drain(&mut t);
+    assert_eq!(
+        t.pos(1),
+        tile,
+        "P1 landed on the rent tile: {}",
+        t.dump_prompt()
+    );
+    let paid = ceil10(((rent + 100) * 3 + 1) / 2);
+    assert_eq!(
+        t.money(1),
+        10_000 - paid,
+        "ceil10((R+100)*1.5) for R = {rent}"
+    );
+    assert_eq!(
+        t.money(0),
+        10_000 + paid,
+        "the payee receives the paid amount"
+    );
+}
+
+// =====================================================================
 // G03. cancel-one x split-share: 网络链接异常 drops one leg of a 分摊
 // =====================================================================
 

@@ -1,13 +1,14 @@
+
 //!
 //! 规则书（docs/rulebook/cards.json, id `HHW:（kkr）前往笑容集结的地方！`）:
 //! > （kkr）前往笑容集结的地方！：
-//! >  支付10000资金（视为买地花费）并将此卡置于CiRCLE上，若其他玩家在该格[触发结算]则向所有者支付6000资金，视为格子的收款
+//! > [支付]10000资金，视为买地花费，并将此卡置于CiRCLE上。
+//! > 其他玩家在该格子[结算]时：向所有者[支付]6000资金，视为该格子的收款。
 //!
-
 use bandori_std::ctx::{self, trigger};
 use card_sdk::abi::{ActionKind, PayKind};
 use card_sdk::CardText;
-use card_sdk::{key, Action, CardDef, Msg, On};
+use card_sdk::{key, para, sec, Action, CardDef, Msg, On};
 
 const ID: &str = "HHW:（kkr）前往笑容集结的地方！";
 
@@ -25,9 +26,9 @@ pub const KOKORO_CIRCLE: CardDef = CardDef::new(
     ],
 ).props(&[(card_sdk::abi::prop::EST_COST, 10000)]).meta(&card_sdk::meta::CardMeta::new()
         .name(r#"前往笑容集结的地方！"#)
-        .raw_name(r#"（kkr）前往笑容集结的地方！"#)
+        .raw_name(r#"（弦卷心）前往笑容集结的地方！"#)
         .tags(&[])
-        .text(CardText::para(r#"支付10000资金（视为买地花费）并将此卡置于CiRCLE上，若其他玩家在该格[触发结算]则向所有者支付6000资金，视为格子的收款"#))
+        .text(CardText::of(&[sec(r#""#, &[para(r#"[支付]10000资金，视为买地花费，并将此卡置于CiRCLE上。"#), para(r#"其他玩家在该格子[结算]时：向所有者[支付]6000资金，视为该格子的收款。"#)])]))
         // sheet cell F7
         .fields(&[("group", r#"Hello, Happy World!"#), ("owner", r#"弦卷心"#)]));
 

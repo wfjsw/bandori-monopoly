@@ -1,11 +1,12 @@
+//! ahead (no settle), then take the main move roll right away.
 //!
 //! 规则书（docs/rulebook/cards.json, id `Mor:纯真振翅`）:
-//! > 纯真振翅：传送到移动方向20格后（不触发结算），立刻进行移动掷骰
+//! > 纯真振翅：
+//! > 传送到移动方向20格后（不触发结算），立刻进行移动掷骰。
 //!
-//! ahead (no settle), then take the main move roll right away.
 
 use card_sdk::CardText;
-use card_sdk::{ctx, key, CardDef, Msg, On};
+use card_sdk::{ctx, key, para, CardDef, Msg, On};
 
 pub const PURE_WINGS: CardDef = CardDef::new("Mor:纯真振翅", &[On::Play("", None, pure_wings)])
     .meta(
@@ -13,9 +14,7 @@ pub const PURE_WINGS: CardDef = CardDef::new("Mor:纯真振翅", &[On::Play("", 
             .name(r#"纯真振翅"#)
             .raw_name(r#"纯真振翅"#)
             .tags(&[])
-            .text(CardText::para(
-                r#"传送到移动方向20格后（不触发结算），立刻进行移动掷骰"#,
-            ))
+            .text(CardText::para(r#"传送到移动方向20格后（不触发结算），立刻进行移动掷骰。"#))
             // sheet cell G13
             .fields(&[("group", r#"Morfonica"#), ("owner", "")]),
     );

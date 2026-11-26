@@ -1,20 +1,20 @@
+
 //!
 //! 规则书（docs/rulebook/cards.json, id `Mor:勇气展翅高飞之时`）:
 //! > 勇气展翅高飞之时：
-//! >  掷骰3d20，结果对应序号格子的所有者向你支付该地块的购买价格+地块已有房子的建造价格总额的一半，若为地产商地块，获得1000资金
+//! > 掷骰3d20，结果对应序号格子的所有者向你支付该地块的购买价格+地块已有房子的建造价格总额的一半，若为地产商地块，获得1000资金。
 //!
-
 use bandori_std::ctx;
 use card_sdk::abi::{roll_source, RollPurpose};
 use card_sdk::CardText;
-use card_sdk::{key, CardDef, Msg, On};
+use card_sdk::{key, para, CardDef, Msg, On};
 
 pub const COURAGE_WINGS: CardDef =
     CardDef::new("Mor:勇气展翅高飞之时", &[On::Play("", None, courage_wings)]).meta(&card_sdk::meta::CardMeta::new()
         .name(r#"勇气展翅高飞之时"#)
         .raw_name(r#"勇气展翅高飞之时"#)
         .tags(&[])
-        .text(CardText::para(r#"掷骰3d20，结果对应序号格子的所有者向你支付该地块的购买价格+地块已有房子的建造价格总额的一半，若为地产商地块，获得1000资金"#))
+        .text(CardText::para(r#"掷骰3d20，结果对应序号格子的所有者向你支付该地块的购买价格+地块已有房子的建造价格总额的一半，若为地产商地块，获得1000资金。"#))
         // sheet cell G6
         .fields(&[("group", r#"Morfonica"#), ("owner", "")]));
 

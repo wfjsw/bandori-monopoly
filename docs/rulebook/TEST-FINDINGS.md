@@ -1172,7 +1172,8 @@ Fixed and un-ignored (green):
 * **SKILL-01 / skillBlock** (`accident_blocks_pp_skill_2`). The residual guard
   was already consulting `skill_blocked`; the test's `set_fans` helper wiped
   the whole tokens vector (including `skillBlock`). The helper now updates the
-  two fan counters in place.
+  two fan counters in place. The seal spelling later moved from the band to
+  per-entry `skillBlock:skill:<id>:<clause>` tags (same test updated).
 
 Test fixes (not engine): DRAW-02's who-pays reading; DRAW-03's discard path;
 CRYSTAL-04's prompt sequence and Morfonica-cycle expectation; SKILL-01's

@@ -1,13 +1,15 @@
+
 //!
 //! 规则书（docs/rulebook/cards.json, id `PPP:Bang Dream!`）:
 //! > Bang Dream!：
 //! > [手]：
-//! > 为[使用者]的团卡添加一个[奇迹水晶]，然后[传送]至任意[使用者]拥有的格子且可选择盖房。
+//! > 依次进行以下操作：
+//! > 1. 为[使用者]的乐队技能卡添加1个[奇迹水晶]。
+//! > 2. [传送]至任意[使用者]拥有的格子，且可选择盖房。
 //!
-
 use bandori_std::ctx;
 use card_sdk::{key, CardDef, Msg, On};
-use card_sdk::{para, sec, CardText};
+use card_sdk::{para, sec, steps, CardText};
 
 pub const BANG_DREAM: CardDef = CardDef::new(
     "PPP:Bang Dream!",
@@ -18,11 +20,7 @@ pub const BANG_DREAM: CardDef = CardDef::new(
         .name(r#"Bang Dream!"#)
         .raw_name(r#"Bang Dream!"#)
         .tags(&[r#"手"#])
-        .text(CardText::of(&[
-            sec(r#"[手]："#, &[
-                para(r#"为[使用者]的团卡添加一个[奇迹水晶]，然后[传送]至任意[使用者]拥有的格子且可选择盖房。"#),
-            ]),
-        ]))
+        .text(CardText::of(&[sec(r#"[手]："#, &[para(r#"依次进行以下操作："#), steps(&[r#"为[使用者]的乐队技能卡添加1个[奇迹水晶]。"#, r#"[传送]至任意[使用者]拥有的格子，且可选择盖房。"#])])]))
         // sheet cell B7
         .fields(&[("group", r#"Poppin' Party"#), ("owner", "")]),
 );

@@ -643,6 +643,10 @@ pub struct PlayCtx<'a> {
     /// on the context (a resume keeps it) and drawn from the world's
     /// `factor_gen`, so parallel fresh contexts cannot collide. Transient.
     pub(crate) ledger_exec: u32,
+    /// The declaration a 「[分摊]」 total left for its `pay_leg` calls (C19).
+    /// Set by [`Self::pay_total`], read by the legs, brackets across nested
+    /// money pipelines. Transient.
+    pub pay_split_decl: Option<super::play::SplitDecl>,
     /// Nested `state` [反击] settlement depth. A counter's own skill-state
     /// toggles must not open another window (ping-pong). Transient.
     pub state_raise_depth: u32,
@@ -3710,6 +3714,7 @@ impl<'a> PlayCtx<'a> {
             reentrant_hooks: Vec::new(),
             settle_stack: Vec::new(),
             ledger_exec: 0,
+            pay_split_decl: None,
             state_raise_depth: 0,
             marker_raise_depth: 0,
             in_teleport_tail: false,

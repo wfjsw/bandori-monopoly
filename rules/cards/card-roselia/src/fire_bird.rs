@@ -1,16 +1,20 @@
+//! place this card with X self-chosen miracle crystals. While it is in play:
 //!
 //! 规则书（docs/rulebook/cards.json, id `R:Fire bird`）:
 //! > Fire bird：
-//! >  支付1600资金将此卡放置在自己场地上并为其添加X（自选）个奇迹水晶，自己场地上存在此卡时，每回合结束时失去400资金并移除1个奇迹水晶，自己的所有格子收费变成1.5倍，奇迹水晶耗尽时将此卡放入弃牌堆
+//! > 支付1600资金，将此卡放置在自己的场地上，并为此卡添加X个[奇迹水晶]；X由自己选择。
+//! > 自己的场地上存在此卡时：
+//! > - 每回合结束时：失去400资金，并移除此卡的1个[奇迹水晶]。
+//! > - 自己的所有格子收费变为原本的1.5倍。
+//! > 此卡的[奇迹水晶]耗尽时，将此卡放入弃卡区。
 //!
-//! place this card with X self-chosen miracle crystals. While it is in play:
 //! pay 400 and burn one crystal at every turn end, all your tiles charge 1.5x
 //! rent, and the card hits the discard when the crystals run out.
 
 use bandori_std::ctx::{self, trigger};
 use card_sdk::abi::{ActionKind, FilterKind, TriggerKind};
 use card_sdk::CardText;
-use card_sdk::{key, Action, CardDef, Filter, Msg, On};
+use card_sdk::{key, para, sec, Action, CardDef, Filter, Msg, On};
 
 pub const FIRE_BIRD: CardDef = CardDef::new(
     "R:Fire bird",
@@ -35,7 +39,7 @@ pub const FIRE_BIRD: CardDef = CardDef::new(
         .name(r#"Fire bird"#)
         .raw_name(r#"Fire bird"#)
         .tags(&[])
-        .text(CardText::para(r#"支付1600资金将此卡放置在自己场地上并为其添加X（自选）个奇迹水晶，自己场地上存在此卡时，每回合结束时失去400资金并移除1个奇迹水晶，自己的所有格子收费变成1.5倍，奇迹水晶耗尽时将此卡放入弃牌堆"#))
+        .text(CardText::of(&[sec(r#""#, &[para(r#"支付1600资金，将此卡放置在自己的场地上，并为此卡添加X个[奇迹水晶]；X由自己选择。"#), para(r#"自己的场地上存在此卡时："#), para(r#"- 每回合结束时：失去400资金，并移除此卡的1个[奇迹水晶]。"#), para(r#"- 自己的所有格子收费变为原本的1.5倍。"#), para(r#"此卡的[奇迹水晶]耗尽时，将此卡放入弃卡区。"#)])]))
         // sheet cell E6
         .fields(&[("group", r#"Roselia"#), ("owner", "")]));
 
@@ -75,9 +79,18 @@ fn play(player_id: i32) -> card_sdk::Asked {
     Ok(())
 }
 
-/// 规则书: 「自己的所有格子收费变成1.5倍」. Rent on this card's owner's tiles is
-/// charged at ×1.5. Runs through the hook dispatch at `paySplitMul` (after
-/// `PaySplitAdd`, before `PaySplitChoose`), so this is a field effect, not a [反击].
+/// 规则书: 「自己的所有格子收费变为原本的1.5倍」. Rent on this card's owner's
+/// tiles is charged at ×1.5. Runs through the hook dispatch at `paySplitMul`
+/// (after `PaySplitAdd`, before `PaySplitChoose`), so this is a field effect,
+/// not a [反击].
+///
+/// `原本` is the mul stage's input, not a second base home: the ruling makes
+/// the add row a separate, earlier stage that composes its fixed values before
+/// any scale (MONEY-01 / C-Q1, ruled 2026-10-31; G02 asserts `(R+100)/2`), so a
+/// live `+100` lands first and the ×1.5 covers `charge+100`. A `paySplitMul`
+/// body only sees that stage input -- no base value is exported -- and
+/// `ctx::rent_of` would miss a dice-rent roll (it quotes the unit, not
+/// `unit × 1d20`), so the module stays one factor of the product.
 ///
 /// User ruling 2026-10-15 (OPEN-取整 family): a ×1.5 modifier transforms the
 /// running amount exactly and must NOT CeilTo in its own body; the engine
@@ -88,9 +101,10 @@ fn pay_mul(player_id: i32, value: i32) -> i32 {
     if value <= 0 {
         return value;
     }
-    // （自己的所有格子收费变成1.5倍）: 「变成1.5倍」 is one factor of the mul
-    //   stage, which folds every live multiplier as a commutative product
-    //   (MONEY-01 / C-Q1, ruled 2026-10-31) -- no ordering question is left here.
+    // （自己的所有格子收费变为原本的1.5倍）: one factor of the mul stage. The
+    //   mul fold reads the stage input, so the fixed-value row is already in
+    //   it -- `原本` here is base charge + live adds (MONEY-01 / C-Q1, ruled
+    //   2026-10-31). Holds `(25 → 38 → 40)` for a lone modifier.
     let boosted = ((value as i64 * 3 + 1) / 2).clamp(0, i32::MAX as i64) as i32;
     ctx::log(
         player_id,

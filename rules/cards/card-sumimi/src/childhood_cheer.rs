@@ -1,9 +1,9 @@
+//! 「移动后」 is 行动阶段 13 (`SETTLE-STAGES.md` §4 M1): it fires when the move
 //!
 //! 规则书（docs/rulebook/cards.json, id `Sumimi:(初华（Sumimi）)儿时玩伴的鼓励`）:
 //! > (初华（Sumimi）)儿时玩伴的鼓励：
-//! >  可在移动掷骰前打出此卡，使本次移动以“小豆岛”为起点并在移动后获得一个火罐。
+//! > 用于确定移动步数的[投掷]前：可打出此卡，使本次移动以“小豆岛”为起点，并在此次移动后获得1个[火罐]。
 //!
-//! 「移动后」 is 行动阶段 13 (`SETTLE-STAGES.md` §4 M1): it fires when the move
 //! ends **whether or not it settles** (其他规则注意事项 1.2 gates only the
 //! settle), so this is a single `moveAfter` hook -- not the old
 //! `settleBefore`+`settleAfter`+`teleported` triple that missed a
@@ -12,7 +12,7 @@
 use bandori_std::ctx::{self, trigger};
 use card_sdk::abi::ActionKind;
 use card_sdk::CardText;
-use card_sdk::{key, Action, CardDef, Msg, On};
+use card_sdk::{key, para, Action, CardDef, Msg, On};
 
 pub const CHILDHOOD_CHEER: CardDef = CardDef::new(
     "Sumimi:(初华（Sumimi）)儿时玩伴的鼓励",
@@ -33,11 +33,9 @@ pub const CHILDHOOD_CHEER: CardDef = CardDef::new(
 .meta(
     &card_sdk::meta::CardMeta::new()
         .name(r#"儿时玩伴的鼓励"#)
-        .raw_name(r#"(初华（Sumimi）)儿时玩伴的鼓励"#)
+        .raw_name(r#"（三角初华）儿时玩伴的鼓励"#)
         .tags(&[])
-        .text(CardText::para(
-            r#"可在移动掷骰前打出此卡，使本次移动以“小豆岛”为起点并在移动后获得一个火罐。"#,
-        ))
+        .text(CardText::para(r#"用于确定移动步数的[投掷]前：可打出此卡，使本次移动以“小豆岛”为起点，并在此次移动后获得1个[火罐]。"#))
         // sheet cell L9
         .fields(&[("group", r#"Sumimi"#), ("owner", r#"三角初华（Sumimi）"#)]),
 );

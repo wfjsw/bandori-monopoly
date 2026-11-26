@@ -1,18 +1,20 @@
+//! placed card that walks one player per turn and takes band skill cards.
 //!
 //! 规则书（docs/rulebook/cards.json, id `Mujica:（海铃）`）:
-//! > （海铃）
-//! >
-//! > （1）将此卡放置于在此卡使用者下一名行动的玩家场上，轮到使用者的回合开始时，将其移动到其所在场的玩家行动序列后一名的玩家场上。
-//! >
-//! > （2）使用者打出此卡时以及使用者的回合开始时，从卡堆拿取场上有此卡的玩家的所有乐队技能卡（相同乐队技能卡的效果不可叠加），但不视为那个乐队的角色。
+//! > （海铃）：
 //!
-//! > （3）当此卡回到使用者场上时，使用者回合结束时将此卡与使用者拿取的所有乐队技能卡置入弃牌堆，抽一张卡。
+//! > （1）将此卡放置于行动顺序在[使用者]之后的下一名玩家的场上。[使用者]的回合开始时，将此卡移动到其当前所在场地的玩家之后、行动顺序中的下一名玩家的场上。
 //!
-//! placed card that walks one player per turn and takes band skill cards.
+//! > （2）[使用者]打出此卡时，以及[使用者]的回合开始时：从卡堆拿取场上有此卡的玩家的所有乐队技能卡。相同乐队技能卡的效果不可叠加，[使用者]不因此视为那个乐队的角色。
+//!
+//! > （3）当此卡回到[使用者]场上时：在[使用者]的回合结束时，依次进行以下操作：
+//! > 1. 将此卡与[使用者]拿取的所有乐队技能卡置入弃卡区。
+//! > 2. 抽1张卡。
+//!
 
 use bandori_std::ctx::{self, trigger};
 use card_sdk::abi::ActionKind;
-use card_sdk::{it, CardText};
+use card_sdk::{it, it_sub, items, CardText};
 use card_sdk::{key, Action, CardDef, Msg, On};
 
 const ID: &str = "Mujica:（海铃）";
@@ -34,14 +36,10 @@ pub const UMIRI_CARD: CardDef = CardDef::new(
         On::Action(Action::TurnEnd("card.placed && card.counter('umiri_user') - 1 == actor && owner == card.counter('umiri_user') - 1", None, turn_end)),
     ],
 ).meta(&card_sdk::meta::CardMeta::new()
-        .name("")
-        .raw_name(r#"（海铃）"#)
+        .name(r#""#)
+        .raw_name(r#"（八幡海铃）unnamed"#)
         .tags(&[])
-        .text(CardText::items(&[
-            it(r#"将此卡放置于在此卡使用者下一名行动的玩家场上，轮到使用者的回合开始时，将其移动到其所在场的玩家行动序列后一名的玩家场上。 "#),
-            it(r#"使用者打出此卡时以及使用者的回合开始时，从卡堆拿取场上有此卡的玩家的所有乐队技能卡（相同乐队技能卡的效果不可叠加），但不视为那个乐队的角色。"#),
-            it(r#"当此卡回到使用者场上时，使用者回合结束时将此卡与使用者拿取的所有乐队技能卡置入弃牌堆，抽一张卡。"#),
-        ]))
+        .text(CardText::items(&[it(r#"将此卡放置于行动顺序在[使用者]之后的下一名玩家的场上。[使用者]的回合开始时，将此卡移动到其当前所在场地的玩家之后、行动顺序中的下一名玩家的场上。"#), it(r#"[使用者]打出此卡时，以及[使用者]的回合开始时：从卡堆拿取场上有此卡的玩家的所有乐队技能卡。相同乐队技能卡的效果不可叠加，[使用者]不因此视为那个乐队的角色。"#), it_sub(r#"当此卡回到[使用者]场上时：在[使用者]的回合结束时，依次进行以下操作："#, &[r#"将此卡与[使用者]拿取的所有乐队技能卡置入弃卡区。"#, r#"抽1张卡。"#])]))
         // sheet cell J16
         .fields(&[("group", r#"Ave Mujica"#), ("owner", r#"八幡海铃"#)]));
 

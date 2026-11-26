@@ -1,22 +1,25 @@
+//! deck, draw 1. The roll shave and the pay bends live in the hooks;
 //!
 //! 规则书（docs/rulebook/cards.json, id `PP:不要背负期待`）:
 //! > 不要背负期待：
 //! > [特]：
 //! > 此卡不受任何其他效果影响。
 //! > [手]：
-//! > 将此卡放置在[使用者]的[场地]并将1张“共鸣”加入卡组，然后抽1张牌。
+//! > 依次进行以下操作：
+//! > 1. 将此卡放置在[使用者]的[场地]。
+//! > 2. 将1张“共鸣”加入卡组。
+//! > 3. 抽1张卡。
 //! > [持续]：
 //!
-//! > （1）以下效果对[拥有者]持续生效：非回合开始时进行投掷的投掷结果减少2（如果是移动投掷则最终结果最小为0，如果为0则此次移动不[结算]）；手卡上限数量减1。
+//! > （1）以下效果对[拥有者]持续生效：非回合开始时进行的[投掷]结果减少2；若该[投掷]用于确定移动步数，最终结果最低为0，结果为0时此次移动不[结算]。手牌数量上限减少1。
 //!
 //! > （2）以下效果此卡放入[场地]或每次[拥有者]弃卡区洗入抽卡区时对[拥有者]生效2次：[支付]资金时金额提高100；[收取]资金时金额减少100（最低0）。
 //!
-//! deck, draw 1. The roll shave and the pay bends live in the hooks;
 //! the reshuffle stack growth runs on `Reshuffled`.
 
 use bandori_std::ctx::{self, trigger};
 use card_sdk::abi::{prop, ActionKind, FilterKind, RollPurpose};
-use card_sdk::{it, items, para, sec, CardText};
+use card_sdk::{it, items, para, sec, steps, CardText};
 use card_sdk::{key, Action, CardDef, Filter, Msg, On, PayAddValue, RollValue};
 
 pub const NO_EXPECTATION: CardDef = CardDef::new(
@@ -59,20 +62,7 @@ pub const NO_EXPECTATION: CardDef = CardDef::new(
         .name(r#"不要背负期待"#)
         .raw_name(r#"不要背负期待"#)
         .tags(&[r#"手"#, r#"持续"#, r#"特"#])
-        .text(CardText::of(&[
-            sec(r#"[特]："#, &[
-                para(r#"此卡不受任何其他效果影响。"#),
-            ]),
-            sec(r#"[手]："#, &[
-                para(r#"将此卡放置在[使用者]的[场地]并将1张“共鸣”加入卡组，然后抽1张牌。"#),
-            ]),
-            sec(r#"[持续]："#, &[
-                items(&[
-                    it(r#"以下效果对[拥有者]持续生效：非回合开始时进行投掷的投掷结果减少2（如果是移动投掷则最终结果最小为0，如果为0则此次移动不[结算]）；手卡上限数量减1。"#),
-                    it(r#"以下效果此卡放入[场地]或每次[拥有者]弃卡区洗入抽卡区时对[拥有者]生效2次：[支付]资金时金额提高100；[收取]资金时金额减少100（最低0）。"#),
-                ]),
-            ]),
-        ]))
+        .text(CardText::of(&[sec(r#"[特]："#, &[para(r#"此卡不受任何其他效果影响。"#)]), sec(r#"[手]："#, &[para(r#"依次进行以下操作："#), steps(&[r#"将此卡放置在[使用者]的[场地]。"#, r#"将1张“共鸣”加入卡组。"#, r#"抽1张卡。"#])]), sec(r#"[持续]："#, &[items(&[it(r#"以下效果对[拥有者]持续生效：非回合开始时进行的[投掷]结果减少2；若该[投掷]用于确定移动步数，最终结果最低为0，结果为0时此次移动不[结算]。手牌数量上限减少1。"#), it(r#"以下效果此卡放入[场地]或每次[拥有者]弃卡区洗入抽卡区时对[拥有者]生效2次：[支付]资金时金额提高100；[收取]资金时金额减少100（最低0）。"#)])])]))
         // sheet cell D7
         .fields(&[("group", r#"Pastel✽Palettes"#), ("owner", "")]));
 

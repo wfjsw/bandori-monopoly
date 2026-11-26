@@ -1,16 +1,16 @@
+//! arm a turn-end undo of abnormal movement (counteraction or hand play).
 //!
 //! 规则书（docs/rulebook/cards.json, id `AG:(兰) 像往常一样`）:
 //! > (兰) 像往常一样：
 //!
-//! > （1）此卡可以当反击使用
-//! >
-//! > （2）受到异常移动效果（包括你的技能）的回合结束前，回到起始地点并取消所有受到的效果（不进行任何结算）。
+//! > （1）此卡可作为[反击]使用。
 //!
-//! arm a turn-end undo of abnormal movement (counteraction or hand play).
+//! > （2）受到异常移动效果（包括你的技能）的回合结束前：回到起始地点，并取消所有受到的效果，不进行任何[结算]。
+//!
 
 use bandori_std::ctx;
 use card_sdk::abi::{ActionKind, ChainKind};
-use card_sdk::{it, CardText};
+use card_sdk::{it, items, CardText};
 use card_sdk::{key, Action, CardDef, Msg, On};
 
 pub const RAN_AS_USUAL: CardDef = CardDef::new(
@@ -35,12 +35,9 @@ pub const RAN_AS_USUAL: CardDef = CardDef::new(
     ],
 ).meta(&card_sdk::meta::CardMeta::new()
         .name(r#"像往常一样"#)
-        .raw_name(r#"(兰) 像往常一样"#)
+        .raw_name(r#"（美竹兰）像往常一样"#)
         .tags(&[r#"手"#, r#"反击"#])
-        .text(CardText::items(&[
-            it(r#"此卡可以当反击使用"#),
-            it(r#"受到异常移动效果（包括你的技能）的回合结束前，回到起始地点并取消所有受到的效果（不进行任何结算）。"#),
-        ]))
+        .text(CardText::items(&[it(r#"此卡可作为[反击]使用。"#), it(r#"受到异常移动效果（包括你的技能）的回合结束前：回到起始地点，并取消所有受到的效果，不进行任何[结算]。"#)]))
         // sheet cell C6
         .fields(&[("group", r#"Afterglow"#), ("owner", r#"美竹兰"#)]));
 

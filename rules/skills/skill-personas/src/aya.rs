@@ -30,9 +30,11 @@ use skill_groups::fans;
 pub const AYA: CardDef = CardDef::new(
     "skill:丸山彩:With~",
     &[
+        // The (1) entry carries its own seal guard -- 「[拥有者]不可使用丸山彩…的
+        // [主动]（1）技能」 (初次演出事故).
         On::Action(Action::DeckAtGameStart(
             "group_is(owner, 'Pastel✽Palettes')",
-            None,
+            Some(press_gate),
             at_start,
         )),
         // 「此次支付的分摊前资金减少Y×100（最少0）」 -- the **pre-split** total
@@ -52,12 +54,17 @@ pub const AYA: CardDef = CardDef::new(
 )
 .rule();
 
+fn press_gate(player_id: i32) -> bool {
+    // 「[持续]：[拥有者]不可使用丸山彩…的[主动]（1）技能」 (初次演出事故) --
+    // the (1) entry is the press. `skill_blocked` covers the seal tag, the
+    // global `skillBlock`, and a `skillBlock` mark on the tile.
+    !bandori_std::ctx::skill_blocked(player_id, "skill:丸山彩:With~:1")
+}
+
 fn mine(player_id: i32) -> bool {
-    // 「[持续]：[拥有者]不可使用任何Pastel✽Palettes角色的（2）技能」 (初次演出事故)
-    // -- the `skillBlock:Pastel✽Palettes` token (one spelling, the band's real
-    // name). `skill_blocked` covers the token, the global `skillBlock`, and a
-    // `skillBlock` mark on the tile.
-    if bandori_std::ctx::skill_blocked(player_id, "Pastel✽Palettes") {
+    // The (2) automatic, still usable under 初次演出事故 -- its own clause tag,
+    // plus the global seal / tile mark `skill_blocked` folds in.
+    if bandori_std::ctx::skill_blocked(player_id, "skill:丸山彩:With~:2") {
         return false;
     }
     ctx::trigger::player_id() == player_id

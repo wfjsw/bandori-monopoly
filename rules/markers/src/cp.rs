@@ -183,17 +183,22 @@ fn on_land(_owner: i32) -> card_sdk::Asked {
     // Read the attachment **before** the write: dropping the last mark takes
     // its provenance with it.
     let src = ctx::mark_src_at(tile, &MarkFilter::any().category(mark::CP_CATEGORY));
+    // 规则书[手]: 「任一处不足1个时，不使用任一处资源，也不取得该笔资金」 -- no
+    // tile [CP点] or no on-card [CP点] on the attached card means neither side is
+    // spent and no 800 is paid (the guard already gates this; the body keeps the
+    // same reads so a direct call cannot half-spend).
+    if cp_on(tile) <= 0 || src < 0 || ctx::counter_at(src, counter::CP) <= 0 {
+        return Ok(());
+    }
     // A tile-mark write: it does not touch the on-card count.
     ctx::bump_mark(tile, &MarkFilter::any().category(mark::CP_CATEGORY), -1);
     // 「自己[场上]1个[CP点]」 -- one on-card [CP点] of the attached 该清CP了
     // card (user ruling 2026-10-07).
-    if src >= 0 {
-        // TODO(规则书)（自己[场上]1个[CP点]）: 「自己」 is the settling player, so the
-        //   book removes a [CP点] on the settler's own field -- we spend the on-card
-        //   count of the card the mark is attached to (`src`), per the 2026-10-07
-        //   ruling.
-        ctx::add_counter_at(src, counter::CP, -1, 0);
-    }
+    // TODO(规则书)（自己[场上]1个[CP点]）: 「自己」 is the settling player, so the
+    //   book removes a [CP点] on the settler's own field -- we spend the on-card
+    //   count of the card the mark is attached to (`src`), per the 2026-10-07
+    //   ruling.
+    ctx::add_counter_at(src, counter::CP, -1, 0);
     // 「[获得]800资金」 -- the settling player (see the reading above).
     ctx::gain(seat, 800, &Msg::new("log.cp_clean").player_id("who", seat))?;
     Ok(())

@@ -1,13 +1,13 @@
+
 //!
 //! 规则书（docs/rulebook/cards.json, id `RAS:Repaint`）:
 //! > Repaint：
-//! > [反击] 当任意其他玩家进行移动掷骰并进入移动阶段后，打出此卡，使目标玩家的此次移动数-X，X为对方原本预计路径上你拥有的格子数，对方此次结算的支付减半。
+//! > [反击]任意其他玩家进行用于确定移动步数的[投掷]并进入移动阶段后：打出此卡，使目标玩家此次移动步数减少X；X为对方原本预计路径上你拥有的格子数。对方此次[结算]中的[支付]金额减半。
 //!
-
 use bandori_std::ctx::{self, trigger};
 use card_sdk::abi::{ChainKind, PayFactorScope};
 use card_sdk::CardText;
-use card_sdk::{key, CardDef, Msg, On};
+use card_sdk::{key, para, CardDef, Msg, On};
 
 pub const REPAINT: CardDef = CardDef::new(
     "RAS:Repaint",
@@ -27,7 +27,7 @@ pub const REPAINT: CardDef = CardDef::new(
         .name(r#"Repaint"#)
         .raw_name(r#"Repaint"#)
         .tags(&[r#"反击"#])
-        .text(CardText::para(r#"[反击] 当任意其他玩家进行移动掷骰并进入移动阶段后，打出此卡，使目标玩家的此次移动数-X，X为对方原本预计路径上你拥有的格子数，对方此次结算的支付减半。"#))
+        .text(CardText::para(r#"[反击]任意其他玩家进行用于确定移动步数的[投掷]并进入移动阶段后：打出此卡，使目标玩家此次移动步数减少X；X为对方原本预计路径上你拥有的格子数。对方此次[结算]中的[支付]金额减半。"#))
         // sheet cell H11
         .fields(&[("group", r#"RAISE A SUILEN"#), ("owner", "")]));
 

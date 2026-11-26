@@ -25,9 +25,11 @@ use skill_groups::fans;
 pub const MAYA: CardDef = CardDef::new(
     "skill:大和麻弥:朝阳照耀的片刻",
     &[
+        // The (1) entry carries its own seal guard -- 「[拥有者]不可使用…大和麻弥…的
+        // [主动]（1）技能」 (初次演出事故).
         On::Action(Action::DeckAtGameStart(
             "group_is(owner, 'Pastel✽Palettes')",
-            None,
+            Some(press_gate),
             at_start,
         )),
         // （2） replaces the draw, so it runs at the per-card **before** point.
@@ -61,10 +63,18 @@ fn at_start(player_id: i32) -> card_sdk::Asked {
 
 /// （2）「自己抽卡时时可选择将自己Y个正面[P✽P粉丝]变反，此次抽卡改为观看卡组顶端
 /// Y+1张卡…」.
+fn press_gate(player_id: i32) -> bool {
+    // 「[持续]：[拥有者]不可使用…大和麻弥…的[主动]（1）技能」 (初次演出事故) --
+    // the (1) entry is the press. `ctx::skill_blocked` covers the seal tag, the
+    // global `skillBlock`, and a `skillBlock` mark on the tile.
+    !ctx::skill_blocked(player_id, "skill:大和麻弥:朝阳照耀的片刻:1")
+}
+
 fn on_draw(player_id: i32) -> card_sdk::Asked {
-    // 规则书: 「[拥有者]不可使用任何Pastel✽Palettes角色的（2）技能。」 --
-    // 「初次演出事故」 seals every Pastel✽Palettes (2).
-    if ctx::skill_blocked(player_id, "Pastel✽Palettes") {
+
+    // The (2) automatic, still usable under 初次演出事故 -- its own clause tag
+    // plus the global seal / tile mark `ctx::skill_blocked` folds in.
+    if ctx::skill_blocked(player_id, "skill:大和麻弥:朝阳照耀的片刻:2") {
         return Ok(());
     }
     let up = fans::up(player_id);

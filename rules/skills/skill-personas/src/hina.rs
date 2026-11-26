@@ -73,9 +73,10 @@ fn roll(player_id: i32) -> card_sdk::Asked {
     // 「在下回合开始前」 -- last round's borrow comes off first (whether or not
     // this start rolls -- the lock below does not extend a borrow).
     expire(player_id)?;
-    // 规则书: 「[拥有者]不可使用任何Pastel✽Palettes角色的（2）技能。」 -- 「初次演出事故」
-    // seals every Pastel✽Palettes (2); a blocked holder neither rolls nor borrows.
-    if ctx::skill_blocked(player_id, "Pastel✽Palettes") {
+    // 规则书: 「[拥有者]不可使用…冰川日菜的[自动]（2）技能。」 -- 「初次演出事故」
+    // seals this (2) entry by its own clause tag; a blocked holder neither rolls
+    // nor borrows. The (1) grant above stays open.
+    if ctx::skill_blocked(player_id, "skill:冰川日菜:日菜抽中的大奖:2") {
         return Ok(());
     }
     let n = ctx::roll(player_id, 1, 4, RollPurpose::Effect, roll_source::SKILL)?;

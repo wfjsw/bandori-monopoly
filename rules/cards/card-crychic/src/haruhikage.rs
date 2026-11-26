@@ -1,17 +1,18 @@
+//! runs a CRYCHIC character skill (reroll / step toward / cancel a rent).
 //!
 //! 规则书（docs/rulebook/cards.json, id `CRYCHIC:春日影`）:
-//! > 春日影
-//! >  ：
-//! > （1）[特] 若抽到此卡时你的总资产大于等于20000且手牌不多于5张，可选择使其直接从抽牌堆打出，依次抽牌直至你的手牌数为6，若受到弃牌效果则中断此效果。
-//! > （2）（此卡可作为[反击]打出）使用一次Crychic角色的技能
+//! > 春日影：
 //!
-//! runs a CRYCHIC character skill (reroll / step toward / cancel a rent).
+//! > （1）[特]抽到此卡时，若你的总资产大于等于20000：可选择使此卡直接从抽卡区打出，依次抽卡直至你的手牌数为6。若受到弃卡效果，中断此效果。
+//!
+//! > （2）此卡可作为[反击]打出。使用1次CRYCHIC角色的技能。
+//!
 
 use alloc::vec::Vec;
 
 use bandori_std::ctx::{self, trigger};
 use card_sdk::abi::{ActionKind, ChainKind, TriggerKind};
-use card_sdk::{it, CardText};
+use card_sdk::{it, items, CardText};
 use card_sdk::{key, Action, CardDef, Msg, On};
 
 pub const HARUHIKAGE: CardDef = CardDef::new(
@@ -38,11 +39,11 @@ pub const HARUHIKAGE: CardDef = CardDef::new(
             None,
             counteract
         ).counter_reason(key!("haruhikage_when")),
-        // 规则书（1）: 「若抽到此卡时你的总资产大于等于20000且手牌不多于5张，可选择…」 -- the
-        // offer exists only at that asset *and* hand-size threshold. `assets_of`
-        // is a derived list (money + land + houses), residual (docs/GUARDS.md
-        // §4.2). `Drawn` fires with the card already in hand (`wasm_rules.rs`
-        // 「it is still in hand」), so 「手牌」 counts this card.
+        // 规则书（1）: 「若抽到此卡时你的总资产大于等于20000：可选择…」 -- the
+        // offer exists only at that asset threshold. `assets_of` is a derived
+        // list (money + land + houses), residual (docs/GUARDS.md §4.2).
+        // `Drawn` fires with the card already in hand (`wasm_rules.rs`
+        // 「it is still in hand」), so the card itself is not a gate.
         On::Action(Action::Drawn("trigger_card == card.id", Some(assets_ready), on_drawn)),
         // 规则书（2）: 「使用一次Crychic角色的技能」 -- when the borrowed 雨中祈晴
         // armed a teleport, the borrower runs the skill's own plan/after bodies
@@ -67,10 +68,7 @@ pub const HARUHIKAGE: CardDef = CardDef::new(
         .name(r#"春日影"#)
         .raw_name(r#"春日影"#)
         .tags(&[r#"反击"#, r#"特"#])
-        .text(CardText::items(&[
-            it(r#"[特] 若抽到此卡时你的总资产大于等于20000且手牌不多于5张，可选择使其直接从抽牌堆打出，依次抽牌直至你的手牌数为6，若受到弃牌效果则中断此效果。"#),
-            it(r#"（此卡可作为[反击]打出）使用一次Crychic角色的技能"#),
-        ]))
+        .text(CardText::items(&[it(r#"[特]抽到此卡时，若你的总资产大于等于20000：可选择使此卡直接从抽卡区打出，依次抽卡直至你的手牌数为6。若受到弃卡效果，中断此效果。"#), it(r#"此卡可作为[反击]打出。使用1次CRYCHIC角色的技能。"#)]))
         // sheet cell M3
         .fields(&[("group", r#"CRYCHIC"#), ("owner", "")]));
 
@@ -153,12 +151,12 @@ fn use_skill(player_id: i32) -> card_sdk::Asked {
     Ok(())
 }
 
-/// Residual guard for [`on_drawn`]: 「若抽到此卡时你的总资产大于等于20000且手牌不多于5张」. Derived scan
+/// Residual guard for [`on_drawn`]: 「若抽到此卡时你的总资产大于等于20000」. Derived scan
 /// (money + land + houses), outside the CEL schema (docs/GUARDS.md §4.2).
-/// 「手牌不多于5张」 is the hand size at the `Drawn` moment -- the card itself is already
-/// in hand.
+/// The hand size is not a gate any more; the card itself is already in hand at
+/// the `Drawn` moment.
 fn assets_ready(player_id: i32) -> bool {
-    assets_of(player_id) >= 20000 && ctx::hand_size(player_id) <= 5
+    assets_of(player_id) >= 20000
 }
 
 /// Applicability is `assets_ready`; the ask is the 「可选择」 opt-in.

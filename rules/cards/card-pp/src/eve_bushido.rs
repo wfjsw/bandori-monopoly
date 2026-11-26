@@ -1,23 +1,29 @@
+//! for money. The duel runs in the `SettleBefore` hook; the crystal growth
 //!
 //! 规则书（docs/rulebook/cards.json, id `PP:[若宫伊芙]属于我的武士道！`）:
 //! > [若宫伊芙]属于我的武士道！：
+//! > [资源]：
+//!
+//! > （1）此卡的[奇迹水晶]：上限3。
 //! > [手]：
-//! > 将此卡放置在[使用者]场上并投掷12d4，获得投掷结果*60的资金。
+//! > 依次进行以下操作：
+//! > 1. 将此卡放置在[使用者]场上。
+//! > 2. [投掷]12d4。
+//! > 3. 获得此次[投掷]结果×60的资金。
 //! > [持续]：
 //!
-//! > （1）[使用者]抽卡后为此卡添加1个[奇迹水晶]（上限3）。
+//! > （1）[使用者]抽卡后为此卡添加1个[奇迹水晶]。
 //!
 //! > （2）[结算]前如果此卡上有[奇迹水晶]且[拥有者]所在格子的地契主人为其他玩家则使用1个[奇迹水晶]并依次进行以下操作：
-//! > 1. 地契主人投掷1d6；
-//! > 2. [拥有者]投掷3d4；
+//! > 1. 地契主人[投掷]1d6；
+//! > 2. [拥有者][投掷]3d4；
 //! > 3. 投掷点数低的玩家[支付]投掷点数高的玩家[拥有者]所在格子的房屋数量加1×100（如果平局则双方互不支付），如果[共鸣]则[支付]金额改为“投掷点差”×50。
 //!
-//! for money. The duel runs in the `SettleBefore` hook; the crystal growth
 //! runs on the `Drew` hook.
 
 use bandori_std::ctx::{self, trigger};
 use card_sdk::abi::{roll_source, ActionKind, RollPurpose, TriggerKind};
-use card_sdk::{it, it_sub, items, para, sec, CardText};
+use card_sdk::{it, it_sub, items, para, sec, steps, CardText};
 use card_sdk::{key, Action, CardDef, Msg, On};
 
 /// The caster (1-based). The hooks key on the [使用者], which the rule names,
@@ -33,26 +39,9 @@ pub const EVE_BUSHIDO: CardDef = CardDef::new(
     ],
 ).meta(&card_sdk::meta::CardMeta::new()
         .name(r#"属于我的武士道！"#)
-        .raw_name(r#"[若宫伊芙]属于我的武士道！"#)
+        .raw_name(r#"（若宫伊芙）属于我的武士道！"#)
         .tags(&[r#"手"#, r#"持续"#])
-        .text(CardText::of(&[
-            sec(r#"[手]："#, &[
-                para(r#"将此卡放置在[使用者]场上并投掷12d4，获得投掷结果*60的资金。"#),
-            ]),
-            sec(r#"[持续]："#, &[
-                items(&[
-                    it(r#"[使用者]抽卡后为此卡添加1个[奇迹水晶]（上限3）。"#),
-                    it_sub(
-                        r#"[结算]前如果此卡上有[奇迹水晶]且[拥有者]所在格子的地契主人为其他玩家则使用1个[奇迹水晶]并依次进行以下操作："#,
-                        &[
-                        r#"地契主人投掷1d6；"#,
-                        r#"[拥有者]投掷3d4；"#,
-                        r#"投掷点数低的玩家[支付]投掷点数高的玩家[拥有者]所在格子的房屋数量加1×100（如果平局则双方互不支付），如果[共鸣]则[支付]金额改为“投掷点差”×50。"#,
-                        ],
-                    ),
-                ]),
-            ]),
-        ]))
+        .text(CardText::of(&[sec(r#"[资源]："#, &[items(&[it(r#"此卡的[奇迹水晶]：上限3。"#)])]), sec(r#"[手]："#, &[para(r#"依次进行以下操作："#), steps(&[r#"将此卡放置在[使用者]场上。"#, r#"[投掷]12d4。"#, r#"获得此次[投掷]结果×60的资金。"#])]), sec(r#"[持续]："#, &[items(&[it(r#"[使用者]抽卡后为此卡添加1个[奇迹水晶]。"#), it_sub(r#"[结算]前如果此卡上有[奇迹水晶]且[拥有者]所在格子的地契主人为其他玩家则使用1个[奇迹水晶]并依次进行以下操作："#, &[r#"地契主人[投掷]1d6；"#, r#"[拥有者][投掷]3d4；"#, r#"投掷点数低的玩家[支付]投掷点数高的玩家[拥有者]所在格子的房屋数量加1×100（如果平局则双方互不支付），如果[共鸣]则[支付]金额改为“投掷点差”×50。"#])])])]))
         // sheet cell D20
         .fields(&[("group", r#"Pastel✽Palettes"#), ("owner", r#"若宫伊芙"#)]));
 

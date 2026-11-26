@@ -1,19 +1,22 @@
+//! in play with crystals and mono/dual marks; cash the marks in at 5 crystals.
 //!
 //! 规则书（docs/rulebook/cards.json, id `PP:练习生解密指南`）:
 //! > 练习生解密指南：
 //! > [手]：
-//! > 为[使用者]的Pastel✽Palettes乐队卡添加3个[奇迹水晶]并将此卡放置在[使用者]的[场地]，在此卡上放置“粉丝数量”÷3个[奇迹水晶]，然后公开[使用者]的抽卡区并根据公开卡中的颜色数量添加一个单色/双色标记，如果[共鸣]则[消耗]500资金并添加任意2个标记。
+//! > 依次进行以下操作：
+//! > 1. 为[使用者]的Pastel✽Palettes乐队卡添加3个[奇迹水晶]，并将此卡放置在[使用者]的[场地]。
+//! > 2. 在此卡上放置“粉丝数量”÷3个[奇迹水晶]。
+//! > 3. 公开[使用者]的抽卡区，根据公开卡中的颜色数量添加1个单色或双色标记；如果[共鸣]，则[消耗]500资金并添加任意2个标记。
 //! > [持续]：
 //!
-//! > （1）手卡上限数量减1。
+//! > （1）手牌数量上限减少1。
 //!
 //! > （2）回合结束时添加1个[奇迹水晶]。
 //!
-//! > （3）此卡拥有至少5个[奇迹水晶]时根据此卡上的标记进行一下操作随后进入弃卡区：
-//! > 1. 每个单色效果为获得1层状态“下次盖房的价格减少1000（可溢出），盖房后减少1层”；
+//! > （3）此卡拥有至少5个[奇迹水晶]时根据此卡上的标记进行以下操作随后进入弃卡区：
+//! > 1. 每个单色效果为获得1层[盖房免除1000]；
 //! > 2. 每个双色效果为将自己的所有反面[P✽P粉丝]变正。
 //!
-//! in play with crystals and mono/dual marks; cash the marks in at 5 crystals.
 //! The crystal counter, the turn-end tick, the resonance marks and the
 //! (3) cash-in are live; the banked build discount it leaves behind has no
 //! listener once the card is filed away (see the TODO on `before_build`).
@@ -22,7 +25,7 @@
 use bandori_std::ctx;
 use bandori_std::state_key;
 use card_sdk::abi::{prop, ActionKind};
-use card_sdk::{it, it_sub, items, para, sec, CardText};
+use card_sdk::{it, it_sub, items, para, sec, steps, CardText};
 use card_sdk::{key, Action, CardDef, Msg, On};
 use skill_groups::fans;
 
@@ -48,24 +51,7 @@ pub const TRAINEE_GUIDE: CardDef = CardDef::new(
         .name(r#"练习生解密指南"#)
         .raw_name(r#"练习生解密指南"#)
         .tags(&[r#"手"#, r#"持续"#])
-        .text(CardText::of(&[
-            sec(r#"[手]："#, &[
-                para(r#"为[使用者]的Pastel✽Palettes乐队卡添加3个[奇迹水晶]并将此卡放置在[使用者]的[场地]，在此卡上放置“粉丝数量”÷3个[奇迹水晶]，然后公开[使用者]的抽卡区并根据公开卡中的颜色数量添加一个单色/双色标记，如果[共鸣]则[消耗]500资金并添加任意2个标记。"#),
-            ]),
-            sec(r#"[持续]："#, &[
-                items(&[
-                    it(r#"手卡上限数量减1。"#),
-                    it(r#"回合结束时添加1个[奇迹水晶]。"#),
-                    it_sub(
-                        r#"此卡拥有至少5个[奇迹水晶]时根据此卡上的标记进行一下操作随后进入弃卡区："#,
-                        &[
-                        r#"每个单色效果为获得1层状态“下次盖房的价格减少1000（可溢出），盖房后减少1层”；"#,
-                        r#"每个双色效果为将自己的所有反面[P✽P粉丝]变正。"#,
-                        ],
-                    ),
-                ]),
-            ]),
-        ]))
+        .text(CardText::of(&[sec(r#"[手]："#, &[para(r#"依次进行以下操作："#), steps(&[r#"为[使用者]的Pastel✽Palettes乐队卡添加3个[奇迹水晶]，并将此卡放置在[使用者]的[场地]。"#, r#"在此卡上放置“粉丝数量”÷3个[奇迹水晶]。"#, r#"公开[使用者]的抽卡区，根据公开卡中的颜色数量添加1个单色或双色标记；如果[共鸣]，则[消耗]500资金并添加任意2个标记。"#])]), sec(r#"[持续]："#, &[items(&[it(r#"手牌数量上限减少1。"#), it(r#"回合结束时添加1个[奇迹水晶]。"#), it_sub(r#"此卡拥有至少5个[奇迹水晶]时根据此卡上的标记进行以下操作随后进入弃卡区："#, &[r#"每个单色效果为获得1层[盖房免除1000]；"#, r#"每个双色效果为将自己的所有反面[P✽P粉丝]变正。"#])])])]))
         // sheet cell D15
         .fields(&[("group", r#"Pastel✽Palettes"#), ("owner", "")]));
 

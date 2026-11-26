@@ -1,16 +1,19 @@
+//! at the top two deck cards, keep 0-2 in order, discard the rest for 1,000 each.
 //!
 //! 规则书（docs/rulebook/cards.json, id `HHW:出发！后台之旅！`）:
 //! > 出发！后台之旅！：
-//! >  看牌堆顶2张牌，选择0~2张以任意顺序放回，剩余的翻入弃牌堆，每翻入一张获得1000资金
+//! > 依次进行以下操作：
+//! > 1. 观看牌堆顶部2张卡。
+//! > 2. 选择其中0至2张卡，以任意顺序放回；将剩余的卡翻入弃卡区。
+//! > 3. 每翻入1张卡，获得1000资金。
 //!
-//! at the top two deck cards, keep 0-2 in order, discard the rest for 1,000 each.
 
 use alloc::vec::Vec;
 
 use bandori_std::ctx::{self, CardPile};
 use card_sdk::ctx::NameId;
 use card_sdk::CardText;
-use card_sdk::{key, CardDef, Msg, On};
+use card_sdk::{key, para, sec, steps, CardDef, Msg, On};
 
 pub const BACKSTAGE_TOUR: CardDef = CardDef::new(
     "HHW:出发！后台之旅！",
@@ -21,9 +24,7 @@ pub const BACKSTAGE_TOUR: CardDef = CardDef::new(
         .name(r#"出发！后台之旅！"#)
         .raw_name(r#"出发！后台之旅！"#)
         .tags(&[])
-        .text(CardText::para(
-            r#"看牌堆顶2张牌，选择0~2张以任意顺序放回，剩余的翻入弃牌堆，每翻入一张获得1000资金"#,
-        ))
+        .text(CardText::of(&[sec(r#""#, &[para(r#"依次进行以下操作："#), steps(&[r#"观看牌堆顶部2张卡。"#, r#"选择其中0至2张卡，以任意顺序放回；将剩余的卡翻入弃卡区。"#, r#"每翻入1张卡，获得1000资金。"#])])]))
         // sheet cell F4
         .fields(&[("group", r#"Hello, Happy World!"#), ("owner", "")]),
 );

@@ -1,12 +1,19 @@
+
 //!
 //! 规则书（docs/rulebook/cards.json, id `RAS:UNSTOPPABLE`）:
 //! > UNSTOPPABLE：
-//! > 投掷1d6mod6，根据结果1-6分别传送至白雪学园，艺术学院高中，瑟罗希亚国际学校，银河拉面馆，旭汤澡堂，CHUCHU的公寓。本次传送不触发结算，视为你的主要移动。且若骰点为1-3获得2000资金，若为4-6则获得1000资金。
+//! > [投掷]1d6mod6，根据结果[传送]至对应格子：
+//! > - 结果为1：白雪学园。
+//! > - 结果为2：艺术学院高中。
+//! > - 结果为3：瑟罗希亚国际学校。
+//! > - 结果为4：银河拉面馆。
+//! > - 结果为5：旭汤澡堂。
+//! > - 结果为6：CHUCHU的公寓。
+//! > 此次[传送]不触发[结算]，视为你的[主要移动]。结果为1至3时，获得2000资金；结果为4至6时，获得1000资金。
 //!
-
 use card_sdk::abi::{roll_source, RollPurpose};
 use card_sdk::CardText;
-use card_sdk::{ctx, key, CardDef, Msg, On};
+use card_sdk::{ctx, key, para, sec, CardDef, Msg, On};
 
 pub const UNSTOPPABLE: CardDef =
     CardDef::new("RAS:UNSTOPPABLE", &[On::Play("", Some(cant_play), unstoppable)])
@@ -14,7 +21,7 @@ pub const UNSTOPPABLE: CardDef =
         .name(r#"UNSTOPPABLE"#)
         .raw_name(r#"UNSTOPPABLE"#)
         .tags(&[])
-        .text(CardText::para(r#"投掷1d6mod6，根据结果1-6分别传送至白雪学园，艺术学院高中，瑟罗希亚国际学校，银河拉面馆，旭汤澡堂，CHUCHU的公寓。本次传送不触发结算，视为你的主要移动。且若骰点为1-3获得2000资金，若为4-6则获得1000资金。"#))
+        .text(CardText::of(&[sec(r#""#, &[para(r#"[投掷]1d6mod6，根据结果[传送]至对应格子："#), para(r#"- 结果为1：白雪学园。"#), para(r#"- 结果为2：艺术学院高中。"#), para(r#"- 结果为3：瑟罗希亚国际学校。"#), para(r#"- 结果为4：银河拉面馆。"#), para(r#"- 结果为5：旭汤澡堂。"#), para(r#"- 结果为6：CHUCHU的公寓。"#), para(r#"此次[传送]不触发[结算]，视为你的[主要移动]。结果为1至3时，获得2000资金；结果为4至6时，获得1000资金。"#)])]))
         // sheet cell H10
         .fields(&[("group", r#"RAISE A SUILEN"#), ("owner", "")]));
 

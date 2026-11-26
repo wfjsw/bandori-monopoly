@@ -873,7 +873,7 @@ listed above are OPEN / untestable, not discrepancies.)
 | 前场队还是后场队？ | one-shot | E-front-or-back-01..02 | 2 (分摊 OPEN) |
 | EX任务挑战 | one-shot | E-ex-quest-01..02 | 1 (+1 cosmetic) |
 | 发送熊饼表情 | one-shot | E-bear-cookie-01..03 | 2 (+1 follow-up) |
-| 飞鸟山之战 | one-shot | E-asukayama-01..03 | 2 (+1 tick) |
+| 飞鸟山之战 | active | E-asukayama-01..03 | 2 (+1 tick) |
 | 上学时间 | one-shot | E-school-time-01..02 | 2 |
 | 泪水的含义 | one-shot | E-tears-01..02 | 2 |
 | Kizuna Music | one-shot | E-kizuna-01 | 1 (song X OPEN) |

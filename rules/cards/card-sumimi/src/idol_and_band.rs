@@ -1,12 +1,12 @@
+//! money to 3,000.
 //!
 //! 规则书（docs/rulebook/cards.json, id `Sumimi:兼顾偶像与乐队`）:
 //! > 兼顾偶像与乐队：
-//! >  当你本回合未进行过赎回操作时可打出，将你的资金重设为3000。（若你的资金为3000以上则无效果）
+//! > 你本回合未进行过赎回操作时：可打出此卡，将你的资金重设为3000。若你的资金在3000以上，此卡无效果。
 //!
-//! money to 3,000.
 
 use card_sdk::CardText;
-use card_sdk::{ctx, key, CardDef, Msg, On};
+use card_sdk::{ctx, key, para, CardDef, Msg, On};
 
 pub const IDOL_AND_BAND: CardDef = CardDef::new(
     "Sumimi:兼顾偶像与乐队",
@@ -15,7 +15,7 @@ pub const IDOL_AND_BAND: CardDef = CardDef::new(
         .name(r#"兼顾偶像与乐队"#)
         .raw_name(r#"兼顾偶像与乐队"#)
         .tags(&[])
-        .text(CardText::para(r#"当你本回合未进行过赎回操作时可打出，将你的资金重设为3000。（若你的资金为3000以上则无效果）"#))
+        .text(CardText::para(r#"你本回合未进行过赎回操作时：可打出此卡，将你的资金重设为3000。若你的资金在3000以上，此卡无效果。"#))
         // sheet cell L2
         .fields(&[("group", r#"Sumimi"#), ("owner", "")]));
 

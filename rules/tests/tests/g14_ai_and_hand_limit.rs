@@ -25,7 +25,7 @@ use rules_spec::{data, rules, Clause, Table};
 
 const NNM: &str = "Mor:（NNM）稍微努力了一下";
 const SUMMER: &str = "Mor:夏日合宿";
-const MARK: &str = "角色标记:skill:户山香澄:鼓动";
+const MARK: &str = "模仿标记:skill:户山香澄:鼓动";
 
 /// Five harmless hand fillers (distinct from NNM).
 const FILLER: [&str; 5] = [
@@ -45,7 +45,7 @@ fn decline_all(t: &mut Table) {
     }
 }
 
-/// A quiet table with `marks` 角色标记 on P0 and no board residue. The named
+/// A quiet table with `marks` 模仿标记 on P0 and no board residue. The named
 /// character is NNM's owner; skills are stripped so only the card under test
 /// answers.
 fn nnm_table(marks: i32) -> Table {

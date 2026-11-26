@@ -1,14 +1,14 @@
+//! ahead of the user's choice (nearest forward first), treat the walk as the
 //!
 //! 规则书（docs/rulebook/cards.json, id `PPP:抓到了`）:
 //! > 抓到了：
-//! > 移动到你前方一名玩家的格子，视为本回合的主要移动且可选择盖房。
+//! > 选择你前方的1名玩家，移动到那名玩家所在的格子。此次移动视为本回合的[主要移动]，且可选择盖房。
 //!
-//! ahead of the user's choice (nearest forward first), treat the walk as the
 //! main move, build allowed.
 
 use alloc::vec::Vec;
 use card_sdk::CardText;
-use card_sdk::{ctx, key, CardDef, Msg, On};
+use card_sdk::{ctx, key, para, CardDef, Msg, On};
 
 pub const CAUGHT: CardDef = CardDef::new("PPP:抓到了", &[On::Play("", Some(cant_play), play)])
     .meta(
@@ -16,9 +16,7 @@ pub const CAUGHT: CardDef = CardDef::new("PPP:抓到了", &[On::Play("", Some(ca
             .name(r#"抓到了"#)
             .raw_name(r#"抓到了"#)
             .tags(&[])
-            .text(CardText::para(
-                r#"移动到你前方一名玩家的格子，视为本回合的主要移动且可选择盖房。"#,
-            ))
+            .text(CardText::para(r#"选择你前方的1名玩家，移动到那名玩家所在的格子。此次移动视为本回合的[主要移动]，且可选择盖房。"#))
             // sheet cell B9
             .fields(&[("group", r#"Poppin' Party"#), ("owner", "")]),
     );

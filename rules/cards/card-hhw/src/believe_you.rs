@@ -1,15 +1,19 @@
+//! 800, reveal hand + deck, a rival discards one hand card, then keep two from the deck.
 //!
 //! 规则书（docs/rulebook/cards.json, id `HHW:因为我一直相信着你`）:
 //! > 因为我一直相信着你：
-//! > 至少有另一张手牌时可发动，消耗800资金，公开你的卡组与手牌，选择一名玩家，使其从你的手牌中选择一张放入弃牌堆，然后从你的卡组中选择两张加入你的手牌，重洗你的抽牌堆。
+//! > 至少还有1张其他手牌时：可[消耗]800资金，依次进行以下操作：
+//! > 1. 公开你的卡组与手牌。
+//! > 2. 选择1名玩家，由那名玩家从你的手牌中选择1张卡，放入弃卡区。
+//! > 3. 由那名玩家从你的卡组中选择2张卡，加入你的手牌。
+//! > 4. 重洗你的抽卡区。
 //!
-//! 800, reveal hand + deck, a rival discards one hand card, then keep two from the deck.
 
 use alloc::vec::Vec;
 
 use bandori_std::ctx::{self, CardPile};
 use card_sdk::CardText;
-use card_sdk::{key, CardDef, Msg, On};
+use card_sdk::{key, para, sec, steps, CardDef, Msg, On};
 
 const ID: &str = "HHW:因为我一直相信着你";
 
@@ -19,7 +23,7 @@ pub const BELIEVE_YOU: CardDef =
         .name(r#"因为我一直相信着你"#)
         .raw_name(r#"因为我一直相信着你"#)
         .tags(&[])
-        .text(CardText::para(r#"至少有另一张手牌时可发动，消耗800资金，公开你的卡组与手牌，选择一名玩家，使其从你的手牌中选择一张放入弃牌堆，然后从你的卡组中选择两张加入你的手牌，重洗你的抽牌堆。"#))
+        .text(CardText::of(&[sec(r#""#, &[para(r#"至少还有1张其他手牌时：可[消耗]800资金，依次进行以下操作："#), steps(&[r#"公开你的卡组与手牌。"#, r#"选择1名玩家，由那名玩家从你的手牌中选择1张卡，放入弃卡区。"#, r#"由那名玩家从你的卡组中选择2张卡，加入你的手牌。"#, r#"重洗你的抽卡区。"#])])]))
         // sheet cell F2
         .fields(&[("group", r#"Hello, Happy World!"#), ("owner", "")]));
 

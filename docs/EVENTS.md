@@ -50,7 +50,7 @@ as `rules/cards/card-*`, `rules/skills/*`, `rules/tiles` and `rules/markers`:
 | `event:前场队还是后场队？` | `front_or_back.rs` | one-shot | A9 |
 | `event:EX任务挑战` | `ex_quest.rs` | one-shot | A10 |
 | `event:发送熊饼表情` | `bear_cookie.rs` | one-shot | A11 |
-| `event:飞鸟山之战` | `asukayama.rs` | one-shot | A12 |
+| `event:飞鸟山之战` | `asukayama.rs` | active (until the veto lapses) | A12 |
 | `event:幻觉来了` | `hallucination.rs` | active | A13 |
 | `event:卡池BUG` | `pool_bug.rs` | active | A14 |
 | `event:A！A！O！` | `a_a_o.rs` | active | A15 |

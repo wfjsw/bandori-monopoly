@@ -1,13 +1,16 @@
+//! [反击] on a shop-street mortgage: buy it cheap, or double your own mortgage.
 //!
 //! 规则书（docs/rulebook/cards.json, id `AG:（巴）商店街的救世主`）:
-//! > （巴）商店街的救世主：【反击】当其他玩家抵押商店街地契时，你可以打出此卡，立刻支付常规收购价一半的价格从该玩家处收购该地契。当你抵押商店街地契时，你可以打出此卡，额外获得一份抵押收益并将地契翻回
+//! > （巴）商店街的救世主：
+//! > [反击]符合下列任一时机时，你可以打出此卡，进行该时机对应的操作：
+//! > - 其他玩家抵押商店街地契时：你立刻支付常规收购价一半的资金，从该玩家处收购该地契。
+//! > - 你抵押商店街地契时：你额外获得1份抵押收益，并将该地契翻回。
 //!
-//! [反击] on a shop-street mortgage: buy it cheap, or double your own mortgage.
 
 use bandori_std::ctx::{self, trigger};
 use card_sdk::abi::{ChainKind, TriggerKind};
 use card_sdk::CardText;
-use card_sdk::{key, CardDef, Msg, On};
+use card_sdk::{key, para, sec, CardDef, Msg, On};
 
 pub const TOMOE_SAVIOR: CardDef = CardDef::new(
     "AG:（巴）商店街的救世主",
@@ -28,9 +31,9 @@ pub const TOMOE_SAVIOR: CardDef = CardDef::new(
         counteract).counter_reason(key!("tomoe_savior_when"))],
 ).meta(&card_sdk::meta::CardMeta::new()
         .name(r#"商店街的救世主"#)
-        .raw_name(r#"（巴）商店街的救世主"#)
+        .raw_name(r#"（宇田川巴）商店街的救世主"#)
         .tags(&[r#"反击"#])
-        .text(CardText::para(r#"【反击】当其他玩家抵押商店街地契时，你可以打出此卡，立刻支付常规收购价一半的价格从该玩家处收购该地契。当你抵押商店街地契时，你可以打出此卡，额外获得一份抵押收益并将地契翻回"#))
+        .text(CardText::of(&[sec(r#""#, &[para(r#"[反击]符合下列任一时机时，你可以打出此卡，进行该时机对应的操作："#), para(r#"- 其他玩家抵押商店街地契时：你立刻支付常规收购价一半的资金，从该玩家处收购该地契。"#), para(r#"- 你抵押商店街地契时：你额外获得1份抵押收益，并将该地契翻回。"#)])]))
         // sheet cell C14
         .fields(&[("group", r#"Afterglow"#), ("owner", r#"宇田川巴"#)]));
 

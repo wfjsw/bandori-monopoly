@@ -1,9 +1,10 @@
+//! copy the last non-placed card another player played. The engine resolves
 //!
 //! 规则书（docs/rulebook/cards.json, id `Mujica:（睦/mortis）表演的本能`）:
 //! > （睦/mortis）表演的本能：
-//! >  此卡打出时效果为场上其他玩家打出的上一张卡（不计入效果带有放置于场上的卡）（此卡复制[反击]卡时可在符合条件时打出）
+//! > 此卡打出时，效果为场上其他玩家打出的上一张卡的效果。查找上一张卡时，不计入效果带有放置于场上的卡。
+//! > 此卡复制[反击]卡时，可在符合该[反击]条件时打出。
 //!
-//! copy the last non-placed card another player played. The engine resolves
 //! the copy: the entry's empty list means every kind, `copies_previous` makes
 //! the matcher walk the play record and dispatch **the copied card's own
 //! entry**, and a **play** stamps `trigger::link_copied` with the source so
@@ -11,7 +12,7 @@
 
 use card_sdk::ctx::trigger;
 use card_sdk::CardText;
-use card_sdk::{ctx, key, CardDef, Msg, On};
+use card_sdk::{ctx, key, para, sec, CardDef, Msg, On};
 
 pub const MORTIS_INSTINCT: CardDef = CardDef::new(
     "Mujica:（睦/mortis）表演的本能",
@@ -28,9 +29,9 @@ pub const MORTIS_INSTINCT: CardDef = CardDef::new(
     ],
 ).meta(&card_sdk::meta::CardMeta::new()
         .name(r#"表演的本能"#)
-        .raw_name(r#"（睦/mortis）表演的本能"#)
+        .raw_name(r#"（若叶睦）表演的本能"#)
         .tags(&[r#"反击"#])
-        .text(CardText::para(r#"此卡打出时效果为场上其他玩家打出的上一张卡（不计入效果带有放置于场上的卡）（此卡复制[反击]卡时可在符合条件时打出）"#))
+        .text(CardText::of(&[sec(r#""#, &[para(r#"此卡打出时，效果为场上其他玩家打出的上一张卡的效果。查找上一张卡时，不计入效果带有放置于场上的卡。"#), para(r#"此卡复制[反击]卡时，可在符合该[反击]条件时打出。"#)])]))
         // sheet cell J2
         .fields(&[("group", r#"Ave Mujica"#), ("owner", r#"若叶睦"#)]));
 

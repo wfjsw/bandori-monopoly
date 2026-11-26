@@ -1,23 +1,26 @@
+//! 1d6-th own shop-street tile from 商店街, else 商店街, as the main move.
 //!
 //! 规则书（docs/rulebook/cards.json, id `AG:商店街的青梅竹马`）:
 //! > 商店街的青梅竹马：
-//! >  投掷1d6并[传送]到商店街自己拥有的对应的格子（从商店街格子开始数），如果投掷结果大于自己拥有的商店街格子数量则[传送]到商店街，视为你的主要移动
+//! > 依次进行以下操作：
+//! > 1. [投掷]1d6。
+//! > 2. 根据此次[投掷]结果，[传送]到商店街自己拥有的对应格子（从商店街格子开始数）。若结果大于自己拥有的商店街格子数量，改为[传送]到商店街。
+//! > 此次[传送]视为你的[主要移动]。
 //!
-//! 1d6-th own shop-street tile from 商店街, else 商店街, as the main move.
 
 use alloc::vec::Vec;
 use bandori_std::ctx::{self, plan};
 use card_sdk::abi::{roll_source, MoveKind, RollPurpose};
 use card_sdk::CardText;
 
-use card_sdk::{key, CardDef, Msg, On};
+use card_sdk::{key, para, sec, steps, CardDef, Msg, On};
 
 pub const SHOP_FRIENDS: CardDef =
     CardDef::new("AG:商店街的青梅竹马", &[On::Play("", Some(cant_play), play)]).meta(&card_sdk::meta::CardMeta::new()
         .name(r#"商店街的青梅竹马"#)
         .raw_name(r#"商店街的青梅竹马"#)
         .tags(&[])
-        .text(CardText::para(r#"投掷1d6并[传送]到商店街自己拥有的对应的格子（从商店街格子开始数），如果投掷结果大于自己拥有的商店街格子数量则[传送]到商店街，视为你的主要移动"#))
+        .text(CardText::of(&[sec(r#""#, &[para(r#"依次进行以下操作："#), steps(&[r#"[投掷]1d6。"#, r#"根据此次[投掷]结果，[传送]到商店街自己拥有的对应格子（从商店街格子开始数）。若结果大于自己拥有的商店街格子数量，改为[传送]到商店街。"#]), para(r#"此次[传送]视为你的[主要移动]。"#)])]))
         // sheet cell C4
         .fields(&[("group", r#"Afterglow"#), ("owner", "")]));
 

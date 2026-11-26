@@ -1,11 +1,11 @@
+//! auto-placed when it enters the hand; on the owner's own turn start it eats a
 //!
 //! 规则书（docs/rulebook/cards.json, id `PPP:[衍生]拍卖撤下来了`）:
 //! > [衍生]拍卖撤下来了：
 //! > [特]：
-//! > 此卡加入手牌时将此卡放置在自身场上，每回合开始时将自身场上的“仓库里的Random Star”[移除]（如果有，然后失去540资金）
-//! > [持续]：此卡拥有者火罐上限加1且不受任何其他效果影响。
+//! > 此卡加入手牌时将此卡放置在自身场上，每回合开始时将自身场上的“仓库里的Random Star”[移除]（如果有，然后失去540资金）。
+//! > [持续]：此卡[拥有者]的[火罐]上限增加1且不受任何其他效果影响。
 //!
-//! auto-placed when it enters the hand; on the owner's own turn start it eats a
 //! placed 仓库里的Random Star, and it raises the owner's fire-pot cap.
 
 use bandori_std::ctx::{self, trigger};
@@ -28,14 +28,7 @@ pub const AUCTION_PULLED: CardDef = CardDef::new(
         .raw_name(r#"[衍生]拍卖撤下来了"#)
         .derived(true)
         .tags(&[r#"持续"#, r#"特"#, r#"衍生"#])
-        .text(CardText::of(&[
-            sec(r#"[特]："#, &[
-                para(r#"此卡加入手牌时将此卡放置在自身场上，每回合开始时将自身场上的“仓库里的Random Star”[移除]（如果有，然后失去540资金）"#),
-            ]),
-            sec(r#"[持续]："#, &[
-                para(r#"此卡拥有者火罐上限加1且不受任何其他效果影响。"#),
-            ]),
-        ]))
+        .text(CardText::of(&[sec(r#"[特]："#, &[para(r#"此卡加入手牌时将此卡放置在自身场上，每回合开始时将自身场上的“仓库里的Random Star”[移除]（如果有，然后失去540资金）。"#), para(r#"[持续]：此卡[拥有者]的[火罐]上限增加1且不受任何其他效果影响。"#)])]))
         // sheet cell B13
         .fields(&[("group", r#"Poppin' Party"#), ("owner", "")]));
 

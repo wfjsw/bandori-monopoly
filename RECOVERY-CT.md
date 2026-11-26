@@ -34,3 +34,17 @@ Next action: UNIT b7gu71o5q on the fixed tree (tmp/kani-markers-final2): 15/18 S
 Continuation cues: continue / 继续 / 照做
   INTEGRATION COMMITTED a4b9d432 "Close the A/B rulebook backlog (ABI v124)" on worktree-backlog-ab. Final full suite bs27pr3q8 (tmp/ruleset-all4.txt) in flight; 73/120, 0 fail at last check (drift suite stalls for hours). Merge --no-ff to master only after it is 120/120.
   FULL `cargo test -p ruleset-tests` bkvlnhcmx: 120/120 test binaries ok, exit 0, 0 FAILED (finished 2026-11-13).
+
+  2026-11-26 card-face sync COMPLETE (branch autoresearch/session-20261125); sheet + cards.json rebuilt, no commit
+    upstream ileuxali/bangdream-monopoly @ 3dd8e3da vendored at tools/autoresearch/cardlib (sha manifest); pair fixture tools/autoresearch/pairs.json
+    autoresearch.sh: face_full 183/183, face_synced 183/183, all gates green
+    implementation sync of the audited behavioural deltas:
+      crimson soul per-entry fix; haruhikage hand-removal removal
+      初次演出事故 per-entry seals -- four active-1 + hina auto-2, maya auto-2 left open
+      STAR BEAT layer always spends; 登上武道馆 split model; 该清CP了 both-side check
+      kanon `manageAfter` timing; 模仿标记 rename (legacy prefix accepted); Fire bird base-ordering documented
+    engine fix: `pay_total` split declaration carried onto `pay_leg` (`SplitDecl` on PlayCtx; wasm_rules applies on legs) so per-leg `[反击]` / pre-split hooks hold; tests c19 etc.
+    kani wrappers restored for saaya/shifune; wrapper_check green; one harness times out at 900 s (solver cost)
+    known pre-existing reds NOT ours: `ab_cond::a_slot_condition_sees_an_earlier_entry_write_in_the_same_window`; `roselia::yukina_pass_hook_announces_the_pot_loss` (stale expectation after aa868ee0 made the entry silent); `cargo test --workspace` link (`ruleset_*` undefined)
+    gates run green: game-rules 191, 510 ruleset-test assertions across the touched binaries, spec suites, roster_equiv, autoresearch harness
+    next action: finish the remaining full-suite binaries (/tmp/verify5/unrun.txt) and decide on the two stale reds

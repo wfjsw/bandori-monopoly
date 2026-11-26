@@ -1,10 +1,13 @@
+//! choose one at play time: play a @Tsugu ycm, or (as a counteraction) force a
 //!
 //! 规则书（docs/rulebook/cards.json, id `AG:（鸫）微小的『能做到』的事`）:
-//! > （鸫）微小的『能做到』的事：打出此卡时，选择其中一个效果发动：
-//! > （1）【反击】时机合适时打出此卡，使任意结果只有数字区间的效果以理论最大值或最小值结算，除@Tsugu ycm以外无法直接改变骰子点数（ex：可以对YOLO生效但无法对无论是何种颜色的夕阳生效）
-//! > （2）视为打出一张@Tsugu ycm
+//! > （鸫）微小的『能做到』的事：
+//! > 打出此卡时，选择以下一个效果发动：
 //!
-//! choose one at play time: play a @Tsugu ycm, or (as a counteraction) force a
+//! > （1）[反击]时机合适时：使任意结果只有数字区间的效果以理论最大值或最小值结算。除@Tsugu ycm以外，无法直接改变骰子点数。例如：可以对“Y.O.L.O”生效，但无法对“无论是何种颜色的夕阳”生效。
+//!
+//! > （2）视为打出1张@Tsugu ycm。
+//!
 //! range-card's dice to max/min. Only the chosen effect runs. No whole-card
 //! play gate: (1) needs no main move, and the nested (2) ycm gates only its
 //! own teleport arm (LOY-TSUGU-01).
@@ -30,17 +33,9 @@ pub const TSUGUMI_CAN: CardDef = CardDef::new(
     ],
 ).meta(&card_sdk::meta::CardMeta::new()
         .name(r#"微小的『能做到』的事"#)
-        .raw_name(r#"（鸫）微小的『能做到』的事"#)
+        .raw_name(r#"（羽泽鸫）微小的『能做到』的事"#)
         .tags(&[r#"反击"#])
-        .text(CardText::of(&[
-            sec("", &[
-                para(r#"打出此卡时，选择其中一个效果发动："#),
-                items(&[
-                    it(r#"【反击】时机合适时打出此卡，使任意结果只有数字区间的效果以理论最大值或最小值结算，除@Tsugu ycm以外无法直接改变骰子点数（ex：可以对YOLO生效但无法对无论是何种颜色的夕阳生效）"#),
-                    it(r#"视为打出一张@Tsugu ycm"#),
-                ]),
-            ]),
-        ]))
+        .text(CardText::of(&[sec(r#""#, &[para(r#"打出此卡时，选择以下一个效果发动："#), items(&[it(r#"[反击]时机合适时：使任意结果只有数字区间的效果以理论最大值或最小值结算。除@Tsugu ycm以外，无法直接改变骰子点数。例如：可以对“Y.O.L.O”生效，但无法对“无论是何种颜色的夕阳”生效。"#), it(r#"视为打出1张@Tsugu ycm。"#)])])]))
         // sheet cell C16
         .fields(&[("group", r#"Afterglow"#), ("owner", r#"羽泽鸫"#)]));
 

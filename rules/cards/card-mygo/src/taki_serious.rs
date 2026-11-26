@@ -1,25 +1,25 @@
+//! every player holding [停留] settles immediately on a tile you pick within
 //!
 //! 规则书（docs/rulebook/cards.json, id `MyGO:（立希）想认真去做`）:
 //! > （立希）想认真去做：
-//! >  使场上所有拥有[停留]的玩家立刻在所在格子前后2格内你选择的一个格子进行一次[触发结算]，本次结算导致的所有[支付]变为原价的四分之一
+//! > 使场上所有拥有[停留]的玩家立刻在所在格子前后2格内你选择的一个格子进行一次[结算]，本次[结算]导致的所有[支付]变为原价的四分之一。
 //!
-//! every player holding [停留] settles immediately on a tile you pick within
 //! 2 of their position, all payments at a quarter price.
 
 use alloc::vec::Vec;
 
 use card_sdk::abi::PayFactorScope;
 use card_sdk::CardText;
-use card_sdk::{ctx, key, CardDef, Msg, On};
+use card_sdk::{ctx, key, para, CardDef, Msg, On};
 
 pub const TAKI_SERIOUS: CardDef = CardDef::new(
     "MyGO:（立希）想认真去做",
     &[On::Play("", None, taki_serious)],
 ).meta(&card_sdk::meta::CardMeta::new()
         .name(r#"想认真去做"#)
-        .raw_name(r#"（立希）想认真去做"#)
+        .raw_name(r#"（椎名立希）想认真去做"#)
         .tags(&[])
-        .text(CardText::para(r#"使场上所有拥有[停留]的玩家立刻在所在格子前后2格内你选择的一个格子进行一次[触发结算]，本次结算导致的所有[支付]变为原价的四分之一"#))
+        .text(CardText::para(r#"使场上所有拥有[停留]的玩家立刻在所在格子前后2格内你选择的一个格子进行一次[结算]，本次[结算]导致的所有[支付]变为原价的四分之一。"#))
         // sheet cell I10
         .fields(&[("group", r#"MyGO!!!!!"#), ("owner", r#"椎名立希"#)]));
 

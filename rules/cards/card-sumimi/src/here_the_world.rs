@@ -1,16 +1,18 @@
+//! [反击] onto the field of whoever played two cards this turn.
 //!
 //! 规则书（docs/rulebook/cards.json, id `Sumimi:Here the world`）:
 //! > Here the world：
-//! >
-//! > （1）[反击] 当有人同一回合内打出两张卡时，将此卡放置于对方场上。
-//! > （2）场上有此卡的玩家下次抽卡时，将那张卡背面朝上放置于此卡上并为其放置3个奇迹水晶，那名玩家的每个回合开始时移除一个，当奇迹水晶数为0时，那名玩家将那张卡加入手牌，并使此卡使用者抽一张卡。
 //!
-//! [反击] onto the field of whoever played two cards this turn.
+//! > （1）[反击]有人在同一回合内打出2张卡时：将此卡放置于那名玩家的场上。
+//!
+//! > （2）场上有此卡的玩家下次抽卡时：将那张卡背面朝上放置于此卡上，并为其放置3个[奇迹水晶]。
+//! > 那名玩家的每个回合开始时，移除1个[奇迹水晶]。[奇迹水晶]数量为0时，那名玩家将那张卡加入手牌，并使此卡的[使用者]抽1张卡。
+//!
 
 use bandori_std::ctx::{self, trigger};
 use bandori_std::zones::ZoneChangeCause;
 use card_sdk::abi::{ActionKind, ChainKind};
-use card_sdk::{it, CardText};
+use card_sdk::{it, items, CardText};
 use card_sdk::{key, Action, CardDef, Msg, On};
 
 const ID: &str = "Sumimi:Here the world";
@@ -58,10 +60,8 @@ pub const HERE_THE_WORLD: CardDef = CardDef::new(
         .name(r#"Here the world"#)
         .raw_name(r#"Here the world"#)
         .tags(&[r#"反击"#])
-        .text(CardText::items(&[
-            it(r#"[反击] 当有人同一回合内打出两张卡时，将此卡放置于对方场上。"#),
-            it(r#"场上有此卡的玩家下次抽卡时，将那张卡背面朝上放置于此卡上并为其放置3个奇迹水晶，那名玩家的每个回合开始时移除一个，当奇迹水晶数为0时，那名玩家将那张卡加入手牌，并使此卡使用者抽一张卡。"#),
-        ]))
+        .text(CardText::items(&[it(r#"[反击]有人在同一回合内打出2张卡时：将此卡放置于那名玩家的场上。"#), it(r#"场上有此卡的玩家下次抽卡时：将那张卡背面朝上放置于此卡上，并为其放置3个[奇迹水晶]。
+那名玩家的每个回合开始时，移除1个[奇迹水晶]。[奇迹水晶]数量为0时，那名玩家将那张卡加入手牌，并使此卡的[使用者]抽1张卡。"#)]))
         // sheet cell L7
         .fields(&[("group", r#"Sumimi"#), ("owner", "")]));
 

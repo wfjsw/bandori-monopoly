@@ -1,13 +1,13 @@
+
 //!
 //! 规则书（docs/rulebook/cards.json, id `通用:GREAT`）:
 //! > GREAT：
 //! > [手]：
 //! > 依次进行以下操作：
 //! > 1. [移除]此卡；
-//! > 2. 将一张“PERFECT“加入抽卡区并洗切；
+//! > 2. 将一张“PERFECT”加入抽卡区并洗切；
 //! > 3. [获得]2000资金。
 //!
-
 use card_sdk::{ctx, key, CardDef, Msg, On};
 use card_sdk::{para, sec, steps, CardText};
 
@@ -16,17 +16,7 @@ pub const GREAT: CardDef = CardDef::new("通用:GREAT", &[On::Play("", None, gre
         .name(r#"GREAT"#)
         .raw_name(r#"GREAT"#)
         .tags(&[r#"手"#])
-        .text(CardText::of(&[sec(
-            r#"[手]："#,
-            &[
-                para(r#"依次进行以下操作："#),
-                steps(&[
-                    r#"[移除]此卡；"#,
-                    r#"将一张“PERFECT“加入抽卡区并洗切；"#,
-                    r#"[获得]2000资金。"#,
-                ]),
-            ],
-        )]))
+        .text(CardText::of(&[sec(r#"[手]："#, &[para(r#"依次进行以下操作："#), steps(&[r#"[移除]此卡；"#, r#"将一张“PERFECT”加入抽卡区并洗切；"#, r#"[获得]2000资金。"#])])]))
         // sheet cell A4
         .fields(&[("group", r#"通用"#), ("owner", "")]),
 );

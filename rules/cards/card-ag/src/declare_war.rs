@@ -3,7 +3,9 @@
 //! 规则书（docs/rulebook/cards.json, id `AG:宣战布告`）:
 //! > 宣战布告：
 //! > [手]：
-//! > [反击]当你或你拥有的格子被其他玩家的卡效果影响时：[指定]那名玩家。被[指定]的玩家[支付][使用者]500资金且[使用者]抽1张卡。
+//! > [反击][使用者]或[使用者]拥有的格子被其他玩家的卡效果影响时：[指定]那名玩家，依次进行以下操作：
+//! > 1. 被[指定]的玩家[支付][使用者]500资金。
+//! > 2. [使用者]抽1张卡。
 //!
 //! [反击] when another player's card affects you or a tile you own, they pay
 //! you 500 and you draw.
@@ -13,7 +15,7 @@
 use bandori_std::ctx::{self, trigger};
 use card_sdk::abi::ChainKind;
 use card_sdk::{key, CardDef, Msg, On};
-use card_sdk::{para, sec, CardText};
+use card_sdk::{para, sec, steps, CardText};
 
 pub const DECLARE_WAR: CardDef = CardDef::new(
     "AG:宣战布告",
@@ -24,11 +26,7 @@ pub const DECLARE_WAR: CardDef = CardDef::new(
         .name(r#"宣战布告"#)
         .raw_name(r#"宣战布告"#)
         .tags(&[r#"手"#, r#"反击"#])
-        .text(CardText::of(&[
-            sec(r#"[手]："#, &[
-                para(r#"[反击]当你或你拥有的格子被其他玩家的卡效果影响时：[指定]那名玩家。被[指定]的玩家[支付][使用者]500资金且[使用者]抽1张卡。"#),
-            ]),
-        ]))
+        .text(CardText::of(&[sec(r#"[手]："#, &[para(r#"[反击][使用者]或[使用者]拥有的格子被其他玩家的卡效果影响时：[指定]那名玩家，依次进行以下操作："#), steps(&[r#"被[指定]的玩家[支付][使用者]500资金。"#, r#"[使用者]抽1张卡。"#])])]))
         // sheet cell C2
         .fields(&[("group", r#"Afterglow"#), ("owner", "")]));
 

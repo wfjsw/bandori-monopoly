@@ -1,15 +1,17 @@
+//! stay in play, take a card back from the discard, and shave the owner's
 //!
 //! 规则书（docs/rulebook/cards.json, id `PP:[丸山彩]憧憬的前方`）:
 //! > [丸山彩]憧憬的前方：
 //! > [手]：
-//! > 将此卡放置在[使用者]的[场地]并将弃卡区中的一张卡加入手卡。
+//! > 依次进行以下操作：
+//! > 1. 将此卡放置在[使用者]的[场地]。
+//! > 2. 将弃卡区中的1张卡加入手牌。
 //! > [持续]：
 //!
 //! > （1）如果[拥有者]的资金数是所有存活玩家中最少则[拥有者][消耗]或[支付]时将金额降低X（最低0）；X为100，如果[拥有者]拥有至少10个[P✽P粉丝]则X添加100。
 //!
 //! > （2）[共鸣][反击][消耗]或[支付]时将金额降低1500（最低0）。
 //!
-//! stay in play, take a card back from the discard, and shave the owner's
 //! payments -- X while poorest, 1500 on resonance.
 //! The discard pick runs in `Play`; the [持续]（1） shave is a `PaySplitAdd`
 //! amount filter and (2) a `PaySplitMulBefore` action.
@@ -19,7 +21,7 @@ use alloc::vec::Vec;
 use bandori_std::ctx::{self, trigger};
 use card_sdk::abi::{ActionKind, FilterKind};
 use card_sdk::ctx::NameId;
-use card_sdk::{it, items, para, sec, CardText};
+use card_sdk::{it, items, para, sec, steps, CardText};
 use card_sdk::{key, Action, CardDef, Filter, Msg, On, PayAddValue};
 use skill_groups::fans;
 
@@ -51,19 +53,9 @@ pub const AYA_LONGING: CardDef = CardDef::new(
     ],
 ).meta(&card_sdk::meta::CardMeta::new()
         .name(r#"憧憬的前方"#)
-        .raw_name(r#"[丸山彩]憧憬的前方"#)
+        .raw_name(r#"（丸山彩）憧憬的前方"#)
         .tags(&[r#"手"#, r#"反击"#, r#"持续"#])
-        .text(CardText::of(&[
-            sec(r#"[手]："#, &[
-                para(r#"将此卡放置在[使用者]的[场地]并将弃卡区中的一张卡加入手卡。"#),
-            ]),
-            sec(r#"[持续]："#, &[
-                items(&[
-                    it(r#"如果[拥有者]的资金数是所有存活玩家中最少则[拥有者][消耗]或[支付]时将金额降低X（最低0）；X为100，如果[拥有者]拥有至少10个[P✽P粉丝]则X添加100。"#),
-                    it(r#"[共鸣][反击][消耗]或[支付]时将金额降低1500（最低0）。"#),
-                ]),
-            ]),
-        ]))
+        .text(CardText::of(&[sec(r#"[手]："#, &[para(r#"依次进行以下操作："#), steps(&[r#"将此卡放置在[使用者]的[场地]。"#, r#"将弃卡区中的1张卡加入手牌。"#])]), sec(r#"[持续]："#, &[items(&[it(r#"如果[拥有者]的资金数是所有存活玩家中最少则[拥有者][消耗]或[支付]时将金额降低X（最低0）；X为100，如果[拥有者]拥有至少10个[P✽P粉丝]则X添加100。"#), it(r#"[共鸣][反击][消耗]或[支付]时将金额降低1500（最低0）。"#)])])]))
         // sheet cell D16
         .fields(&[("group", r#"Pastel✽Palettes"#), ("owner", r#"丸山彩"#)]));
 

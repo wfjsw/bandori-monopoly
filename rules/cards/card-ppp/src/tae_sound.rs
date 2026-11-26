@@ -1,14 +1,14 @@
+//! bare 传送 -- `teleport_to` is a position write with `settles: false` (no 结算
 //!
 //! 规则书（docs/rulebook/cards.json, id `PPP:（多惠）寻找更好的声音`）:
 //! > （多惠）寻找更好的声音：
-//! >  传送到“江户川乐器店”并获得一个[火罐]
+//! > [传送]到“江户川乐器店”，并获得1个[火罐]。
 //!
-//! bare 传送 -- `teleport_to` is a position write with `settles: false` (no 结算
 //! on arrival) -- then +1 [火罐].
 
 use bandori_std::ctx;
 use card_sdk::CardText;
-use card_sdk::{key, CardDef, Msg, On};
+use card_sdk::{key, para, CardDef, Msg, On};
 
 pub const TAE_SOUND: CardDef = CardDef::new(
     "PPP:（多惠）寻找更好的声音",
@@ -17,9 +17,9 @@ pub const TAE_SOUND: CardDef = CardDef::new(
 .meta(
     &card_sdk::meta::CardMeta::new()
         .name(r#"寻找更好的声音"#)
-        .raw_name(r#"（多惠）寻找更好的声音"#)
+        .raw_name(r#"（花园多惠）寻找更好的声音"#)
         .tags(&[])
-        .text(CardText::para(r#"传送到“江户川乐器店”并获得一个[火罐]"#))
+        .text(CardText::para(r#"[传送]到“江户川乐器店”，并获得1个[火罐]。"#))
         // sheet cell B17
         .fields(&[("group", r#"Poppin' Party"#), ("owner", r#"花园多惠"#)]),
 );

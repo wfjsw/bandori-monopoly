@@ -6,15 +6,14 @@ status):
 | kind | ids | what they are |
 |---|---|---|
 | **状态 / conditions** | `status:stay`, `status:stun`, `status:exile`, `status:unstoppable` | 「处于该状态时…」 gates + ticks. The real status hosts. |
-| **companions** | `status:no_hand` | `noHand` card-text slot (turn-flow 2→1→0 dance), not a glossary status. |
+| **card-text slot** | (none) | `noHand` -- a granting card's own clause (event:飞鸟山之战), not a glossary status and not a host. |
 
 火罐 is **not** a status -- it is 「技能指示物」. Its kernel and the face's
 「（初始N，上限M）」 declaration live in `bandori_std::fire` (the numbers ride
 the skill's own `CardDef` as `fireInitial`/`fireCap`). See `docs/MARKERS.md`.
 
-Each 状态 marker (and the cheap companions for symmetry) becomes its own
-**standing pseudo card** -- `status:stay`, `status:stun`, `status:exile`,
-`status:unstoppable`, `status:no_hand` -- following the `mark:cp` precedent
+Each 状态 marker becomes its own **standing pseudo card** -- `status:stay`,
+`status:stun`, `status:exile`, `status:unstoppable` -- following the `mark:cp` precedent
 (`rules/markers/src/{lib,cp,pp_fans}.rs`, `docs/TILES.md`, `docs/MARKERS.md`).
 The engine keeps only
 **generic** turn-flow verbs and player gates; it stops naming stay / stun /
@@ -121,12 +120,14 @@ Cheap host: a boolean-ish counter that (a) suppresses the move gate for stay,
 TODO(规则书): the "choose whether [传送]/[强制移动]/[强制停下] apply" clause
 is a separate prompt surface -- not in this batch.
 
-### 「无手牌」 (`noHand`) -- companion, not a status
+### 「无手牌」 (`noHand`) -- card text, not a hosted status
 
-Not a named glossary marker; it is the continuous 「手牌数没有上限」 /
-「may hold no hand cards」 companion already keyed as `noHand`. Kept as a host
-for symmetry. Its TurnStart/TurnEnd 2→1→0 dance now lives on the host
-(`status:no_hand` hooks), not in `play.rs`. No gates.
+Not a named glossary marker; the only clause that grants it is 飞鸟山之战's
+「下一位玩家在下个自己的回合结束前不可使用手牌」. `noHand` is a player state
+key with a `PlayGate`, but it has **no host**: the granting event owns the
+whole clause (its `TurnStart` / `TurnEnd` hooks run the 2→1→0 clock and it
+stays in play until the veto lapses). 「手牌数没有上限」 is a different
+mechanism (`handLimit = NO_HAND_LIMIT`, CRYCHIC's skill), not this key.
 
 ---
 
@@ -208,8 +209,10 @@ above are unaffected; `docs/MARKERS.md` §5 has the fire storage story.)
 | `status:stun` | `stun`, `stunStart` | -- |
 | `status:exile` | `exile`, `exileTo` | `exileMain` |
 | `status:unstoppable` | `unstoppable` | -- |
-| `status:no_hand` | `noHand` | -- |
 | *(not a status)* `bandori_std::fire` | -- (held `tokens`, not `state`) | `tokens` rows `"charge"` / `"tempFire"` of the persona-skill instance |
+
+`noHand` is the one key with no owning rule here: the card that grants it
+(飞鸟山之战) owns it, see §1.
 
 ### 3.2 New crate `rules/status`
 
@@ -225,7 +228,6 @@ rules/status/
   src/stun.rs
   src/exile.rs
   src/unstoppable.rs
-  src/no_hand.rs
 ```
 
 火罐 is **not** in this crate -- `rules/bandori-std/src/fire.rs` owns the
@@ -254,7 +256,6 @@ pub mod fire { pub fn get(p: i32) -> i32; pub fn max(p: i32) -> i32;
                pub fn spend(p: i32, n: i32, reason: &Msg) -> Result<bool, Prompt>;
                pub fn add_max(p: i32, n: i32) -> i32; }
 pub mod unstoppable { pub fn add(p: i32, n: i32); pub fn get(p: i32) -> i32; }
-pub mod no_hand { pub fn add(p: i32, n: i32); pub fn get(p: i32) -> i32; }
 
 // generic gate readers (namespaced, replace can_pay / cant_move)
 pub fn can_act(p: i32) -> bool;          // !stunned && !exiled && !out
@@ -324,12 +325,12 @@ in time for the turn-start gate checks. So:
 
 **Ordering is frozen.** Today (`play.rs` `turn_start` / `end_turn`):
 
-1. `turnStartBefore` -- before any status tick;
+1. `turnStartBefore` -- before any status tick; the event's `noHand` 2 -> 1
+   hook runs here, ahead of the exile tick (a skipped turn still spends it);
 2. exile decrement; if layers remain -> log `log.exiled_skip`, `end_turn`
    (auto-skip); if 0 -> consume `exileTo` / `exileMain`, log
    `log.exile_over`, teleport (optionally as the main move);
 3. `tick_state(Tick::TurnStart)` -- `stunStart` -> `stun` here;
-4. `noHand` 2 -> 1;
 5. `turn_snapshot` / `turn_start_pos` snapshot;
 6. `turnStart`;
 7. stun -> log `log.stunned_skip`, `end_turn`;
@@ -340,7 +341,7 @@ End of turn (`end_turn`):
 
 1. `turnEndBefore`;
 2. `tick_state(Tick::TurnEnd)` -- stay / stun layers drop here;
-3. `noHand` 1 -> 0;
+3. `noHand` 1 -> 0 (the event's `TurnEnd` hook);
 4. `turnEnd` / `turnEndAfter` / `endTurnAfter`.
 
 Phase B **must preserve this order** (hook order / new `TriggerKind`s if
@@ -359,7 +360,7 @@ stun / stay checks run after it.
 | `wasm_rules` `can_pay` / `cant_move` | generic gates + `status::can_act` / `move_blocked` | already gate-based (ABI 58+) |
 | `play.rs` exile tick / return teleport | generic turn-start tick + `status:exile` hook / engine verb `teleport_as` | **done**: `status:exile` `TurnStartBefore` hook + generic `end_turn_now` / `teleport_as` / `log_as` |
 | `play.rs` stun skip / stay skip | gates (hosts maintain); engine reads gates | already gate-based; leave the flow alone |
-| `play.rs` `noHand` 2→1→0 dance | `status:no_hand` `TurnStart` / `TurnEnd` hooks | **done**: dance deleted from `play.rs`; host hooks own the clause |
+| `play.rs` `noHand` 2→1→0 dance | 飞鸟山之战's own `TurnStartBefore` / `TurnEnd` hooks | **done**: dance lives on the granting event; the event stays until the veto lapses |
 | `state.rs` `is_status_key` / `default_expiry` | stay: expiry stays item-carried (`Tick::TurnEnd` etc.); hosts declare it via `set_expires`; `default_expiry` remains the safety net for raw writes | **done** for stay / stun / stunStart |
 | `key::{STAY,STUN,...}` constants | **kept** (wire + host vocabulary); the engine just stops *branching* on them | unchanged. `key::EXILE_HOLD` is host-owned (`rules/status/src/exile.rs::KEY_HOLD`) |
 
@@ -458,7 +459,7 @@ is additive.
 | exile return teleport | **done**: `status:exile` hook + `teleport_as` | same | walk / teleport triggers |
 | generic end-turn latch | `play.rs` names `exile` | **done**: `end_turn_now` latch after the raise | -- |
 | `stunStart` -> `stun` | `tick_state(TurnStart)` | same (item expiry) | -- |
-| `noHand` 2->1 | `play.rs` (after `tick_state`, before snapshot) | `status:no_hand` `TurnStart` hook (after snapshot) | -- |
+| `noHand` 2->1 | `play.rs` (after `tick_state`, before snapshot) | the event's `TurnStartBefore` hook (before the exile tick) | -- |
 | snapshot | `turn_snapshot` | same (reads the keys) | -- |
 | `turnStart` | same | same (+ latch check after) | `turnStart` |
 | stun auto-skip | `play.rs` names `stunned()` | engine reads `act`/`move` gate | `log.stunned_skip` |
@@ -466,18 +467,18 @@ is additive.
 | ops / move / settle | engine | same, gates consulted | -- |
 | `turnEndBefore` | same | same | `turnEndBefore` |
 | stay/stun layer tick | `tick_state(TurnEnd)` | same (item expiry) | -- |
-| `noHand` 1->0 | `play.rs` (after `tick_state`) | `status:no_hand` `TurnEnd` hook (same slot) | -- |
+| `noHand` 1->0 | `play.rs` (after `tick_state`) | the event's `TurnEnd` hook (same slot) | -- |
 | `turnEnd` / `turnEndAfter` / `endTurnAfter` | same | same | those |
 
-**noHand placement note (this batch).** There is no hook exactly between
-`tick_state` and `turn_snapshot` where the inline dance sat. The host therefore
-hooks `TurnStart` (fold) / `TurnEnd` (clear). `TurnStartBefore` was rejected
-for the fold: it runs *before* the exile tick, so an exile-skipped turn
-(`log.exiled_skip` -> `end_turn` without reaching `turnStart`) would consume
-the fold and the clear would wipe the key mid-skip. `TurnStart` is not
-reached on that path, matching the old dance exactly. `noHand` is not in
-`turn_snapshot`, so the fold's shift from "before snapshot" to "after snapshot"
-is unobservable. `TurnEnd` is hook-only (no counteraction window).
+**noHand placement note.** The deadline is a turn boundary, not a turn
+*body*: 「下个自己的回合结束前」 must pass even when that turn is auto-skipped
+(`log.exiled_skip` -> `end_turn` without reaching `turnStart`), so the fold
+sits on `TurnStartBefore` -- before the exile tick -- and the skipped turn
+spends it like any other. (The old inline dance sat after `tick_state` and so
+survived a skipped turn; that stretched the veto past its deadline, and the
+event owning the clause made it visible.) `noHand` is not in `turn_snapshot`,
+so the shift from "after snapshot" to "before" is unobservable. `TurnEnd` is
+hook-only (no counteraction window).
 
 ---
 
@@ -498,8 +499,8 @@ definitions and comments).
 
 ### Phase B -- engine primitives + host crate, old API still works
 
-1. `rules/status` crate + hosts (the layer hosts / fire /
-   no_hand), bound via `status_rule_ids` -> `bind_tiles`.
+1. `rules/status` crate + hosts (the layer hosts / fire), bound via
+   `status_rule_ids` -> `bind_tiles`.
 2. Generic gates on `MatchPlayer` (serde-default) + generic turn verbs
    (`skip_main_move`, `end_turn_now`, `extra_turn` renamed).
 3. Host-backed shims: `ctx::{give_stay, ...}` keep their signatures and wire
@@ -544,7 +545,7 @@ One commit per batch.
 | 1 | [除外] 「该效果生效时无法重复获得该效果」 (`rules.txt` 50) | `give_exile` stacks layers | Conservative reading: already-exiled player gains **no** new layer. Change in `status:exile`. Tag every site that still stacks. |
 | 2 | [不可阻挡] 「可选择受到的[传送]，[强制移动]，[强制停下]效果是否生效」 | not implemented | Separate prompt surface; out of this batch. |
 | 3 | [无法移动] 「移动终点视为当前所在格子且不[结算]」 vs "cannot roll" | `skip_move` closes the main move entirely | Matches the observed engine; the book's wording is about the endpoint being "here". Keep current behaviour; quote both. |
-| 4 | 「无手牌」 glossary text | `noHand` 2->1->0 dance | Not in `rules.txt` 「标志物解释」; source is card text. Host keeps the dance. |
+| 4 | 「无手牌」 glossary text | `noHand` 2->1->0 dance | Not in `rules.txt` 「标志物解释」; source is card text. The granting event keeps the dance. |
 | 5 | cond CEL `exile` field vs generic counter vocab | bespoke accessors | Sugar over `state_get` is fine; only a real vocab merge needs a TODO. |
 | 6 | `is_status_key` floor-at-0 | engine-wide for stay/stun/stunStart/exile | Keep as the generic `state_set` floor (it is already "the status rule, not the engine enforcing bounds" per the comment). Hosts additionally clamp in their verbs. (Fire left this list with the 2026-10-23 token re-home.) |
 | 7 | fire cap source | `Counter.max` on the persona-skill's `"charge"` token row, written by the character skill | Book says 「持有上限」 is mandated by the skill text. Unchanged; only the container moved (`StateVar.max` → `Counter.max`, 2026-10-23). |
@@ -565,7 +566,7 @@ One commit per batch.
 
 `status::stay::{add,get,clear}`, `status::stun::{add,add_start,get,clear}`,
 `status::exile::{send,get,clear}`, `status::fire::{get,max,gain,spend,add_max}`,
-`status::unstoppable::{add,get}`, `status::no_hand::{add,get}`,
+`status::unstoppable::{add,get}`,
 `status::can_act`, `status::move_blocked`, `status::can_pay`.
 
 ### Engine verbs (generic)
@@ -585,7 +586,7 @@ Phase C).
 
 Landed on `status-hosts-v2` (rebased over the closeout batches, ABI 57):
 
-* `rules/status` hosts `status:{stay,stun,exile,fire,unstoppable,no_hand}`
+* `rules/status` hosts `status:{stay,stun,exile,fire,unstoppable}`
   linked into `card-all`, `rules-native` and the aggregate build (native and
   sandbox manifests agree: 291 cards).
 * Every card / skill / tile / event call site uses `rules_status::*`; the

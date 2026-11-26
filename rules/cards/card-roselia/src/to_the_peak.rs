@@ -1,21 +1,22 @@
+//! free Livehouse, or build one of yours at 1.5x cost.
 //!
 //! 规则书（docs/rulebook/cards.json, id `R:向着顶点`）:
 //! > 向着顶点：
-//! >  移动到下一个可被购买的livehouse格子，视为你的主要移动。若所有livehouse格子已被购买，可花费1.5倍价格为属于你的一个livehouse格子加盖一层房屋。
+//! > 移动到下一个可被购买的Live House格子，视为你的[主要移动]。
+//! > 若所有Live House格子均已被购买，可花费1.5倍价格，为属于你的1个Live House格子加盖1层房屋。
 //!
-//! free Livehouse, or build one of yours at 1.5x cost.
 
 use alloc::vec::Vec;
 
 use bandori_std::ctx;
 use card_sdk::CardText;
-use card_sdk::{key, CardDef, Msg, On};
+use card_sdk::{key, para, sec, CardDef, Msg, On};
 
 pub const TO_THE_PEAK: CardDef = CardDef::new("R:向着顶点", &[On::Play("", Some(cant_play), play)]).meta(&card_sdk::meta::CardMeta::new()
         .name(r#"向着顶点"#)
         .raw_name(r#"向着顶点"#)
         .tags(&[])
-        .text(CardText::para(r#"移动到下一个可被购买的livehouse格子，视为你的主要移动。若所有livehouse格子已被购买，可花费1.5倍价格为属于你的一个livehouse格子加盖一层房屋。"#))
+        .text(CardText::of(&[sec(r#""#, &[para(r#"移动到下一个可被购买的Live House格子，视为你的[主要移动]。"#), para(r#"若所有Live House格子均已被购买，可花费1.5倍价格，为属于你的1个Live House格子加盖1层房屋。"#)])]))
         // sheet cell E4
         .fields(&[("group", r#"Roselia"#), ("owner", "")]));
 

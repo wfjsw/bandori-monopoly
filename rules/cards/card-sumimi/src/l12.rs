@@ -1,4 +1,19 @@
 //!
+//!
+//! 规则书（docs/rulebook/cards.json, id `Sumimi:#L12`）:
+//! > #L12：
+//! > [手]：
+//! > 依次进行以下操作：
+//! > 1. 从弃卡区或抽卡区选择1张“Sumimi”卡，加入手牌。
+//! > 2. 将此卡置于自身场上。
+//! > [持续]：
+//!
+//! > （1）[拥有者]的手牌数量上限减少1。
+//!
+//! > （2）每当你使用[火罐]时：为此卡添加1个[奇迹水晶]。
+//!
+//! > （3）此卡拥有6个[奇迹水晶]时：将此卡返回手牌。
+//!
 //! 规则书（the roster, id `Sumimi:#L12`）:
 //! > [手] 从弃牌堆或抽牌堆选择一张“Sumimi”卡加入手牌并将此卡置于自身场上； [持续] （1）[拥有者]手卡上限数量减1。（2）每当你消耗火罐时，为此卡添加一个[奇迹水晶] （3）当此卡上拥有6个[奇迹水晶]时，将此卡返回手牌。
 //!
@@ -10,7 +25,7 @@ use bandori_std::ctx::{self, trigger, CardPile};
 use bandori_std::state_key;
 use card_sdk::abi::prop;
 use card_sdk::ctx::NameId;
-use card_sdk::{it, items, para, sec, CardText};
+use card_sdk::{it, items, para, sec, steps, CardText};
 use card_sdk::{key, Action, CardDef, Msg, On};
 
 pub const L12: CardDef = CardDef::new(
@@ -29,20 +44,10 @@ pub const L12: CardDef = CardDef::new(
     ],
 )
 .meta(&card_sdk::meta::CardMeta::new()
-        // sheet cell L12 -- the name line is blank; `#L12` is the name.
-        .name("#L12")
-        .raw_name("")
+        .name(r#""#)
+        .raw_name(r#"unnamed"#)
         .tags(&[r#"手"#, r#"持续"#])
-        .text(CardText::of(&[
-            sec("", &[
-                para(r#"[手] 从弃牌堆或抽牌堆选择一张“Sumimi”卡加入手牌并将此卡置于自身场上； [持续]"#),
-                items(&[
-                    it(r#"[拥有者]手卡上限数量减1。"#),
-                    it(r#"每当你消耗火罐时，为此卡添加一个[奇迹水晶]"#),
-                    it(r#"当此卡上拥有6个[奇迹水晶]时，将此卡返回手牌。"#),
-                ]),
-            ]),
-        ]))
+        .text(CardText::of(&[sec(r#"[手]："#, &[para(r#"依次进行以下操作："#), steps(&[r#"从弃卡区或抽卡区选择1张“Sumimi”卡，加入手牌。"#, r#"将此卡置于自身场上。"#])]), sec(r#"[持续]："#, &[items(&[it(r#"[拥有者]的手牌数量上限减少1。"#), it(r#"每当你使用[火罐]时：为此卡添加1个[奇迹水晶]。"#), it(r#"此卡拥有6个[奇迹水晶]时：将此卡返回手牌。"#)])])]))
         .fields(&[("group", r#"Sumimi"#), ("owner", "")])) // 规则书[持续]（1）: 「[拥有者]手卡上限数量减1。」 -- the `handLimitDelta`
 .props(&[(prop::HAND_LIMIT_DELTA, -1)]);
 

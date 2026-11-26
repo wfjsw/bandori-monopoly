@@ -1,3 +1,4 @@
+//! The stand-in runs the substitute's [手] via `play_card` (大和麻弥 has none and is
 //!
 //! 规则书（docs/rulebook/cards.json, id `PP:[冰川日菜]会发出怎样的声音呢？`）:
 //! > [冰川日菜]会发出怎样的声音呢？：
@@ -7,7 +8,6 @@
 //!
 //! > （2）[共鸣]本卡在[场地]时改变本卡代替的专属卡效果。
 //!
-//! The stand-in runs the substitute's [手] via `play_card` (大和麻弥 has none and is
 //! placed directly), then banishes itself. (2) is passive: on a [共鸣] the
 //! substitute's instance is marked with the effective card [`ID`] and the
 //! substitute's effect is re-picked, so later dispatch runs this card's surface.
@@ -24,15 +24,9 @@ const ID: &str = "PP:[冰川日菜]会发出怎样的声音呢？";
 pub const HINA_SOUND: CardDef = CardDef::new(ID, &[On::Play("", None, hina_sound)]).meta(
     &card_sdk::meta::CardMeta::new()
         .name(r#"会发出怎样的声音呢？"#)
-        .raw_name(r#"[冰川日菜]会发出怎样的声音呢？"#)
+        .raw_name(r#"（冰川日菜）会发出怎样的声音呢？"#)
         .tags(&[r#"特"#])
-        .text(CardText::of(&[sec(
-            r#"[特]："#,
-            &[items(&[
-                it(r#"此卡在符合使用条件时可替代丸山彩，大和麻弥，白鹭千圣，或若宫伊芙的专属卡。"#),
-                it(r#"[共鸣]本卡在[场地]时改变本卡代替的专属卡效果。"#),
-            ])],
-        )]))
+        .text(CardText::of(&[sec(r#"[特]："#, &[items(&[it(r#"此卡在符合使用条件时可替代丸山彩，大和麻弥，白鹭千圣，或若宫伊芙的专属卡。"#), it(r#"[共鸣]本卡在[场地]时改变本卡代替的专属卡效果。"#)])])]))
         // sheet cell D19
         .fields(&[("group", r#"Pastel✽Palettes"#), ("owner", r#"冰川日菜"#)]),
 );

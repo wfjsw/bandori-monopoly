@@ -348,7 +348,7 @@ test("Animator: a board-rule card event (status / tile) keeps the log, no empty 
   anim.push(frame({
     id: 91,
     type: "card",
-    card: "status:no_hand",
+    card: "status:stay",
     kind: "hook",
     uid: -1,
     msg: { k: "log.effect_applied" },
@@ -481,7 +481,7 @@ test("chain: a non-card link 1 joins no overlay; the first card stays a lone fla
 });
 
 test("chain: a status / tile / mark link 1 has no face and is dropped", async () => {
-  for (const [i, id] of ["status:no_hand", "tile:circle", "mark:cp"].entries()) {
+  for (const [i, id] of ["status:stay", "tile:circle", "mark:cp"].entries()) {
     const { anim, shots } = await chainShots([
       frame({ id: 120 + i * 2, type: "chain", card: id, value: 1, msg: { k: "log.chain_link_trigger" } }),
       frame({ id: 121 + i * 2, type: "chain", card: "TEST:counter", value: 2, msg: { k: "log.chain_link" } }),

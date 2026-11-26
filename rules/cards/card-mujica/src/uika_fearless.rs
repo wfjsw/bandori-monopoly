@@ -1,22 +1,24 @@
+//! if you settled on a memory tile since CiRCLE, draw 1 or fix this turn's roll.
 //!
 //! 规则书（docs/rulebook/cards.json, id `Mujica:（初华）我，无畏悲伤`）:
 //! > （初华）我，无畏悲伤：
-//! >  打出此卡时若自从上一次[经过]CiRCLE后有在任何[回忆地块][触发结算]，你可选择抽1张卡或使你本回合的移动掷骰结果可定义为1-6以内的任何数字
+//! > 打出此卡时，若自从上一次[经过]CiRCLE后，你曾在任何[回忆地块]进行[结算]：可选择以下一个效果：
+//! > - 抽1张卡。
+//! > - 将本回合用于确定你的移动步数的[投掷]结果，定义为1至6以内的任意数字。
 //!
-//! if you settled on a memory tile since CiRCLE, draw 1 or fix this turn's roll.
 
 use card_sdk::abi::roll_source;
 use card_sdk::CardText;
-use card_sdk::{ctx, key, CardDef, Msg, On};
+use card_sdk::{ctx, key, para, sec, CardDef, Msg, On};
 
 pub const UIKA_FEARLESS: CardDef = CardDef::new(
     "Mujica:（初华）我，无畏悲伤",
     &[On::Play("", None, uika_fearless)],
 ).meta(&card_sdk::meta::CardMeta::new()
         .name(r#"我，无畏悲伤"#)
-        .raw_name(r#"（初华）我，无畏悲伤"#)
+        .raw_name(r#"（三角初华）我，无畏悲伤"#)
         .tags(&[])
-        .text(CardText::para(r#"打出此卡时若自从上一次[经过]CiRCLE后有在任何[回忆地块][触发结算]，你可选择抽1张卡或使你本回合的移动掷骰结果可定义为1-6以内的任何数字"#))
+        .text(CardText::of(&[sec(r#""#, &[para(r#"打出此卡时，若自从上一次[经过]CiRCLE后，你曾在任何[回忆地块]进行[结算]：可选择以下一个效果："#), para(r#"- 抽1张卡。"#), para(r#"- 将本回合用于确定你的移动步数的[投掷]结果，定义为1至6以内的任意数字。"#)])]))
         // sheet cell J8
         .fields(&[("group", r#"Ave Mujica"#), ("owner", r#"三角初华"#)]));
 

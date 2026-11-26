@@ -1,9 +1,9 @@
+//! on an out-of-turn draw, draw 1 at the end of your next turn.
 //!
 //! 规则书（docs/rulebook/cards.json, id `CRYCHIC:优雅的呐喊`）:
-//! > 优雅的呐喊
-//! >  ：[反击] 当你在回合外受到抽卡效果时打出，你的下回合结束时抽一张卡。
+//! > 优雅的呐喊：
+//! > [反击]你在自己的回合外受到抽卡效果时：可打出此卡，在你的下回合结束时抽1张卡。
 //!
-//! on an out-of-turn draw, draw 1 at the end of your next turn.
 //!
 //! The engine raises `drawOut` at the `ctx::draw` chokepoint when the draw is
 //! effect-caused and lands outside the drawer's own turn (wasm_rules
@@ -12,7 +12,7 @@
 use bandori_std::ctx;
 use card_sdk::abi::{ActionKind, ChainKind};
 use card_sdk::CardText;
-use card_sdk::{key, Action, CardDef, Msg, On};
+use card_sdk::{key, para, Action, CardDef, Msg, On};
 
 pub const ELEGANT_SHOUT: CardDef = CardDef::new(
     "CRYCHIC:优雅的呐喊",
@@ -45,9 +45,7 @@ pub const ELEGANT_SHOUT: CardDef = CardDef::new(
         .name(r#"优雅的呐喊"#)
         .raw_name(r#"优雅的呐喊"#)
         .tags(&[r#"反击"#])
-        .text(CardText::para(
-            r#"[反击] 当你在回合外受到抽卡效果时打出，你的下回合结束时抽一张卡。"#,
-        ))
+        .text(CardText::para(r#"[反击]你在自己的回合外受到抽卡效果时：可打出此卡，在你的下回合结束时抽1张卡。"#))
         // sheet cell M6
         .fields(&[("group", r#"CRYCHIC"#), ("owner", "")]),
 );

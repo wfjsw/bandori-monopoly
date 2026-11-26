@@ -1,25 +1,24 @@
+//! a farthest player and settle, then maybe raise a house on your farthest deed.
 //!
 //! 规则书（docs/rulebook/cards.json, id `PPP:献给远方的你`）:
 //! > 献给远方的你：
 //! > [手]：
-//! > [传送]至任意与[使用者]绝对距离最远的玩家的格子并[结算]，然后可以给任意与[使用者]绝对距离最远的[使用者]拥有且可盖房的格子加盖（例：[使用者]在#11号格子，一名玩家在#1号格子则绝对距离为10）。
+//! > 依次进行以下操作：
+//! > 1. [传送]至任意与[使用者][绝对距离]最远的玩家所在的格子，并进行[结算]。
+//! > 2. 可选择任意与[使用者][绝对距离]最远的、[使用者]拥有且可盖房的格子，加盖房屋。
+//! > 例如：[使用者]在11号格子，1名玩家在1号格子，两者的[绝对距离]为10。
 //!
-//! a farthest player and settle, then maybe raise a house on your farthest deed.
 
 use alloc::vec::Vec;
 use card_sdk::{ctx, key, CardDef, Msg, On};
-use card_sdk::{para, sec, CardText};
+use card_sdk::{para, sec, steps, CardText};
 
 pub const TO_YOU_FAR_AWAY: CardDef =
     CardDef::new("PPP:献给远方的你", &[On::Play("", Some(cant_play), play)]).meta(&card_sdk::meta::CardMeta::new()
         .name(r#"献给远方的你"#)
         .raw_name(r#"献给远方的你"#)
         .tags(&[r#"手"#])
-        .text(CardText::of(&[
-            sec(r#"[手]："#, &[
-                para(r#"[传送]至任意与[使用者]绝对距离最远的玩家的格子并[结算]，然后可以给任意与[使用者]绝对距离最远的[使用者]拥有且可盖房的格子加盖（例：[使用者]在#11号格子，一名玩家在#1号格子则绝对距离为10）。"#),
-            ]),
-        ]))
+        .text(CardText::of(&[sec(r#"[手]："#, &[para(r#"依次进行以下操作："#), steps(&[r#"[传送]至任意与[使用者][绝对距离]最远的玩家所在的格子，并进行[结算]。"#, r#"可选择任意与[使用者][绝对距离]最远的、[使用者]拥有且可盖房的格子，加盖房屋。"#]), para(r#"例如：[使用者]在11号格子，1名玩家在1号格子，两者的[绝对距离]为10。"#)])]))
         // sheet cell B11
         .fields(&[("group", r#"Poppin' Party"#), ("owner", "")]));
 

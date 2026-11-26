@@ -1,15 +1,16 @@
+//! that places itself and locks other players out of hand [反击]s this turn.
 //!
 //! 规则书（docs/rulebook/cards.json, id `Mujica:骰子已经掷下`）:
 //! > 骰子已经掷下：
-//! >  将此卡放置于自身场上，本回合内所有其他玩家无法从手牌中使用[反击]，回合结束后放入弃牌堆（此卡可以被反击）
+//! > 将此卡放置于自身场上。本回合内，所有其他玩家无法从手牌中使用[反击]。回合结束后，将此卡放入弃卡区。
+//! > 此卡本身可以被[反击]。
 //!
-//! that places itself and locks other players out of hand [反击]s this turn.
 
 use bandori_std::ctx::{self, trigger};
 use bandori_std::state_key;
 use card_sdk::abi::{ActionKind, ChainKind};
 use card_sdk::CardText;
-use card_sdk::{key, Action, CardDef, Msg, On};
+use card_sdk::{key, para, sec, Action, CardDef, Msg, On};
 
 /// Once-per-turn placement latch. A hand play reaches `cast` through `play`;
 /// the played card's own `counteract` follow-up also reaches the entry (and
@@ -42,7 +43,7 @@ pub const DICE_CAST: CardDef = CardDef::new(
         .name(r#"骰子已经掷下"#)
         .raw_name(r#"骰子已经掷下"#)
         .tags(&[r#"反击"#])
-        .text(CardText::para(r#"将此卡放置于自身场上，本回合内所有其他玩家无法从手牌中使用[反击]，回合结束后放入弃牌堆（此卡可以被反击）"#))
+        .text(CardText::of(&[sec(r#""#, &[para(r#"将此卡放置于自身场上。本回合内，所有其他玩家无法从手牌中使用[反击]。回合结束后，将此卡放入弃卡区。"#), para(r#"此卡本身可以被[反击]。"#)])]))
         // sheet cell J6
         .fields(&[("group", r#"Ave Mujica"#), ("owner", "")]));
 

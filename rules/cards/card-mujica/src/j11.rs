@@ -1,12 +1,15 @@
+
 //!
 //! 规则书（docs/rulebook/cards.json, id `Mujica:#J11`）:
-//! > 将此卡置于自身场上，为其添加2个[奇迹水晶]，每回合结束时移除1个，为0时置入弃牌堆。在此期间任意需要失去资金或被其他卡指定的时刻，可将此卡置入弃牌堆并使自身及前后1格内的其他玩家获得1层眩晕。
+//! > #J11：
+//! > 将此卡置于自身场上，并为此卡添加2个[奇迹水晶]。
+//! > 每回合结束时：移除此卡的1个[奇迹水晶]。此卡的[奇迹水晶]为0时，将此卡置入弃卡区。
+//! > 在此期间，任意需要失去资金或被其他卡[指定]的时刻：可将此卡置入弃卡区，使自己及前后1格内的其他玩家各获得1层[眩晕]。
 //!
-
 use bandori_std::ctx::{self, trigger};
 use card_sdk::abi::{ActionKind, FilterKind, TriggerKind};
 use card_sdk::CardText;
-use card_sdk::{key, Action, CardDef, Filter, Msg, On};
+use card_sdk::{key, para, sec, Action, CardDef, Filter, Msg, On};
 
 const ID: &str = "Mujica:#J11";
 
@@ -29,11 +32,10 @@ pub const J11: CardDef = CardDef::new(
 // 规则书「添加2个[奇迹水晶]」: the `⌛2` marker the client shows.
 .props(&[(bandori_std::marker::TURNS_LEFT, 2)])
 .meta(&card_sdk::meta::CardMeta::new()
-        // sheet cell J11 -- the name line is blank; `#J11` is the name.
-        .name("#J11")
-        .raw_name("")
+        .name(r#""#)
+        .raw_name(r#"unnamed"#)
         .tags(&[])
-        .text(CardText::para(r#"将此卡置于自身场上，为其添加2个[奇迹水晶]，每回合结束时移除1个，为0时置入弃牌堆。在此期间任意需要失去资金或被其他卡指定的时刻，可将此卡置入弃牌堆并使自身及前后1格内的其他玩家获得1层眩晕。"#))
+        .text(CardText::of(&[sec(r#""#, &[para(r#"将此卡置于自身场上，并为此卡添加2个[奇迹水晶]。"#), para(r#"每回合结束时：移除此卡的1个[奇迹水晶]。此卡的[奇迹水晶]为0时，将此卡置入弃卡区。"#), para(r#"在此期间，任意需要失去资金或被其他卡[指定]的时刻：可将此卡置入弃卡区，使自己及前后1格内的其他玩家各获得1层[眩晕]。"#)])]))
         .fields(&[("group", r#"Ave Mujica"#), ("owner", "")]));
 
 fn play(player_id: i32) -> card_sdk::Asked {

@@ -1,15 +1,18 @@
+//! player either moves without settling or pays you X*20, then you move the sum.
 //!
 //! 规则书（docs/rulebook/cards.json, id `Mujica:人偶的箱庭`）:
 //! > 人偶的箱庭：
-//! >  使场上所有其他玩家选择其一执行：“进行一次移动掷骰并移动对应步数（不[触发结算]）”或“向你支付X*20资金，X为该玩家正常移动到你所在格子所需的移动数。”  无法移动的玩家只能选择向你支付。
-//! >  然后，你强制移动其他玩家本次移动掷骰数之和。视为你本回合的主要移动。
+//! > 使场上所有其他玩家各自选择以下一个操作执行：
+//! > - 进行1次用于确定移动步数的[投掷]，并移动对应步数，不进行[结算]。
+//! > - 向你[支付]X×20资金；X为该玩家正常移动到你所在格子所需的移动数。
+//! > 无法移动的玩家只能选择[支付]。
+//! > 然后，你强制移动的步数为其他玩家上述[投掷]结果之和。此次移动视为你本回合的[主要移动]。
 //!
-//! player either moves without settling or pays you X*20, then you move the sum.
 
 use bandori_std::state_key;
 use card_sdk::abi::{roll_source, RollPurpose};
 use card_sdk::CardText;
-use card_sdk::{ctx, key, CardDef, Msg, On};
+use card_sdk::{ctx, key, para, sec, CardDef, Msg, On};
 
 pub const DOLL_GARDEN: CardDef = CardDef::new(
     "Mujica:人偶的箱庭",
@@ -18,8 +21,7 @@ pub const DOLL_GARDEN: CardDef = CardDef::new(
         .name(r#"人偶的箱庭"#)
         .raw_name(r#"人偶的箱庭"#)
         .tags(&[])
-        .text(CardText::para(r#"使场上所有其他玩家选择其一执行：“进行一次移动掷骰并移动对应步数（不[触发结算]）”或“向你支付X*20资金，X为该玩家正常移动到你所在格子所需的移动数。” 无法移动的玩家只能选择向你支付。
-        然后，你强制移动其他玩家本次移动掷骰数之和。视为你本回合的主要移动。"#))
+        .text(CardText::of(&[sec(r#""#, &[para(r#"使场上所有其他玩家各自选择以下一个操作执行："#), para(r#"- 进行1次用于确定移动步数的[投掷]，并移动对应步数，不进行[结算]。"#), para(r#"- 向你[支付]X×20资金；X为该玩家正常移动到你所在格子所需的移动数。"#), para(r#"无法移动的玩家只能选择[支付]。"#), para(r#"然后，你强制移动的步数为其他玩家上述[投掷]结果之和。此次移动视为你本回合的[主要移动]。"#)])]))
         // sheet cell J12
         .fields(&[("group", r#"Ave Mujica"#), ("owner", "")]));
 

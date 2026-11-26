@@ -1,3 +1,4 @@
+//! then Xd20 >= 35 pays out; alone, an extra turn.
 //!
 //! 规则书（docs/rulebook/cards.json, id `通用:CiRCLE THANKS PARTY!`）:
 //! > CiRCLE THANKS PARTY!：
@@ -5,7 +6,6 @@
 //! > 1. X至少为2则[使用者]投掷Xd20，如果结果至少为35则[使用者][获得]3000资金且其他因此卡[消耗]资金的玩家[获得]1500资金；
 //! > 2. X等于1则[使用者]的本回合结束后获得一个额外回合。
 //!
-//! then Xd20 >= 35 pays out; alone, an extra turn.
 
 use alloc::vec::Vec;
 use card_sdk::abi::{roll_source, RollPurpose};
@@ -18,15 +18,7 @@ pub const THANKS_PARTY: CardDef =
         .name(r#"CiRCLE THANKS PARTY!"#)
         .raw_name(r#"CiRCLE THANKS PARTY!"#)
         .tags(&[r#"手"#])
-        .text(CardText::of(&[
-            sec("", &[
-                para(r#"[手]：所有其他玩家可选择[消耗]500资金，你消耗500资金，将X设为因此卡[消耗]资金的玩家数量加1。根据X进行以下操作之一："#),
-                steps(&[
-                    r#"X至少为2则[使用者]投掷Xd20，如果结果至少为35则[使用者][获得]3000资金且其他因此卡[消耗]资金的玩家[获得]1500资金；"#,
-                    r#"X等于1则[使用者]的本回合结束后获得一个额外回合。"#,
-                ]),
-            ]),
-        ]))
+        .text(CardText::of(&[sec(r#""#, &[para(r#"[手]：所有其他玩家可选择[消耗]500资金，你消耗500资金，将X设为因此卡[消耗]资金的玩家数量加1。根据X进行以下操作之一："#), steps(&[r#"X至少为2则[使用者]投掷Xd20，如果结果至少为35则[使用者][获得]3000资金且其他因此卡[消耗]资金的玩家[获得]1500资金；"#, r#"X等于1则[使用者]的本回合结束后获得一个额外回合。"#])])]))
         // sheet cell A12
         .fields(&[("group", r#"通用"#), ("owner", "")]));
 

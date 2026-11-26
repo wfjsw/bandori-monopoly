@@ -1,15 +1,16 @@
+//! Counteraction: when one of your own rolls is under 6, it goes up by 1.
 //!
 //! 规则书（docs/rulebook/cards.json, id `AG:（绯玛丽）如果并非没问题`）:
-//! > （绯玛丽）如果并非没问题：【反击】当你的一次掷骰小于6时，你可以打出此卡使结果+1
+//! > （绯玛丽）如果并非没问题：
+//! > [反击]你的一次[投掷]结果小于6时：你可以打出此卡，使此次[投掷]结果增加1。
 //!
-//! Counteraction: when one of your own rolls is under 6, it goes up by 1.
 //!
 //! Reviewed 10/23/2026
 
 use bandori_std::ctx::{self, trigger};
 use card_sdk::abi::ChainKind;
 use card_sdk::CardText;
-use card_sdk::{key, CardDef, Msg, On};
+use card_sdk::{key, para, CardDef, Msg, On};
 
 pub const HIMARI_PLUS_ONE: CardDef = CardDef::new(
     "AG:（绯玛丽）如果并非没问题",
@@ -32,11 +33,9 @@ pub const HIMARI_PLUS_ONE: CardDef = CardDef::new(
 .meta(
     &card_sdk::meta::CardMeta::new()
         .name(r#"如果并非没问题"#)
-        .raw_name(r#"（绯玛丽）如果并非没问题"#)
+        .raw_name(r#"（上原绯玛丽）如果并非没问题"#)
         .tags(&[r#"反击"#])
-        .text(CardText::para(
-            r#"【反击】当你的一次掷骰小于6时，你可以打出此卡使结果+1"#,
-        ))
+        .text(CardText::para(r#"[反击]你的一次[投掷]结果小于6时：你可以打出此卡，使此次[投掷]结果增加1。"#))
         // sheet cell C15
         .fields(&[("group", r#"Afterglow"#), ("owner", r#"上原绯玛丽"#)]),
 );

@@ -41,9 +41,11 @@ use skill_groups::fans;
 pub const EVE: CardDef = CardDef::new(
     "skill:若宫伊芙:天下统一",
     &[
+        // The (1) entry carries its own seal guard -- 「[拥有者]不可使用…若宫伊芙…的
+        // [主动]（1）技能」 (初次演出事故).
         On::Action(Action::DeckAtGameStart(
             "group_is(owner, 'Pastel✽Palettes')",
-            None,
+            Some(press_gate),
             at_start,
         )),
         // （2） 「投掷前」 -- ask + flips. Action: prompts allowed.
@@ -55,11 +57,20 @@ pub const EVE: CardDef = CardDef::new(
     ],
 )
 .rule();
-/// Residual guard for （2） -- `skill_blocked` (band-specific) and `fixed_roll`
+/// Residual guard for （2） -- `skill_blocked` (this entry's own tag) and `fixed_roll`
 /// (derived plan state) stay here (not yet in the condition vocabulary).
 /// `actor == owner && slot('ppFansUp') >= 1` is the condition.
+fn press_gate(player_id: i32) -> bool {
+    // 「[持续]：[拥有者]不可使用…若宫伊芙…的[主动]（1）技能」 (初次演出事故) --
+    // the (1) entry is the press. `skill_blocked` covers the seal tag, the
+    // global `skillBlock`, and a `skillBlock` mark on the tile.
+    !bandori_std::ctx::skill_blocked(player_id, "skill:若宫伊芙:天下统一:1")
+}
+
 fn roll_ok(player_id: i32) -> bool {
-    if bandori_std::ctx::skill_blocked(player_id, "Pastel✽Palettes") {
+    // The (2) automatic, still usable under 初次演出事故 -- its own clause tag
+    // plus the global seal / tile mark `skill_blocked` folds in.
+    if bandori_std::ctx::skill_blocked(player_id, "skill:若宫伊芙:天下统一:2") {
         return false;
     }
     ctx::fixed_roll().is_none()

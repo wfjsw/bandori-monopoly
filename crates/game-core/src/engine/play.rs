@@ -336,6 +336,27 @@ impl PayShape {
     }
 }
 
+/// The declaration a 「[分摊]」 command total leaves for its legs (C19 / （小白）).
+///
+/// `pay_total` raises the command's `effect` window on the total figure; a
+/// counter there may rewrite the payee / kind / shape, and the split legs must
+/// carry that same declaration so each leg opens the same reaction surface a
+/// `transfer` does (`target` [反击] and `PaySplitAdd` per leg). Persisted on the
+/// context by [`PlayCtx::pay_total`] and read by the next `pay_leg` calls; a
+/// new total overwrites it, and [`PlayCtx::money`] brackets a nested pipeline
+/// so an outer split keeps its own declaration.
+#[derive(Debug, Clone, Copy)]
+pub struct SplitDecl {
+    /// Settlement target after the total's rewrites (`None` = the bank).
+    pub to: Option<usize>,
+    /// The declared payee a [`PayShape::PayeeHalf`] declaration must charge
+    /// half, captured before any target rewrite.
+    pub partner: Option<usize>,
+    pub kind: PayKind,
+    pub rent: bool,
+    pub shape: PayShape,
+}
+
 /// Which scope a pay factor belongs to (guest code order). `Auto` is not a
 /// wire scope: `set_pay_factor` resolves it to the innermost live scope.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -4566,7 +4587,11 @@ impl PlayCtx<'_> {
         // body must not clear the outer leg's answer for its `payAfter`).
         let outer_split_ran = self.w.pay_split_ran;
         self.w.pay_split_ran = false;
+        // A nested payment that itself splits must not eat the outer split's
+        // leg declaration -- keep it across the nested pipeline.
+        let outer_decl = self.pay_split_decl;
         let r = self.money_inner(p, depth);
+        self.pay_split_decl = outer_decl;
         self.w.pay_split_ran = outer_split_ran;
         self.money_depth = depth;
         r
@@ -5409,9 +5434,7 @@ impl PlayCtx<'_> {
                 )?;
                 Self::fold_pay_trigger(p, &ask);
                 amount = ask.value;
-                if ask.target >= 0 {
-                    *to = Some(ask.target as usize);
-                }
+                *to = (ask.target >= 0).then_some(ask.target as usize);
             }
             let t = raise!(
                 self,
@@ -5430,9 +5453,7 @@ impl PlayCtx<'_> {
                 return Ok(None);
             }
             amount = t.value;
-            if t.target >= 0 {
-                *to = Some(t.target as usize);
-            }
+            *to = (t.target >= 0).then_some(t.target as usize);
         }
         Ok(Some(amount))
     }
@@ -5469,6 +5490,13 @@ impl PlayCtx<'_> {
         // 0 on every leg. A cancel drops the whole command (`None`).
         let mut rent = probe.rent;
         let mut fixed = probe.shape == PayShape::Fixed;
+        // A `PayeeHalf` shape written by the total's windows needs the declared
+        // payee captured before the target rewrite, exactly like the per-leg
+        // pipeline does; the legs then carry it as their own declaration.
+        let mut partner = probe.partner;
+        if partner.is_none() && probe.shape == PayShape::PayeeHalf {
+            partner = to;
+        }
         // 支付阶段 1 「支付计算前」 on the command total, before its
         // `effect` window (HOST-03). Hook-only; the writes fold into the
         // declaration `effect` sees.
@@ -5492,10 +5520,13 @@ impl PlayCtx<'_> {
         )?;
         total = t.value;
         probe.amount = total;
-        if t.target >= 0 {
-            to = Some(t.target as usize);
-        }
         Self::fold_pay_payload(&mut probe, &t, &mut rent, &mut fixed);
+        // Capture the half victim from the declaration's payee *before* the
+        // target rewrite clears `to` (the order `money_inner` uses).
+        if partner.is_none() && probe.shape == PayShape::PayeeHalf {
+            partner = to;
+        }
+        to = (t.target >= 0).then_some(t.target as usize);
         let t = raise!(
             self,
             "effect",
@@ -5515,14 +5546,17 @@ impl PlayCtx<'_> {
             }],
         )?;
         Self::fold_pay_payload(&mut probe, &t, &mut rent, &mut fixed);
+        // As above: the half victim comes from the declared payee before the
+        // target rewrite clears `to`.
+        if partner.is_none() && probe.shape == PayShape::PayeeHalf {
+            partner = to;
+        }
         if t.is_cancelled() || !t.settles_for(side as i32) {
             return Ok(None);
         }
         total = t.value;
         probe.amount = total;
-        if t.target >= 0 {
-            to = Some(t.target as usize);
-        }
+        to = (t.target >= 0).then_some(t.target as usize);
         // A `Fixed` write at the total is the card's own figure: the combined
         // stages are skipped, exactly as a `Fixed` leg skips its chain.
         let shaped = if fixed {
@@ -5547,9 +5581,25 @@ impl PlayCtx<'_> {
         // divides. An untouched total is the base figure and remains as-is (the
         // per-share formula still CeilTo-10s each share -- that share rounding
         // is the book's printed 「向上取整10」, not this rule).
-        Ok(shaped
+        let shaped = shaped
             .map(|s| if s != total { ceil10_money(s) } else { s })
-            .filter(|&s| s > 0))
+            .filter(|&s| s > 0);
+        // Whatever the total's windows wrote (target / kind / shape) is the
+        // declaration every following leg carries, so a [反击] answered here
+        // holds for the split as a whole instead of being lost with the probe.
+        if shaped.is_some() {
+            if partner.is_none() && probe.shape == PayShape::PayeeHalf {
+                partner = to;
+            }
+            self.pay_split_decl = Some(SplitDecl {
+                to,
+                partner,
+                kind: probe.kind,
+                rent: probe.rent,
+                shape: probe.shape,
+            });
+        }
+        Ok(shaped)
     }
 
     /// Emit the money log line for one settled payment.

@@ -1,14 +1,16 @@
+//! and walk from 流星堂 past that many unowned buyable tiles, buying for free.
 //!
 //! 规则书（docs/rulebook/cards.json, id `PPP:迷宫般的仓库`）:
 //! > 迷宫般的仓库：
-//! > 位于“流星堂”前后5格内时，可打出此卡，投掷1d10，从“流星堂”开始移动直到[经过]投掷结果对应数量的无主可购买地，视为你的主要移动且本回合购买格子不[消耗]资金，如果购买则拆除那个格子上的所有房屋。如果[经过]“流星堂”则[强制停下]且[消耗]6000资金
+//! > 位于“流星堂”前后5格内时：可打出此卡，[投掷]1d10。从“流星堂”开始移动，直到[经过]此次[投掷]结果对应数量的无主可购买地。此次移动视为你的[主要移动]。
+//! > 本回合购买格子不[消耗]资金；若购买，拆除该格子上的所有房屋。
+//! > 若[经过]“流星堂”，则[强制停下]，并[消耗]6000资金。
 //!
-//! and walk from 流星堂 past that many unowned buyable tiles, buying for free.
 
 use bandori_std::ctx::{self, trigger};
 use card_sdk::abi::{roll_source, FilterKind, RollPurpose};
 use card_sdk::CardText;
-use card_sdk::{key, CardDef, DealValue, Filter, Msg, On};
+use card_sdk::{key, para, sec, CardDef, DealValue, Filter, Msg, On};
 
 pub const MAZE_WAREHOUSE: CardDef = CardDef::new(
     "PPP:迷宫般的仓库",
@@ -24,7 +26,7 @@ pub const MAZE_WAREHOUSE: CardDef = CardDef::new(
         .name(r#"迷宫般的仓库"#)
         .raw_name(r#"迷宫般的仓库"#)
         .tags(&[])
-        .text(CardText::para(r#"位于“流星堂”前后5格内时，可打出此卡，投掷1d10，从“流星堂”开始移动直到[经过]投掷结果对应数量的无主可购买地，视为你的主要移动且本回合购买格子不[消耗]资金，如果购买则拆除那个格子上的所有房屋。如果[经过]“流星堂”则[强制停下]且[消耗]6000资金"#))
+        .text(CardText::of(&[sec(r#""#, &[para(r#"位于“流星堂”前后5格内时：可打出此卡，[投掷]1d10。从“流星堂”开始移动，直到[经过]此次[投掷]结果对应数量的无主可购买地。此次移动视为你的[主要移动]。"#), para(r#"本回合购买格子不[消耗]资金；若购买，拆除该格子上的所有房屋。"#), para(r#"若[经过]“流星堂”，则[强制停下]，并[消耗]6000资金。"#)])]))
         // sheet cell B10
         .fields(&[("group", r#"Poppin' Party"#), ("owner", "")]));
 

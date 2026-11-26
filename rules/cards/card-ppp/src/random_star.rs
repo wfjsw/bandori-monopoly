@@ -1,16 +1,18 @@
+//! the card stays in play; the 流星堂 stop is live on the `PassTile` hook.
 //!
 //! 规则书（docs/rulebook/cards.json, id `PPP:仓库里的Random Star`）:
 //! > 仓库里的Random Star：
 //!
-//! > （1）将此卡放置自身场上并将弃牌堆和手牌洗入卡组，然后将一张“拍卖撤下来了”放置在卡组底端
+//! > （1）依次进行以下操作：
+//! > 1. 将此卡放置在自身场上，并将弃卡区和手牌洗入卡组。
+//! > 2. 将1张“拍卖撤下来了”放置在卡组底端。
 //!
-//! > （2）[经过]“流星堂”时可使用2星星贴纸在“流星堂”强制停下并[结算]
+//! > （2）[经过]“流星堂”时：可使用2个[星星贴纸]，在“流星堂”[强制停下]并[结算]。
 //!
-//! the card stays in play; the 流星堂 stop is live on the `PassTile` hook.
 
 use bandori_std::ctx;
 use card_sdk::abi::ActionKind;
-use card_sdk::{it, CardText};
+use card_sdk::{it, it_sub, items, CardText};
 use card_sdk::{key, Action, CardDef, Msg, On};
 
 pub const RANDOM_STAR: CardDef = CardDef::new(
@@ -25,10 +27,7 @@ pub const RANDOM_STAR: CardDef = CardDef::new(
         .name(r#"仓库里的Random Star"#)
         .raw_name(r#"仓库里的Random Star"#)
         .tags(&[])
-        .text(CardText::items(&[
-            it(r#"将此卡放置自身场上并将弃牌堆和手牌洗入卡组，然后将一张“拍卖撤下来了”放置在卡组底端"#),
-            it(r#"[经过]“流星堂”时可使用2星星贴纸在“流星堂”强制停下并[结算]"#),
-        ]))
+        .text(CardText::items(&[it_sub(r#"依次进行以下操作："#, &[r#"将此卡放置在自身场上，并将弃卡区和手牌洗入卡组。"#, r#"将1张“拍卖撤下来了”放置在卡组底端。"#]), it(r#"[经过]“流星堂”时：可使用2个[星星贴纸]，在“流星堂”[强制停下]并[结算]。"#)]))
         // sheet cell B12
         .fields(&[("group", r#"Poppin' Party"#), ("owner", "")]));
 

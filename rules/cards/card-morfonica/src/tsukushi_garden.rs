@@ -1,22 +1,23 @@
+//! 1d6 to pick a player and move to the tile in front of them.
 //!
 //! 规则书（docs/rulebook/cards.json, id `Mor:（筑紫）迷茫的庭园`）:
-//! > （筑紫）迷茫的庭园：获得100资金。投掷1d6并根据结果传送到行动条上对应玩家前一格并视为主要移动（选中自己则前进一格，若玩家数量不足6则超出部分重新计算，ex：在五人局roll到6时，视为选中第一位玩家），可以选择是否触发结算。直到下个你的回合开始时，你无法被异常移动
+//! > （筑紫）迷茫的庭园：
+//! > 获得100资金。投掷1d6并根据结果传送到行动条上对应玩家前一格并视为主要移动（选中自己则前进一格，若玩家数量不足6则超出部分重新计算，ex：在五人局roll到6时，视为选中第一位玩家），可以选择是否触发结算。直到下个你的回合开始时，你无法被异常移动。
 //!
-//! 1d6 to pick a player and move to the tile in front of them.
 
 use bandori_std::ctx;
 use card_sdk::abi::{roll_source, RollPurpose};
 use card_sdk::CardText;
-use card_sdk::{key, CardDef, Msg, On};
+use card_sdk::{key, para, CardDef, Msg, On};
 
 pub const TSUKUSHI_GARDEN: CardDef = CardDef::new(
     "Mor:（筑紫）迷茫的庭园",
     &[On::Play("", None, tsukushi_garden)],
 ).meta(&card_sdk::meta::CardMeta::new()
         .name(r#"迷茫的庭园"#)
-        .raw_name(r#"（筑紫）迷茫的庭园"#)
+        .raw_name(r#"（二叶筑紫）迷茫的庭园"#)
         .tags(&[])
-        .text(CardText::para(r#"获得100资金。投掷1d6并根据结果传送到行动条上对应玩家前一格并视为主要移动（选中自己则前进一格，若玩家数量不足6则超出部分重新计算，ex：在五人局roll到6时，视为选中第一位玩家），可以选择是否触发结算。直到下个你的回合开始时，你无法被异常移动"#))
+        .text(CardText::para(r#"获得100资金。投掷1d6并根据结果传送到行动条上对应玩家前一格并视为主要移动（选中自己则前进一格，若玩家数量不足6则超出部分重新计算，ex：在五人局roll到6时，视为选中第一位玩家），可以选择是否触发结算。直到下个你的回合开始时，你无法被异常移动。"#))
         // sheet cell G16
         .fields(&[("group", r#"Morfonica"#), ("owner", r#"二叶筑紫"#)]));
 

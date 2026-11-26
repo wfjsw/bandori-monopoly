@@ -1,21 +1,21 @@
+//! Both flip clauses ride the flip hooks: `cardFaceFlipped` (before the face
 //!
 //! 规则书（docs/rulebook/cards.json, id `Mujica:（喵梦）`）:
-//! > （喵梦）
-//! >
-//! > （1）将此卡放置于场上
+//! > （喵梦）：
+//!
+//! > （1）将此卡放置于场上。
 //!
 //! > （2）
-//! > 1. 每当此卡将从正面翻至背面时可选择失去2个火罐。
-//! > 2. 每当此卡将从背面翻至正面时此卡拥有者抽一张卡。
+//! > 1. 每当此卡将从正面翻至背面时：可选择使用2个[火罐]。
+//! > 2. 每当此卡将从背面翻至正面时：此卡的[拥有者]抽1张卡。
 //!
-//! Both flip clauses ride the flip hooks: `cardFaceFlipped` (before the face
 //! changes, where the old face is still readable) offers the fire-pot cost, and
 //! `cardFaceFlippedAfter` draws on a turn to the face-up side. The card's own
 //! hooks run while it is face-down (the subject pass has no face guard).
 
 use card_sdk::abi::ZoneChangeCause;
 use card_sdk::{ctx, key, Action, CardDef, Msg, On};
-use card_sdk::{it, it_sub, CardText};
+use card_sdk::{it, it_sub, items, CardText};
 
 const ID: &str = "Mujica:（喵梦）";
 
@@ -31,19 +31,10 @@ pub const NYAMU_CARD: CardDef = CardDef::new(
 )
 .meta(
     &card_sdk::meta::CardMeta::new()
-        .name("")
-        .raw_name(r#"（喵梦）"#)
+        .name(r#""#)
+        .raw_name(r#"（祐天寺若麦）unnamed"#)
         .tags(&[])
-        .text(CardText::items(&[
-            it(r#"将此卡放置于场上"#),
-            it_sub(
-                r#""#,
-                &[
-                    r#"每当此卡将从正面翻至背面时可选择失去2个火罐。"#,
-                    r#"每当此卡将从背面翻至正面时此卡拥有者抽一张卡。"#,
-                ],
-            ),
-        ]))
+        .text(CardText::items(&[it(r#"将此卡放置于场上。"#), it_sub(r#""#, &[r#"每当此卡将从正面翻至背面时：可选择使用2个[火罐]。"#, r#"每当此卡将从背面翻至正面时：此卡的[拥有者]抽1张卡。"#])]))
         // sheet cell J15
         .fields(&[("group", r#"Ave Mujica"#), ("owner", r#"祐天寺若麦"#)]),
 );

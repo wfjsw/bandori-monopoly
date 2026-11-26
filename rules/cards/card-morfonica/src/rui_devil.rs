@@ -1,13 +1,14 @@
 //! `Mor:（Rui）正论恶魔`: pay 100 to every other player,
 //!
 //! 规则书（docs/rulebook/cards.json, id `Mor:（Rui）正论恶魔`）:
-//! > （Rui）正论恶魔：向全场玩家支付100资金（该数值不可被任何效果影响），之后全场玩家向你支付300资金（可被影响）。在此卡结算过程中，每当你的技能被触发后，立即将x设置为5
+//! > （Rui）正论恶魔：
+//! > 向全场玩家支付100资金（该数值不可被任何效果影响），之后全场玩家向你支付300资金（可被影响）。在此卡结算过程中，每当你的技能被触发后，立即将x设置为5。
 //!
 //! Sheet 2026-10-06 新卡组卡 G15: 「每当…立即将x设置为5」 (was 「若你的技能
 //! 被触发，将x设置为5」) -- every skill fire during the resolution, immediately.
 
 use card_sdk::CardText;
-use card_sdk::{ctx, key, Action, CardDef, Msg, On};
+use card_sdk::{ctx, key, para, Action, CardDef, Msg, On};
 
 pub const RUI_DEVIL: CardDef = CardDef::new(
     "Mor:（Rui）正论恶魔",
@@ -29,9 +30,9 @@ pub const RUI_DEVIL: CardDef = CardDef::new(
     ],
 ).meta(&card_sdk::meta::CardMeta::new()
         .name(r#"正论恶魔"#)
-        .raw_name(r#"（Rui）正论恶魔"#)
+        .raw_name(r#"（八潮瑠唯）正论恶魔"#)
         .tags(&[])
-        .text(CardText::para(r#"向全场玩家支付100资金（该数值不可被任何效果影响），之后全场玩家向你支付300资金（可被影响）。在此卡结算过程中，每当你的技能被触发后，立即将x设置为5"#))
+        .text(CardText::para(r#"向全场玩家支付100资金（该数值不可被任何效果影响），之后全场玩家向你支付300资金（可被影响）。在此卡结算过程中，每当你的技能被触发后，立即将x设置为5。"#))
         // sheet cell G15
         .fields(&[("group", r#"Morfonica"#), ("owner", r#"八潮瑠唯"#)]));
 

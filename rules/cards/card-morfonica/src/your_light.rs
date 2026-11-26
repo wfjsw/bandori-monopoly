@@ -1,12 +1,12 @@
+//! move at 月之森女子学院 (without triggering its tile).
 //!
 //! 规则书（docs/rulebook/cards.json, id `Mor:你的光芒将照亮前路`）:
 //! > 你的光芒将照亮前路：
 //! > 当你在“月之森女子学院”格子前后20格之内，可以从手牌中打出此卡，此次移动以“月之森女子学院”为起点（不触发起点地块效果）。
 //!
-//! move at 月之森女子学院 (without triggering its tile).
 
 use card_sdk::CardText;
-use card_sdk::{ctx, key, CardDef, Msg, On};
+use card_sdk::{ctx, key, para, CardDef, Msg, On};
 
 pub const YOUR_LIGHT: CardDef = CardDef::new(
     "Mor:你的光芒将照亮前路",

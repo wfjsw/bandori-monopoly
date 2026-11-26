@@ -1,16 +1,16 @@
+//! mortgaged deeds with another player's same-colour mortgaged deed.
 //!
 //! 规则书（docs/rulebook/cards.json, id `Mor:（toko）`）:
 //! > （toko）：
-//! > 选择一个自己被抵押的地契和任意玩家颜色相同的被抵押地契交换，地契+房屋价格更低的玩家向更高的玩家支付差价，互换后将你得到的地契免费赎回
+//! > 选择一个自己被抵押的地契和任意玩家颜色相同的被抵押地契交换，地契+房屋价格更低的玩家向更高的玩家支付差价，互换后将你得到的地契免费赎回。
 //!
-//! mortgaged deeds with another player's same-colour mortgaged deed.
 
 use alloc::vec::Vec;
 
 use bandori_std::ctx::is_color;
 use card_sdk::abi::{mark, prop, MarkFilter};
 use card_sdk::CardText;
-use card_sdk::{ctx, key, CardDef, Msg, On};
+use card_sdk::{ctx, key, para, CardDef, Msg, On};
 
 pub const TOKO_SWAP: CardDef =
     CardDef::new("Mor:（toko）", &[On::Play("", Some(cant_play), toko_swap)])
@@ -19,10 +19,10 @@ pub const TOKO_SWAP: CardDef =
     // clause 1 applies.
     .props(&[(prop::DESIGNATES, 1)])
     .meta(&card_sdk::meta::CardMeta::new()
-        .name("")
-        .raw_name(r#"（toko）"#)
+        .name(r#""#)
+        .raw_name(r#"（桐谷透子）unnamed"#)
         .tags(&[])
-        .text(CardText::para(r#"选择一个自己被抵押的地契和任意玩家颜色相同的被抵押地契交换，地契+房屋价格更低的玩家向更高的玩家支付差价，互换后将你得到的地契免费赎回"#))
+        .text(CardText::para(r#"选择一个自己被抵押的地契和任意玩家颜色相同的被抵押地契交换，地契+房屋价格更低的玩家向更高的玩家支付差价，互换后将你得到的地契免费赎回。"#))
         // sheet cell G8
         .fields(&[("group", r#"Morfonica"#), ("owner", r#"桐谷透子"#)]));
 

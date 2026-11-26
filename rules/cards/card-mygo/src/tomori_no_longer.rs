@@ -1,12 +1,12 @@
+//! Sheet 2026-10-06 新卡组卡 I3 adds the refill clause (2): a decrease that is
 //!
 //! 规则书（docs/rulebook/cards.json, id `MyGO:（灯）不再迷茫`）:
 //! > （灯）不再迷茫：
-//! >
-//! > （1）获得两层仅能被自然流失效果移除的[停留]，将此卡放置于场上并将所有手卡置入弃牌堆，在此卡上放置X+1个[奇迹水晶]，X为你弃置的手牌数
-//! > （2）你使用角色技能时可移除此卡上的一个[奇迹水晶]以代替此次技能的火罐消耗，当此卡上的水晶由于此效果以外的原因减少时，此卡立刻获得等同于减少量的[奇迹水晶]
-//! > （3）此卡上的奇迹水晶耗尽后，[移除]此卡
 //!
-//! Sheet 2026-10-06 新卡组卡 I3 adds the refill clause (2): a decrease that is
+//! > （1）获得两层仅能被自然流失效果移除的[停留]，将此卡放置于场上并将所有手卡置入弃卡区，在此卡上放置X+1个[奇迹水晶]，X为你弃置的手牌数 
+//! > （2）你使用角色技能时可使用此卡上的1个[奇迹水晶]以代替此次技能的[火罐]使用，当此卡上的水晶由于此效果以外的原因减少时，此卡立刻获得等同于减少量的[奇迹水晶] 
+//! > （3）此卡上的奇迹水晶耗尽后，[移除]此卡。
+//!
 //! not the skill-cost substitution is refunded immediately.
 
 use alloc::vec::Vec;
@@ -15,7 +15,7 @@ use alloc::string::String;
 use bandori_std::ctx::{self, trigger, CardPile};
 use bandori_std::kind::Actions;
 use card_sdk::abi::ActionKind;
-use card_sdk::{it, CardText};
+use card_sdk::{it, items, CardText};
 use card_sdk::{key, Action, CardDef, Msg, On};
 
 pub const TOMORI_NO_LONGER: CardDef = CardDef::new(
@@ -58,13 +58,9 @@ pub const TOMORI_NO_LONGER: CardDef = CardDef::new(
     ],
 ).meta(&card_sdk::meta::CardMeta::new()
         .name(r#"不再迷茫"#)
-        .raw_name(r#"（灯）不再迷茫"#)
+        .raw_name(r#"（高松灯）不再迷茫"#)
         .tags(&[])
-        .text(CardText::items(&[
-            it(r#"获得两层仅能被自然流失效果移除的[停留]，将此卡放置于场上并将所有手卡置入弃牌堆，在此卡上放置X+1个[奇迹水晶]，X为你弃置的手牌数"#),
-            it(r#"你使用角色技能时可移除此卡上的一个[奇迹水晶]以代替此次技能的火罐消耗，当此卡上的水晶由于此效果以外的原因减少时，此卡立刻获得等同于减少量的[奇迹水晶]"#),
-            it(r#"此卡上的奇迹水晶耗尽后，[移除]此卡"#),
-        ]))
+        .text(CardText::items(&[it(r#"获得两层仅能被自然流失效果移除的[停留]，将此卡放置于场上并将所有手卡置入弃卡区，在此卡上放置X+1个[奇迹水晶]，X为你弃置的手牌数 （2）你使用角色技能时可使用此卡上的1个[奇迹水晶]以代替此次技能的[火罐]使用，当此卡上的水晶由于此效果以外的原因减少时，此卡立刻获得等同于减少量的[奇迹水晶] （3）此卡上的奇迹水晶耗尽后，[移除]此卡。"#)]))
         // sheet cell I3
         .fields(&[("group", r#"MyGO!!!!!"#), ("owner", r#"高松灯"#)]));
 

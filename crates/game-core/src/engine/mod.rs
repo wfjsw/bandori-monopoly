@@ -54,7 +54,7 @@ pub use journal::{
 pub use move_ctx::{MoveCtx, MoveKind, Roll};
 pub use play::purchase;
 pub use play::MAX_SETTLE_DEPTH;
-pub use play::{Paid, Pay, PayEvent, PayFactorScope, PayKind, PayShape};
+pub use play::{Paid, Pay, PayEvent, PayFactorScope, PayKind, PayShape, SplitDecl};
 pub use rules::{
     CardRules, Dest, Dir, Effect, ExclusiveAsk, Gate, Negation, Payee, RollSource, SettleFacts,
     StubRules, TileTextDecl, Trigger, TriggerBuy, TriggerMove, TriggerPay,

@@ -306,6 +306,51 @@ fn budokan_x_ceil10_per_alive_others() {
 }
 
 // 规则书: 「[指定][使用者]以外的所有玩家，被[指定]的玩家[支付][使用者]X资金」
+// 规则书: 「[使用者]以外的所有[存活]玩家[分摊]向[使用者][支付]2000资金；
+// 无法付款的玩家（包括处于[除外]状态的玩家）仍计入分摊，其付款条目在分摊后
+// 取消，其他玩家的份额不变」
+//
+// An [除外] payer cannot pay (rulebook 50), but stays alive: it keeps its slot
+// in the divisor, its own leg cancels, and the others' 670 stands.
+#[test]
+fn budokan_excluded_payer_stays_in_the_divisor() {
+    let mut t = Table::vanilla(4);
+    t.set_state(1, "exile", 1);
+    t.give_play(0, "通用:登上武道馆").unwrap();
+    skip_all(&mut t);
+    // 3 alive others (P1 still counts): ceil10(2000/3) = 670.
+    assert_eq!(t.money(1), 10_000, "the excluded seat pays nothing");
+    assert_eq!(t.money(2), 10_000 - 670, "P2's share is untouched");
+    assert_eq!(t.money(3), 10_000 - 670, "P3's share is untouched");
+    assert_eq!(t.money(0), 10_000 + 670 * 2, "no redistribution to P0");
+}
+
+// 规则书: the printed 2000 is the **command total**. The 「分摊前」 stage shapes
+// it once (TEST:totalAdd +100 -> 2100) and only then divides:
+// ceil10(2100/3) = 700 each. A per-share +100 on the 670 share would give 710.
+#[test]
+fn budokan_pre_split_add_shapes_the_total_not_each_leg() {
+    let mut t = Table::vanilla(4);
+    t.place_raw(0, "TEST:totalAdd");
+    t.give_play(0, "通用:登上武道馆").unwrap();
+    skip_all(&mut t);
+    for who in 1..4 {
+        assert_eq!(t.money(who), 10_000 - 700, "P{who} pays the shaped share 700");
+    }
+    assert_eq!(t.money(0), 10_000 + 700 * 3, "the user receives 2100");
+}
+
+// 规则书: 「若没有其他[存活]玩家，则[使用者][获得]2000资金」 -- an ordinary
+// print, not a [分摊].
+#[test]
+fn budokan_alone_prints_2000() {
+    let mut t = Table::vanilla(2);
+    t.m.world_mut().st.players[1].bankrupt = true;
+    t.give_play(0, "通用:登上武道馆").unwrap();
+    assert_eq!(t.money(0), 12_000);
+    assert_eq!(t.money(1), 10_000, "the out seat pays nothing");
+}
+
 #[test]
 fn budokan_targets_everyone_else() {
     let mut t = Table::vanilla(3);
@@ -844,6 +889,47 @@ fn cp_settle_spends_the_src_cards_on_card_cp_and_pays_the_settler() {
     );
     assert!(t.marks_on(5).is_empty(), "tile mark gone: {:?}", t.marks());
     assert!(t.on_field(0, "通用:该清CP了"), "the card stays at 5");
+}
+
+// 规则书: 「任一处不足1个时，不使用任一处资源，也不取得该笔资金」 -- a tile
+// [CP点] with no on-card [CP点] on the attached card spends nothing: the tile
+// mark stays and no 800 is paid.
+#[test]
+fn cp_settle_without_on_card_cp_spends_nothing() {
+    let mut t = Table::vanilla(2);
+    t.give_play(0, "通用:该清CP了").unwrap();
+    t.answer_tile(0, 5).unwrap();
+    t.set_cp_on_card(0, "通用:该清CP了", 0);
+    t.begin_turn(0);
+    t.set_pos(0, 4);
+    t.dice(&[1]);
+    t.roll(0).unwrap();
+    skip_all(&mut t);
+    assert_eq!(t.money(0), 10_000, "no 800");
+    assert_eq!(t.marks_on(5).len(), 1, "the tile [CP点] stays");
+    assert_eq!(t.cp_on_card(0, "通用:该清CP了"), Some(0));
+}
+
+// 规则书: 「任一处不足1个时，不使用任一处资源，也不取得该笔资金」 -- on-card
+// [CP点] on a tile that carries no [CP点]: the on-card stock stays and no 800
+// is paid.
+#[test]
+fn cp_settle_without_tile_cp_spends_nothing() {
+    let mut t = Table::vanilla(2);
+    t.give_play(0, "通用:该清CP了").unwrap();
+    t.answer_tile(0, 5).unwrap();
+    t.m.world_mut().st.marks.clear();
+    t.begin_turn(0);
+    t.set_pos(0, 4);
+    t.dice(&[1]);
+    t.roll(0).unwrap();
+    skip_all(&mut t);
+    assert_eq!(t.money(0), 10_000, "no 800");
+    assert_eq!(
+        t.cp_on_card(0, "通用:该清CP了"),
+        Some(6),
+        "the on-card [CP点] stays"
+    );
 }
 
 // 规则书: 「（1）[使用者]使用此卡后的下2回合开始时，此卡在格子上添加的[CP点]及其产物将在相邻的没有[CP点]的格子添加1个[CP点]」

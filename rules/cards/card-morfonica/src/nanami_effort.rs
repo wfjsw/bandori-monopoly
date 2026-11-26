@@ -1,18 +1,18 @@
+//! x character tokens for one of three effects.
 //!
 //! 规则书（docs/rulebook/cards.json, id `Mor:（NNM）稍微努力了一下`）:
 //! > （NNM）稍微努力了一下：
-//! > 弃置手中x枚角色标记，发动以下效果中的一个：
+//! > 移除自己持有的x个[模仿标记]，发动以下效果中的一个：
 //!
-//! > （1）抽x张卡（可超过上限），回合结束后将手牌弃置到五张
+//! > （1）抽x张卡（可超过上限），回合结束后将手牌弃置到五张。
 //!
-//! > （2）获得x次经过CiRCLE时的资金奖励
+//! > （2）获得x次经过CiRCLE时的资金奖励。
 //!
-//! > （3）将此卡放置在场上并放置x个奇迹水晶，你可以移除一个奇迹水晶视为发动你的
-//! > （2）技能，此次技能不受数量或轮数限制
+//! > （3）将此卡放置在场上并放置x个奇迹水晶，你可以使用1个[奇迹水晶]视为发动你的[主动]
+//! > （1）技能，此次技能不受数量或轮数限制。
 //!
-//! > （4）当奇迹水晶耗尽时，将此卡置入弃牌堆
+//! > （4）当奇迹水晶耗尽时，将此卡置入弃卡区。
 //!
-//! x character tokens for one of three effects.
 
 use bandori_std::ctx::{self, trigger, CardPile};
 use card_sdk::abi::REWARD_MONEY;
@@ -24,8 +24,11 @@ use card_sdk::{key, Action, CardDef, Msg, On};
 const CIRCLE_MONEY: i32 = 2000;
 
 const ID: &str = "Mor:（NNM）稍微努力了一下";
-/// The counter names 「角色标记:*」.
-const TOKEN_PREFIX: &str = "角色标记:";
+/// The counter names 「模仿标记:*」.
+const TOKEN_PREFIX: &str = "模仿标记:";
+/// The pre-rename prefix. Replays and saves still hold `角色标记:*` counters,
+/// so every read takes either; spends write back to the name they read.
+const LEGACY_TOKEN_PREFIX: &str = "角色标记:";
 
 pub const NANAMI_EFFORT: CardDef = CardDef::new(
     "Mor:（NNM）稍微努力了一下",
@@ -41,26 +44,25 @@ pub const NANAMI_EFFORT: CardDef = CardDef::new(
     ],
 ).meta(&card_sdk::meta::CardMeta::new()
         .name(r#"稍微努力了一下"#)
-        .raw_name(r#"（NNM）稍微努力了一下"#)
+        .raw_name(r#"（广町七深）稍微努力了一下"#)
         .tags(&[])
-        .text(CardText::of(&[
-            sec("", &[
-                para(r#"弃置手中x枚角色标记，发动以下效果中的一个："#),
-                items(&[
-                    it(r#"抽x张卡（可超过上限），回合结束后将手牌弃置到五张"#),
-                    it(r#"获得x次经过CiRCLE时的资金奖励"#),
-                    it("将此卡放置在场上并放置x个奇迹水晶，你可以移除一个奇迹水晶视为发动你的\n（2）技能，此次技能不受数量或轮数限制"),
-                    it(r#"当奇迹水晶耗尽时，将此卡置入弃牌堆"#),
-                ]),
-            ]),
-        ]))
+        .text(CardText::of(&[sec(r#""#, &[para(r#"移除自己持有的x个[模仿标记]，发动以下效果中的一个："#), items(&[it(r#"抽x张卡（可超过上限），回合结束后将手牌弃置到五张。"#), it(r#"获得x次经过CiRCLE时的资金奖励。"#), it(r#"将此卡放置在场上并放置x个奇迹水晶，你可以使用1个[奇迹水晶]视为发动你的[主动]（1）技能，此次技能不受数量或轮数限制。"#), it(r#"当奇迹水晶耗尽时，将此卡置入弃卡区。"#)])])]))
         // sheet cell G7
         .fields(&[("group", r#"Morfonica"#), ("owner", r#"广町七深"#)]));
 
-/// The x-标记 body needs at least one 「角色标记:*」; everything (3) later needs
-/// is checked inline, where it is asked.
+/// Held mark names under both prefixes (new convention first, legacy after):
+/// a save made before the rename still lists `角色标记:*` and must stay
+/// spendable.
+fn held_tokens(player_id: i32) -> alloc::vec::Vec<card_sdk::ctx::NameId> {
+    let mut names = ctx::held_names(player_id, TOKEN_PREFIX);
+    names.extend(ctx::held_names(player_id, LEGACY_TOKEN_PREFIX));
+    names
+}
+
+/// The x-标记 body needs at least one 「模仿标记:*」 (or a legacy `角色标记:*`);
+/// everything (3) later needs is checked inline, where it is asked.
 fn cant_play(player_id: i32) -> Option<Msg> {
-    let names = ctx::held_names(player_id, TOKEN_PREFIX);
+    let names = held_tokens(player_id);
     if names
         .iter()
         .any(|n| ctx::held_count(player_id, n.as_str()) > 0)
@@ -72,9 +74,10 @@ fn cant_play(player_id: i32) -> Option<Msg> {
 
 fn nanami_effort(player_id: i32) -> card_sdk::Asked {
     // 规则书: 「弃置手中x枚角色标记，发动以下效果中的一个」 -- the tokens are the
-    // `角色标记:*` counters; x is chosen from what the player actually holds, then
-    // they are spent and one effect is picked.
-    let names = ctx::held_names(player_id, TOKEN_PREFIX);
+    // `模仿标记:*` counters (legacy `角色标记:*` still accepted); x is chosen
+    // from what the player actually holds, then they are spent and one effect
+    // is picked.
+    let names = held_tokens(player_id);
     let total: i32 = names
         .iter()
         .map(|n| ctx::held_count_id(player_id, *n))

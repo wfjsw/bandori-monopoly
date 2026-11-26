@@ -1,18 +1,21 @@
+//! an unowned deed and must buy it; a [特] that revives it as a fake Live House.
 //!
 //! 规则书（docs/rulebook/cards.json, id `RAS:游击演出`）:
-//! > 游击演出：\[特]：
-//! > 此卡进入弃卡区的回合结束时，如果本回合的[结算]向其他玩家支付了至少1000资金且你不拥有任何可盖房的live house格子且场上已不存在可购买的此类格子，则可选择将此卡置于场上，指定你拥有的一个最贵的地契，使其对你视为live house格子。
+//! > 游击演出：
+//! > [特]：
+//! > 此卡进入弃卡区的回合结束时，如果本回合的[结算]向其他玩家[支付]了至少1000资金且你不拥有任何可盖房的Live House格子且场上已不存在可购买的此类格子，则可选择将此卡置于场上，[指定]你拥有的1张最贵地契，使其对你视为Live House格子。
 //! > [手]：
-//! > [反击]当你经过属于其他玩家的livehouse格子后，且当次[结算]时被其他玩家的格子收取资金后：传送至任意无主可购买的格子并[结算]，且必须购买。
+//! > [反击]当你[经过]属于其他玩家的Live House格子后，且当次[结算]时被其他玩家的格子收取资金后：依次进行以下操作：
+//! > 1. [传送]至任意无主可购买的格子。
+//! > 2. 进行[结算]，且必须购买。
 //!
-//! an unowned deed and must buy it; a [特] that revives it as a fake Live House.
 
 use alloc::vec::Vec;
 
 use bandori_std::ctx::{self, trigger};
 use card_sdk::abi::{ActionKind, ChainKind, TriggerKind};
 use card_sdk::{key, Action, CardDef, Msg, On};
-use card_sdk::{para, sec, CardText};
+use card_sdk::{para, sec, steps, CardText};
 
 pub const GUERRILLA: CardDef = CardDef::new(
     "RAS:游击演出",
@@ -37,14 +40,7 @@ pub const GUERRILLA: CardDef = CardDef::new(
         .name(r#"游击演出"#)
         .raw_name(r#"游击演出"#)
         .tags(&[r#"手"#, r#"反击"#, r#"特"#])
-        .text(CardText::of(&[
-            sec(r#"[特]："#, &[
-                para(r#"此卡进入弃卡区的回合结束时，如果本回合的[结算]向其他玩家支付了至少1000资金且你不拥有任何可盖房的live house格子且场上已不存在可购买的此类格子，则可选择将此卡置于场上，指定你拥有的一个最贵的地契，使其对你视为live house格子。"#),
-            ]),
-            sec(r#"[手]："#, &[
-                para(r#"[反击]当你经过属于其他玩家的livehouse格子后，且当次[结算]时被其他玩家的格子收取资金后：传送至任意无主可购买的格子并[结算]，且必须购买。"#),
-            ]),
-        ]))
+        .text(CardText::of(&[sec(r#"[特]："#, &[para(r#"此卡进入弃卡区的回合结束时，如果本回合的[结算]向其他玩家[支付]了至少1000资金且你不拥有任何可盖房的Live House格子且场上已不存在可购买的此类格子，则可选择将此卡置于场上，[指定]你拥有的1张最贵地契，使其对你视为Live House格子。"#)]), sec(r#"[手]："#, &[para(r#"[反击]当你[经过]属于其他玩家的Live House格子后，且当次[结算]时被其他玩家的格子收取资金后：依次进行以下操作："#), steps(&[r#"[传送]至任意无主可购买的格子。"#, r#"进行[结算]，且必须购买。"#])])]))
         // sheet cell H9
         .fields(&[("group", r#"RAISE A SUILEN"#), ("owner", "")]));
 

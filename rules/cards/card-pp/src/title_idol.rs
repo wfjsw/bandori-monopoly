@@ -1,12 +1,12 @@
+//! crystals, then +1 (or +2 with [共鸣]) on every non-immune field card whose
 //!
 //! 规则书（docs/rulebook/cards.json, id `PP:TITLE IDOL`）:
 //! > TITLE IDOL：
 //! > [手]：
-//! > 依次进行以下效果：
+//! > 依次进行以下操作：
 //! > 1. 为[使用者]的Pastel✽Palettes乐队卡添加2个[奇迹水晶]；
 //! > 2. 为[使用者]所有效果包含[奇迹水晶]的卡添加1个[奇迹水晶]，如果[共鸣]则改为添加2个。
 //!
-//! crystals, then +1 (or +2 with [共鸣]) on every non-immune field card whose
 //! text mentions 「奇迹水晶」.
 
 use bandori_std::counter;
@@ -22,15 +22,7 @@ pub const TITLE_IDOL: CardDef =
                 .name(r#"TITLE IDOL"#)
                 .raw_name(r#"TITLE IDOL"#)
                 .tags(&[r#"手"#])
-                .text(CardText::of(&[
-                    sec(r#"[手]："#, &[
-                        para(r#"依次进行以下效果："#),
-                        steps(&[
-                            r#"为[使用者]的Pastel✽Palettes乐队卡添加2个[奇迹水晶]；"#,
-                            r#"为[使用者]所有效果包含[奇迹水晶]的卡添加1个[奇迹水晶]，如果[共鸣]则改为添加2个。"#,
-                        ]),
-                    ]),
-                ]))
+                .text(CardText::of(&[sec(r#"[手]："#, &[para(r#"依次进行以下操作："#), steps(&[r#"为[使用者]的Pastel✽Palettes乐队卡添加2个[奇迹水晶]；"#, r#"为[使用者]所有效果包含[奇迹水晶]的卡添加1个[奇迹水晶]，如果[共鸣]则改为添加2个。"#])])]))
                 // sheet cell D11
                 .fields(&[("group", r#"Pastel✽Palettes"#), ("owner", "")]),
         );

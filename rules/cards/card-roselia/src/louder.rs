@@ -1,14 +1,14 @@
+//! The book never defines 价格基础乘数; the engine slot is the ring rent unit
 //!
 //! 规则书（docs/rulebook/cards.json, id `R:（ykn）louder`）:
 //! > （ykn）louder：
-//! >  每次打出此卡时使ring的价格基础乘数+5
+//! > 每次打出此卡时：使RiNG的价格基础乘数增加5。
 //!
-//! The book never defines 价格基础乘数; the engine slot is the ring rent unit
 //! (`rentUnitMult`, OPEN-RING-MULT).
 
 use bandori_std::ctx;
 use card_sdk::CardText;
-use card_sdk::{key, CardDef, Msg, On};
+use card_sdk::{key, para, CardDef, Msg, On};
 
 // 规则书: 「每次打出此卡时」 -- `On::Play` fires on every play, no gate.
 pub const LOUDER: CardDef = CardDef::new("R:（ykn）louder", &[On::Play("", None, louder)])
@@ -16,9 +16,9 @@ pub const LOUDER: CardDef = CardDef::new("R:（ykn）louder", &[On::Play("", Non
     .meta(
         &card_sdk::meta::CardMeta::new()
             .name(r#"louder"#)
-            .raw_name(r#"（ykn）louder"#)
+            .raw_name(r#"（凑友希那）louder"#)
             .tags(&[])
-            .text(CardText::para(r#"每次打出此卡时使ring的价格基础乘数+5"#))
+            .text(CardText::para(r#"每次打出此卡时：使RiNG的价格基础乘数增加5。"#))
             // sheet cell E2
             .fields(&[("group", r#"Roselia"#), ("owner", r#"凑友希那"#)]),
     );

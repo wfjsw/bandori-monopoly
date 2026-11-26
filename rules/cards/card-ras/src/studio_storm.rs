@@ -1,16 +1,17 @@
+//! placed on your Live House; CiRCLE passes charge it, a nearby settle spends it.
 //!
 //! 规则书（docs/rulebook/cards.json, id `RAS:练习室里的风暴`）:
 //! > 练习室里的风暴：
+//! > [资源]：此卡的[奇迹水晶]初始0，上限3。
 //!
-//! > （1）当你位于你拥有的livehouse格子上时可将此卡放置在当前格子上，每次[使用者]经过CiRCLE时为此卡放置一个[奇迹水晶]（初始0，上限3）
+//! > （1）你位于自己拥有的Live House格子上时：可将此卡放置在当前格子上。每次[使用者][经过]CiRCLE时，为此卡放置1个[奇迹水晶]。
 //!
-//! > （2）[使用者]以外的玩家在距此卡所在格子X个格子处[结算]时将此卡放入弃牌堆且对那个玩家进行一次相当于此卡所在格子普通[结算]的(4-X)/4倍价格的收费，此效果只有在X至少为1且小等于此卡[奇迹水晶]数量时可发动
+//! > （2）[使用者]以外的玩家在距此卡所在格子X格处[结算]时，若X至少为1且不大于此卡的[奇迹水晶]数量：将此卡放入弃卡区，并对那名玩家进行1次收费，金额为此卡所在格子普通[结算]价格的(4-X)/4倍。
 //!
-//! placed on your Live House; CiRCLE passes charge it, a nearby settle spends it.
 
 use bandori_std::ctx::{self, trigger};
 use card_sdk::abi::ActionKind;
-use card_sdk::{it, CardText};
+use card_sdk::{it, items, para, sec, CardText};
 use card_sdk::{key, Action, CardDef, Msg, On};
 
 pub const STUDIO_STORM: CardDef = CardDef::new(
@@ -29,10 +30,7 @@ pub const STUDIO_STORM: CardDef = CardDef::new(
         .name(r#"练习室里的风暴"#)
         .raw_name(r#"练习室里的风暴"#)
         .tags(&[])
-        .text(CardText::items(&[
-            it(r#"当你位于你拥有的livehouse格子上时可将此卡放置在当前格子上，每次[使用者]经过CiRCLE时为此卡放置一个[奇迹水晶]（初始0，上限3）"#),
-            it(r#"[使用者]以外的玩家在距此卡所在格子X个格子处[结算]时将此卡放入弃牌堆且对那个玩家进行一次相当于此卡所在格子普通[结算]的(4-X)/4倍价格的收费，此效果只有在X至少为1且小等于此卡[奇迹水晶]数量时可发动"#),
-        ]))
+        .text(CardText::of(&[sec(r#""#, &[para(r#"[资源]：此卡的[奇迹水晶]初始0，上限3。"#), items(&[it(r#"你位于自己拥有的Live House格子上时：可将此卡放置在当前格子上。每次[使用者][经过]CiRCLE时，为此卡放置1个[奇迹水晶]。"#), it(r#"[使用者]以外的玩家在距此卡所在格子X格处[结算]时，若X至少为1且不大于此卡的[奇迹水晶]数量：将此卡放入弃卡区，并对那名玩家进行1次收费，金额为此卡所在格子普通[结算]价格的(4-X)/4倍。"#)])])]))
         // sheet cell H8
         .fields(&[("group", r#"RAISE A SUILEN"#), ("owner", "")]));
 

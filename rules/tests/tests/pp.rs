@@ -11,6 +11,7 @@
 mod common;
 use common::*;
 
+use game_core::engine::CardRules;
 use game_core::msg::{Arg, Msg};
 
 const BAND_SKILL: &str = "skill:Pastel✽Palettes:与偶像一起";
@@ -2200,20 +2201,22 @@ fn dream_ahead_reduces_hand_limit() {
     assert_eq!(t.p(0).hand_limit(), Some(4));
 }
 
-/// 规则书: 「[持续]：[拥有者]不可使用任何Pastel✽Palettes角色的（2）技能。」(初次演出事故)
+/// 规则书: 「[持续]：[拥有者]不可使用…大和麻弥…的[主动]（1）技能，也不可使用
+/// 冰川日菜的[自动]（2）技能。」(初次演出事故) -- the new wording seals those two
+/// (2)s, not the whole band: 丸山彩's (2) stays usable, so an aya prompt is fine.
 #[test]
 fn accident_blocks_pp_skill_2() {
     let mut t = Table::vanilla(2);
     t.set_character_raw(0, "丸山彩");
     t.place_raw(0, "skill:丸山彩:With~");
     // Setup fix: `place_raw` skips the play body, which is what writes the
-    // `skillBlock:Pastel✽Palettes` token. Play the card for real.
+    // seal tags. Play the card for real.
     t.give_play(0, "PP:初次演出事故").unwrap();
     drain(&mut t);
     eprintln!(
         "DBG field={:?} tok={}",
         t.field_ids(0),
-        t.token(0, "skillBlock:Pastel✽Palettes")
+        t.token(0, "skillBlock:skill:大和麻弥:朝阳照耀的片刻:2")
     );
     set_fans(&mut t, 0, 3, 0);
     t.own(1, &[7]);
@@ -2224,10 +2227,18 @@ fn accident_blocks_pp_skill_2() {
     t.roll(0).unwrap();
     while t.prompt().is_some() {
         let p = t.expect_prompt();
-        assert!(!p.title.key().contains("aya"), "{}", t.dump_prompt());
+        // 「maya」 first: `maya_title` also contains 「aya」. 丸山彩's (2) is
+        // deliberately absent -- it is usable under the new text.
+        for k in ["maya", "hina"] {
+            assert!(
+                !p.title.key().contains(k),
+                "sealed {k} (2) still offered: {}",
+                t.dump_prompt()
+            );
+        }
         t.decline();
     }
-    assert_eq!(fans(&t, 0), (3, 0), "skill (2) never used");
+    assert_eq!(fans(&t, 0), (3, 0), "no sealed (2) ran");
 }
 
 /// 规则书: 「[手]：将此卡放置在[使用者]的[场地]并将弃卡区中的一张卡加入手卡。」(丸山彩 exclusive)
@@ -2713,3 +2724,195 @@ fn strong_flower_pass_hook_is_silent_off_its_tile() {
         "no 「（无事发生）」: {keys:?}"
     );
 }
+
+// =============================== 初次演出事故 [持续]: the per-entry seal (new text)
+
+/// 规则书[持续]: 「[拥有者]不可使用丸山彩、若宫伊芙、白鹭千圣或大和麻弥的[主动]
+/// （1）技能，也不可使用冰川日菜的[自动]（2）技能。」 -- the seal is one per
+/// named *entry*, not the whole band. These five tags are what the skills'
+/// own gates read; the four (2) autos (大和麻弥's included) stay open.
+const ACCIDENT_SEALS: [&str; 5] = [
+    "skillBlock:skill:丸山彩:With~:1",
+    "skillBlock:skill:若宫伊芙:天下统一:1",
+    "skillBlock:skill:白鹭千圣:保持坦率的你:1",
+    "skillBlock:skill:大和麻弥:朝阳照耀的片刻:1",
+    "skillBlock:skill:冰川日菜:日菜抽中的大奖:2",
+];
+
+/// Arrange `who`'s field-copy of 初次演出事故 without the [手] body: the card
+/// plus the seal tags it writes (bound to the instance, as the body does).
+fn place_accident(t: &mut Table, who: usize) {
+    // `edit_world`, not `world_mut`: the (1) tests arrange this while the
+    // opening routine is still pending.
+    let d = data();
+    let props = rules().card_props("PP:初次演出事故");
+    let slot = core::cell::Cell::new(-1);
+    t.m.edit_world(|w| {
+        slot.set(w.place_card(&d, who as i32, "PP:初次演出事故", Msg::default(), props.clone()));
+    });
+    let uid = slot.get();
+    for tag in ACCIDENT_SEALS {
+        t.m.edit_world(|w| w.set_held(who as i32, tag, 1, uid, 0));
+    }
+}
+
+#[test]
+fn accident_seals_the_named_entries_only() {
+    let mut t = Table::vanilla(2);
+    t.give_play(0, "PP:初次演出事故").unwrap();
+    drain(&mut t);
+    for tag in ACCIDENT_SEALS {
+        assert_eq!(t.token(0, tag), 1, "missing seal {tag}");
+    }
+    assert_eq!(
+        t.token(0, "skillBlock:Pastel✽Palettes"),
+        0,
+        "the whole-band seal is gone"
+    );
+}
+
+/// 规则书[持续]（1）: the four named characters' (1) cannot be used. The (1)
+/// body hands the (2) to every non-PP seat, so a blocked seat leaves P1 without
+/// the granted skill.
+#[test]
+fn accident_blocks_the_named_active_1() {
+    for (persona, skill) in [
+        ("丸山彩", "skill:丸山彩:With~"),
+        ("若宫伊芙", "skill:若宫伊芙:天下统一"),
+        ("白鹭千圣", "skill:白鹭千圣:保持坦率的你"),
+        ("大和麻弥", "skill:大和麻弥:朝阳照耀的片刻"),
+    ] {
+        // The (1) is a game-start hook: seal it before `deckAtGameStart`.
+        let mut blocked = Table::pending(&[persona, "美竹兰"]);
+        place_accident(&mut blocked, 0);
+        blocked.settle_answering_defaults();
+        assert!(
+            !blocked.on_field(1, skill),
+            "{persona} (1) ran under 初次演出事故: {:?}",
+            blocked.field_ids(1)
+        );
+        // Control: the same start without the seal grants it.
+        let mut open = Table::pending(&[persona, "美竹兰"]);
+        open.settle_answering_defaults();
+        assert!(
+            open.on_field(1, skill),
+            "{persona} (1) must run without 初次演出事故: {:?}",
+            open.field_ids(1)
+        );
+    }
+}
+
+/// 规则书[持续]: 「也不可使用冰川日菜的[自动]（2）技能」 -- a sealed hina holder
+/// neither rolls the 1d4 nor borrows at turn start. The (1) grant stays open
+/// (the control hina (1) above is unsealed).
+#[test]
+fn accident_blocks_hina_automatic_2() {
+    let mut t = Table::vanilla(2);
+    t.set_character_raw(0, "冰川日菜");
+    t.place_raw(0, "skill:冰川日菜:日菜抽中的大奖");
+    place_accident(&mut t, 0);
+    t.dice(&[1]);
+    t.begin_turn(0);
+    drain(&mut t);
+    assert_eq!(
+        t.state(0, "skill.hinaLottery.borrowed"),
+        -1,
+        "blocked hina (2) must not borrow: {:?}",
+        t.field_ids(0)
+    );
+    let borrowed = t
+        .skills(0)
+        .into_iter()
+        .filter(|s| s != "skill:冰川日菜:日菜抽中的大奖")
+        .count();
+    assert_eq!(borrowed, 0, "no borrowed skill: {:?}", t.field_ids(0));
+
+    // Control: unsealed, the same start borrows.
+    let mut open = Table::vanilla(2);
+    open.set_character_raw(0, "冰川日菜");
+    open.place_raw(0, "skill:冰川日菜:日菜抽中的大奖");
+    open.dice(&[1]);
+    open.begin_turn(0);
+    drain(&mut open);
+    assert!(
+        open.state(0, "skill.hinaLottery.borrowed") >= 0,
+        "unsealed hina (2) must borrow: {:?}",
+        open.field_ids(0)
+    );
+}
+
+/// 规则书[持续]: only the named entries are sealed -- the four (2) autos stay
+/// usable. 丸山彩's (2) prompt still opens on the owner's payment.
+#[test]
+fn accident_leaves_the_named_active_2_usable() {
+    let mut t = Table::vanilla(2);
+    t.set_character_raw(0, "丸山彩");
+    t.place_raw(0, "skill:丸山彩:With~");
+    place_accident(&mut t, 0);
+    set_fans(&mut t, 0, 3, 0);
+    t.own(1, &[7]);
+    t.set_houses(7, 1);
+    t.begin_turn(0);
+    t.set_pos(0, 5);
+    t.dice(&[2]);
+    t.roll(0).unwrap();
+    let mut seen_aya = false;
+    while t.prompt().is_some() {
+        let p = t.expect_prompt();
+        if format!("{p:?}").contains("aya") {
+            seen_aya = true;
+        }
+        t.decline();
+    }
+    assert!(seen_aya, "丸山彩's (2) must stay usable: {seen_aya}");
+}
+
+/// 规则书[持续]: 大和麻弥's (2) is an automatic on a draw and stays usable --
+/// the accident's own draw offers it and, answered, it runs. The (1) is sealed,
+/// the (2) is not.
+#[test]
+fn accident_leaves_maya_automatic_2_usable() {
+    let mut t = Table::vanilla(2);
+    t.set_character_raw(0, "大和麻弥");
+    t.place_raw(0, "skill:大和麻弥:朝阳照耀的片刻");
+    set_fans(&mut t, 0, 3, 0);
+    // The play's own draw is the (2)'s window; the card seals maya's (1) before
+    // it, so this also proves the (1) seal does not shadow the (2).
+    t.give_play(0, "PP:初次演出事故").unwrap();
+    let mut asked = false;
+    while t.prompt().is_some() {
+        let p = t.expect_prompt();
+        if p.title.key().contains("maya") && !asked {
+            asked = true;
+            t.answer_one(1).unwrap();
+        } else {
+            t.decline();
+        }
+    }
+    assert!(asked, "大和麻弥's (2) window must open under the card");
+    assert_eq!(fans(&t, 0).0, 2, "the (2) flipped one fan");
+}
+
+/// 规则书[持续]: the seal names entries, not the band -- another band's skill
+/// press is unaffected. Poppin' Party's band skill keeps answering.
+#[test]
+fn accident_leaves_a_band_skill_usable() {
+    let mut t = Table::vanilla(2);
+    t.set_character_raw(0, "户山香澄");
+    let band = "skill:Poppin' Party:星之鼓动";
+    t.place_raw(0, band);
+    t.m.world_mut().set_held(0, "星星贴纸", 3, -1, i32::MAX);
+    place_accident(&mut t, 0);
+    drain(&mut t);
+    t.skill(0, band)
+        .map_err(|e| format!("band skill refused under the accident: {e}"))
+        .unwrap();
+    drain(&mut t);
+    assert_eq!(
+        t.crystals(0, band),
+        Some(1),
+        "the press spent 2 stickers for a crystal: {:?}",
+        t.turn_played()
+    );
+}
+

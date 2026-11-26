@@ -1,12 +1,13 @@
+//! toggle one player's skill state; as [反击], re-toggle everyone who switched.
 //!
 //! 规则书（docs/rulebook/cards.json, id `Mujica:欢迎来到ave mujica的世界`）:
 //! > 欢迎来到ave mujica的世界：
-//! >  选择以下效果其一发动：
-//! >
-//! > （1）转换任意一名玩家的状态（若指定了不存在状态2的玩家则无效果）；
-//! > （2）[反击] 当有其他玩家切换状态时，你与所有本回合切换了状态的玩家同时切换一次状态
+//! > 选择以下效果其一发动：
 //!
-//! toggle one player's skill state; as [反击], re-toggle everyone who switched.
+//! > （1）切换任意一名玩家的[人偶模式]：已处于则退出，未处于则进入（若指定了不支持[人偶模式]的玩家则无效果）。
+//!
+//! > （2）[反击]当有其他玩家进入或退出[人偶模式]时，你与所有本回合进入或退出过[人偶模式]的玩家同时切换1次[人偶模式]，已处于则退出，未处于则进入；不支持[人偶模式]的玩家不受影响。
+//!
 
 use bandori_std::ctx;
 use bandori_std::state_key;
@@ -28,15 +29,7 @@ pub const WELCOME_MUJICA: CardDef = CardDef::new(
         .name(r#"欢迎来到ave mujica的世界"#)
         .raw_name(r#"欢迎来到ave mujica的世界"#)
         .tags(&[r#"反击"#])
-        .text(CardText::of(&[
-            sec("", &[
-                para(r#"选择以下效果其一发动："#),
-                items(&[
-                    it(r#"转换任意一名玩家的状态（若指定了不存在状态2的玩家则无效果）；"#),
-                    it(r#"[反击] 当有其他玩家切换状态时，你与所有本回合切换了状态的玩家同时切换一次状态"#),
-                ]),
-            ]),
-        ]))
+        .text(CardText::of(&[sec(r#""#, &[para(r#"选择以下效果其一发动："#), items(&[it(r#"切换任意一名玩家的[人偶模式]：已处于则退出，未处于则进入（若指定了不支持[人偶模式]的玩家则无效果）。"#), it(r#"[反击]当有其他玩家进入或退出[人偶模式]时，你与所有本回合进入或退出过[人偶模式]的玩家同时切换1次[人偶模式]，已处于则退出，未处于则进入；不支持[人偶模式]的玩家不受影响。"#)])])]))
         // sheet cell J3
         .fields(&[("group", r#"Ave Mujica"#), ("owner", "")]));
 

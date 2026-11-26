@@ -1,16 +1,18 @@
+//! park on 山吹面包房; after the user passes it, +1 fire and the card hops to 3d20.
 //!
 //! 规则书（docs/rulebook/cards.json, id `PPP:（沙绫）总有一天要给这片天空命名`）:
 //! > （沙绫）总有一天要给这片天空命名：
 //!
-//! > （1）将此卡放置在山吹面包房
+//! > （1）将此卡放置在山吹面包房。
 //!
-//! > （2）[使用者][经过]此卡后在回合结束后获得1个[火罐]，然后投掷3d20将此卡放置在投掷结果的格子上
+//! > （2）[使用者][经过]此卡后，在回合结束后依次进行以下操作：
+//! > 1. 获得1个[火罐]。
+//! > 2. [投掷]3d20，将此卡放置在此次[投掷]结果对应的格子上。
 //!
-//! park on 山吹面包房; after the user passes it, +1 fire and the card hops to 3d20.
 
 use bandori_std::ctx::{self, trigger};
 use card_sdk::abi::{roll_source, ActionKind, RollPurpose};
-use card_sdk::{it, CardText};
+use card_sdk::{it, it_sub, items, CardText};
 use card_sdk::{key, Action, CardDef, Msg, On};
 
 const ID: &str = "PPP:（沙绫）总有一天要给这片天空命名";
@@ -35,12 +37,9 @@ pub const SAAYA_SKY: CardDef = CardDef::new(
 .meta(
     &card_sdk::meta::CardMeta::new()
         .name(r#"总有一天要给这片天空命名"#)
-        .raw_name(r#"（沙绫）总有一天要给这片天空命名"#)
+        .raw_name(r#"（山吹沙绫）总有一天要给这片天空命名"#)
         .tags(&[])
-        .text(CardText::items(&[
-            it(r#"将此卡放置在山吹面包房"#),
-            it(r#"[使用者][经过]此卡后在回合结束后获得1个[火罐]，然后投掷3d20将此卡放置在投掷结果的格子上"#),
-        ]))
+        .text(CardText::items(&[it(r#"将此卡放置在山吹面包房。"#), it_sub(r#"[使用者][经过]此卡后，在回合结束后依次进行以下操作："#, &[r#"获得1个[火罐]。"#, r#"[投掷]3d20，将此卡放置在此次[投掷]结果对应的格子上。"#])]))
         // sheet cell B18
         .fields(&[("group", r#"Poppin' Party"#), ("owner", r#"山吹沙绫"#)]),
 );

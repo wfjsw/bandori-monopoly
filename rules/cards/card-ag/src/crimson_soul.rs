@@ -3,16 +3,17 @@
 //! 规则书（docs/rulebook/cards.json, id `AG:绯红之魂`）:
 //! > 绯红之魂：
 //! > [手]：
-//! > 将此卡放置在[使用者]的[场地]，然后选择[消耗]1到5次500资金并在这张卡上放置对应数量的[奇迹水晶]。
+//! > 依次进行以下操作：
+//! > 1. 将此卡放置在[使用者]的[场地]。
+//! > 2. 选择[消耗]1到5次500资金，并在此卡上放置对应数量的[奇迹水晶]。
 //! > [持续]：
 //!
-//! > （1）
-//! > [反击][拥有者]因导致的[消耗]或[支付]时可选择移除此卡的1个[奇迹水晶]，此次[消耗]或[支付]金额减少1000（最少为0，若为[支付]则被[支付]玩家[获得]500资金）。
+//! > （1）[反击][拥有者]因导致的[消耗]或[支付]时：可选择使用此卡的1个[奇迹水晶]，使此次[消耗]或[支付]金额减少1000，最少为0。若此次为[支付]，被[支付]玩家[获得]500资金。
 //!
-//! > （2）[拥有者]使用自己原有的技能
-//! > （2）时移除此卡的1个[奇迹水晶]。
+//! > （2）[拥有者]使用自己原有的[主动]
+//! > （1）技能时：移除此卡的1个[奇迹水晶]。
 //!
-//! > （3）此卡上不再拥有[奇迹水晶]时将此卡放入[使用者]弃卡区。
+//! > （3）此卡上不再拥有[奇迹水晶]时：将此卡放入[使用者]弃卡区。
 //!
 //! place with N crystals; spend a crystal to cut a [消耗] or [支付] by 1,000
 //! (the payee gains 500 on a [支付]).
@@ -21,7 +22,7 @@
 
 use bandori_std::ctx::{self, trigger};
 use card_sdk::abi::ZoneChangeCause;
-use card_sdk::{it, items, para, sec, CardText};
+use card_sdk::{it, items, para, sec, steps, CardText};
 use card_sdk::{key, Action, CardDef, Msg, On};
 
 const ID: &str = "AG:绯红之魂";
@@ -54,7 +55,7 @@ pub const CRIMSON_SOUL: CardDef = CardDef::new(
         //   the payee 500.
         On::Action(Action::PaySplitChooseBefore("actor == owner && card.placed && card.counter('crystals') > 0", None, pay_choose).counter_reason(key!("crimson_soul_when"))).label("（1）"),
 
-        // > （2）[拥有者]使用自己原有的技能（2）时移除此卡的1个[奇迹水晶]。
+        // > （2）[拥有者]使用自己原有的[主动]（1）技能时：移除此卡的1个[奇迹水晶]。
         On::Action(Action::CardUsed("", Some(skill_used_guard), skill_used)).label("（2）"),
 
         // > （3）此卡上不再拥有[奇迹水晶]时将此卡放入[使用者]弃卡区。
@@ -66,18 +67,7 @@ pub const CRIMSON_SOUL: CardDef = CardDef::new(
         .name(r#"绯红之魂"#)
         .raw_name(r#"绯红之魂"#)
         .tags(&[r#"手"#, r#"反击"#, r#"持续"#])
-        .text(CardText::of(&[
-            sec(r#"[手]："#, &[
-                para(r#"将此卡放置在[使用者]的[场地]，然后选择[消耗]1到5次500资金并在这张卡上放置对应数量的[奇迹水晶]。"#),
-            ]),
-            sec(r#"[持续]："#, &[
-                items(&[
-                    it(r#"[反击][拥有者]因导致的[消耗]或[支付]时可选择移除此卡的1个[奇迹水晶]，此次[消耗]或[支付]金额减少1000（最少为0，若为[支付]则被[支付]玩家[获得]500资金）。"#),
-                    it(r#"[拥有者]使用自己原有的技能（2）时移除此卡的1个[奇迹水晶]。"#),
-                    it(r#"此卡上不再拥有[奇迹水晶]时将此卡放入[使用者]弃卡区。"#),
-                ]),
-            ]),
-        ]))
+        .text(CardText::of(&[sec(r#"[手]："#, &[para(r#"依次进行以下操作："#), steps(&[r#"将此卡放置在[使用者]的[场地]。"#, r#"选择[消耗]1到5次500资金，并在此卡上放置对应数量的[奇迹水晶]。"#])]), sec(r#"[持续]："#, &[items(&[it(r#"[反击][拥有者]因导致的[消耗]或[支付]时：可选择使用此卡的1个[奇迹水晶]，使此次[消耗]或[支付]金额减少1000，最少为0。若此次为[支付]，被[支付]玩家[获得]500资金。"#), it(r#"[拥有者]使用自己原有的[主动]（1）技能时：移除此卡的1个[奇迹水晶]。"#), it(r#"此卡上不再拥有[奇迹水晶]时：将此卡放入[使用者]弃卡区。"#)])])]))
         // sheet cell C12
         .fields(&[("group", r#"Afterglow"#), ("owner", "")]));
 
@@ -159,21 +149,37 @@ fn pay_choose(player_id: i32) -> card_sdk::Asked {
     Ok(())
 }
 
-/// 规则书[持续]（2）: 「[拥有者]使用自己原有的技能（2）时移除此卡的1个[奇迹水晶]」 --
+/// 规则书[持续]（2）: 「[拥有者]使用自己原有的[主动]（1）技能时：移除此卡的1个[奇迹水晶]」 --
 /// Pure guard for [`skill_used`] -- the activation gate. `false`
 /// means the card is not activated at all.
 fn skill_used_guard(player_id: i32) -> bool {
-    // TODO(规则书)（[拥有者]使用自己原有的技能）: a skill press is `skill:*`, which
-    //   excludes a placed-card declaration (`cardUsed` carries the card id
-    //   there); 「自己原有的技能（2）」 is the *persona* skill (2) -- a band skill
-    //   (`skill:<group>:*`) still strips a crystal too.
+    // 规则书（[拥有者]使用自己原有的[主动]（1）技能）:
+    // * a press carries the pressed rule id on `trigger::cards` (`use_skill`,
+    //   `play.rs`: `t.cards = vec![card]`), and nothing else -- there is no
+    //   entry index on the trigger (`Trigger` has none; `trig_cards` is the id
+    //   verbatim);
+    // * 「自己原有」 is the owner's *persona* skill instance
+    //   (`ctx::persona_skill(owner)`), so a band skill (`skill:<group>:*`) and a
+    //   borrowed character skill placed here both fall out;
+    // * 「[主动]（1）」 is the persona sheet's `[主动]`（1） entry, and its press
+    //   entry is the only `On::Play` a persona skill declares -- the
+    //   `[自动]`（1） clause is a hook and never raises `cardUsed`. So the bare
+    //   id *is* the active-1 press; the library's own `:1` clause alias
+    //   (`skillBlock:skill:<id>:1`, 初次演出事故) is accepted too, while the
+    //   same persona's `:2` stays out.
     // TODO: Can this be ported to CEL?
     ctx::is_placed()
         && trigger::player_id() == player_id
         && ctx::crystals() > 0
-        && trigger::cards()
-            .first()
-            .is_some_and(|c| c.as_str().starts_with("skill:"))
+        && trigger::cards().first().is_some_and(|c| {
+            ctx::persona_skill(player_id).is_some_and(|p| is_own_active_1(c.as_str(), &p))
+        })
+}
+
+/// Is `pressed` the owner's own `[主动]（1）` press? Either the persona skill id
+/// itself (the press entry) or that id's `:1` clause alias.
+fn is_own_active_1(pressed: &str, persona: &str) -> bool {
+    pressed == persona || pressed.strip_prefix(persona) == Some(":1")
 }
 
 fn skill_used(player_id: i32) -> card_sdk::Asked {

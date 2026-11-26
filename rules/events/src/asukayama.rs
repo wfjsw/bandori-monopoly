@@ -2,24 +2,54 @@
 //!
 //! 事件文本（`CardMeta` beside the rule body, id `飞鸟山之战`）:
 //! > 所有玩家[传送]到飞鸟山公园。然后抽到此卡的玩家移动1d20，行动序列上在抽到此卡的玩家的上一位玩家获得2层回合开始时减少一层的[眩晕]，行动序列上在抽到此卡的玩家的下一位玩家在下个自己的回合结束前不可使用手牌，其余玩家获得1层在回合开始时移除的[除外]
+//!
+//! The no-hand clause is **this card's** property: `data/rules.txt` has no
+//! `noHand` glossary entry (TODO(规则书)). The event stays in play until the
+//! clause lapses (「下个自己的回合结束前」), so its own `TurnStart` / `TurnEnd`
+//! hooks carry the `2 -> 1 -> 0` clock and the `PlayGate` filter is the veto.
 
 use bandori_std::ctx::{self, plan};
 use bandori_std::state_key;
-use card_sdk::abi::MoveKind;
-use card_sdk::CardText;
-use card_sdk::{CardDef, Msg, On};
+use card_sdk::abi::{FilterKind, MoveKind};
+use card_sdk::ctx::trigger;
+use card_sdk::{Action, CardDef, CardText, Filter, GateValue, Msg, On};
 
-use crate::util::{all_players, roll};
+use crate::util::{all_players, expire, keep, roll};
 
 // TODO(规则书): the sheet's B12 lists a derived 「迷子的追逐」; the text does not
 // say drawing this event triggers it. The main clause only is implemented.
 
-pub const ASUKAYAMA: CardDef = CardDef::new("event:飞鸟山之战", &[On::Play("", None, play)]).rule()
-        .meta(&card_sdk::meta::CardMeta::new()
-            .name(r#"飞鸟山之战"#)
-            .text(CardText::para(r#"所有玩家[传送]到飞鸟山公园。然后抽到此卡的玩家移动1d20，行动序列上在抽到此卡的玩家的上一位玩家获得2层回合开始时减少一层的[眩晕]，行动序列上在抽到此卡的玩家的下一位玩家在下个自己的回合结束前不可使用手牌，其余玩家获得1层在回合开始时移除的[除外]"#))
-            // sheet cell A12
-            .derived(false));
+/// The event's bare id (`event:` is the rule prefix; `ctx::event_expire` takes
+/// the bare id).
+const ID: &str = "飞鸟山之战";
+
+pub const ASUKAYAMA: CardDef = CardDef::new(
+    "event:飞鸟山之战",
+    &[
+        On::Play("", None, play),
+        // 规则书 「下一位玩家在下个自己的回合结束前不可使用手牌」 -- the
+        // event stays in play for exactly that long; these two hooks are the
+        // 「下个」 clock (2 -> 1 at their turn start, 1 -> 0 at their turn end).
+        // `TurnStartBefore`, not `TurnStart`: the deadline must pass even when
+        // their turn is auto-skipped (e.g. [除外]), so the event is not
+        // stretched by whatever skips the turn.
+        On::Action(Action::TurnStartBefore("", None, no_hand_fold)),
+        On::Action(Action::TurnEnd("", None, no_hand_clear)),
+        // A holder who leaves the match takes the owed clause with them: an
+        // out seat gets no `turnEnd`, so the clock would otherwise never end.
+        On::Action(Action::BeforeBankrupt("", None, no_hand_drop_out)),
+        // 「不可使用手牌」 -- the play gate. The counter is the whole answer
+        // (CEL-only), so the engine applies it to hand-card plays.
+        On::Filter(Filter::PlayGate(NO_HAND_HELD, None, refuse)),
+    ],
+)
+.rule()
+.gate_msgs(&[(FilterKind::PlayGate.gate_id(), "err.play_no_hand")])
+.meta(&card_sdk::meta::CardMeta::new()
+    .name(r#"飞鸟山之战"#)
+    .text(CardText::para(r#"所有玩家[传送]到飞鸟山公园。然后抽到此卡的玩家移动1d20，行动序列上在抽到此卡的玩家的上一位玩家获得2层回合开始时减少一层的[眩晕]，行动序列上在抽到此卡的玩家的下一位玩家在下个自己的回合结束前不可使用手牌，其余玩家获得1层在回合开始时移除的[除外]"#))
+    // sheet cell A12
+    .derived(false));
 
 /// 规则书: 「所有玩家[传送]到飞鸟山公园」 -- everyone onto the park, no settle
 /// on the jump itself.
@@ -29,10 +59,10 @@ pub const ASUKAYAMA: CardDef = CardDef::new("event:飞鸟山之战", &[On::Play(
 /// [pass]-resolves the tiles it travels (`settles` gates stages 14-15 only).
 /// 规则书: 「上一位玩家获得2层回合开始时减少一层的[眩晕]」 -- `stunStart`, the
 /// stun that loses a layer at turn start (not the end-of-turn `stun`).
-/// 规则书: 「下一位玩家在下个自己的回合结束前不可使用手牌」 -- `noHand` = 2: the
-/// `status:no_hand` host folds 2->1 at their turn start and
-/// 1->0 at their turn end, so the veto lifts exactly at the end of their next
-/// own turn.
+/// 规则书: 「下一位玩家在下个自己的回合结束前不可使用手牌」 -- `noHand` = 2 and
+/// the event stays (see the hooks): their turn start folds 2 -> 1, their turn
+/// end clears 1 -> 0, so the veto lifts exactly at the end of their next own
+/// turn.
 /// 规则书: 「其余玩家获得1层在回合开始时移除的[除外]」 -- `give_exile(p, 1, -1)`.
 fn play(player_id: i32) -> card_sdk::Asked {
     let park = ctx::tile_named("飞鸟山公园");
@@ -82,9 +112,11 @@ fn play(player_id: i32) -> card_sdk::Asked {
         );
     }
     if next >= 0 {
-        // 「在下个自己的回合结束前不可使用手牌」
+        // 「在下个自己的回合结束前不可使用手牌」 -- the veto itself. Staying
+        // keeps this instance's hooks alive; `no_hand_clear` files the event.
         ctx::state::set(next, state_key::NO_HAND, 2);
         bandori_std::status::declare_companion(next, state_key::NO_HAND);
+        keep();
         ctx::log(
             next,
             &Msg::new("log.event.asukayama_no_hand").player_id("who", next),
@@ -102,6 +134,78 @@ fn play(player_id: i32) -> card_sdk::Asked {
         );
     }
     Ok(())
+}
+
+/// The condition under which the veto closes the play gate.
+pub const NO_HAND_HELD: &str = "state(actor,'noHand') > 0";
+
+fn refuse(_owner: i32, mut g: GateValue) -> GateValue {
+    g.allowed = Some(false); // deny
+    g
+}
+
+/// 规则书 「在下个自己的回合结束前」 -- at the holder's turn start the 「下个」
+/// half is spent (`2 -> 1`). `TurnStartBefore` fires before the status ticks
+/// (the [除外] auto-skip among them), so a skipped turn still spends the veto
+/// and the deadline passes with it -- the event is not affected by what skips
+/// the turn.
+fn no_hand_fold(_owner: i32) -> card_sdk::Asked {
+    let who = trigger::player_id();
+    if who < 0 {
+        return Ok(());
+    }
+    if ctx::state::get(who, state_key::NO_HAND) != 2 {
+        return Ok(());
+    }
+    ctx::state::set(who, state_key::NO_HAND, 1);
+    bandori_std::status::declare_companion(who, state_key::NO_HAND);
+    Ok(())
+}
+
+/// 规则书 「回合结束前」 -- the veto lapses at the holder's turn end (`1 -> 0`).
+/// That spends the event's whole clause, so it files itself (「放入事件弃牌」).
+fn no_hand_clear(_owner: i32) -> card_sdk::Asked {
+    let who = trigger::player_id();
+    if who < 0 {
+        return Ok(());
+    }
+    if ctx::state::get(who, state_key::NO_HAND) != 1 {
+        return Ok(());
+    }
+    ctx::state::set(who, state_key::NO_HAND, 0);
+    bandori_std::status::declare_companion(who, state_key::NO_HAND);
+    expire_if_none_owed();
+    Ok(())
+}
+
+/// 规则书 L81 「所有其正在生效的卡，技能效果停止生效」 -- a holder who is
+/// bankrupted or forfeits loses the clause instead of keeping a clock that can
+/// never tick (`end_turn` skips `turnEnd` for an out seat, and `remove_from_game`
+/// zeroes the keys). `beforeOut` covers both exits.
+fn no_hand_drop_out(_owner: i32) -> card_sdk::Asked {
+    let who = trigger::player_id();
+    if who < 0 || ctx::state::get(who, state_key::NO_HAND) <= 0 {
+        return Ok(());
+    }
+    ctx::state::set(who, state_key::NO_HAND, 0);
+    bandori_std::status::declare_companion(who, state_key::NO_HAND);
+    expire_if_none_owed();
+    Ok(())
+}
+
+/// File the event once no seat owes the veto. A second activation reuses this
+/// instance (`bind_event` is idempotent per id), so the first holder's clear
+/// must not take the clause away from a later one.
+fn expire_if_none_owed() {
+    if !ctx::event_is_active(ID) {
+        return;
+    }
+    if all_players()
+        .into_iter()
+        .all(|p| ctx::state::get(p, state_key::NO_HAND) == 0)
+    {
+        expire(ID);
+    }
 }
 
 //

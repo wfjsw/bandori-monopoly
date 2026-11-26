@@ -1,18 +1,19 @@
+//! expensive tile immediately and mark it untargetable.
 //!
 //! 规则书（docs/rulebook/cards.json, id `Mor:高贵的微蓝`）:
-//! > 高贵的微蓝：当你位于一块地契价值大于等于2200的地块时，可以打出此卡，如果此地块属于你：1.立刻进行一次触发结算。2.在该地块上放置一个标记，有标记时此地块不能被指定。
+//! > 高贵的微蓝：
+//! > 当你位于一块地契价值大于等于2200的地块时，可以打出此卡，如果此地块属于你：1.立刻进行一次触发结算。2.在该地块上放置1个[微蓝标记]，有此标记时该地块不能被[指定]。[微蓝标记]永久保留，不随回合推进或来源卡离场而消失；明确移除该标记的效果仍按自身规则处理。
 //!
-//! expensive tile immediately and mark it untargetable.
 
 use card_sdk::CardText;
-use card_sdk::{ctx, key, CardDef, Msg, On};
+use card_sdk::{ctx, key, para, CardDef, Msg, On};
 
 pub const NOBLE_BLUE: CardDef =
     CardDef::new("Mor:高贵的微蓝", &[On::Play("", Some(cant_play), noble_blue)]).meta(&card_sdk::meta::CardMeta::new()
         .name(r#"高贵的微蓝"#)
         .raw_name(r#"高贵的微蓝"#)
         .tags(&[])
-        .text(CardText::para(r#"当你位于一块地契价值大于等于2200的地块时，可以打出此卡，如果此地块属于你：1.立刻进行一次触发结算。2.在该地块上放置一个标记，有标记时此地块不能被指定。"#))
+        .text(CardText::para(r#"当你位于一块地契价值大于等于2200的地块时，可以打出此卡，如果此地块属于你：1.立刻进行一次触发结算。2.在该地块上放置1个[微蓝标记]，有此标记时该地块不能被[指定]。[微蓝标记]永久保留，不随回合推进或来源卡离场而消失；明确移除该标记的效果仍按自身规则处理。"#))
         // sheet cell G11
         .fields(&[("group", r#"Morfonica"#), ("owner", "")]));
 

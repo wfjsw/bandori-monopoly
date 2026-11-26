@@ -19,9 +19,11 @@ use skill_groups::fans;
 pub const CHISATO: CardDef = CardDef::new(
     "skill:白鹭千圣:保持坦率的你",
     &[
+        // The (1) entry carries its own seal guard -- 「[拥有者]不可使用…白鹭千圣…的
+        // [主动]（1）技能」 (初次演出事故).
         On::Action(Action::DeckAtGameStart(
             "group_is(owner, 'Pastel✽Palettes')",
-            None,
+            Some(press_gate),
             at_start,
         )),
         // 「此次获得的分摊前数量增加Y×100」 -- the **pre-split** total (「分摊前」),
@@ -42,9 +44,17 @@ pub const CHISATO: CardDef = CardDef::new(
 )
 .rule();
 
+fn press_gate(player_id: i32) -> bool {
+    // 「[持续]：[拥有者]不可使用…白鹭千圣…的[主动]（1）技能」 (初次演出事故) --
+    // the (1) entry is the press. `skill_blocked` covers the seal tag, the
+    // global `skillBlock`, and a `skillBlock` mark on the tile.
+    !bandori_std::ctx::skill_blocked(player_id, "skill:白鹭千圣:保持坦率的你:1")
+}
+
 fn mine(player_id: i32) -> bool {
-    // 「[持续]：[拥有者]不可使用任何Pastel✽Palettes角色的（2）技能」 -- residual.
-    !bandori_std::ctx::skill_blocked(player_id, "Pastel✽Palettes")
+    // The (2) automatic, still usable under 初次演出事故 -- its own clause tag
+    // plus the global seal / tile mark `skill_blocked` folds in.
+    !bandori_std::ctx::skill_blocked(player_id, "skill:白鹭千圣:保持坦率的你:2")
 }
 
 /// （1）「游戏开始后获得5个正面[P✽P粉丝]，所有非Pastel✽Palettes玩家获得白鹭千圣的

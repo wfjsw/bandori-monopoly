@@ -822,9 +822,15 @@ fn g10_body_write_before_redeem_is_seen_by_the_owner_guard() {
     );
 }
 
-/// HOST-02: the `skillBlock:Pastel✽Palettes` held-token write is on live before
-/// the draw routine raises its hooks, so the accident's own draw offers no PP
-/// (2) skill prompt for 丸山彩 / 大和麻弥 / 冰川日菜.
+/// HOST-02: the per-entry seal writes are on live before the draw routine
+/// raises its hooks, so the accident's own draw offers no 冰川日菜 (2) prompt.
+/// The four (2) autos stay usable -- 丸山彩's and 大和麻弥's (2) prompts may
+/// appear on the same draw.
+///
+/// The hook is raised from inside the body's own `ctx::draw` host call. Its
+/// drive starts from the live world the `NeedHost` boundary just crossed the
+/// body's pending token writes onto (the same `overlay_guest_state` the pay /
+/// settle routines use), so the nested drive reads the seal as already set.
 #[test]
 fn g10_seal_is_seen_by_the_body_own_draw_hook() {
     let mut t = Table::vanilla(2);
@@ -843,8 +849,8 @@ fn g10_seal_is_seen_by_the_body_own_draw_hook() {
         let hit = |k: &str| {
             p.title.key().contains(k) || p.options.iter().any(|o| format!("{o:?}").contains(k))
         };
-        // `maya` first: `maya_title` contains 「aya」 too.
-        if let Some(k) = ["maya", "hina", "aya"].into_iter().find(|&k| hit(k)) {
+        // 日菜 only: `maya_title` contains 「aya」 too, and both are open now.
+        if let Some(k) = ["hina"].into_iter().find(|&k| hit(k)) {
             panic!(
                 "PP (2) skill {k} offered on the accident's own draw: {}",
                 t.dump_prompt()
@@ -853,7 +859,7 @@ fn g10_seal_is_seen_by_the_body_own_draw_hook() {
         t.decline();
     }
     assert_eq!(
-        t.token(0, "skillBlock:Pastel✽Palettes"),
+        t.token(0, "skillBlock:skill:冰川日菜:日菜抽中的大奖:2"),
         1,
         "the seal is on live"
     );

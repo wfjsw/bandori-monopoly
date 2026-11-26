@@ -1,9 +1,11 @@
+//! after the move, before settle: stuff a 「觉悟」 into the deck, lock the turn's
 //!
 //! 规则书（docs/rulebook/cards.json, id `R:学生会的检查`）:
 //! > 学生会的检查：
-//! >  移动结束后前后三格内若存在你拥有地契的格子，[触发结算]前可打出，向抽牌堆中加入一张“觉悟”，本回合无法加盖房屋，但可支付那格一层房屋的建造价格一半将此卡放于那个格子上，使下一个经过且移动终点不在此各的你以外的玩家强制停下并触发结算。因此卡强制停下的玩家的结算地租价格为原价格一半。若此卡进入弃牌堆时结算获得的资金小于本卡原应拿到的资金或未结算则获得发动此卡消耗的资金。
+//! > 移动结束后，若前后3格内存在你拥有地契的格子：可在[结算]前打出此卡，向抽卡区加入1张“觉悟”。本回合无法加盖房屋，但可支付该格子1层房屋建造价格的一半，将此卡放在该格子上。
+//! > 下一个[经过]该格子、且[移动终点]不在该格子的其他玩家，在该格子[强制停下]并进行[结算]。因此卡[强制停下]的玩家，此次[结算]地租价格为原本的一半。
+//! > 此卡进入弃卡区时，若[结算]获得的资金小于本卡原应拿到的资金，或未进行[结算]：获得发动此卡消耗的资金。
 //!
-//! after the move, before settle: stuff a 「觉悟」 into the deck, lock the turn's
 //! builds, and optionally pay half a house's build cost to leave this card on a
 //! nearby deed -- the next passer-by stops there and settles at half rent.
 
@@ -12,7 +14,7 @@ use alloc::vec::Vec;
 use bandori_std::ctx::{self, trigger};
 use card_sdk::abi::{ActionKind, ChainKind, MoveKind, SettleOutcome, TriggerKind};
 use card_sdk::CardText;
-use card_sdk::{key, Action, CardDef, Msg, On};
+use card_sdk::{key, para, sec, Action, CardDef, Msg, On};
 
 pub const COUNCIL_CHECK: CardDef = CardDef::new(
     "R:学生会的检查",
@@ -57,7 +59,7 @@ pub const COUNCIL_CHECK: CardDef = CardDef::new(
         .name(r#"学生会的检查"#)
         .raw_name(r#"学生会的检查"#)
         .tags(&[])
-        .text(CardText::para(r#"移动结束后前后三格内若存在你拥有地契的格子，[触发结算]前可打出，向抽牌堆中加入一张“觉悟”，本回合无法加盖房屋，但可支付那格一层房屋的建造价格一半将此卡放于那个格子上，使下一个经过且移动终点不在此各的你以外的玩家强制停下并触发结算。因此卡强制停下的玩家的结算地租价格为原价格一半。若此卡进入弃牌堆时结算获得的资金小于本卡原应拿到的资金或未结算则获得发动此卡消耗的资金。"#))
+        .text(CardText::of(&[sec(r#""#, &[para(r#"移动结束后，若前后3格内存在你拥有地契的格子：可在[结算]前打出此卡，向抽卡区加入1张“觉悟”。本回合无法加盖房屋，但可支付该格子1层房屋建造价格的一半，将此卡放在该格子上。"#), para(r#"下一个[经过]该格子、且[移动终点]不在该格子的其他玩家，在该格子[强制停下]并进行[结算]。因此卡[强制停下]的玩家，此次[结算]地租价格为原本的一半。"#), para(r#"此卡进入弃卡区时，若[结算]获得的资金小于本卡原应拿到的资金，或未进行[结算]：获得发动此卡消耗的资金。"#)])]))
         // sheet cell E3
         .fields(&[("group", r#"Roselia"#), ("owner", "")]));
 

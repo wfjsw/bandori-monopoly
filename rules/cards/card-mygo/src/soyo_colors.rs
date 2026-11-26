@@ -1,14 +1,14 @@
+//! place this card on one of your deeds; that tile gains every colour, and an
 //!
 //! 规则书（docs/rulebook/cards.json, id `MyGO:（soyo）混合的颜色`）:
 //! > （soyo）混合的颜色：
-//! >  将此卡放置于你拥有地契的一个格子，该格获得所有颜色（该格本身不可因自有以外的颜色的地产商盖房），因该效果从在其他颜色的地产商格子触发结算的玩家处收费时，收费在地产商的减半收费基础上额外减半。
+//! > 将此卡放置于你拥有地契的一个格子，该格获得所有颜色（该格本身不可因自有以外的颜色的地产商盖房），因该效果从在其他颜色的地产商格子[结算]的玩家处收费时，收费在地产商的减半收费基础上额外减半。
 //!
-//! place this card on one of your deeds; that tile gains every colour, and an
 //! agent settle that charges rent there is halved again.
 
 use bandori_std::zones::ZoneChangeCause;
 use card_sdk::CardText;
-use card_sdk::{ctx, key, Action, CardDef, Filter, Msg, On};
+use card_sdk::{ctx, key, para, Action, CardDef, Filter, Msg, On};
 
 pub const SOYO_COLORS: CardDef = CardDef::new(
     "MyGO:（soyo）混合的颜色",
@@ -22,9 +22,9 @@ pub const SOYO_COLORS: CardDef = CardDef::new(
     ],
 ).meta(&card_sdk::meta::CardMeta::new()
         .name(r#"混合的颜色"#)
-        .raw_name(r#"（soyo）混合的颜色"#)
+        .raw_name(r#"（长崎素世）混合的颜色"#)
         .tags(&[])
-        .text(CardText::para(r#"将此卡放置于你拥有地契的一个格子，该格获得所有颜色（该格本身不可因自有以外的颜色的地产商盖房），因该效果从在其他颜色的地产商格子触发结算的玩家处收费时，收费在地产商的减半收费基础上额外减半。"#))
+        .text(CardText::para(r#"将此卡放置于你拥有地契的一个格子，该格获得所有颜色（该格本身不可因自有以外的颜色的地产商盖房），因该效果从在其他颜色的地产商格子[结算]的玩家处收费时，收费在地产商的减半收费基础上额外减半。"#))
         // sheet cell I9
         .fields(&[("group", r#"MyGO!!!!!"#), ("owner", r#"长崎素世"#)]));
 

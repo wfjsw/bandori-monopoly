@@ -1,8 +1,10 @@
+//! after a skill teleport: park this card on a same-tile character's field, and
 //!
 //! 规则书（docs/rulebook/cards.json, id `R:必然的联系（莉莎）`）:
-//! > 必然的联系（莉莎）：【反击】当你使用技能进行传送后，你可以打出此卡并指定一个和你在同一地块的角色，将此卡放在对方的游戏区，你对对方使用技能将可以无视【距离最近】这一限制。当你发动该效果后，此卡进入弃牌堆。
+//! > 必然的联系（莉莎）：
+//! > [反击]你使用技能进行[传送]后：可打出此卡，[指定]1个与你位于同一格子的角色，并将此卡放在对方的游戏区。
+//! > 你对那名角色使用技能时，可以无视按[正向距离]选择最近角色的限制。你发动该效果后，将此卡放入弃卡区。
 //!
-//! after a skill teleport: park this card on a same-tile character's field, and
 //! record the placer on the instance so their skills may ignore 「距离最近」
 //! when targeting that holder (`bandori_std::nearest`).
 //!
@@ -15,7 +17,7 @@ use alloc::vec::Vec;
 use bandori_std::ctx;
 use card_sdk::abi::ChainKind;
 use card_sdk::CardText;
-use card_sdk::{key, CardDef, Msg, On};
+use card_sdk::{key, para, sec, CardDef, Msg, On};
 
 pub const LISA_BOND: CardDef = CardDef::new(
     "R:必然的联系（莉莎）",
@@ -30,9 +32,9 @@ pub const LISA_BOND: CardDef = CardDef::new(
         counteract).counter_reason(key!("lisa_bond_when"))],
 ).meta(&card_sdk::meta::CardMeta::new()
         .name(r#"必然的联系"#)
-        .raw_name(r#"必然的联系（莉莎）"#)
+        .raw_name(r#"（今井莉莎）必然的联系"#)
         .tags(&[r#"反击"#])
-        .text(CardText::para(r#"【反击】当你使用技能进行传送后，你可以打出此卡并指定一个和你在同一地块的角色，将此卡放在对方的游戏区，你对对方使用技能将可以无视【距离最近】这一限制。当你发动该效果后，此卡进入弃牌堆。"#))
+        .text(CardText::of(&[sec(r#""#, &[para(r#"[反击]你使用技能进行[传送]后：可打出此卡，[指定]1个与你位于同一格子的角色，并将此卡放在对方的游戏区。"#), para(r#"你对那名角色使用技能时，可以无视按[正向距离]选择最近角色的限制。你发动该效果后，将此卡放入弃卡区。"#)])]))
         // sheet cell E16
         .fields(&[("group", r#"Roselia"#), ("owner", r#"今井莉莎"#)]));
 

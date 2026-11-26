@@ -1,13 +1,17 @@
+
 //!
 //! 规则书（docs/rulebook/cards.json, id `HHW:（花音）Wacha Mocha 啪嗒进行曲`）:
-//! > （花音）Wacha Mocha 啪嗒进行曲：[场]花音每次倒走时此卡获得一个水母标记；主要阶段中，若此卡上有至少9个水母标记，可以清除所有标记并传送到#4水族馆或者 #30弦卷豪宅，视为本次主要移动(喊出呼诶诶～!)，然后此卡置入弃牌堆。
+//! > （花音）Wacha Mocha 啪嗒进行曲：
+//! > [持续]花音每次倒走时，为此卡添加1个[水母标记]。
+//! > 运营阶段中，若此卡至少有9个[水母标记]：可以清除所有标记，依次进行以下操作：
+//! > 1. [传送]到“水族馆”（4号格子）或“弦卷豪宅”（30号格子），视为本次[主要移动]（喊出呼诶诶～！）。
+//! > 2. 将此卡置入弃卡区。
 //!
-
 use alloc::vec::Vec;
 
 use card_sdk::abi::MoveKind;
 use card_sdk::CardText;
-use card_sdk::{ctx, key, Action, Activation, CardDef, Declared, Msg, On};
+use card_sdk::{ctx, key, para, sec, steps, Action, Activation, CardDef, Declared, Msg, On};
 
 const ID: &str = "HHW:（花音）Wacha Mocha 啪嗒进行曲";
 /// 「水母标记」.
@@ -17,12 +21,14 @@ pub const KANON_MARCH: CardDef = CardDef::new(
     "HHW:（花音）Wacha Mocha 啪嗒进行曲",
     &[
         // 「[场]」 is the hand play and only the placement. The jump is a placed
-        // offer anchored at the pre-dice plan pass -- `DiceRollPlan` is the
-        // declaring side of the filter kind, so the question runs before
-        // anything is announced and a decline is silent.
+        // offer anchored at 「运营阶段中」 -- the phase's own closing hook,
+        // `manageAfter` (行动阶段 6, raised once when 运营 ends: into the main
+        // move, or on an end-turn from 运营). Its `declare` asks before the
+        // body, so the question runs before anything is announced and a
+        // decline is silent.
         On::Play("", Some(cant_place), place),
-        On::Action(Action::DiceRollPlan(
-            "card.placed && actor == owner && move.is_main_move",
+        On::Action(Action::ManageAfter(
+            "card.placed && actor == owner",
             Some(can_jump),
             unused_body, // replaced by `declare_arg`
         ))
@@ -33,9 +39,9 @@ pub const KANON_MARCH: CardDef = CardDef::new(
     ],
 ).meta(&card_sdk::meta::CardMeta::new()
         .name(r#"Wacha Mocha 啪嗒进行曲"#)
-        .raw_name(r#"（花音）Wacha Mocha 啪嗒进行曲"#)
-        .tags(&[])
-        .text(CardText::para(r#"[场]花音每次倒走时此卡获得一个水母标记；主要阶段中，若此卡上有至少9个水母标记，可以清除所有标记并传送到#4水族馆或者 #30弦卷豪宅，视为本次主要移动(喊出呼诶诶～!)，然后此卡置入弃牌堆。"#))
+        .raw_name(r#"（松原花音）Wacha Mocha 啪嗒进行曲"#)
+        .tags(&[r#"持续"#])
+        .text(CardText::of(&[sec(r#""#, &[para(r#"[持续]花音每次倒走时，为此卡添加1个[水母标记]。"#), para(r#"运营阶段中，若此卡至少有9个[水母标记]：可以清除所有标记，依次进行以下操作："#), steps(&[r#"[传送]到“水族馆”（4号格子）或“弦卷豪宅”（30号格子），视为本次[主要移动]（喊出呼诶诶～！）。"#, r#"将此卡置入弃卡区。"#])])]))
         // sheet cell F13
         .fields(&[("group", r#"Hello, Happy World!"#), ("owner", r#"松原花音"#)]));
 
@@ -51,9 +57,11 @@ fn cant_place(_player_id: i32) -> Option<Msg> {
 }
 
 /// 「若此卡上有至少9个水母标记」; another card's claim on this move stands this
-/// one down. The movement gate is the anchor's own: `main_move` stops before the
-/// plan pass once the main move is spent, and a teleport is legal under
-/// [停留]/[晕眩] (rules.txt 47 「无法使用非[传送]的移动效果」).
+/// one down. The offer sits on 「运营阶段中」 (`manageAfter`), so the movement
+/// gate does not stand it down -- a teleport is legal under [停留]/[晕眩]
+/// (rules.txt 47 「无法使用非[传送]的移动效果」). The nested `manageAfter`
+/// `run_planned_move` raises carries the stage is still 运营; the markers are
+/// spent by then, so the second pass stands down.
 fn can_jump(player_id: i32) -> bool {
     ctx::held_count(player_id, JELLY) >= 9 && !ctx::plan::is_claimed()
 }
@@ -129,10 +137,14 @@ fn jump(player_id: i32, pick: i32) -> card_sdk::Asked {
     // 规则书: 「清除所有标记」 -- every 水母标记 on this card.
     ctx::set_held(player_id, JELLY, 0, 0, -1);
     // 规则书: 「视为本次主要移动」 -- this *is* that move: the plan becomes a
-    // teleport and main_move's teleport branch runs it, no die, landing settles.
+    // teleport. `manageAfter` also fires on an end-turn from 运营, where no
+    // `main_move` follows to consume the plan, so the planned move runs here
+    // (a teleport is legal under [停留], rules.txt 47) and the main slot is
+    // spent either way.
     ctx::plan::set_kind(MoveKind::Teleport);
     ctx::plan::set_teleport_to(pick);
     ctx::plan::set_settles(true);
+    ctx::run_planned_move(player_id);
     ctx::log(
         player_id,
         &Msg::new(key!("kanon_march_jump")).tile("tile", pick),

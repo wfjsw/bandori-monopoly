@@ -684,9 +684,11 @@ pub fn band_idol_03_no_reward_formula() {
 }
 // ===========================================================================
 // C-PP-first-accident-02 (moved from proofs/pp.rs — needs `skills-personas`
-// for the 丸山彩 (2) body; the pp unit's features do not compile that crate,
-// so the harness was cfg'd out and `cargo kani` "Failed to match" it).
-// 「[持续]：[拥有者]不可使用任何Pastel✽Palettes角色的（2）技能。」
+// for the sealed skill bodies; the pp unit's features do not compile that
+// crate, so the harness was cfg'd out and `cargo kani` "Failed to match" it).
+// 「[持续]：[拥有者]不可使用丸山彩、若宫伊芙、白鹭千圣或大和麻弥的[主动]（1）
+// 技能，也不可使用冰川日菜的[自动]（2）技能。」 The seal is per named entry
+// (`skillBlock:skill:<id>:<clause>`), no longer the whole band.
 // ===========================================================================
 
 /// Shared body at a concrete seat.
@@ -700,33 +702,44 @@ fn first_accident_02_iff_at(me: i32) {
         w.trig_value = pre_amount;
         w.pay_amount = pre_amount;
     });
-    // 1) play 初次演出事故 — sets the skillBlock token
+    // 1) play 初次演出事故 — writes one seal per named entry
     invoke::unwrap_done(invoke::play_idx(crate::card_id!("PP:初次演出事故"), me));
-    let blocked = world::with_world(|ww| {
-        ww.key_get(me, crate::intern::intern("skillBlock:Pastel✽Palettes")) > 0
-            || ww.key_get(me, crate::intern::intern("skillBlock")) > 0
-    });
-    kani::cover!(blocked, "skillBlock token written");
+    const SEALS: [&str; 5] = [
+        "skillBlock:skill:丸山彩:With~:1",
+        "skillBlock:skill:若宫伊芙:天下统一:1",
+        "skillBlock:skill:白鹭千圣:保持坦率的你:1",
+        "skillBlock:skill:大和麻弥:朝阳照耀的片刻:1",
+        "skillBlock:skill:冰川日菜:日菜抽中的大奖:2",
+    ];
+    let mut all = true;
+    for tag in SEALS {
+        all &= world::with_world(|ww| ww.key_get(me, crate::intern::intern(tag)) > 0);
+    }
+    kani::cover!(all, "all five entry seals written");
     crate::kassert!(
-        blocked,
-        "C-PP-first-accident-02: skillBlock token must be set"
+        all,
+        "C-PP-first-accident-02: every named entry seal must be set"
     );
 
-    // 2) 丸山彩 (2) must refuse
-    let pre_amount2 = world::with_world(|ww| ww.pay_amount);
+    // 2) 冰川日菜 (2) must refuse -- the body's own gate runs before the roll,
+    // so a sealed holder never records a borrow. (丸山彩's (2) is *not* sealed
+    // under the new text and may rewrite the amount, so it is no assertion
+    // here.)
     invoke::unwrap_done(invoke::entry_index(
-        crate::card_id!("skill:丸山彩:With~"),
+        crate::card_id!("skill:冰川日菜:日菜抽中的大奖"),
         1,
         me,
-    ) /* Hook PayCombinedAdd */);
-    let post = world::snapshot();
+    ) /* Hook TurnStartBefore */);
+    let borrowed = world::with_world(|ww| {
+        ww.key_get(me, crate::intern::intern("skill.hinaLottery.borrowed"))
+    });
     crate::kassert!(
-        post.pay_amount == pre_amount2,
-        "C-PP-first-accident-02: PP (2) must not rewrite the pay amount"
+        borrowed < 0,
+        "C-PP-first-accident-02: sealed hina (2) must not borrow"
     );
     crate::kassert!(
-        post.fans_pos[me as usize] == pre_up,
-        "C-PP-first-accident-02: PP (2) must not flip fans"
+        world::snapshot().fans_pos[me as usize] == pre_up,
+        "C-PP-first-accident-02: the failed press must not flip fans"
     );
 }
 

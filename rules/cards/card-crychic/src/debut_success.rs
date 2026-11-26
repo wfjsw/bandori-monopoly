@@ -1,14 +1,15 @@
+//! turn's money never drops, then stun + a band crystal after the turn.
 //!
 //! 规则书（docs/rulebook/cards.json, id `CRYCHIC:初演大成功`）:
 //! > 初演大成功：
-//! >   打出此卡后，本回合内你的资金不会下降（除拍卖与写明不受资金变动效果影响的情况外），回合结束后获得一层眩晕并向乐队技能卡上添加一个奇迹水晶。
+//! > 打出此卡后，本回合内你的资金不会下降，但拍卖与写明不受资金变动效果影响的情况除外。
+//! > 回合结束后：获得1层[眩晕]，并向乐队技能卡添加1个[奇迹水晶]。
 //!
-//! turn's money never drops, then stun + a band crystal after the turn.
 
 use bandori_std::ctx;
 use card_sdk::abi::ActionKind;
 use card_sdk::CardText;
-use card_sdk::{key, Action, CardDef, Msg, On};
+use card_sdk::{key, para, sec, Action, CardDef, Msg, On};
 
 pub const DEBUT_SUCCESS: CardDef = CardDef::new(
     "CRYCHIC:初演大成功",
@@ -17,7 +18,7 @@ pub const DEBUT_SUCCESS: CardDef = CardDef::new(
         .name(r#"初演大成功"#)
         .raw_name(r#"初演大成功"#)
         .tags(&[])
-        .text(CardText::para(r#"打出此卡后，本回合内你的资金不会下降（除拍卖与写明不受资金变动效果影响的情况外），回合结束后获得一层眩晕并向乐队技能卡上添加一个奇迹水晶。"#))
+        .text(CardText::of(&[sec(r#""#, &[para(r#"打出此卡后，本回合内你的资金不会下降，但拍卖与写明不受资金变动效果影响的情况除外。"#), para(r#"回合结束后：获得1层[眩晕]，并向乐队技能卡添加1个[奇迹水晶]。"#)])]))
         // sheet cell M11
         .fields(&[("group", r#"CRYCHIC"#), ("owner", "")]));
 

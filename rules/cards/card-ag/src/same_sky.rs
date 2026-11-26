@@ -1,14 +1,17 @@
+//! [反击] auto-plays when drawn: money by hand size, else draw.
 //!
 //! 规则书（docs/rulebook/cards.json, id `AG:朝同一片天空迈进`）:
 //! > 朝同一片天空迈进：
-//! > [反击]抽出此卡时立刻打出，如果你手牌数至少为3，获得手牌数*600的资金，如果你的手牌数小于3，抽一张卡（开局时抽到此卡洗回）
+//! > 开局时抽到此卡，将此卡洗回。
+//! > [反击]抽出此卡时，立刻打出，并根据你的手牌数进行对应操作：
+//! > - 手牌数至少为3：获得手牌数×600的资金。
+//! > - 手牌数小于3：抽1张卡。
 //!
-//! [反击] auto-plays when drawn: money by hand size, else draw.
 
 use bandori_std::ctx::{self, trigger};
 use bandori_std::zones::ZoneChangeCause;
 use card_sdk::CardText;
-use card_sdk::{key, Action, CardDef, Msg, On};
+use card_sdk::{key, para, sec, Action, CardDef, Msg, On};
 
 pub const SAME_SKY: CardDef = CardDef::new(
     "AG:朝同一片天空迈进",
@@ -25,7 +28,7 @@ pub const SAME_SKY: CardDef = CardDef::new(
         .name(r#"朝同一片天空迈进"#)
         .raw_name(r#"朝同一片天空迈进"#)
         .tags(&[r#"反击"#])
-        .text(CardText::para(r#"[反击]抽出此卡时立刻打出，如果你手牌数至少为3，获得手牌数*600的资金，如果你的手牌数小于3，抽一张卡（开局时抽到此卡洗回）"#))
+        .text(CardText::of(&[sec(r#""#, &[para(r#"开局时抽到此卡，将此卡洗回。"#), para(r#"[反击]抽出此卡时，立刻打出，并根据你的手牌数进行对应操作："#), para(r#"- 手牌数至少为3：获得手牌数×600的资金。"#), para(r#"- 手牌数小于3：抽1张卡。"#)])]))
         // sheet cell C11
         .fields(&[("group", r#"Afterglow"#), ("owner", "")]));
 

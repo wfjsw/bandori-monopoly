@@ -1,16 +1,18 @@
+//! force-move the player who [反击]'d you this turn 1-4 tiles with settle.
 //!
 //! 规则书（docs/rulebook/cards.json, id `Mujica:无法将视线移开`）:
 //! > 无法将视线移开：
-//! >  使当前回合内对你打出过[反击]的所有玩家向你选择的方向强制移动1~4以内的任意步数并[触发结算] （此卡可作为[反击]在有玩家对你使用[反击]后立即使用），若使用者在自身回合内选择了使用者自己进行强制移动，则视为其主要移动
+//! > 使当前回合内对你打出过[反击]的所有玩家，向你选择的方向强制移动1至4格中的任意步数，并进行[结算]。
+//! > 有玩家对你使用[反击]后，你可立即将此卡作为[反击]使用。
+//! > 若[使用者]在自身回合内选择自己进行强制移动，此次移动视为其[主要移动]。
 //!
-//! force-move the player who [反击]'d you this turn 1-4 tiles with settle.
 
 use alloc::vec::Vec;
 
 use bandori_std::ctx::{self, trigger};
 use card_sdk::abi::{ActionKind, ChainKind};
 use card_sdk::CardText;
-use card_sdk::{key, CardDef, Msg, On};
+use card_sdk::{key, para, sec, CardDef, Msg, On};
 
 pub const CANT_LOOK_AWAY: CardDef = CardDef::new(
     "Mujica:无法将视线移开",
@@ -34,7 +36,7 @@ pub const CANT_LOOK_AWAY: CardDef = CardDef::new(
         .name(r#"无法将视线移开"#)
         .raw_name(r#"无法将视线移开"#)
         .tags(&[r#"反击"#])
-        .text(CardText::para(r#"使当前回合内对你打出过[反击]的所有玩家向你选择的方向强制移动1~4以内的任意步数并[触发结算] （此卡可作为[反击]在有玩家对你使用[反击]后立即使用），若使用者在自身回合内选择了使用者自己进行强制移动，则视为其主要移动"#))
+        .text(CardText::of(&[sec(r#""#, &[para(r#"使当前回合内对你打出过[反击]的所有玩家，向你选择的方向强制移动1至4格中的任意步数，并进行[结算]。"#), para(r#"有玩家对你使用[反击]后，你可立即将此卡作为[反击]使用。"#), para(r#"若[使用者]在自身回合内选择自己进行强制移动，此次移动视为其[主要移动]。"#)])]))
         // sheet cell J7
         .fields(&[("group", r#"Ave Mujica"#), ("owner", "")]));
 

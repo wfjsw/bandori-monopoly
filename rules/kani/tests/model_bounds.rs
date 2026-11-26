@@ -79,7 +79,7 @@ fn intern_fixed_loop_bounds() {
     assert!(card_sdk::intern::intern(&long).is_valid());
     // Production has no length cap (`MAX_NAME` is the cfg(kani) unwind bound
     // only). A 65-byte mark name must intern and round-trip.
-    let sixty_five = "角色标记:".to_owned() + &"x".repeat(52);
+    let sixty_five = "模仿标记:".to_owned() + &"x".repeat(52);
     assert_eq!(sixty_five.len(), 65);
     let id = card_sdk::intern::intern(&sixty_five);
     assert!(id.is_valid(), "65-byte composite name must intern");
