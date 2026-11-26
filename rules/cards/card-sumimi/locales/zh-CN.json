@@ -6,7 +6,7 @@
   "here_the_world_note": "扣着一张卡（还有奇迹水晶）",
   "here_the_world_placed": "「Here the world」放到了 {{who}} 的场上（{{by}} 打出）",
   "here_the_world_returned": "Here the world 的效果：扣着的卡回到了 {{who}} 的手牌",
-  "here_the_world_when": "有人同一回合内打出两张卡",
+  "here_the_world_when": "有人在同一回合内打出2张卡时",
   "idol_and_band_no_effect": "资金已经有 3,000 以上，没有效果",
   "idol_and_band_redeemed": "你本回合已经赎回过。",
   "idol_and_band_reason": "兼顾偶像与乐队 的效果：资金重设为 3,000",
@@ -29,7 +29,7 @@
   "no_breakup_moved": "Sumimi不会解散哦 的效果：{{who}} [传送] 到 {{tile}}",
   "no_breakup_repeated": "资金里有相同的数字",
   "no_breakup_title": "Sumimi不会解散哦",
-  "now_sumimi_when": "你在你的本回合开始后到下回合开始前之间失去资金的总额即将超过你所在格子的[收费标价]",
+  "now_sumimi_when": "从你的本回合开始后，到下回合开始前，若你失去资金的总额即将超过你所在格子的[收费标价]",
   "now_sumimi_reason": "「现在她是Sumimi的小初啦」：获得 {{n}} 资金",
   "sweet_escape_ask": "[传送] 到哪一格并结算？（无主的必须买下）",
   "sweet_escape_moved": "Sweet Escape 的效果：{{who}} [传送] 到 {{tile}}",
@@ -48,5 +48,5 @@
   "two_in_one_note": "替换为另一名角色",
   "two_in_one_not_sumimi": "不是 Sumimi 的角色，不能打出",
   "two_in_one_swap": "Sumimi是二人一体的 的效果：{{who}} 换成 Sumimi 的另一名角色",
-  "two_in_one_when": "你的移动掷骰后"
+  "two_in_one_when": "你进行用于确定移动步数的[投掷]后"
 }
