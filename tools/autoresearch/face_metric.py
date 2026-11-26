@@ -15,9 +15,17 @@ local title, or an internal ``#`` id, matches it. A prefix-only local face
 pair's ``[full name]`` annotation. Any other empty-vs-nonempty title is drift.
 ``unpaired_library`` counts library entries whose normalized key no pair uses.
 
-Every metric is one stdout line ``METRIC <name>=<value>``; up to ten mismatched
-paired ids follow as ``ASI synced=0 id=<id>``. A completed comparison always
-exits 0; malformed input or unreadable infrastructure exits 2.
+Every metric is one stdout line ``METRIC <name>=<value>``; ``face_full`` (title,
+text, tags, derived) is the primary, ``face_synced`` (title+text) secondary. Up
+to ten non-full ids follow as ``ASI full=0 id=<id>``. A completed comparison
+always exits 0; malformed input or unreadable infrastructure exits 2.
+
+Tag coverage compares the roster (``--roster``) tag set against the bracketed
+tokens the library body/title supports (``手 场地 反击 持续 特 限 衍生``).
+The roster must be a superset of the supported set; roster extras (``限`` is
+the common one) are tolerated. ``tags_missing`` and ``tags_unsupported`` count
+the two shortfalls, whose allowed vocabulary is
+``{手, 场地, 反击, 持续, 特, 限, 衍生}``.
 """
 
 from __future__ import annotations
@@ -38,6 +46,17 @@ HEADING = re.compile(r"#{1,6}\s")
 # Event faces live in events.md's own `## Cards` section; pairs.json covers the
 # roster only, so event entries would masquerade as unpaired library rows.
 EXCLUDED_FILES = {"events.md"}
+ALLOWED_TAGS = {"手", "场地", "反击", "持续", "特", "限", "衍生"}
+# A label token counts at a clause boundary: a body line start or after a
+# `（N）` marker, and every token in a leading run (`[反击][特]`). Reaction
+# cards write `[反击]` anywhere, so that token always counts.
+LEADING_TAG_RUN_RE = re.compile(
+    r"^\s*(?:（\d+）|\(\d+\))?\s*((?:\[(?:手|特|持续|限|场地|反击)\])+)"
+)
+TAG_TOKEN_RE = re.compile(r"\[(手|特|持续|限|场地|反击)\]")
+CLAUSE_TAG_RE = re.compile(r"(?:（\d+）|\(\d+\))\s*\[(手|特|持续|限|场地)\]")
+REACTION_TAG_RE = re.compile(r"\[(反击)\]")
+DERIVED_TOKEN = "[衍生]"
 
 
 class MetricError(Exception):
@@ -229,6 +248,44 @@ def load_json(path: Path, label: str) -> dict:
     return data
 
 
+def load_roster(path: Path) -> dict[str, dict]:
+    data = load_json(path, "roster")
+    rows = data.get("cards")
+    if not isinstance(rows, list):
+        raise fail(f"roster has no 'cards' array: {path}")
+    out: dict[str, dict] = {}
+    for row in rows:
+        if not isinstance(row, dict) or not isinstance(row.get("id"), str):
+            raise fail(f"roster card without a string id: {path}")
+        if row["id"] in out:
+            raise fail(f"duplicate roster card id: {row['id']!r}")
+        tags = row.get("tags")
+        if not isinstance(tags, list) or not all(isinstance(t, str) for t in tags):
+            raise fail(f"roster card {row['id']!r} tags must be a string array")
+        out[row["id"]] = {"tags": set(tags), "derived": bool(row.get("derived"))}
+    return out
+
+
+def supported_tags(title: str, bodies: list[str]) -> set[str]:
+    """Face tags the library supports, ignoring prose cross-references.
+
+    Label tokens count at a clause boundary (line start or after a `（N）`
+    marker) and in a leading tag run (`[反击][特]`); `[反击]` counts anywhere;
+    `[衍生]` comes from the title only. Prose `[场]` is not a token here.
+    """
+    found: set[str] = set()
+    if DERIVED_TOKEN in title:
+        found.add("衍生")
+    for body in bodies:
+        for line in body.splitlines():
+            run = LEADING_TAG_RUN_RE.match(line)
+            if run:
+                found.update(TAG_TOKEN_RE.findall(run.group(1)))
+            found.update(CLAUSE_TAG_RE.findall(line))
+        found.update(REACTION_TAG_RE.findall(body))
+    return found
+
+
 def pair_is_synced(pairs, cards, index, local_id: str) -> bool:
     """Both title and body must line up for one paired id."""
     derived, norm = normalize_local_id(local_id)
@@ -245,11 +302,50 @@ def pair_is_synced(pairs, cards, index, local_id: str) -> bool:
     return title_ok and text_ok
 
 
-def find_mismatches(
-    pairs: dict[str, str],
-    cards: dict,
-    index: dict[tuple[bool, str], list[str]],
-) -> list[str]:
+def pair_is_full(
+    pairs, cards, index, roster, local_id: str
+) -> tuple[bool, bool, bool, bool, set[str], set[str]]:
+    """(title, text, tags, derived, supported, local_tags) for one pair."""
+    derived, norm = normalize_local_id(local_id)
+    t_derived, t_norm = normalize_title(pairs[local_id])
+    bodies = index.get((t_derived, t_norm))
+    if local_id not in cards or not bodies:
+        card = cards.get(local_id) if isinstance(cards, dict) else None
+        tags = set(card.get("tags") or []) if isinstance(card, dict) else set()
+        return False, False, False, False, set(), tags
+
+    title_ok = title_matches(
+        local_id, norm, pairs[local_id], t_norm, t_derived, derived
+    )
+    card = cards[local_id]
+    text = card.get("text", "") if isinstance(card, dict) else ""
+    text_ok = any(normalize_text(body) == normalize_text(text) for body in bodies)
+
+    # Duplicate placeholder titles (`unnamed`) put every file's body under one
+    # key; tags belong to the body this display face actually mirrors.
+    tag_bodies = [
+        body for body in bodies if normalize_text(body) == normalize_text(text)
+    ] or bodies
+    supported = supported_tags(pairs[local_id], tag_bodies)
+    entry = roster.get(local_id)
+    local_tags = set(entry["tags"]) if entry else set()
+    # The roster may carry extras (a face is also a `手`/`场地` card even when
+    # its prose never labels it); only a missing supported token fails.
+    tags_ok = entry is not None and supported <= local_tags
+    derived_ok = entry is not None and entry["derived"] == derived
+    return title_ok, text_ok, tags_ok, derived_ok, supported, local_tags
+
+
+def find_full_mismatches(pairs, cards, index, roster) -> list[str]:
+    return [
+        local_id
+        for local_id in sorted(pairs)
+        if local_id in cards
+        and not all(pair_is_full(pairs, cards, index, roster, local_id)[:4])
+    ]
+
+
+def find_mismatches(pairs, cards, index) -> list[str]:
     return [
         local_id
         for local_id in sorted(pairs)
@@ -262,10 +358,12 @@ def compute() -> int:
     parser.add_argument("--display", required=True, type=Path)
     parser.add_argument("--pairs", required=True, type=Path)
     parser.add_argument("--library", required=True, type=Path)
+    parser.add_argument("--roster", required=True, type=Path)
     args = parser.parse_args()
 
     display = load_json(args.display, "display")
     pairs_raw = load_json(args.pairs, "pairs")
+    roster = load_roster(args.roster)
 
     cards = display.get("cards")
     if not isinstance(cards, dict):
@@ -290,30 +388,34 @@ def compute() -> int:
     paired = 0
     title_match = 0
     text_match = 0
+    tags_match = 0
+    derived_match = 0
+    full = 0
     synced = 0
     missing_local = 0
+    tags_missing = 0
+    tags_unsupported = 0
 
     for local_id, title in pairs.items():
-        derived, norm = normalize_local_id(local_id)
-        t_derived, t_norm = normalize_title(title)
-        bodies = index.get((t_derived, t_norm))
-
         if local_id not in cards:
             missing_local += 1
             continue
         paired += 1
 
-        title_ok = bool(bodies) and title_matches(
-            local_id, norm, title, t_norm, t_derived, derived
-        )
-        card = cards[local_id]
-        text = card.get("text", "") if isinstance(card, dict) else ""
-        text_ok = bool(bodies) and any(
-            normalize_text(body) == normalize_text(text) for body in bodies
+        title_ok, text_ok, tags_ok, derived_ok, supported, local_tags = pair_is_full(
+            pairs, cards, index, roster, local_id
         )
         title_match += int(title_ok)
         text_match += int(text_ok)
+        tags_match += int(tags_ok)
+        derived_match += int(derived_ok)
+        full += int(title_ok and text_ok and tags_ok and derived_ok)
         synced += int(title_ok and text_ok)
+
+        entry = roster.get(local_id)
+        if entry is not None:
+            tags_missing += len(supported - entry["tags"])
+        tags_unsupported += len(local_tags - ALLOWED_TAGS)
 
     unpaired_local = sorted(
         local_id
@@ -327,39 +429,22 @@ def compute() -> int:
         1 for title in titles if normalize_title(title) not in used_keys
     )
 
-    has_tags = any(
-        isinstance(card, dict) and card.get("tags") for card in cards.values()
-    )
-    tags_match = 0
-    if has_tags:
-        label = re.compile(r"^\s*\[([^\]]+)\][：:]?\s*$")
-        for local_id, title in pairs.items():
-            if local_id not in cards:
-                continue
-            card = cards[local_id]
-            display_tags = set(card.get("tags") or []) if isinstance(card, dict) else set()
-            derived, norm = normalize_title(title)
-            bodies = index.get((derived, norm)) or []
-            library_tags: set[str] = set()
-            for body in bodies:
-                for line in body.splitlines():
-                    match = label.match(line)
-                    if match:
-                        library_tags.add(match.group(1))
-            if display_tags and display_tags == library_tags:
-                tags_match += 1
-
     print(f"METRIC face_paired={paired}")
+    print(f"METRIC face_full={full}")
     print(f"METRIC face_title_match={title_match}")
     print(f"METRIC face_text_match={text_match}")
     print(f"METRIC face_synced={synced}")
+    print(f"METRIC face_tags_match={tags_match}")
+    print(f"METRIC face_derived_match={derived_match}")
+    print(f"METRIC tags_missing={tags_missing}")
+    print(f"METRIC tags_unsupported={tags_unsupported}")
     print(f"METRIC unpaired_local={len(unpaired_local)}")
     print(f"METRIC unpaired_library={unpaired_library}")
     print(f"METRIC cards_present={len(cards)}")
-    if has_tags:
-        print(f"METRIC tags_match={tags_match}")
     print(f"METRIC missing_local={missing_local}")
 
+    for local_id in find_full_mismatches(pairs, cards, index, roster)[:MAX_ASI]:
+        print(f"ASI full=0 id={local_id}")
     for local_id in find_mismatches(pairs, cards, index)[:MAX_ASI]:
         print(f"ASI synced=0 id={local_id}")
     return 0

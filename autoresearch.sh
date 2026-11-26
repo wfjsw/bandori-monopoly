@@ -18,10 +18,18 @@ else
   exit 1
 fi
 
+echo "METRIC roster_dump_ok=0"
+if node tools/roster-dump.mjs --force; then
+  echo "METRIC roster_dump_ok=1"
+else
+  exit 1
+fi
+
 python3 tools/autoresearch/face_metric.py \
   --display "$OUT/display.json" \
   --pairs tools/autoresearch/pairs.json \
-  --library tools/autoresearch/cardlib
+  --library tools/autoresearch/cardlib \
+  --roster target/roster-dump/cards.json
 
 if node --test webui/src/core/cards.test.ts; then
   echo "METRIC cards_test_ok=1"

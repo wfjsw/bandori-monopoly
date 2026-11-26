@@ -56,7 +56,7 @@ pub const HAGUMI_MARKS: CardDef = CardDef::new(
 ).meta(&card_sdk::meta::CardMeta::new()
         .name(r#"We Can☆Hurray!"#)
         .raw_name(r#"（北泽育美）We Can☆Hurray!"#)
-        .tags(&[])
+        .tags(&[r#"手"#, r#"反击"#])
         .text(CardText::items(&[it(r#"[手][投掷]2次4d20，选择其中1个结果：
 - 若选择的结果大于60：获得1000资金并抽1张卡，不放置标记。
 - 否则：将1个[育美标记]放置到该结果对应的格子上。你[经过]该标记时，可在该格子[强制停下]并获得2000资金，然后移除该标记。"#), it(r#"[反击]在你回合外收到资金的回合结束时，可打出此卡。当前回合内，你每获得过1次资金，此卡的[投掷]次数增加1。"#)]))

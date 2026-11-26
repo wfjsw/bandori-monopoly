@@ -38,7 +38,7 @@ pub const KANON_MARCH: CardDef = CardDef::new(
 ).meta(&card_sdk::meta::CardMeta::new()
         .name(r#"Wacha Mocha 啪嗒进行曲"#)
         .raw_name(r#"（松原花音）Wacha Mocha 啪嗒进行曲"#)
-        .tags(&[])
+        .tags(&[r#"持续"#])
         .text(CardText::of(&[sec(r#""#, &[para(r#"[持续]花音每次倒走时，为此卡添加1个[水母标记]。"#), para(r#"运营阶段中，若此卡至少有9个[水母标记]：可以清除所有标记，依次进行以下操作："#), steps(&[r#"[传送]到“水族馆”（4号格子）或“弦卷豪宅”（30号格子），视为本次[主要移动]（喊出呼诶诶～！）。"#, r#"将此卡置入弃卡区。"#])])]))
         // sheet cell F13
         .fields(&[("group", r#"Hello, Happy World!"#), ("owner", r#"松原花音"#)]));

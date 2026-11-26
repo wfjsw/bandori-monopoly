@@ -48,7 +48,7 @@ pub const CLEAR_CP: CardDef = CardDef::new(
 ).meta(&card_sdk::meta::CardMeta::new()
         .name(r#"该清CP了"#)
         .raw_name(r#"该清CP了"#)
-        .tags(&[r#"手"#, r#"特"#])
+        .tags(&[r#"手"#])
         .text(CardText::of(&[sec(r#""#, &[items(&[it(r#"[使用者]使用此卡后的下2回合开始时，此卡在格子上添加的[CP点]及其产物将在相邻的没有[CP点]的格子添加1个[CP点]。"#)])]), sec(r#"[手]："#, &[para(r#"在任意一个没有角色和[CP点]的格子上添加1个[CP点]并在自己[场地]添加6个[CP点]。在有[CP点]的格子[结算]时，使用该格1个[CP点]及自己[场地]上1个[CP点]，[获得]800资金。任一处不足1个时，不使用任一处资源，也不取得该笔资金。"#)])]))
         // sheet cell A8
         .fields(&[("group", r#"通用"#), ("owner", "")]));
