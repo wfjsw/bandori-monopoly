@@ -19,6 +19,9 @@ use card_sdk::{key, Action, CardDef, Filter, GateValue, Msg, On};
 const TAKEN: &str = "skill.ras.taken";
 /// The livehouse tile the settle latched.
 const ON_HOUSE: &str = "skill.ras.onHouse";
+/// The teleport option has come due: the player stood on the remembered tile
+/// at this turn's start, so the 运营-phase press may use it.
+const ARMED: &str = "skill.ras.armed";
 
 pub const RAS: CardDef = CardDef::new(
     "skill:RAISE A SUILEN:UNSTOPPABLE",
@@ -42,23 +45,27 @@ pub const RAS: CardDef = CardDef::new(
         // (受到的), self-applied included. Paired with the pure gate above.
         On::Action(Action::Abnormal("target == owner", None, mark_taken)).silent(),
         On::Action(Action::Settle(card_sdk::condition::MINE, None, on_settle)).silent(),
-        // （2）「若你的下回合开始时仍在那个格子上」 -- the teleport offer.
-        // The remembered-tile scan is a derived read (docs/GUARDS.md §4.2).
-        On::Action(Action::TurnStartBefore(
-            card_sdk::condition::MINE,
-            Some(still_on_remembered),
-            at_turn_start_offer,
-        )),
+        // （2）「自己的下回合开始时，如果自己仍在此卡[自动]（2）记录的格子上：可
+        // 在运营阶段选择立刻进入移动阶段并将自己的[主要移动]改为[传送]…」 -- the
+        // turn start arms it (`AT_START`), the press is this 主动 used in 运营.
+        // The engine already refuses an `On::Play` outside the operations phase.
+        // Destination presence is the residual guard.
+        On::Play("", Some(cant_use), use_teleport),
     ],
 )
 .rule();
 
-/// Turn-start bookkeeping: always clear the per-turn latch; drop a stale
-/// landing memory when the player has moved off it.
+/// Turn-start bookkeeping: always clear the per-turn latch; a remembered
+/// landing that is still underfoot arms the 运营-phase press, a stale one is
+/// dropped. `ARMED` is what makes the press 下回合-only (a settle later this
+/// turn does not arm it until the next turn start).
 fn at_turn_start_reset(player_id: i32) -> card_sdk::Asked {
     state::set(player_id, TAKEN, 0);
     let t = state::get(player_id, ON_HOUSE);
-    if t >= 0 && ctx::tile_at(ctx::player_pos(player_id)) != t {
+    if t >= 0 && ctx::tile_at(ctx::player_pos(player_id)) == t {
+        state::set(player_id, ARMED, 1);
+    } else {
+        state::set(player_id, ARMED, 0);
         state::set(player_id, ON_HOUSE, -1);
     }
     Ok(())
@@ -73,36 +80,40 @@ fn owned_livehouses(player_id: i32) -> alloc::vec::Vec<i32> {
         .collect()
 }
 
-/// Residual guard for the （2） teleport offer: still standing on the
+/// Residual guard for the （2） press: armed at this turn's start, still on the
 /// remembered livehouse, and owning at least one Live House to teleport to.
 /// Derived scan (docs/GUARDS.md §4.2).
 ///
 /// 规则书（band sheet, RAISE A SUILEN）:
-/// > （2）因该技能以外的效果在livehouse格子[触发结算]时，若你的下回合开始时
-/// > 仍在那个格子上，你的下一次主要移动可变为传送至你拥有的一个livehouse格子。
+/// > （1）自己的下回合开始时，如果自己仍在此卡[自动]（2）记录的格子上：可在运营
+/// > 阶段选择立刻进入移动阶段并将自己的[主要移动]改为[传送]至自己拥有的1个Live
+/// > House格子。
 ///
-/// The offer is 「可变为传送至你拥有的一个livehouse格子」 -- it exists only when
-/// such a destination exists. A player who owns no Live House has nothing the
-/// offer can name, so the entry must not activate (no prompt, no flash, no log).
+/// The press is 「可…」 -- it exists only when such a destination exists. A
+/// player who owns no Live House has nothing the offer can name, so the entry
+/// must not activate (no flash, no log).
 fn still_on_remembered(player_id: i32) -> bool {
     let t = state::get(player_id, ON_HOUSE);
-    t >= 0
+    state::get(player_id, ARMED) != 0
+        && t >= 0
         && ctx::tile_at(ctx::player_pos(player_id)) == t
         && owned_livehouses(player_id).first().is_some()
 }
 
-/// （2）「若你的下回合开始时仍在那个格子上」 -- the teleport offer.
-/// Destination presence is the residual guard's job; this body only picks one.
-fn at_turn_start_offer(player_id: i32) -> card_sdk::Asked {
-    let t = state::get(player_id, ON_HOUSE);
-    if !ctx::ask_yes(
-        player_id,
-        &Msg::new(key!("ras_title")),
-        &Msg::new(key!("ras_teleport")).tile("tile", t),
-    )? {
-        return Ok(());
+/// [`On::Play`]'s residual gate: the press is blocked while the clause's
+/// precondition does not hold (the reason names it).
+fn cant_use(player_id: i32) -> Option<Msg> {
+    if still_on_remembered(player_id) {
+        None
+    } else {
+        Some(Msg::new(key!("ras_not_ready")))
     }
-    // 「你的下一次主要移动可变为传送至你拥有的一个livehouse格子」
+}
+
+/// （1）「立刻进入移动阶段并将自己的[主要移动]改为[传送]至自己拥有的1个Live
+/// House格子」 -- a press, so an [`On::Play`]. The walk runs now, which is
+/// 「立刻进入移动阶段」; the destination is the first owned Live House.
+fn use_teleport(player_id: i32) -> card_sdk::Asked {
     let Some(&to) = owned_livehouses(player_id).first() else {
         // Guard already admitted a destination; keep the accept path total.
         return Ok(());
@@ -111,6 +122,8 @@ fn at_turn_start_offer(player_id: i32) -> card_sdk::Asked {
     plan::set_teleport_to(ctx::position_of_tile(to));
     plan::set_settles(true);
     state::set(player_id, ON_HOUSE, -1);
+    state::set(player_id, ARMED, 0);
+    ctx::run_planned_move(player_id);
     ctx::log(player_id, &Msg::new(key!("ras_moved")).tile("tile", to));
     Ok(())
 }
@@ -158,7 +171,11 @@ bandori_std::roster::GroupDef::new(r#"RAISE A SUILEN"#)
     .short_name(r#"RAS"#)
     .color(r#"#22CCCC"#)
     .skill(r#"UNSTOPPABLE"#)
-    .text(r#"（1）每回合可选择只获得第一次受到的[异常移动效果]。（2）因该技能以外的效果在livehouse格子[触发结算]时，若你的下回合开始时仍在那个格子上，你的下一次主要移动可变为传送至你拥有的一个livehouse格子。"#)
+    .text(r#"[自动]：
+（1）每回合，自己可选择只受到第一次受到的[异常移动效果]。
+（2）自己因本技能以外的效果在Live House格子[结算]时：记录该格子，供此卡的[主动]（1）效果检查。
+[主动]：
+（1）自己的下回合开始时，如果自己仍在此卡[自动]（2）记录的格子上：可在运营阶段选择立刻进入移动阶段并将自己的[主要移动]改为[传送]至自己拥有的1个Live House格子。"#)
     .logo(r#"018"#);
 
 //
@@ -192,6 +209,6 @@ pub fn on_settle_kani(player_id: i32) -> card_sdk::Asked {
 
 #[cfg(kani)]
 #[inline(always)]
-pub fn at_turn_start_offer_kani(player_id: i32) -> card_sdk::Asked {
-    at_turn_start_offer(player_id)
+pub fn use_teleport_kani(player_id: i32) -> card_sdk::Asked {
+    use_teleport(player_id)
 }

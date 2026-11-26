@@ -17,7 +17,7 @@
 //! `cannot_play`) refuses every action while stunned; `prop::PLAYABLE_STUNNED`
 //! is the documented exception (the same waiver 壱雫空 carries).
 
-use bandori_std::ctx::{self, state};
+use bandori_std::ctx::{self, plan, state};
 use bandori_std::state_key;
 use card_sdk::abi::{roll_source, ActionKind};
 use card_sdk::{key, Action, CardDef, Msg, On};
@@ -82,11 +82,14 @@ fn use_skill(player_id: i32) -> card_sdk::Asked {
     if x < 1 || !bandori_std::fire::spend_skill(player_id, x, &Msg::new(key!("rinko_spend")))? {
         return Ok(());
     }
-    // 「固定为X*6」 -- the face is pinned, not rolled.
-    ctx::set_fixed_roll(x * 6, roll_source::SKILL);
-    // 「本次移动不受异常移动效果影响」 -- the companion layer closes the
-    // stay half of the move gate, and the generic walk-exempt flag cancels
-    // the immobile clamp for this walk.
+    // 「固定为X*6」 -- the length is fixed. `set_settles(true)` so the landing
+    // settles whichever arm below walks it.
+    plan::clear_dice();
+    plan::set_settles(true);
+    // 「获得一层[霸体]状态」 -- [霸体] is the `UNSTOPPABLE` alias: 「不受[异常
+    // 移动效果]影响，回合结束时移除该状态」. The companion layer closes the
+    // stay half of the move gate, and the generic walk-exempt flag cancels the
+    // immobile clamp for this walk.
     state::add(player_id, state_key::UNSTOPPABLE, 1);
     bandori_std::status::declare_companion(player_id, state_key::UNSTOPPABLE);
     state::set_expires(player_id, state_key::UNSTOPPABLE, ctx::state::TURN_END);
@@ -96,6 +99,20 @@ fn use_skill(player_id: i32) -> card_sdk::Asked {
         player_id,
         &Msg::new(key!("rinko_fixed")).i("n", (x * 6) as i64),
     );
+    // 「并立刻进入移动阶段，进行固定为X×6格的移动」 -- normally the press runs
+    // the move (`run_planned_move` marks `MainMoved`, so no later main move).
+    // While the seat cannot move (stun / exile), the move gate is read against
+    // the committed world, which the pause discards the fresh [霸体] write
+    // from; there the face is pinned instead and the ordinary roll walks it
+    // (the committed exemption lets the clamp through).
+    let cannot_move = ctx::state::get(player_id, state_key::STUN) > 0
+        || ctx::state::get(player_id, state_key::EXILE) > 0;
+    if cannot_move {
+        ctx::set_fixed_roll(x * 6, roll_source::SKILL);
+    } else {
+        plan::set_steps(x * 6);
+        ctx::run_planned_move(player_id);
+    }
     Ok(())
 }
 

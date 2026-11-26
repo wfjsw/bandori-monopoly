@@ -1,17 +1,24 @@
 //! `skill:若叶睦（CRYCHIC）:精致的人偶`
 //!
 //! 规则书（skill sheet, 若叶睦（CRYCHIC））:
-//! > （1）每次[经过]CiRCLE时获得一个[火罐]（初始1，上限1）
-//! > （2）开局时指定一名其他玩家，你的移动阶段开始时，可消耗1火罐，使本次的移动
-//! > 掷骰结果为那名玩家上一次的移动掷骰结果；那名玩家破产时，可重新指定一名玩家。
-//! > （3）乐队技能为Ave Mujica时，任意时刻手牌大于等于3时进入状态2，严格小于3时
-//! > 进入状态1，但只有洗牌时可以为你的乐队技能卡上添加奇迹水晶。
+//! > [资源]：
+//! > （1）[火罐]：初始1，上限1。
+//! > [自动]：
+//! > （1）自己每次[经过]CiRCLE时：获得1个[火罐]。
+//! > （2）游戏开始时：自己[指定]1名其他玩家。那名玩家[破产]时，自己可重新[指定]
+//! > 1名玩家。
+//! > （3）自己的乐队技能为“Ave Mujica”时：回合结束时手牌数至少为3则进入[人偶模式]，
+//! > 严格小于3则退出[人偶模式]；只有洗牌时才能为自己的乐队技能卡添加[奇迹水晶]。
+//! > [主动]：
+//! > （1）自己的移动阶段开始时：可使用1个[火罐]，使此次用于确定移动步数的[投掷]
+//! > 结果，等于此角色[自动]（2）[指定]玩家上一次用于确定移动步数的[投掷]结果。
 //!
 //! （3） is the two-state mechanic the Ave Mujica band skill also uses; the state
-//! axis is `skillState`. 「但只有洗牌时可以为你的乐队技能卡上添加奇迹水晶」
-//! moves the band skill's crystal add to reshuffles: it rides `Reshuffled` and
-//! writes through the shuffle-tagged host op, and the band skill's own
-//! third-turn add stands down while this face rides with it.
+//! axis is `skillState`. The threshold is checked **only at the turn end**
+//! (`TurnEnd`), not on every hand change. 「只有洗牌时才能为自己的乐队技能卡添加
+//! 奇迹水晶」 moves the band skill's crystal add to reshuffles: it rides
+//! `Reshuffled` and writes through the shuffle-tagged host op, and the band
+//! skill's own third-turn add stands down while this face rides with it.
 
 use bandori_std::ctx::{self, state};
 use bandori_std::state_key;
@@ -31,14 +38,10 @@ pub const MUTSUMI_CRYCHIC: CardDef = CardDef::new(
         On::Action(Action::DeckAtGameStart("", None, at_start)),
         On::Action(Action::Pass(bandori_std::guards::OWN_START, None, on_pass)),
         On::Action(Action::DiceRollAfter("", Some(other), latch)).silent(),
-        // （3）「乐队技能为Ave Mujica时，任意时刻手牌大于等于3时进入状态2，严格
-        // 小于3时进入状态1」 -- own hand changes only (`actor == owner`); the
-        // band check is the residual (band id is outside the CEL vocabulary).
-        On::Action(Action::HandChanged(
-            "actor == owner",
-            Some(mujica),
-            sync_state,
-        )),
+        // （3）「回合结束时手牌数至少为3则进入[人偶模式]，严格小于3则退出」 --
+        // own turn end only (`actor == owner`); the band check is the residual
+        // (band id is outside the CEL vocabulary).
+        On::Action(Action::TurnEndAfter("actor == owner", Some(mujica), sync_state)),
         // 「但只有洗牌时可以为你的乐队技能卡上添加奇迹水晶」 -- the carve-out:
         // the add rides `Reshuffled` and writes through the shuffle-tagged
         // host op, so it is distinguishable from every other crystal gain.
@@ -144,7 +147,7 @@ fn mujica_in_two(player_id: i32) -> bool {
     mujica(player_id) && state::get(player_id, state_key::SKILL_STATE) == 2
 }
 
-/// （3）「任意时刻手牌大于等于3时进入状态2，严格小于3时进入状态1」.
+/// （3）「回合结束时手牌数至少为3则进入[人偶模式]，严格小于3则退出」.
 ///
 /// The state axis is the band skill's (`skillState`); this face only drives
 /// the edge. Outside an Ave Mujica band the hand size means nothing here.

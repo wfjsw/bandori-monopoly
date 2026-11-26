@@ -14,12 +14,21 @@ use card_sdk::abi::ActionKind;
 use card_sdk::{key, Action, CardDef, Msg, On};
 
 const ID: &str = "skill:Hello, Happy World!:传播笑容";
-/// The recorded player, or -1. 「分别记录这两名玩家」 names two; `WHO2` is the
-/// second.
-const WHO: &str = "skill.hhw.who";
-const WHO2: &str = "skill.hhw.who2";
+/// One held mark per doubled payer: `[X玩家标记（HHW）]`. The player's seat
+/// number is in the key, so a second doubled payment keeps the first.
+const MARK: &str = "skill.hhw.mark.";
 /// 「记录该次收款的价格（可累加）」.
 const SAVED: &str = "skill.hhw.saved";
+
+/// The held-mark name one payer's mark lives under.
+fn mark(who: i32) -> alloc::string::String {
+    alloc::format!("{MARK}{who}")
+}
+
+/// Does this card still hold `who`'s mark?
+fn has_mark(player_id: i32, who: i32) -> bool {
+    ctx::held_count(player_id, &mark(who)) > 0
+}
 
 pub const HHW: CardDef = CardDef::new(
     "skill:Hello, Happy World!:传播笑容",
@@ -56,15 +65,10 @@ pub const HHW: CardDef = CardDef::new(
 /// Residual guard for [`after_pay`]: a recorded player collected a rent and
 /// this card has a crystal to spend. Dynamic keys (`skill.hhw.*`), not CEL.
 fn after_pay_applies(player_id: i32) -> bool {
-    let who = state::get(player_id, WHO);
-    let who2 = state::get(player_id, WHO2);
-    if who < 0 && who2 < 0 {
-        return false;
-    }
     // The recorded player's tile **collects**: that is the pay trigger's
     // `target` (the payer rides `player_id`).
     let to = ctx::trigger::target();
-    if to != who && to != who2 {
+    if !has_mark(player_id, to) {
         return false;
     }
     // 规则书（`Sumimi:#L11`）: 「每当乐队技能需要移除[奇迹水晶]时，可移除此卡上的
@@ -92,8 +96,10 @@ fn on_pay_choose(player_id: i32) -> card_sdk::Asked {
     }
     let amount = ctx::trigger::value();
     ctx::trigger::set_pay_amount(amount * 2);
-    // 「记录该玩家并使此卡获得一个奇迹水晶」
-    state::set(player_id, WHO, to);
+    // 「若如此做，获得一个那名玩家的[X玩家标记（HHW）]」 + the crystal of
+    // （1）'s old wording. The mark is keyed on the payer, so a later double
+    // against a different player adds a second mark instead of overwriting.
+    ctx::add_held_by_name(player_id, &mark(to), 1, i32::MAX)?;
     ctx::add_crystals(1, i32::MAX)?;
     ctx::log(
         player_id,
@@ -102,9 +108,12 @@ fn on_pay_choose(player_id: i32) -> card_sdk::Asked {
     Ok(())
 }
 
-/// （2）「被记录的玩家的格子产生收款时，移除此卡的一个奇迹水晶，记录该次收款的
-/// 价格（可累加）」.
+/// （2）「自己拥有对应[X玩家标记（HHW）]的玩家的格子[收取]资金时：移除此卡的1个
+/// 对应的[X玩家标记（HHW）]，记录此次[收取]的金额（可累加）」.
 fn after_pay(player_id: i32) -> card_sdk::Asked {
+    // The mark of the collecting player (the guard admitted one).
+    let to = ctx::trigger::target();
+    ctx::add_held_by_name(player_id, &mark(to), -1, i32::MAX)?;
     // 规则书: 「每当乐队技能需要移除[奇迹水晶]时，可移除此卡上的一个[奇迹水晶]代替」
     // -- 「此卡」 is the placed `Sumimi:#L11`, drained first.
     crate::spend_crystals(player_id, 1)?;
@@ -136,7 +145,13 @@ bandori_std::roster::GroupDef::new(r#"Hello, Happy World!"#)
     .short_name(r#"HHW"#)
     .color(r#"#FFDD00"#)
     .skill(r#"传播笑容"#)
-    .text(r#"（1）向他人的格子付款时可选择支付双倍价格，若如此做，记录该玩家并使此卡获得一个奇迹水晶。（2）被记录的玩家的格子产生收款时，移除此卡的一个奇迹水晶，记录该次收款的价格（可累加）。（3）你进行盖房时，可从盖房花费中减去所记录的数字，然后将记录数字归零。"#)
+    .text(r#"[自动]：
+（1）自己拥有对应[X玩家标记（HHW）]的玩家的格子[收取]资金时：移除此卡的1个对应的[X玩家标记（HHW）]，记录此次[收取]的金额（可累加）。
+[主动]：
+（1）自己向其他玩家的格子[支付]资金时：可选择[支付]双倍金额。若如此做，获得一个那名玩家的[X玩家标记（HHW）]。
+（2）自己盖房时：可依次进行以下操作：
+1. 从盖房花费中减去此卡记录的金额（最低为0）。
+2. 将此卡记录的金额归零。"#)
     .logo(r#"003"#);
 
 //

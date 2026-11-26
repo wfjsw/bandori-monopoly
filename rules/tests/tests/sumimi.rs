@@ -521,6 +521,27 @@ fn mana_half_only_halves_own_spending() {
     );
 }
 
+/// 規則书 [甜甜圈]: 「自己的[消耗]与[支付]资金减半」 -- the raw-消耗 arm
+/// (`spendBefore`, a redeem debit), not just the pay split.
+#[test]
+fn mana_donut_halves_a_raw_spend() {
+    let mut t = Table::new(&["纯田真奈", "三角初华（Sumimi）"]);
+    t.clean();
+    t.begin_turn(0);
+    drain(&mut t);
+    let deed = 5;
+    t.set_owner(deed, Some(0));
+    t.mortgage(0, deed).unwrap();
+    drain(&mut t);
+    t.set_state(0, "skill.manaDonut.half", 2);
+    let cost = (data().tiles[deed].price * 3 + 2) / 5;
+    let before = t.money(0);
+    t.redeem(0, deed).unwrap();
+    drain(&mut t);
+    assert!(!t.mortgaged(deed), "the deed was redeemed");
+    assert_eq!(t.money(0), before - (cost + 1) / 2, "the 消耗 is halved");
+}
+
 // -- skill:三角初华（Sumimi）:成为偶像 ---------------------------------
 
 #[test]
@@ -535,6 +556,101 @@ fn hina_sumimi_skill_fire_cap() {
     t.set_fire(0, 2, 2);
     assert_eq!(t.charge(0), 2);
     assert_eq!(t.charge_max(0), 2);
+}
+
+/// Accept the turn-start placement and choose the first offered tile.
+fn place_marker(t: &mut Table) {
+    while t.prompt().is_some() {
+        if t.prompt_refers("uika_sumimi_ask") {
+            t.answer_one(0).unwrap();
+            break;
+        }
+        t.decline()
+    }
+    let k = t
+        .option("uika_sumimi_option")
+        .expect("a street-colour tile is offered");
+    t.answer_one(k).unwrap();
+    rest(t);
+    drain(t);
+}
+
+/// The board tile carrying a 成为偶像 marker.
+fn marker_tile(t: &Table) -> usize {
+    (0..60)
+        .find(|&i| t.marks_on(i).iter().any(|m| m.kind == "skill.uikaIdol.pot"))
+        .expect("a marker was placed")
+}
+
+#[test]
+fn hina_sumimi_marker_lowers_then_refunds_the_cap() {
+    // 规则书: 「[sumimi初华标记X]：获得时使自己[火罐]上限-1，移除时使自己[火罐]
+    //          上限+1」
+    let mut t = Table::new(&["三角初华（Sumimi）", "户山香澄"]);
+    t.clean();
+    t.set_fire(0, 2, 2);
+    t.begin_turn(0);
+    place_marker(&mut t);
+    assert_eq!(t.charge_max(0), 1, "the marker holds a cap slot down");
+    let tile = marker_tile(&t);
+    // Finish P0's own move, then hand the turn over.
+    t.dice(&[1]);
+    t.roll(0).unwrap();
+    rest(&mut t);
+    drain(&mut t);
+    if let Err(e) = t.end(0) { panic!("end err {e}: {:?}", t.recent_keys(8)); }
+    drain(&mut t);
+    until_turn(&mut t, 1);
+    t.set_pos(1, (tile + 60 - 2) % 60);
+    t.dice(&[3]);
+    t.roll(1).unwrap();
+    rest(&mut t);
+    drain(&mut t);
+    assert!(t.marks_on(tile).is_empty(), "the marker was removed");
+    assert_eq!(t.charge_max(0), 2, "removal refunds the cap");
+}
+
+/// Put a `冲榜` event on top of the pile and roll into its corner.
+fn draw_event(t: &mut Table, who: usize, event: &str, faces: &[i32]) {
+    let mut deck: Vec<String> = t.event_deck().into_iter().filter(|e| e != event).collect();
+    deck.insert(0, event.to_string());
+    let deck: Vec<&str> = deck.iter().map(String::as_str).collect();
+    t.set_event_deck(&deck);
+    until_turn(t, who);
+    let corner = tile("CiRCLE 咖啡厅");
+    t.set_pos(who, (corner + 59) % 60);
+    let mut all = vec![1];
+    all.extend_from_slice(faces);
+    t.dice(&all);
+    t.roll(who).unwrap();
+}
+
+#[test]
+fn hina_sumimi_marker_covers_a_passive_fire_spend() {
+    // 规则书: 「自己被由自己以外的消耗火罐效果影响时移除等量的该标记代替[火罐]
+    //          消耗」
+    let mut t = Table::new(&["三角初华（Sumimi）", "户山香澄", "花园多惠"]);
+    t.clean();
+    t.set_fire(0, 2, 2);
+    t.begin_turn(0);
+    place_marker(&mut t);
+    assert_eq!(t.charge(0), 1);
+    assert_eq!(t.charge_max(0), 1);
+    let tile = marker_tile(&t);
+    // 冲榜 takes every pot passively -- the marker pays instead of the fire.
+    let m0 = t.money(0);
+    draw_event(&mut t, 0, "冲榜", &[5, 10, 20]);
+    while let Some(p) = t.prompt() {
+        if p.kind == "choice" && !t.asked().is_empty() {
+            t.answer(t.asked()[0], 0).unwrap();
+        } else {
+            t.decline();
+        }
+    }
+    assert!(t.marks_on(tile).is_empty(), "the marker paid the cost");
+    assert_eq!(t.charge(0), 1, "the fire pot itself did not move");
+    assert_eq!(t.charge_max(0), 2, "the marker's cap slot came back");
+    let _ = m0;
 }
 
 // =====================================================================
@@ -645,6 +761,8 @@ fn two_donuts_exile_ends_at_the_pass_and_money_is_not_blocked() {
     let money0 = t.money(0);
     // P1 walks from 5 past 10 (P0's original square) to 15.
     until_turn(&mut t, 1);
+    // The carrier card is the live effect; it must stay placed for the hook.
+    assert!(t.on_field(0, "Sumimi:一人两个甜甜圈"), "carrier placed");
     t.set_pos(1, 5);
     t.dice(&[10]);
     t.roll(1).unwrap();

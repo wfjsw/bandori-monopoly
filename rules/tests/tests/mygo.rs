@@ -1531,6 +1531,34 @@ fn tomori_self_teleport_settles_at_the_destination() {
     );
 }
 
+#[test]
+fn tomori_self_teleport_costs_four() {
+    // 规则书 (3): 「可选择使用4个火罐」 -- the self arm costs 4 too (it used
+    // to cost 1).
+    let mut t = Table::new(&["高松灯", "千早爱音"]);
+    t.clean();
+    t.begin_turn(0);
+    drain(&mut t);
+    t.set_fire(0, 4, 4);
+    let deed = tile("江户川公园");
+    t.set_pos(1, deed);
+    t.set_pos(0, deed + 2);
+    t.dice(&[1]);
+    t.roll(0).unwrap();
+    for _ in 0..32 {
+        if t.prompt().is_none() {
+            break;
+        }
+        let p = t.expect_prompt();
+        if t.prompt_refers("tomori") || p.title.key().contains("tomori") {
+            let _ = t.answer_one(0);
+        } else {
+            t.decline();
+        }
+    }
+    assert_eq!(t.charge(0), 0, "the press cost all 4 pots");
+}
+
 /// P1 lands next to P0's tile and P0 accepts the (2) press with `face` loaded
 /// for the follow-up roll. Returns the rent P1 paid on the forced settle.
 fn tomori_second_forced_settle(face: i32) -> i32 {
@@ -1774,12 +1802,14 @@ fn taki_skill_adds_crystal_once_per_turn() {
     t.begin_turn(0);
     t.set_fire(0, 1, 5);
     t.place_raw(0, "MyGO:轮符雨");
+    // Library (2): only a card already holding a [奇迹水晶] qualifies.
+    t.set_crystals(0, "MyGO:轮符雨", 1);
     let skill = t.skill_id(0, "决定练习日的会议");
     t.skill(0, &skill).unwrap();
     let k = t.option("MyGO:轮符雨").expect("target prompt");
     t.answer(0, k).unwrap();
     assert_eq!(t.charge(0), 0, "one fire spent");
-    assert_eq!(crystals(&t, 0, "MyGO:轮符雨"), 1);
+    assert_eq!(crystals(&t, 0, "MyGO:轮符雨"), 2);
     t.set_fire(0, 1, 5);
     assert!(
         t.skill(0, &skill).is_err(),
@@ -2011,6 +2041,23 @@ fn band_move_one_for_a_crystal() {
 }
 
 #[test]
+fn band_step_is_used_in_the_operations_phase_and_moves_forward() {
+    // 规则书（1）: 「自己的运营阶段中…立刻进入移动阶段并将本回合的主要移动改为
+    //          “正向移动1格”」 -- the press from 运营 runs a forward step now.
+    let mut t = Table::new(&["高松灯", "千早爱音"]);
+    t.clean();
+    t.begin_turn(0);
+    let band = t.skill_id(0, "迷途之星");
+    set_crystals(&mut t, 0, &band, 1);
+    t.set_pos(0, 5);
+    assert_eq!(t.step(), stage::OPS, "the press is a 运营 act");
+    t.skill(0, &band).unwrap();
+    rest(&mut t);
+    drain(&mut t);
+    assert_eq!(t.pos(0), 6, "forward one step from the current tile");
+}
+
+#[test]
 fn band_press_offers_both_effects_when_both_are_available() {
     // 规则书（2）/（3）: two independent 「可」 abilities -- with enough crystals
     // for both, the press asks which one this activation takes. The move half
@@ -2219,8 +2266,8 @@ fn anon_char_draws_after_abnormal_resolves() {
     t.give_play(1, "MyGO:那天的雨").unwrap();
     let mut used = false;
     while t.prompt().is_some() {
-        if let Some(k) = t.option("skill:千早爱音").or(t.option("重新开始")) {
-            let _ = t.answer(0, k);
+        if t.prompt_refers("重新开始") {
+            let _ = t.answer_one(0);
             used = true;
         } else {
             t.decline();
@@ -2239,6 +2286,55 @@ fn anon_char_draws_after_abnormal_resolves() {
             t.hand(0)
         );
     }
+}
+
+#[test]
+fn anon_char_stay_dec_at_turn_end_offers_a_draw() {
+    // 规则书 [主动]（1）: 「自己回合结束时自己的[停留]减少层数时：可使用2个[火罐]，
+    // 自己[抽卡]1张」 -- natural wear-off raises no event; the turn-end hook carries
+    // it, including the 1 -> 0 layer (invisible once the tick already ran).
+    let mut t = Table::new(&["千早爱音", "高松灯"]);
+    t.clean();
+    t.set_fire(0, 2, 3);
+    t.set_draw(0, &["R:[衍生] 压"]);
+    t.begin_turn(0);
+    drain(&mut t);
+    t.dice(&[1]);
+    t.roll(0).unwrap();
+    drain(&mut t);
+    t.set_state(0, "stay", 1);
+    t.end(0).unwrap();
+    let mut used = false;
+    while let Some(p) = t.prompt() {
+        if p.title.key().contains("anon_title") {
+            t.answer_one(0).unwrap();
+            used = true;
+        } else {
+            t.decline();
+        }
+    }
+    rest(&mut t);
+    drain(&mut t);
+    assert!(used, "the 停留 decrease offer fired: {:?}", t.recent_keys(16));
+    assert_eq!(t.charge(0), 0, "2 fire spent");
+    assert_eq!(t.hand(0), vec!["R:[衍生] 压".to_string()], "drew one");
+}
+
+#[test]
+fn anon_char_no_offer_without_a_stay_layer() {
+    // 规则书 [主动]（1） is the decrease; a turn end with no [停留] offers nothing.
+    let mut t = Table::new(&["千早爱音", "高松灯"]);
+    t.clean();
+    t.set_fire(0, 2, 3);
+    t.begin_turn(0);
+    drain(&mut t);
+    t.dice(&[1]);
+    t.roll(0).unwrap();
+    drain(&mut t);
+    t.end(0).unwrap();
+    drain(&mut t);
+    rest(&mut t);
+    assert_eq!(t.charge(0), 2, "nothing offered, nothing spent");
 }
 
 #[test]

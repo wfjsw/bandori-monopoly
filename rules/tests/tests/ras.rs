@@ -16,6 +16,25 @@ fn drain(t: &mut Table) {
     }
 }
 
+/// Advance until it is `who`'s 运营 stage.
+fn until_turn(t: &mut Table, who: usize) {
+    for _ in 0..60 {
+        if t.turn() == who && t.step() == game_core::state::stage::OPS {
+            return;
+        }
+        let cur = t.turn();
+        if cur == who {
+            t.end(who).unwrap();
+            drain(t);
+            continue;
+        }
+        t.m.world_mut().st.skip_move = true;
+        t.end(cur).unwrap();
+        drain(t);
+    }
+    panic!("never reached turn {who} (at {})", t.turn());
+}
+
 /// Board indices used below (`data/board.json`, engine index = 「#N格」 − 1).
 const CIRCLE: usize = 0;
 const SHOPPING: usize = 1; // 购物中心, house 2000
@@ -1458,20 +1477,23 @@ fn lock_skill_colors_the_first_deed_like_a_live_house() {
 
 #[test]
 fn masking_skill_gains_fire_on_named_tiles() {
-    // 规则书: 「（1）每次[经过]“白雪学园”或“银河拉面馆”时获得1个[火罐]（初始0，上限2）」
-    // The engine grants the pot when the named tile is the move's destination.
+    // 规则书: 「（1）每次领取完CiRCLE奖励后首次[经过]“白雪学园”或“银河拉面馆”
+    // 之一时：获得1个[火罐]（初始0，上限3）」 -- the first pass after a reward.
     let mut t = Table::new(&["佐藤益木", "和奏瑞依"]);
     t.clean();
     drain(&mut t);
     t.begin_turn(0);
     drain(&mut t);
-    t.set_fire(0, 0, 2);
+    t.set_fire(0, 0, 3);
+    t.set_state(0, "skill.maskingBurn.after", 1);
     t.set_pos(0, SHIRAYUKI - 1);
     t.dice(&[1]);
     t.roll(0).unwrap();
     drain(&mut t);
     assert_eq!(t.pos(0), SHIRAYUKI);
     assert_eq!(t.charge(0), 1, "landed on 白雪学园");
+    assert_eq!(t.state(0, "skill.maskingBurn.after"), 0, "the latch is spent");
+    // A later turn over 银河拉面馆 gives nothing: the first pass already ran.
     t.begin_turn(1);
     drain(&mut t);
     t.begin_turn(0);
@@ -1481,7 +1503,7 @@ fn masking_skill_gains_fire_on_named_tiles() {
     t.roll(0).unwrap();
     drain(&mut t);
     assert_eq!(t.pos(0), GINGA);
-    assert_eq!(t.charge(0), 2, "landed on 银河拉面馆");
+    assert_eq!(t.charge(0), 1, "second pass after the reward gives nothing");
 }
 
 #[test]
@@ -1491,7 +1513,8 @@ fn masking_skill_gains_fire_when_merely_passing() {
     drain(&mut t);
     t.begin_turn(0);
     drain(&mut t);
-    t.set_fire(0, 0, 2);
+    t.set_fire(0, 0, 3);
+    t.set_state(0, "skill.maskingBurn.after", 1);
     t.set_pos(0, 12);
     t.dice(&[7]); // path 13..19 passes 白雪学园 (18), lands on 19
     t.roll(0).unwrap();
@@ -1501,8 +1524,9 @@ fn masking_skill_gains_fire_when_merely_passing() {
 }
 
 #[test]
-fn masking_skill_adds_xd10_from_fire_pots() {
-    // 规则书: 「（2）移动阶段前可使用X个[火罐]，本回合主要移动掷骰额外添加Xd10」
+fn masking_skill_adds_xd20_from_fire_pots() {
+    // 规则书: 「（1）自己的移动阶段前：可使用X个[火罐]，为本回合用于确定[主要移动]
+    // 步数的[投掷]额外添加X个d20骰子」
     let mut t = Table::new(&["佐藤益木", "和奏瑞依"]);
     t.clean();
     drain(&mut t);
@@ -1522,7 +1546,7 @@ fn masking_skill_adds_xd10_from_fire_pots() {
         drain(&mut t);
     }
     assert!(r.is_ok(), "{r:?}");
-    // 1d20 + 2d10: faces 1,1,1 -> 3 steps.
+    // 1d20 + 2d20: faces 1,1,1 -> 3 steps.
     t.dice(&[1, 1, 1]);
     t.roll(0).unwrap();
     drain(&mut t);
@@ -1587,9 +1611,10 @@ fn band_skill_offers_teleport_after_a_livehouse_settle() {
 
 #[test]
 fn band_skill_accept_makes_the_next_main_move_a_teleport() {
-    // 规则书: 「你的下一次主要移动可变为传送至你拥有的一个livehouse格子。」
-    // Accepting the offer writes the move plan; the main move is the teleport
-    // (no dice are cast).
+    // 规则书 [主动]（1）: 「自己的下回合开始时，如果自己仍在此卡[自动]（2）记录的
+    // 格子上：可在运营阶段选择立刻进入移动阶段并将自己的[主要移动]改为[传送]至自己
+    // 拥有的1个Live House格子。」 -- the press is used in 运营 and runs the walk
+    // itself (no dice are cast).
     let mut t = Table::new(&["和奏瑞依", "珠手知由", "朝日六花"]);
     t.clean();
     drain(&mut t);
@@ -1611,28 +1636,15 @@ fn band_skill_accept_makes_the_next_main_move_a_teleport() {
     t.roll(2).unwrap();
     drain(&mut t);
     t.end(2).unwrap();
-    // P0's turn opens: the ras offer is up. Accept it.
-    let mut accepted = false;
-    while let Some(p) = t.prompt() {
-        if p.title.key().contains("ras_") || p.text.key().contains("ras_") {
-            t.answer_one(0).unwrap();
-            accepted = true;
-        } else {
-            t.decline();
-        }
-    }
-    assert!(
-        accepted,
-        "the teleport offer came up: {:?}",
-        t.recent_keys(15)
-    );
-    let before = t.pos(0);
-    t.dice(&[3]);
-    t.roll(0).unwrap();
+    drain(&mut t);
+    // P0's turn opens; reach its 运营 and use the skill.
+    until_turn(&mut t, 0);
+    let band = t.skill_id(0, "UNSTOPPABLE");
+    t.skill(0, &band).unwrap();
     drain(&mut t);
     assert!(
         t.pos(0) == SPACE || t.pos(0) == BUDOKAN,
-        "the is_main_move move is the teleport to a livehouse, not a walk: was {before} pos={} keys={:?}",
+        "the press teleports to a livehouse: pos={} keys={:?}",
         t.pos(0),
         t.recent_keys(15)
     );

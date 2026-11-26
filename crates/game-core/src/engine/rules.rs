@@ -402,6 +402,11 @@ pub struct Trigger {
     /// `settleBefore` window's answer is read back here so the settle's body
     /// can tell its declaration was already shaped (`-1` = untouched).
     pub value_set: bool,
+    /// Did a responder write `target` (`trigger::set_pay_target`)? The raise
+    /// site seeds `target` with the declaration, so this (not a value compare)
+    /// is what distinguishes an untouched payee from a rewrite -- e.g. a
+    /// 「[分摊]」 total whose legs carry the rewritten target (C19 / （小白）).
+    pub target_set: bool,
     /// How this stage composes its responders' rewrites ([`Fold`]).
     pub fold: Fold,
     /// The stage input: what every responder reads as `value` while `fold` is
@@ -613,6 +618,7 @@ impl Trigger {
             card: None,
             value: 0,
             value_set: false,
+            target_set: false,
             fold: Fold::Replace,
             fold_input: 0,
             fold_milli: 1_000_000,

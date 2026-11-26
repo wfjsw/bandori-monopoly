@@ -35,6 +35,25 @@ fn roll_then_end(t: &mut Table, who: usize) {
     drain(t);
 }
 
+/// Advance until it is `who`'s 运营 stage.
+fn until_turn(t: &mut Table, who: usize) {
+    for _ in 0..60 {
+        if t.turn() == who && t.step() == game_core::state::stage::OPS {
+            return;
+        }
+        let cur = t.turn();
+        if cur == who {
+            t.end(who).unwrap();
+            drain(t);
+            continue;
+        }
+        t.m.world_mut().st.skip_move = true;
+        t.end(cur).unwrap();
+        drain(t);
+    }
+    panic!("never reached turn {who} (at {})", t.turn());
+}
+
 /// Borrowed `tile:circle` instances attached to `group` (the black_suits
 /// stand-in's borrowed rule).
 fn borrowed_on(t: &Table, group: usize) -> usize {
@@ -1271,6 +1290,80 @@ fn kanon_skill_1_starts_on_the_mansion() {
 }
 
 #[test]
+fn kanon_negative_difference_walks_backwards() {
+    // 規則书 (2): 「将两次结果相减，作为自己的移动格数（若为负数则反向移动）」
+    let mut t = Table::new(&["松原花音", "户山香澄"]);
+    t.clean();
+    t.begin_turn(0);
+    drain(&mut t);
+    t.set_pos(0, 20);
+    t.dice(&[2, 5]); // 2 - 5 = -3: three tiles back
+    t.roll(0).unwrap();
+    drain(&mut t);
+    assert_eq!(t.pos(0), 17, "keys={:?}", t.recent_keys(16));
+}
+
+#[test]
+fn kanon_positive_difference_walks_forward() {
+    // 規則书 (2): the signed difference, positive half.
+    let mut t = Table::new(&["松原花音", "户山香澄"]);
+    t.clean();
+    t.begin_turn(0);
+    drain(&mut t);
+    t.set_pos(0, 20);
+    t.dice(&[5, 2]);
+    t.roll(0).unwrap();
+    drain(&mut t);
+    assert_eq!(t.pos(0), 23, "keys={:?}", t.recent_keys(16));
+}
+
+#[test]
+fn kanon_hehe_latches_on_the_third_silent_turn() {
+    // 規則书 (3): 「如果自己在三个回合内没有领取[CiRCLE奖励]：获得[呼诶诶]状态」
+    let mut t = Table::new(&["松原花音", "户山香澄"]);
+    t.clean();
+    t.begin_turn(0);
+    drain(&mut t);
+    t.dice(&[1]);
+    t.roll(0).unwrap();
+    drain(&mut t);
+    t.set_state(0, "skill.kanonLost.silent", 2);
+    t.end(0).unwrap();
+    drain(&mut t);
+    assert_eq!(
+        t.state(0, "skill.kanonLost.hehe"),
+        1,
+        "third silent turn latches 呼诶诶"
+    );
+}
+
+#[test]
+fn kanon_circle_reward_spends_the_hehe_latch() {
+    // 規則书 (3): 「领取CiRCLE奖励后移除该状态」
+    let mut t = Table::new(&["松原花音", "户山香澄"]);
+    t.clean();
+    t.begin_turn(0);
+    drain(&mut t);
+    t.set_state(0, "skill.kanonLost.silent", 3);
+    t.set_state(0, "skill.kanonLost.hehe", 1);
+    t.set_pos(0, 59);
+    // Each roll is 1d20+1d4: (5+1) and (1+1) -> 4 steps over CiRCLE.
+    t.dice(&[5, 1, 1, 1]);
+    t.roll(0).unwrap();
+    while t.prompt().is_some() {
+        let d = t.dump_prompt();
+        if d.contains("pass_reward") {
+            let _ = t.answer_one(0);
+        } else {
+            t.decline();
+        }
+    }
+    drain(&mut t);
+    assert_eq!(t.state(0, "skill.kanonLost.hehe"), 0, "reward spent it");
+    assert_eq!(t.state(0, "skill.kanonLost.silent"), 0, "counter reset");
+}
+
+#[test]
 fn misaki_skill_1_gains_fire_pots_after_passing_the_tsuzumi_group() {
     // 规则书: 「（1）每次经过“弦卷集团”（#29）格子后获得2火罐（初始0，上限2）」
     let mut t = Table::new(&["奥泽美咲", "户山香澄"]);
@@ -1357,6 +1450,43 @@ fn kaoru_skill_1_being_passed_gains_one_pot_not_one_per_step() {
     );
 }
 
+#[test]
+fn kaoru_route_skips_a_marked_players_deed() {
+    // 規則书 [自動]（2）: 「自己非[传送]的[主要移动]不会[经过]移动阶段开始时场上
+    // 拥有[怪盗标记]的玩家所拥有的格子」
+    let mut t = Table::new(&["濑田薰", "户山香澄"]);
+    t.clean();
+    t.begin_turn(0);
+    drain(&mut t);
+    t.set_pos(1, 30); // off the mover's path
+    t.set_owner(12, Some(0));
+    t.set_owner(15, Some(0));
+    set_held(&mut t, 0, "怪盗标记", 1);
+    t.set_pos(0, 10);
+    // 「自己非[传送]的[主要移动]不会[经过]…」 -- Kaoru's own move: 10 -> 16
+    // would pass 12 and 15, both her deeds, so the walk adds a step at each and
+    // ends on 18.
+    t.dice(&[6]);
+    t.roll(0).unwrap();
+    drain(&mut t);
+    assert_eq!(t.pos(0), 18, "keys={:?}", t.recent_keys(20));
+}
+
+#[test]
+fn kaoru_route_keeps_tiles_of_unmarked_players() {
+    let mut t = Table::new(&["濑田薰", "户山香澄"]);
+    t.clean();
+    t.begin_turn(0);
+    drain(&mut t);
+    t.set_pos(1, 30);
+    t.set_owner(12, Some(0)); // owns the tile, but holds no mark
+    t.set_pos(0, 10);
+    t.dice(&[4]);
+    t.roll(0).unwrap();
+    drain(&mut t);
+    assert_eq!(t.pos(0), 14, "keys={:?}", t.recent_keys(20));
+}
+
 // ================================================================ band skill
 
 #[test]
@@ -1383,6 +1513,51 @@ fn band_skill_1_offers_a_double_payment() {
         }
     }
     assert!(saw, "no double-payment prompt: {:?}", t.recent_keys(12));
+}
+
+#[test]
+fn band_record_is_per_player_and_consumed_once() {
+    // 规则书（1）/（2）: the mark is *the* record of that one doubled payer; one
+    // double = one protected collection, and a second payer must not overwrite
+    // the first.
+    let mut t = Table::new(&["弦卷心", "户山香澄", "花园多惠"]);
+    t.begin_turn(0);
+    drain(&mut t);
+    let skill = t.skill_id(0, "传播笑容");
+    let blue = tile("江户川公园");
+    t.set_owner(blue, Some(1));
+    t.set_pos(0, (blue + 60 - 1) % 60);
+    t.dice(&[1]);
+    t.roll(0).unwrap();
+    while t.prompt().is_some() {
+        let d = t.dump_prompt();
+        if d.contains("double") || d.contains("倍") || d.contains("传播") || d.contains("smile") {
+            t.answer_one(0).unwrap();
+        } else {
+            t.decline();
+        }
+    }
+    // P1's own collection spent P1's mark; the price is recorded.
+    assert_eq!(t.token(0, "skill.hhw.mark.1"), 0, "P1's mark was spent");
+    let saved = t.state(0, "skill.hhw.saved");
+    assert!(saved > 0, "the doubled collection was recorded");
+    // Arm a crystal, then let P1's tile collect again from a *different* payer
+    // (P2, no double). P1 has no mark left, so nothing fires.
+    t.set_crystals(0, &skill, 1);
+    t.end(0).unwrap();
+    drain(&mut t);
+    until_turn(&mut t, 2);
+    t.set_pos(2, (blue + 60 - 1) % 60);
+    t.dice(&[1]);
+    t.roll(2).unwrap();
+    drain(&mut t);
+    assert_eq!(t.money(1) >= 0, true);
+    assert_eq!(
+        t.state(0, "skill.hhw.saved"),
+        saved,
+        "no record without a held mark"
+    );
+    assert_eq!(t.crystals(0, &skill), Some(1), "no crystal spent");
 }
 
 // ================================================================ interactions

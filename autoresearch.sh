@@ -29,6 +29,8 @@ python3 tools/autoresearch/face_metric.py \
   --display "$OUT/display.json" \
   --pairs tools/autoresearch/pairs.json \
   --event-pairs tools/autoresearch/event_pairs.json \
+  --persona-pairs tools/autoresearch/persona_pairs.json \
+  --group-pairs tools/autoresearch/group_pairs.json \
   --library tools/autoresearch/cardlib \
   --roster target/roster-dump/cards.json
 

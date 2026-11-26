@@ -348,7 +348,12 @@ impl PayShape {
 #[derive(Debug, Clone, Copy)]
 pub struct SplitDecl {
     /// Settlement target after the total's rewrites (`None` = the bank).
+    /// Only meaningful when [`Self::target_set`]; otherwise each leg keeps its
+    /// own requested payee (a plain split names one per leg).
     pub to: Option<usize>,
+    /// Did a total window write the target at all? A `-1` write is a rewrite
+    /// to the bank and sets this too.
+    pub target_set: bool,
     /// The declared payee a [`PayShape::PayeeHalf`] declaration must charge
     /// half, captured before any target rewrite.
     pub partner: Option<usize>,
@@ -5497,6 +5502,10 @@ impl PlayCtx<'_> {
         if partner.is_none() && probe.shape == PayShape::PayeeHalf {
             partner = to;
         }
+        // Did any window rewrite the payee? Only then do the legs take `to`
+        // from the declaration; a plain split's total is untouched and each
+        // leg keeps its own payee.
+        let mut target_set = false;
         // 支付阶段 1 「支付计算前」 on the command total, before its
         // `effect` window (HOST-03). Hook-only; the writes fold into the
         // declaration `effect` sees.
@@ -5526,7 +5535,10 @@ impl PlayCtx<'_> {
         if partner.is_none() && probe.shape == PayShape::PayeeHalf {
             partner = to;
         }
-        to = (t.target >= 0).then_some(t.target as usize);
+        if t.target_set {
+            target_set = true;
+            to = (t.target >= 0).then_some(t.target as usize);
+        }
         let t = raise!(
             self,
             "effect",
@@ -5556,7 +5568,10 @@ impl PlayCtx<'_> {
         }
         total = t.value;
         probe.amount = total;
-        to = (t.target >= 0).then_some(t.target as usize);
+        if t.target_set {
+            target_set = true;
+            to = (t.target >= 0).then_some(t.target as usize);
+        }
         // A `Fixed` write at the total is the card's own figure: the combined
         // stages are skipped, exactly as a `Fixed` leg skips its chain.
         let shaped = if fixed {
@@ -5593,6 +5608,7 @@ impl PlayCtx<'_> {
             }
             self.pay_split_decl = Some(SplitDecl {
                 to,
+                target_set,
                 partner,
                 kind: probe.kind,
                 rent: probe.rent,

@@ -8,8 +8,12 @@ PersonaDef::new(r#"若宫伊芙"#)
     .group(r#"Pastel✽Palettes"#)
     .color(r#"#DDBBFF"#)
     .skill(r#"天下统一"#)
-    .text(r#"（1）游戏开始后获得5个正面[P✽P粉丝]，所有非Pastel✽Palettes玩家获得若宫伊芙的（2）技能
-（2）当你因任意原因投掷前可选择将自己Y个正面[P✽P粉丝]变反并为此次投掷结果增加Yd4；如果自己是Pastel✽Palettes角色则将Y个其他乐队玩家拥有的反面[P✽P粉丝]变正，否则将所有Pastel✽Palettes角色的1个反面[P✽P粉丝]变正"#)
+    .text(r#"[自动]：
+（1）游戏开始后，自己获得5个正面[P✽P粉丝]，所有非Pastel✽Palettes玩家获得若宫伊芙的[主动]（1）技能。
+[主动]：
+（1）自己因任意原因[投掷]前：可选择将自己Y个正面[P✽P粉丝]变反。若如此做，依次进行以下操作：
+1. 为此次[投掷]额外增加Y个d4骰子；
+2. 如果自己是Pastel✽Palettes角色，则将Y个其他乐队玩家拥有的反面[P✽P粉丝]变正；否则，将所有Pastel✽Palettes角色的Y个反面[P✽P粉丝]变正。"#)
     .cn_id(r#"020"#)
     .art("")
     .costume("")

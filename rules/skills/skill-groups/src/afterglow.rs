@@ -45,7 +45,8 @@ pub const BAND: bandori_std::roster::GroupDef = bandori_std::roster::GroupDef::n
     .short_name(r#"AG"#)
     .color(r#"#EE3344"#)
     .skill(r#"商店街的宠儿"#)
-    .text(r#"你购买商店街的或价值小于等于1200的格子时自动免费在上面加盖一栋房子"#)
+    .text(r#"[自动]：
+（1）购买商店街的格子或价值小于等于1200的格子时：免费在该格子加盖1栋房屋。"#)
     .logo(r#"002"#);
 
 //

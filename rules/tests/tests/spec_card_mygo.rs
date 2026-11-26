@@ -1388,6 +1388,7 @@ fn tomori_card_crystal_pays_fire_and_removes() {
         u.set_crystals(0, TOMORI_CARD, 2);
         u.set_fire(0, 1, 5);
         u.place_raw(0, "MyGO:轮符雨");
+        u.set_crystals(0, "MyGO:轮符雨", 1);
         let skill = u.skill_id(0, "决定练习日的会议");
         // (2) costs 1 火罐. The book says a crystal of this card may pay it.
         u.skill(0, &skill).map_err(|e| format!("skill: {e}"))?;
@@ -2617,6 +2618,8 @@ fn rikki_skill_adds_crystal_once_per_turn() {
         t.begin_turn(0);
         t.set_fire(0, 1, 5);
         t.place_raw(0, "MyGO:轮符雨");
+        // Library (2): the target must already own a [奇迹水晶].
+        t.set_crystals(0, "MyGO:轮符雨", 1);
         let skill = t.skill_id(0, "决定练习日的会议");
         t.skill(0, &skill).map_err(|e| format!("skill: {e}"))?;
         let k = t
@@ -2630,8 +2633,8 @@ fn rikki_skill_adds_crystal_once_per_turn() {
             ));
         }
         let c = t.crystals(0, "MyGO:轮符雨").unwrap_or(-1);
-        if c != 1 {
-            return Err(format!("C-MYGO-rikki-skill-02: crystals {c}, expected 1"));
+        if c != 2 {
+            return Err(format!("C-MYGO-rikki-skill-02: crystals {c}, expected 2"));
         }
         t.set_fire(0, 1, 5);
         if t.skill(0, &skill).is_ok() {

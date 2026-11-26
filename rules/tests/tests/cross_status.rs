@@ -308,7 +308,15 @@ fn s08_sakiko_absorbs_statuses() {
     );
     assert_eq!(t.state(1, "stay"), 0, "P1 = 0");
     assert_eq!(t.state(0, "stay"), 2, "P0 = 2");
-    assert_eq!(t.money(0), 10_000 + 3000, "+1500 per layer");
+    // 「自己[获得](X+Y)×500资金」 -- 2 layers × 500.
+    assert_eq!(t.money(0), 10_000 + 1000, "500 per layer");
+    // The pot is on the *natural wear*, not on the landing: nothing yet.
+    assert_eq!(t.charge(0), 0, "no pot on the landing itself");
+    // End the turn: 停留 + 眩晕 each wear a layer → one pot per kind.
+    t.set_state(0, "stun", 1);
+    t.end(0).unwrap();
+    drain(&mut t);
+    assert_eq!(t.charge(0), 2, "one pot per wearing kind");
 }
 
 // =====================================================================

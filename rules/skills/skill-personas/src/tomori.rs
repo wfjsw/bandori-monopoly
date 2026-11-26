@@ -6,7 +6,7 @@
 //! > [触发结算]前强制将该玩家[传送]至自己所在的格子并[触发结算]，然后使其投掷1d20，
 //! > 若出目小于等于6则获得一层[停留]并在自己的下回合结束时[触发结算]；在此技能影响
 //! > 下的支付价格变为原本的一半。
-//! > （3）当你的[移动终点]位于其他玩家的前后五格内时可以选择使用1个火罐，在
+//! > （3）当你的[移动终点]位于其他玩家的前后五格内时可以选择使用4个火罐，在
 //! > [触发结算]前将自己[传送]至那名玩家所在的格子并[触发结算]。
 //!
 //! （2） and （3） are the same shape in opposite directions: someone's landing
@@ -184,13 +184,14 @@ fn nearest_other_position(player_id: i32) -> i32 {
 /// `ctx::invoke_paid()` is true and only the body runs.
 fn before_settle(player_id: i32) -> card_sdk::Asked {
     let mover = ctx::trigger::player_id();
-    // （3） is this player's own landing near another (cost 1, teleport to
+    // （3） is this player's own landing near another (cost 4, teleport to
     // 「那名玩家」); （2） is someone else's landing near this player (cost 4,
-    // teleport to *this* player's square). Same split as the guard.
+    // teleport to *this* player's square). Same split as the guard. (3) used
+    // to cost 1; the library prices both arms at 4.
     // `destination` is a board position (`teleport_to` writes the slot);
     // the log below names its tile.
     let (cost, destination) = if mover == player_id {
-        (1, nearest_other_position(player_id))
+        (4, nearest_other_position(player_id))
     } else {
         (4, ctx::player_pos(player_id))
     };

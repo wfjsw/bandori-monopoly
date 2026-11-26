@@ -7,7 +7,9 @@ pub const CHARACTER: PersonaDef = PersonaDef::new(r#"弦卷心"#)
     .group(r#"Hello, Happy World!"#)
     .color(r#"#FFEE22"#)
     .skill(r#"弦卷集团"#)
-    .text(r#"（1）开局时获得1000资金（2）[经过]CiRCLE时额外获得1500资金"#)
+    .text(r#"[自动]：
+（1）游戏开始时：自己[获得]1000资金。
+（2）自己[经过]CiRCLE时：自己[获得]1500资金。"#)
     .cn_id(r#"011"#)
     .art("")
     .costume("")

@@ -46,6 +46,10 @@ pub const CRYCHIC: CardDef = CardDef::new(
             at_turn_end,
         )),
         On::Filter(Filter::PaySplitChoose("", Some(in_lock), lock_pay)),
+        // 「无法主动进行会直接[消耗]或[支付]资金的动作」 -- the 支付 arm is
+        // `lock_pay` above; the 消耗 arm is the raw-spend window (`SpendBefore`
+        // runs before the debit, so zeroing the figure blocks it).
+        On::Action(Action::SpendBefore("actor == owner", Some(in_lock), block_spend)),
         On::Action(Actions::PassRewardAffected("", Some(in_lock), force_card)),
         // （1）「任何时刻拥有手牌数大于等于6时…无法从手中打出任何牌」 -- a
         // standing **play-only** lock. `PlayGate` (not `ActGate`: that one also
@@ -101,6 +105,18 @@ fn lock_pay(player_id: i32, _value: i32) -> bool {
     }
     ctx::log(player_id, &Msg::new(key!("crychic_locked")));
     false
+}
+
+/// 「无法主动进行会直接[消耗]…资金的动作」 -- `SpendBefore` sees the full cost
+/// and zeroes it, so the raw debit moves nothing. `actor == owner` in the
+/// condition already scopes it to this player's own spend.
+fn block_spend(player_id: i32) -> card_sdk::Asked {
+    if ctx::trigger::value() <= 0 {
+        return Ok(());
+    }
+    ctx::trigger::set_pay_amount(0);
+    ctx::log(player_id, &Msg::new(key!("crychic_locked")));
+    Ok(())
 }
 
 /// （3）「每当你的手牌数从4增加至5，为此卡放置一个奇迹水晶（上限10）」.
@@ -303,7 +319,22 @@ bandori_std::roster::GroupDef::new(r#"CRYCHIC"#)
     .short_name(r#"CRYCHIC"#)
     .color(r#"#5AC7BE"#)
     .skill(r#"美好的往日幻影"#)
-    .text(r#"CRYCHIC团技能：（1）你的手牌数没有上限，任何时刻拥有手牌数大于等于6时，你无法获得或失去资金，无法从手中打出任何牌且领取CiRCLE奖励时必须选择抽一张卡。（2）你的回合结束时，若你的抽牌堆与弃牌堆中都没有卡，移除此卡与你所有区域的所有“CRYCHIC”卡，将你剩余的所有手牌放入抽牌堆，并向抽牌堆中加入角色对应的自选“MyGO”或“Ave Mujica”卡至抽牌堆中总共有10张卡并洗切；获得角色对应的“MyGO”或“Ave Mujica”乐队技能卡，然后抽2张卡。（3）每当你的手牌数从4增加至5，为此卡放置一个奇迹水晶 （上限10）；当此卡移除时，你获得X*500资金，X为此卡上的奇迹水晶数。"#)
+    .text(r#"[资源]：
+（1）此卡的[奇迹水晶]：上限10。
+[自动]：
+（1）自己的手牌数没有上限。任何时刻，自己的手牌数至少为6时，获得[黑刀之夜]状态。无法获得或失去资金，无法从手中打出任何卡，且领取[CiRCLE奖励]时必须选择[抽卡]1张。
+（2）自己的回合结束时，若自己的抽卡区与弃卡区中均没有卡：依次进行以下操作：
+1. [移除]自己的[黑刀之夜]状态；
+2. [移除]此卡与自己所有区域的全部“CRYCHIC”卡；
+3. 将自己剩余的所有手牌放入抽卡区，并加入自己选择的、角色对应的“MyGO”或“Ave Mujica”卡，直至抽卡区共有10张卡，然后洗切；
+4. 获得角色对应的“MyGO”或“Ave Mujica”乐队技能卡，然后自己[抽卡]2张。
+（3）自己的手牌数每次从4增加至5时：为此卡添加1个[奇迹水晶]。此卡[移除]时，自己[获得]X×500资金；X为此卡上的[奇迹水晶]数量。
+[黑刀之夜]状态：
+1. 无法获得或失去资金；
+2. 无法主动进行会直接[消耗]或[支付]资金的动作；
+3. 无法从手中打出任何卡；
+4. 领取[CiRCLE奖励]时必须选择[抽卡]1张；
+5. 手牌数量从大等于6变成小等于5时减少1层。"#)
     .logo("");
 
 //

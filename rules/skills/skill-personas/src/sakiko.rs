@@ -8,9 +8,10 @@
 //! > 时自动打出一张抽牌堆顶端的牌。
 //!
 //! 「状态1 / 状态2」 is the axis [`skill_groups::ave_mujica`] owns. 状态1's pass
-//! clause is a `PassPlayer` transfer of the other player's `[停留]`/`[眩晕]`
-//! layers onto this one, with a bounty per layer. The pot is granted at the
-//! *outcome* of an abnormal effect (`stay` / `stun` / `exile`), after it lands.
+//! clause is a `PassTile` transfer of the other player's `[停留]`/`[眩晕]`
+//! layers onto this one, with `(X+Y)×500` money. The pot is granted on the
+//! **natural wear** of this player's own `[停留]`/`[眩晕]`/`[除外]`, not on an
+//! effect landing.
 //!
 //! 状态2's 「保留至多一张手牌并将其余置入弃牌堆」 is a one-shot on entry;
 //! 「每回合开始时自动打出一张抽牌堆顶端的牌」 is a free `play_card` of the
@@ -21,8 +22,8 @@ use bandori_std::state_key;
 use card_sdk::abi::ActionKind;
 use card_sdk::{key, Action, CardDef, Msg, On};
 
-/// 「每获得一层停留，眩晕，你获得1500资金」.
-const BOUNTY: i32 = 1500;
+/// 「自己[获得](X+Y)×500资金」 -- per transferred layer.
+const BOUNTY_PER_LAYER: i32 = 500;
 
 pub const SAKIKO: CardDef = CardDef::new(
     "skill:丰川祥子:请把你们的人生交给我",
@@ -45,15 +46,16 @@ pub const SAKIKO: CardDef = CardDef::new(
             Some(first_afflicted_on_tile),
             on_pass_player,
         )),
-        // 「每次受到停留，眩晕，除外影响（并结算其影响），获得一个火罐」 -- the
-        // outcome of an abnormal effect landing on this player. `Abnormal` is
-        // the settlement hook; the legacy `Stay`/`Stun`/`Exile` kinds are never
-        // raised. The guard keeps 状态1 and this player as the *recipient*
-        // (`trigger::target()`), not the causer.
-        On::Action(Action::Abnormal(
-            "target == owner",
-            Some(im_hit),
-            on_abnormal,
+        // 「自己未处于[人偶模式]，自己的[停留]、[眩晕]、[除外]自然减少层数时：
+        // 获得1个[火罐]」 -- the **natural wear**, not an effect landing. Each
+        // kind that will drop a layer this turn end pays one pot; 停留/眩晕 tick
+        // at this very hook, so the pre-decrement count is read. 除外 ticks at
+        // the next turn start, so a live exile pays one pot per turn end here
+        // (one layer late, but one-per-turn either way).
+        On::Action(Action::TurnEndBefore(
+            card_sdk::condition::MINE,
+            Some(state1_wear),
+            on_wear,
         )),
     ],
 )
@@ -64,10 +66,14 @@ pub const SAKIKO: CardDef = CardDef::new(
     (bandori_std::fire::FIRE_CAP, 3),
 ]);
 
-/// The `Abnormal` hook's guard: this player is the *recipient* of the effect
-/// (`trigger::target()`), still in 状态1.
-fn im_hit(player_id: i32) -> bool {
-    state::get(player_id, state_key::SKILL_STATE) != 2
+/// Guard for [`on_wear`]: 状态1 only (`Abnormal`'s old `im_hit`, now also
+/// covering the 状态2 exclusion) and something is about to wear.
+fn state1_wear(player_id: i32) -> bool {
+    if state::get(player_id, state_key::SKILL_STATE) == 2 {
+        return false;
+    }
+    rules_status::stay::get(player_id) + rules_status::stun::get(player_id) > 0
+        || state::get(player_id, state_key::EXILE) > 0
 }
 
 /// 「初始0，上限3」.
@@ -167,10 +173,10 @@ fn on_pass_player(player_id: i32) -> card_sdk::Asked {
         state::add(other, state_key::STUN, -stun);
         rules_status::stun::add(player_id, stun);
     }
-    // 「每获得一层停留，眩晕，你获得1500资金」
+    // 「自己[获得](X+Y)×500资金」
     ctx::gain(
         player_id,
-        BOUNTY * (stay + stun),
+        BOUNTY_PER_LAYER * (stay + stun),
         &Msg::new(key!("sakiko_bounty")),
     )?;
     ctx::log(
@@ -182,23 +188,16 @@ fn on_pass_player(player_id: i32) -> card_sdk::Asked {
     Ok(())
 }
 
-/// 「每次受到停留，眩晕，除外影响（并结算其影响），获得一个火罐」 -- the
-/// *recipient* of the abnormal gains the pot. `in_one` (the hook guard) has
-/// already checked 状态1; here we only need the recipient match.
-fn on_abnormal(player_id: i32) -> card_sdk::Asked {
-    // The `abnormal` hook carries `t.target` = the recipient and `t.player_id`
-    // = the causer. 「受到…影响」 names the recipient.
-    if !matches!(
-        trigger::abnormal_kind(),
-        Some(
-            bandori_std::kind::abnormal::Stay
-                | bandori_std::kind::abnormal::Stun
-                | bandori_std::kind::abnormal::Exile
-        )
-    ) {
-        return Ok(());
+/// 「自己的[停留]、[眩晕]、[除外]自然减少层数时：获得1个[火罐]」 -- one pot per
+/// kind about to lose a layer (the guard already pinned 状态1 and a live layer).
+fn on_wear(player_id: i32) -> card_sdk::Asked {
+    let stay = rules_status::stay::get(player_id);
+    let stun = rules_status::stun::get(player_id);
+    let exile = state::get(player_id, state_key::EXILE);
+    let n = i32::from(stay > 0) + i32::from(stun > 0) + i32::from(exile > 0);
+    if n > 0 {
+        bandori_std::fire::gain(player_id, n, &Msg::new(key!("sakiko_gain")))?;
     }
-    bandori_std::fire::gain(player_id, 1, &Msg::new(key!("sakiko_gain")))?;
     Ok(())
 }
 
@@ -247,6 +246,12 @@ pub fn on_pass_player_kani(player_id: i32) -> card_sdk::Asked {
 
 #[cfg(kani)]
 #[inline(always)]
-pub fn on_abnormal_kani(player_id: i32) -> card_sdk::Asked {
-    on_abnormal(player_id)
+pub fn state1_wear_kani(player_id: i32) -> bool {
+    state1_wear(player_id)
+}
+
+#[cfg(kani)]
+#[inline(always)]
+pub fn on_wear_kani(player_id: i32) -> card_sdk::Asked {
+    on_wear(player_id)
 }

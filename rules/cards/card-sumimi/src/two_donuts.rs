@@ -30,22 +30,28 @@ pub const TWO_DONUTS: CardDef = CardDef::new(
         On::Play("", None, two_donuts),
         // `card.placed` is the uniform gate; per-kind clauses (the other-passer
         // latch, the `move_dir` read) stay in the arms below. The PassTile arm
-        // acts only for another player's pass onto `Orig`, so that arm's whole
-        // applicability is its condition -- the entry would otherwise announce
-        // 「效果适用 …（无事发生）」 on every step of every walk.
+        // acts only for another player's pass onto `Orig`: the tile / latch
+        // clauses are a pure residual guard (the CEL `slot()` reads the
+        // card-instance latch table while the body writes the player-side slots
+        // `ctx::slot` opens, so the guard repeats the read the body uses).
+        // `quiet_when_empty` picks the arm's 「效果适用 …（无事发生）」 line back up
+        // when a step does activate it but the body has nothing to do.
         On::Action(Action::PassTile(
-            "card.placed && actor != owner && tile.id == slot('two_donuts_orig') && slot('two_donuts_by') < 0",
-            None,
+            "card.placed && actor != owner",
+            Some(pass_applies),
             hook,
-        )),
-        On::Action(Action::SettleAfter("card.placed", None, hook)),
+        ))
+        .quiet_when_empty(),
+        // The three terminals only act for the latched passer, so the same
+        // pure liveness gate keeps them silent on every other move.
+        On::Action(Action::SettleAfter("card.placed", Some(latched_by), hook)).quiet_when_empty(),
         // A passer whose move never reaches `settleAfter` still ends the (2)
         // offer here: a 「不触发结算」 teleport raises `passTile` and no settle
         // (`SETTLE-STAGES.md` §6), and a passer who goes bankrupt on the landing
         // tile skips the settle stages entirely. `tileResolved` fires even for
         // an out passer, `moveResolved` for a move that settled to nothing.
-        On::Action(Action::TileResolved("card.placed", None, hook)),
-        On::Action(Action::MoveResolved("card.placed", None, hook)),
+        On::Action(Action::TileResolved("card.placed", Some(latched_by), hook)).quiet_when_empty(),
+        On::Action(Action::MoveResolved("card.placed", Some(latched_by), hook)).quiet_when_empty(),
     ],
 ).meta(&card_sdk::meta::CardMeta::new()
         .name(r#"一人两个甜甜圈"#)
@@ -92,6 +98,22 @@ fn two_donuts(player_id: i32) -> card_sdk::Asked {
             .tile("tile", pos),
     );
     Ok(())
+}
+
+/// Residual guard for the `PassTile` arm: the step is onto `Orig` and no
+/// passer has been latched yet -- the same reads the arm body makes.
+fn pass_applies(player_id: i32) -> bool {
+    if trigger::player_id() == player_id {
+        return false;
+    }
+    trigger::tile() == ctx::slot(player_id, SLOT_ORIG) && ctx::slot(player_id, SLOT_BY) < 0
+}
+
+/// Pure gate for the terminal arms: a passer was latched at the pass and this
+/// terminal belongs to them.
+fn latched_by(player_id: i32) -> bool {
+    let by = ctx::slot(player_id, SLOT_BY);
+    by >= 0 && trigger::player_id() == by
 }
 
 /// The `PassTile` / `SettleAfter` hook pair, while this card is placed.
