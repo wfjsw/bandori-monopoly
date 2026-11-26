@@ -1,5 +1,0 @@
-# Mugendai Mewtype
-
-## Characters
-
-## Cards
