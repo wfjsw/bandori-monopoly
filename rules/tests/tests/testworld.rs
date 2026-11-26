@@ -79,7 +79,7 @@ pub struct TestWorld {
     pub turn_end_settle: Vec<i32>,
     /// Name-keyed held counters as `(player_id, name, value, max)` -- backs
     /// `held_names` / `held_count` / `set_held` / `add_held` so a card body
-    /// that reads its 角色标记 can run.
+    /// that reads its 模仿标记 can run.
     pub held: Vec<(i32, String, i32, i32)>,
 }
 

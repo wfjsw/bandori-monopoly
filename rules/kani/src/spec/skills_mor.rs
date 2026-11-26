@@ -211,7 +211,7 @@ pub fn nanami_01_log_ok_mutant(effects: &[Effect], player: i32) -> bool {
 //
 // Classification: **PROTOCOL-LEVEL / documented-only**.
 // (2) needs a foreign character-skill press in the same window plus a
-// mark-namespace (OPEN-角色标记) and a 3-turn passive CD (OPEN-被动CD).
+// mark-namespace (OPEN-模仿标记) and a 3-turn passive CD (OPEN-被动CD).
 // (3) is borrowed-skill dispatch (OPEN-借用技能, OPEN-时机合适); `play_card`
 // is a protocol stub that returns 0 under Kani. No fake harness.
 // ===========================================================================

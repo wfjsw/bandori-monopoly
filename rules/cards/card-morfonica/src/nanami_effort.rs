@@ -24,8 +24,11 @@ use card_sdk::{key, Action, CardDef, Msg, On};
 const CIRCLE_MONEY: i32 = 2000;
 
 const ID: &str = "Mor:（NNM）稍微努力了一下";
-/// The counter names 「角色标记:*」.
-const TOKEN_PREFIX: &str = "角色标记:";
+/// The counter names 「模仿标记:*」.
+const TOKEN_PREFIX: &str = "模仿标记:";
+/// The pre-rename prefix. Replays and saves still hold `角色标记:*` counters,
+/// so every read takes either; spends write back to the name they read.
+const LEGACY_TOKEN_PREFIX: &str = "角色标记:";
 
 pub const NANAMI_EFFORT: CardDef = CardDef::new(
     "Mor:（NNM）稍微努力了一下",
@@ -47,10 +50,19 @@ pub const NANAMI_EFFORT: CardDef = CardDef::new(
         // sheet cell G7
         .fields(&[("group", r#"Morfonica"#), ("owner", r#"广町七深"#)]));
 
-/// The x-标记 body needs at least one 「角色标记:*」; everything (3) later needs
-/// is checked inline, where it is asked.
+/// Held mark names under both prefixes (new convention first, legacy after):
+/// a save made before the rename still lists `角色标记:*` and must stay
+/// spendable.
+fn held_tokens(player_id: i32) -> alloc::vec::Vec<card_sdk::ctx::NameId> {
+    let mut names = ctx::held_names(player_id, TOKEN_PREFIX);
+    names.extend(ctx::held_names(player_id, LEGACY_TOKEN_PREFIX));
+    names
+}
+
+/// The x-标记 body needs at least one 「模仿标记:*」 (or a legacy `角色标记:*`);
+/// everything (3) later needs is checked inline, where it is asked.
 fn cant_play(player_id: i32) -> Option<Msg> {
-    let names = ctx::held_names(player_id, TOKEN_PREFIX);
+    let names = held_tokens(player_id);
     if names
         .iter()
         .any(|n| ctx::held_count(player_id, n.as_str()) > 0)
@@ -62,9 +74,10 @@ fn cant_play(player_id: i32) -> Option<Msg> {
 
 fn nanami_effort(player_id: i32) -> card_sdk::Asked {
     // 规则书: 「弃置手中x枚角色标记，发动以下效果中的一个」 -- the tokens are the
-    // `角色标记:*` counters; x is chosen from what the player actually holds, then
-    // they are spent and one effect is picked.
-    let names = ctx::held_names(player_id, TOKEN_PREFIX);
+    // `模仿标记:*` counters (legacy `角色标记:*` still accepted); x is chosen
+    // from what the player actually holds, then they are spent and one effect
+    // is picked.
+    let names = held_tokens(player_id);
     let total: i32 = names
         .iter()
         .map(|n| ctx::held_count_id(player_id, *n))

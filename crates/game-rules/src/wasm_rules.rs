@@ -6364,13 +6364,42 @@ impl<M: CardModules> RulesBridge<M> {
             return Ok(if receipt { cancelled } else { 0 });
         }
         let mut p = game_core::engine::Pay::new(amount, kind);
+        // A 「[分摊]」 leg (`total_stage == false`) carries the declaration the
+        // command total left: the [反击] answered there may have rewritten the
+        // payee / kind / shape, and the leg must settle and open its own
+        // windows the same way, or the rewrite dies with the total's probe
+        // (C19 / （小白）). An unreserved `pay_leg` (no preceding `pay_total`)
+        // keeps the request's own values.
+        let decl = if total_stage { None } else { cx.pay_split_decl };
+        let (kind, shape, to, partner, rent) = match decl {
+            Some(d) => (
+                d.kind,
+                d.shape,
+                match d.shape {
+                    // `PayeeHalf` captures its victim from the declaration's
+                    // `to`, so the leg names the declared payee there.
+                    game_core::engine::PayShape::PayeeHalf => d.partner,
+                    _ => d.to,
+                },
+                d.partner,
+                d.rent,
+            ),
+            None => (
+                kind,
+                shape,
+                (to >= 0).then_some(to as usize),
+                None,
+                kind == game_core::engine::PayKind::Rent,
+            ),
+        };
         if from >= 0 {
             p.from = Some(from as usize);
         }
-        if to >= 0 {
-            p.to = Some(to as usize);
-        }
+        p.to = to.and_then(|t| (t >= 0).then_some(t as usize));
         p.shape = shape;
+        p.partner = partner;
+        p.kind = kind;
+        p.rent = rent;
         p.by_card = Some(call.player_id());
         p.runs_total_stage = total_stage;
         p.tile = tile;

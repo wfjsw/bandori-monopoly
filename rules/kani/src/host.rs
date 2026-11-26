@@ -4931,7 +4931,7 @@ pub fn arm_reveal_card(a: Args) -> i64 {
 }
 
 /// `held_names` -- LE `u16` [`NameId`]s of the seat's **non-zero** counter
-/// names with the prefix (`角色标记:*` for nanami). `buf == 0` is the count
+/// names with the prefix (`模仿标记:*`, or the legacy `角色标记:*`, for nanami). `buf == 0` is the count
 /// probe (the `field_instances` convention: no postcard, no UTF-8 scan).
 pub fn arm_tok_names(a: Args) -> i64 {
     let [a0, a1, a2, buf, cap, ..] = a;

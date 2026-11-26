@@ -210,8 +210,20 @@ pub fn on_pay_after_kani(player_id: i32) -> card_sdk::Asked {
 
 #[cfg(kani)]
 #[inline(always)]
+pub fn on_plan_kani(player_id: i32, v: card_sdk::PlanValue) -> card_sdk::PlanValue {
+    on_plan(player_id, v)
+}
+
+#[cfg(kani)]
+#[inline(always)]
 pub fn on_roll_kani(player_id: i32) -> card_sdk::Asked {
     on_roll(player_id)
+}
+
+#[cfg(kani)]
+#[inline(always)]
+pub fn on_result_kani(player_id: i32) -> card_sdk::Asked {
+    on_result(player_id)
 }
 
 #[cfg(kani)]

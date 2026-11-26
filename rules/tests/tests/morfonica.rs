@@ -547,12 +547,13 @@ fn nnm_refused_without_character_marks() {
 fn nnm_discard_marks_draw_x() {
     // 规则书 (sheet 2026-10-06 新卡组卡 G7): 「弃置手中x枚角色标记…（1）抽x张卡（可超过上限），
     // 回合结束后将手牌弃置到五张」
-    // The 角色标记 come from 广町七深（2）「得到一个该角色的标记」; arrange one
-    // directly (namespace `角色标记:<skill id>`, what the skill now writes).
+    // The 模仿标记 come from 广町七深（2）「得到一个该角色的标记」; arrange one
+    // directly (namespace `模仿标记:<skill id>`, what the skill now writes;
+    // a legacy `角色标记:<skill id>` save is covered by its own test below).
     let mut t = Table::new(&["广町七深", "户山香澄", "花园多惠"]);
     t.clean();
     t.begin_turn(0);
-    add_token(&mut t, 0, "角色标记:skill:户山香澄:鼓动", 1);
+    add_token(&mut t, 0, "模仿标记:skill:户山香澄:鼓动", 1);
     t.set_draw(0, &["R:[衍生] 压", "R:[衍生] 压", "R:[衍生] 压"]);
     t.give(0, &["Mor:（NNM）稍微努力了一下"]);
     t.play(0, "Mor:（NNM）稍微努力了一下").unwrap();
@@ -561,6 +562,28 @@ fn nnm_discard_marks_draw_x() {
     assert_eq!(t.hand(0).len(), 1);
     end_quiet(&mut t, 0);
     assert!(t.hand(0).len() <= 5);
+}
+
+/// A pre-rename save holds `角色标记:<skill id>`; every read takes both
+/// prefixes, so the card still sees the mark, offers x from it and spends the
+/// very name it read (no migration needed).
+#[test]
+fn nnm_spends_legacy_character_marks() {
+    const LEGACY: &str = "模仿标记:skill:户山香澄:鼓动";
+    let mut t = Table::new(&["广町七深", "户山香澄", "花园多惠"]);
+    t.clean();
+    t.begin_turn(0);
+    add_token(&mut t, 0, LEGACY, 2);
+    t.set_draw(0, &["R:[衍生] 压", "R:[衍生] 压", "R:[衍生] 压"]);
+    t.give(0, &["Mor:（NNM）稍微努力了一下"]);
+    t.play(0, "Mor:（NNM）稍微努力了一下").unwrap();
+    t.answer_one(0).unwrap(); // x = 1, picked out of the two legacy marks
+    decline_all(&mut t);
+    assert_eq!(
+        t.m.world().held_count(0, LEGACY),
+        1,
+        "the legacy mark was spent under the same name"
+    );
 }
 
 /// 规则书 (3): 「你可以移除一个奇迹水晶视为发动你的（2）技能」 -- the offer is
@@ -573,8 +596,8 @@ fn nnm_placed_press_spends_a_crystal_for_the_owner_skill() {
     t.clean();
     t.begin_turn(0);
     t.place_raw(0, "Mor:（NNM）稍微努力了一下");
-    // The Play's mark check (`cant_play`) wants a 角色标记 in hand.
-    add_token(&mut t, 0, "角色标记:skill:户山香澄:非凡之星", 1);
+    // The Play's mark check (`cant_play`) wants a 模仿标记 in hand.
+    add_token(&mut t, 0, "模仿标记:skill:户山香澄:非凡之星", 1);
     // (2) pays a pot, so the offer needs one to exist before it is asked.
     t.set_fire(0, 1, 3);
     t.skill(0, "Mor:（NNM）稍微努力了一下").unwrap();
@@ -614,7 +637,7 @@ fn nanami_press_invokes_skill_two() {
     t.clean();
     t.begin_turn(0);
     t.place_raw(0, "Mor:（NNM）稍微努力了一下");
-    add_token(&mut t, 0, "角色标记:skill:户山香澄:非凡之星", 1);
+    add_token(&mut t, 0, "模仿标记:skill:户山香澄:非凡之星", 1);
     t.set_fire(0, 1, 3);
     t.skill(0, "Mor:（NNM）稍微努力了一下").unwrap();
     t.answer_one(0).unwrap(); // x = 1
@@ -627,7 +650,7 @@ fn nanami_press_invokes_skill_two() {
     decline_all(&mut t);
     assert_eq!(
         t.m.world()
-            .held_count(0, "角色标记:skill:广町七深:这是很普通的事吧？"),
+            .held_count(0, "模仿标记:skill:广町七深:这是很普通的事吧？"),
         1,
         "the (2) body minted the used skill's mark"
     );
@@ -647,6 +670,34 @@ fn nanami_press_invokes_skill_two() {
     );
 }
 
+/// A pre-rename save holds `角色标记:<skill id>`; the (3) hand list offers it
+/// and the id strip takes the legacy prefix too, so the option carries the
+/// bare skill id. (`play_card` of the invoked skill is not asserted here: the
+/// press body is transactional, so a stub `play_card` rolls the spend back.)
+#[test]
+fn nanami_skill_offers_legacy_character_marks() {
+    const SKILL: &str = "skill:广町七深:这是很普通的事吧？";
+    const LEGACY: &str = "角色标记:skill:户山香澄:鼓动";
+    let mut t = Table::new(&["广町七深", "户山香澄", "花园多惠"]);
+    t.clean();
+    t.begin_turn(0);
+    add_token(&mut t, 0, LEGACY, 1);
+    t.skill(0, SKILL).unwrap();
+    let dump = t.dump_prompt();
+    assert!(
+        dump.contains("nanami_which"),
+        "the legacy mark is offered: {dump}"
+    );
+    assert!(
+        dump.contains("skill:户山香澄:鼓动"),
+        "the legacy name was stripped to its skill id: {dump}"
+    );
+    assert!(
+        !dump.contains("角色标记"),
+        "the option shows the bare id, no legacy prefix: {dump}"
+    );
+}
+
 /// G13 §10.2: exactly one crystal is removed, however many were placed.
 #[test]
 fn nanami_press_spends_one_crystal_only() {
@@ -654,7 +705,7 @@ fn nanami_press_spends_one_crystal_only() {
     t.clean();
     t.begin_turn(0);
     t.place_raw(0, "Mor:（NNM）稍微努力了一下");
-    add_token(&mut t, 0, "角色标记:skill:户山香澄:非凡之星", 2);
+    add_token(&mut t, 0, "模仿标记:skill:户山香澄:非凡之星", 2);
     t.set_fire(0, 1, 3);
     t.skill(0, "Mor:（NNM）稍微努力了一下").unwrap();
     t.answer_one(1).unwrap(); // x = 2
@@ -676,7 +727,7 @@ fn nanami_press_without_pot_refused() {
     t.clean();
     t.begin_turn(0);
     t.place_raw(0, "Mor:（NNM）稍微努力了一下");
-    add_token(&mut t, 0, "角色标记:skill:户山香澄:非凡之星", 1);
+    add_token(&mut t, 0, "模仿标记:skill:户山香澄:非凡之星", 1);
     t.set_fire(0, 0, 3);
     t.skill(0, "Mor:（NNM）稍微努力了一下").unwrap();
     t.answer_one(0).unwrap(); // x = 1
@@ -702,7 +753,7 @@ fn nnm_third_prompt_declined_keeps_the_crystal() {
     t.clean();
     t.begin_turn(0);
     t.place_raw(0, "Mor:（NNM）稍微努力了一下");
-    add_token(&mut t, 0, "角色标记:skill:户山香澄:非凡之星", 1);
+    add_token(&mut t, 0, "模仿标记:skill:户山香澄:非凡之星", 1);
     t.set_fire(0, 1, 3);
     t.skill(0, "Mor:（NNM）稍微努力了一下").unwrap();
     t.answer_one(0).unwrap(); // x = 1
@@ -728,7 +779,7 @@ fn nnm_third_without_pot_skips_the_prompt() {
     t.clean();
     t.begin_turn(0);
     t.place_raw(0, "Mor:（NNM）稍微努力了一下");
-    add_token(&mut t, 0, "角色标记:skill:户山香澄:非凡之星", 1);
+    add_token(&mut t, 0, "模仿标记:skill:户山香澄:非凡之星", 1);
     t.set_fire(0, 0, 3);
     t.skill(0, "Mor:（NNM）稍微努力了一下").unwrap();
     t.answer_one(0).unwrap(); // x = 1
@@ -741,14 +792,14 @@ fn nnm_third_without_pot_skips_the_prompt() {
     assert_eq!(last_copy_crystals(&t, "Mor:（NNM）稍微努力了一下"), Some(1));
 }
 
-/// Only the 角色标记 gate the Play; a crystal is not needed to press.
+/// Only the 模仿标记 gate the Play; a crystal is not needed to press.
 #[test]
 fn nnm_placed_press_needs_no_crystal() {
     let mut t = Table::new(&["广町七深", "户山香澄"]);
     t.clean();
     t.begin_turn(0);
     t.place_raw(0, "Mor:（NNM）稍微努力了一下");
-    add_token(&mut t, 0, "角色标记:skill:户山香澄:非凡之星", 1);
+    add_token(&mut t, 0, "模仿标记:skill:户山香澄:非凡之星", 1);
     t.skill(0, "Mor:（NNM）稍微努力了一下").unwrap();
     assert!(
         t.prompt().is_some(),
@@ -779,10 +830,10 @@ fn nnm_option2_gains_x_times_circle_money_reward() {
     let mut t = Table::new(&["广町七深", "户山香澄", "花园多惠"]);
     t.clean();
     t.begin_turn(0);
-    add_token(&mut t, 0, "角色标记:skill:户山香澄:鼓动", 1);
+    add_token(&mut t, 0, "模仿标记:skill:户山香澄:鼓动", 1);
     t.give(0, &["Mor:（NNM）稍微努力了一下"]);
     t.play(0, "Mor:（NNM）稍微努力了一下").unwrap();
-    // First prompt: how many 角色标记 to spend (x). One mark → one option.
+    // First prompt: how many 模仿标记 to spend (x). One mark → one option.
     t.answer_one(0).unwrap();
     // Second prompt: which effect. Options are (1) draw x / (2) money / (3) place.
     let k = t
