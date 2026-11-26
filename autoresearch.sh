@@ -34,6 +34,15 @@ python3 tools/autoresearch/face_metric.py \
   --library tools/autoresearch/cardlib \
   --roster target/roster-dump/cards.json
 
+# The node card test reads the bundle from its default (gitignored) location;
+# the metric above already consumed the temp copy.
+if node tools/export-display.mjs; then
+  echo "METRIC display_materialise_ok=1"
+else
+  echo "METRIC display_materialise_ok=0"
+  exit 1
+fi
+
 if node --test webui/src/core/cards.test.ts; then
   echo "METRIC cards_test_ok=1"
 else
