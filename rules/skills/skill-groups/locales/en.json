@@ -61,6 +61,7 @@
   "poppin_title": "Heartbeat of the Stars",
   "poppin_which": "Draw a card (yes) or gain 2000 (no)?",
   "ras_moved": "Teleported to {{tile}}",
+  "ras_not_ready": "Not on the recorded Live House",
   "ras_teleport": "You are still on {{tile}}. Teleport to a Live House you own?",
   "ras_title": "UNSTOPPABLE",
   "roselia_first": "The first non-Live-House buy: {{tile}} at half price",

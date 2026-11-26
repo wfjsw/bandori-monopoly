@@ -1589,7 +1589,8 @@ fn kanon_silence_second_roll_logs_the_extra_d4() {
     let mut t = Table::new(&["松原花音", "户山香澄"]);
     t.begin_turn(0);
     drain(&mut t);
-    t.m.world_mut().st.players[0].state_set("skill.kanonLost.silent", 3);
+    // Three silent turns latch [呼诶诶]; the latch is what rewrites the dice.
+    t.m.world_mut().st.players[0].state_set("skill.kanonLost.hehe", 1);
     let mark = t.mark();
     // Each roll is 1d20+1d4: (8+2) and (7+1) → |10-8| = 2.
     t.dice(&[8, 2, 7, 1]);

@@ -242,30 +242,32 @@ fn g09_fixed_roll_plus_starlit_reroll() {
     t.place_raw(0, "Mor:蝴蝶飞舞的星月夜");
     t.set_crystals(0, "Mor:蝴蝶飞舞的星月夜", 3);
     t.set_fire(0, 3, 3);
+    // Faces are queued **before** the press: the press enters the move phase
+    // and its own roll consumes them.
+    t.dice(&[1, 1, 1, 1, 1]);
     // Fix the move at X*6 = 3*6 = 18.
     let skill = t.skill_id(0, "即使1cm");
     skill_with(&mut t, 0, &skill, 3).unwrap();
-    // The skill may ask for X; answer 3 (the highest option).
-    for _ in 0..6 {
+    // Answer the X prompt (highest). 星月夜's after-window may still offer its
+    // re-roll over the pinned face; keeping the old face keeps the pin.
+    let mut reroll = false;
+    for _ in 0..10 {
         let Some(p) = t.prompt() else { break };
-        if p.kind == "choice" {
+        if t.counteract_offered("Mor:蝴蝶飞舞的星月夜") {
+            reroll = true;
+            t.decline();
+        } else if p.title.key().contains("starry_night_reroll") {
+            reroll = true;
+            let _ = t.answer_one(0); // keep the old (pinned) face
+        } else if p.kind == "choice" {
             let k = (p.options.len() as i32 - 1).max(0);
             let _ = t.answer(0, k);
         } else {
-            break;
+            t.decline();
         }
     }
     drain(&mut t);
-    // Whatever the roll prompt asks, the result is fixed: queue plenty of faces.
-    t.dice(&[1, 1, 1, 1, 1]);
-    t.roll(0).unwrap();
-    // No re-roll prompt: the fix leaves nothing to re-roll.
-    assert!(
-        !t.counteract_offered("Mor:蝴蝶飞舞的星月夜"),
-        "no re-roll over a fixed result: {}",
-        t.dump_prompt()
-    );
-    drain(&mut t);
+    assert!(reroll, "the re-roll window is offered over the pinned face");
     assert_eq!(t.charge(0), 0, "3 fire spent");
     assert_eq!(t.pos(0), 18, "the move is the fixed 18");
 }
@@ -288,24 +290,24 @@ fn g09b_fixed_face_still_applies_a_skill_die() {
     let sid = t.skill_id(1, "尽力了吗");
     t.skill(1, &sid).unwrap();
     t.answer(1, 0).unwrap(); // partner P0
-    // P0 pins the move at 3*6 = 18.
+    // P0 pins the move at 3*6 = 18. The skill's d6 is queued before the press:
+    // the press's own roll must consume it (18 − 4 = 14 from 20).
+    t.set_pos(0, 20);
     t.set_fire(0, 3, 3);
+    t.dice(&[4]); // the skill's d6
     let skill = t.skill_id(0, "即使1cm");
     skill_with(&mut t, 0, &skill, 3).unwrap();
-    for _ in 0..6 {
+    for _ in 0..8 {
         let Some(p) = t.prompt() else { break };
         if p.kind == "choice" {
             let k = (p.options.len() as i32 - 1).max(0);
             let _ = t.answer(0, k);
         } else {
-            break;
+            t.decline();
         }
     }
     drain(&mut t);
-    t.set_pos(0, 20);
-    t.dice(&[4]); // the skill's d6
-    t.roll(0).unwrap();
-    drain(&mut t);
+    assert_eq!(t.dice_left(), 0, "the skill die was consumed by the roll");
     assert_eq!(t.pos(0), 34, "the pin carries the die: 18 − 4 = 14");
     assert_eq!(
         t.state(1, "skill.tukushiTry.left"),

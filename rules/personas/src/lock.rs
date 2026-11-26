@@ -8,7 +8,9 @@ PersonaDef::new(r#"朝日六花"#)
     .group(r#"RAISE A SUILEN"#)
     .color(r#"#AAEE22"#)
     .skill(r#"瞄准目标"#)
-    .text(r#"（1）你购买的第一个非“旭汤澡堂”或任意“Live House”格子获得“Live House”的颜色（2）在你有初始“Live House”格子时你拥有的“旭汤澡堂”格子获得“Live House”的颜色"#)
+    .text(r#"[自动]：
+（1）自己购买的第一个非“旭汤澡堂”或任意“Live House”格子获得“Live House”的颜色。
+（2）自己拥有初始“Live House”格子时：自己拥有的“旭汤澡堂”获得“Live House”的颜色。"#)
     .cn_id(r#"032"#)
     .art("")
     .costume("")

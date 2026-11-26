@@ -11,6 +11,7 @@
 //! mark is spent when it pays out.
 
 use bandori_std::ctx::{self, state};
+use bandori_std::kind::Actions;
 use bandori_std::state_key;
 use card_sdk::abi::{ActionKind, MarkFilter};
 use card_sdk::{key, Action, CardDef, Msg, On};
@@ -41,6 +42,16 @@ pub const UIKA_SUMIMI: CardDef = CardDef::new(
             Some(on_pass_tile_has_pot),
             on_pass_tile,
         )),
+        // 「自己被由自己以外的消耗火罐效果影响时移除等量的该标记代替[火罐]
+        // 消耗」 -- a fire spend that is not this player's own skill cost (the
+        // skill-cost window is `charge_is_skill`; a raw 消耗 by an outside
+        // effect rides `ChargePaying` with the other source). The marker count
+        // is the residual guard (`count_marks` is outside the vocabulary).
+        On::Action(Actions::ChargePaying(
+            "actor == owner && !charge_is_skill && value > 0",
+            Some(has_any_pot),
+            substitute,
+        )),
     ],
 )
 .rule()
@@ -54,6 +65,37 @@ pub const UIKA_SUMIMI: CardDef = CardDef::new(
 /// (not yet in the condition vocabulary).
 fn on_pass_tile_has_pot(_player_id: i32) -> bool {
     ctx::count_marks(ctx::trigger::tile(), &MarkFilter::any().kind(POT)) > 0
+}
+
+/// The markers are the tile piles this rule parks; any of them enables the
+/// substitution.
+fn has_any_pot(_player_id: i32) -> bool {
+    (0..ctx::tile_count()).any(|t| ctx::count_marks(t, &MarkFilter::any().kind(POT)) > 0)
+}
+
+/// 「获得时使自己[火罐]上限-1」 / 「移除时使自己[火罐]上限+1」 -- one cap
+/// move per marker, tied to the marker's own gain and removal.
+fn adjust_cap_for_marker(player_id: i32, delta: i32) {
+    bandori_std::fire::adjust_cap(player_id, delta);
+}
+
+/// Remove one marker from `tile` and refund the cap it held down.
+fn take_pot(player_id: i32, tile: i32) {
+    ctx::bump_mark(tile, &MarkFilter::any().kind(POT), -1);
+    adjust_cap_for_marker(player_id, 1);
+}
+
+/// 「移除等量的该标记」 -- take up to `n` markers off the tiles, first come.
+fn take_pots(player_id: i32, mut n: i32) {
+    for t in 0..ctx::tile_count() {
+        while n > 0 && ctx::count_marks(t, &MarkFilter::any().kind(POT)) > 0 {
+            take_pot(player_id, t);
+            n -= 1;
+        }
+        if n == 0 {
+            break;
+        }
+    }
 }
 
 /// 「初始2，上限2」.
@@ -123,6 +165,8 @@ fn at_turn_start(player_id: i32) -> card_sdk::Asked {
         &Msg::new(key!("uika_sumimi_note")),
         card_sdk::abi::Stack::Fresh,
     );
+    // 「获得时使自己[火罐]上限-1」 -- the held-in-tile marker costs a slot.
+    adjust_cap_for_marker(player_id, -1);
     ctx::log(
         player_id,
         &Msg::new(key!("uika_sumimi_placed")).tile("tile", tile),
@@ -138,7 +182,8 @@ fn on_pass_tile(player_id: i32) -> card_sdk::Asked {
     let t = ctx::trigger::tile();
     let mover = ctx::trigger::player_id();
     let x = ctx::trigger::move_remaining().max(0);
-    ctx::bump_mark(t, &MarkFilter::any().kind(POT), -1);
+    // 「并移除那个火罐」 + 「移除时使自己[火罐]上限+1」.
+    take_pot(player_id, t);
     let due = x * 30;
     ctx::transfer(
         mover,
@@ -151,6 +196,40 @@ fn on_pass_tile(player_id: i32) -> card_sdk::Asked {
         &Msg::new(key!("uika_sumimi_paid"))
             .player_id("who", mover)
             .i("n", due as i64),
+    );
+    Ok(())
+}
+
+/// 「自己被由自己以外的消耗火罐效果影响时移除等量的该标记代替[火罐]消耗」
+/// -- cover as much of the cost as the markers allow, then let the uncovered
+/// remainder run as fire. The `ChargePaying` window is cancelled for the
+/// covered part (the outer `spend` treats the whole cost as substituted); the
+/// remainders are spent straight through. The markers are removed first, so
+/// the re-entrant window this opens stands down (`has_any_pot` is false).
+fn substitute(player_id: i32) -> card_sdk::Asked {
+    let cost = ctx::trigger::value();
+    if cost <= 0 {
+        return Ok(());
+    }
+    let have: i32 = (0..ctx::tile_count())
+        .map(|t| ctx::count_marks(t, &MarkFilter::any().kind(POT)))
+        .sum();
+    if have <= 0 {
+        return Ok(());
+    }
+    let cover = have.min(cost);
+    take_pots(player_id, cover);
+    ctx::trigger::set_cancelled();
+    if cost > cover {
+        bandori_std::fire::spend_passive(
+            player_id,
+            cost - cover,
+            &Msg::new(key!("uika_sumimi_substitute")).i("n", cover as i64),
+        )?;
+    }
+    ctx::log(
+        player_id,
+        &Msg::new(key!("uika_sumimi_substitute")).i("n", cover as i64),
     );
     Ok(())
 }

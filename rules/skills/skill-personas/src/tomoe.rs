@@ -37,6 +37,14 @@ pub const TOMOE: CardDef = CardDef::new(
         On::Action(Action::TurnStartBefore("", None, declare_cap)).silent(),
         On::Action(Action::DeckAtGameStart("", None, declare_cap)).silent(),
         On::Action(Action::TurnEnd("", Some(afterglow), tick)),
+        // 「此效果每圈限一次」 -- 「经过CiRCLE时移除」 the latch: a lap (the
+        // owner's pass over the start square) re-arms the press.
+        On::Action(Action::Pass(
+            bandori_std::guards::OWN_START,
+            None,
+            clear_used,
+        ))
+        .silent(),
     ],
 )
 .rule()
@@ -56,18 +64,28 @@ fn declare_cap(player_id: i32) -> card_sdk::Asked {
     Ok(())
 }
 
+/// 「此效果每圈限一次」 -- 「经过CiRCLE时移除」 clears the latch.
+fn clear_used(player_id: i32) -> card_sdk::Asked {
+    state::set(player_id, USED, 0);
+    Ok(())
+}
+
 /// （1）「每四回合没有使用Afterglow角色的（2）技能获得一个[火罐]」.
 fn tick(player_id: i32) -> card_sdk::Asked {
     super::ran::rest_tick(player_id)
 }
 
-/// （2） 「你可以使用一个[火罐]」 + （3） 「若你位于银河拉面馆上，你无法使用（2）效果」.
+/// （2） 「你可以使用一个[火罐]」 + （3） 「若你位于银河拉面馆上，你无法使用（2）效果」
+/// + 「此效果每圈限一次」.
 fn can_use(player_id: i32) -> Option<Msg> {
     if bandori_std::ctx::skill_blocked(player_id, "") {
         return Some(Msg::new(key!("skill_blocked")));
     }
     if ctx::tile_at(ctx::player_pos(player_id)) == shop() {
         return Some(Msg::new(key!("tomoe_at_shop")));
+    }
+    if state::get(player_id, USED) != 0 {
+        return Some(Msg::new(key!("tomoe_used_lap")));
     }
     if bandori_std::fire::get(player_id) < 1 {
         return Some(Msg::new(key!("tomoe_no_fire")));
@@ -97,6 +115,8 @@ fn use_skill(player_id: i32) -> card_sdk::Asked {
     if !bandori_std::fire::spend_skill(player_id, 1, &Msg::new(key!("tomoe_spend")))? {
         return Ok(());
     }
+    // 「此效果每圈限一次」 -- armed until the owner's next CiRCLE pass.
+    state::set(player_id, USED, 1);
     state::set(player_id, REST_TURNS, 0);
     plan::set_start(toward, "豚骨酱油拉面大姐");
     // 「若你因此效果导致起点向前移动并超过了"银河拉面馆"，你补充一个火罐」 --

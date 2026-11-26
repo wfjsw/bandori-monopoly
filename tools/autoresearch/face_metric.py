@@ -3,7 +3,17 @@
 
 Reads only the ``## Cards`` sections of ``--library/*.md``; a body is the
 following non-empty lines (trailing whitespace removed) up to the next heading.
-``events.md`` is skipped (event faces are a follow-up; pairs cover roster faces).
+``events.md`` is skipped by the card parse; ``--event-pairs`` switches on the
+event metrics, which read ``display.events`` against events.md alone (local
+event ids drop the library's ``[衍生]`` marker, so the title compare ignores
+the derived flag; no tags exist on events, so ``event_full`` is ``event_synced``).
+``--persona-pairs`` / ``--group-pairs`` likewise measure the character and band
+skill faces: the ``## Characters`` ``### name — skill`` entries and the single
+``## Band Ability`` ``### skill`` entry per band, compared with the same text
+normalization (persona body stops at a ``####`` sub-heading; the group body is
+the band's one ability). Names are exact display keys; groups pair through the
+file→band map. ``persona_full`` / ``group_full`` require both the library title
+and normalized body to line up; ``*_unpaired_library`` report leftover entries.
 Both sides are normalized: an optional ``[衍生]`` derived marker, an optional
 leading ``[character]``, and a leading/trailing balanced ``（...）`` annotation
 are stripped before comparison.
@@ -46,6 +56,25 @@ HEADING = re.compile(r"#{1,6}\s")
 # Event faces live in events.md's own `## Cards` section; pairs.json covers the
 # roster only, so event entries would masquerade as unpaired library rows.
 EXCLUDED_FILES = {"events.md"}
+EVENT_FILE = "events.md"
+PERSONA_SECTION = re.compile(r"^##\s+Characters\s*$", re.M)
+BAND_SECTION = re.compile(r"^##\s+Band Ability\s*$", re.M)
+# Library stem -> display band key. GeneralCards has no band ability;
+# IkkaDumbRock/Millsage/MugendaiMewtype are absent from display.groups.
+BAND_FILES = {
+    "Afterglow": "Afterglow",
+    "AveMujica": "Ave Mujica",
+    "CiRCLESupportTeam": "CiRCLE",
+    "CRYCHIC": "CRYCHIC",
+    "HelloHappyWorld": "Hello, Happy World!",
+    "Morfonica": "Morfonica",
+    "MyGO": "MyGO!!!!!",
+    "PastelPalettes": "Pastel✽Palettes",
+    "PoppinParty": "Poppin' Party",
+    "RaiseASuilen": "RAISE A SUILEN",
+    "Roselia": "Roselia",
+    "Sumimi": "Sumimi",
+}
 ALLOWED_TAGS = {"手", "场地", "反击", "持续", "特", "限", "衍生"}
 # A label token counts at a clause boundary: a body line start or after a
 # `（N）` marker, and every token in a leading run (`[反击][特]`). Reaction
@@ -168,6 +197,61 @@ def normalize_text(text: str) -> str:
     return re.sub(r"\s+", "", text)
 
 
+def _parse_card_file(path: Path) -> list[tuple[str, bool, str, str]]:
+    """(raw title, derived, normalized title, body) in file order."""
+    try:
+        lines = path.read_text(encoding="utf-8").splitlines()
+    except OSError as exc:
+        raise fail(f"cannot read {path}: {exc}") from exc
+
+    entries: list[tuple[str, bool, str, str]] = []
+    seen: set[str] = set()
+    in_cards = False
+    current: str | None = None
+    body: list[str] = []
+
+    def close() -> None:
+        nonlocal current, body
+        if current is None:
+            return
+        derived, norm = normalize_title(current)
+        # `unnamed` is upstream's placeholder for untitled cards and may
+        # legitimately repeat (Sumimi has two, both pair targets); every
+        # other repeated title makes the body index ambiguous.
+        if current in seen and current != "unnamed":
+            raise fail(f"duplicate card title in {path.name}: {current!r}")
+        seen.add(current)
+        entries.append((current, derived, norm, "\n".join(body)))
+        current = None
+        body = []
+
+    for line in lines:
+        if not in_cards:
+            if line.rstrip() == "## Cards":
+                in_cards = True
+            continue
+        if CARD_HEADING.fullmatch(line.rstrip()):
+            continue
+        if line.startswith("### "):
+            close()
+            match = ENTRY_HEADING.fullmatch(line.rstrip())
+            if not match:
+                raise fail(f"empty card title in {path.name}")
+            current = match.group(1)
+            continue
+        if SUBHEADING.match(line):
+            close()
+            continue
+        if HEADING.match(line):  # next level-2 section ends ## Cards
+            close()
+            in_cards = False
+            continue
+        if current is not None and line.strip():
+            body.append(line.rstrip())
+    close()
+    return entries
+
+
 def parse_library(library: Path) -> tuple[list[str], dict[tuple[bool, str], list[str]]]:
     """Parse ``*.md`` into ordered raw titles and a normalized-title body index."""
     if not library.is_dir():
@@ -180,59 +264,138 @@ def parse_library(library: Path) -> tuple[list[str], dict[tuple[bool, str], list
 
     titles: list[str] = []
     index: dict[tuple[bool, str], list[str]] = {}
-
     for path in files:
-        try:
-            lines = path.read_text(encoding="utf-8").splitlines()
-        except OSError as exc:
-            raise fail(f"cannot read {path}: {exc}") from exc
+        for raw, derived, norm, body in _parse_card_file(path):
+            titles.append(raw)
+            index.setdefault((derived, norm), []).append(body)
+    return titles, index
 
-        seen: set[str] = set()
-        in_cards = False
-        current: str | None = None
-        body: list[str] = []
 
-        def close() -> None:
-            nonlocal current, body
-            if current is None:
-                return
-            derived, norm = normalize_title(current)
-            # `unnamed` is upstream's placeholder for untitled cards and may
-            # legitimately repeat (Sumimi has two, both pair targets); every
-            # other repeated title makes the body index ambiguous.
-            if current in seen and current != "unnamed":
-                raise fail(f"duplicate card title in {path.name}: {current!r}")
-            seen.add(current)
-            titles.append(current)
-            index.setdefault((derived, norm), []).append("\n".join(body))
-            current = None
-            body = []
+def parse_event_library(library: Path) -> tuple[list[str], dict[str, list[str]]]:
+    """Parse events.md alone into raw titles and a derived-agnostic body index.
 
-        for line in lines:
-            if not in_cards:
-                if line.rstrip() == "## Cards":
-                    in_cards = True
-                continue
-            if CARD_HEADING.fullmatch(line.rstrip()):
-                continue
-            if line.startswith("### "):
-                close()
-                match = ENTRY_HEADING.fullmatch(line.rstrip())
-                if not match:
-                    raise fail(f"empty card title in {path.name}")
-                current = match.group(1)
-                continue
-            if SUBHEADING.match(line):
-                close()
-                continue
-            if HEADING.match(line):  # next level-2 section ends ## Cards
-                close()
-                in_cards = False
-                continue
-            if current is not None and line.strip():
-                body.append(line.rstrip())
-        close()
+    Local event ids drop the library's ``[衍生]`` marker, so the index key is
+    the normalized title only; two entries normalizing alike make it ambiguous.
+    """
+    path = library / EVENT_FILE
+    if not path.is_file():
+        raise fail(f"event library not found: {path}")
 
+    titles: list[str] = []
+    index: dict[str, list[str]] = {}
+    for raw, _derived, norm, body in _parse_card_file(path):
+        titles.append(raw)
+        index.setdefault(norm, []).append(body)
+    return titles, index
+
+
+def _read_lines(path: Path) -> list[str]:
+    try:
+        return path.read_text(encoding="utf-8").splitlines()
+    except OSError as exc:
+        raise fail(f"cannot read {path}: {exc}") from exc
+
+
+def _section_span(lines: list[str], heading: re.Pattern) -> tuple[int, int] | None:
+    """Line span after a level-2 ``heading`` to the next level-2 heading."""
+    start = next(
+        (i for i, line in enumerate(lines) if heading.fullmatch(line.rstrip())), None
+    )
+    if start is None:
+        return None
+    for end in range(start + 1, len(lines)):
+        if re.match(r"^##\s", lines[end]):
+            return start + 1, end
+    return start + 1, len(lines)
+
+
+def _entries_in_span(
+    lines: list[str], span: tuple[int, int], split_skill: bool
+) -> list[tuple[str, str | None, str]]:
+    """(name, skill, body) entries; a ``####`` sub-heading ends the body."""
+    entries: list[tuple[str, str | None, str]] = []
+    current: tuple[str, str | None] | None = None
+    body: list[str] = []
+
+    def close() -> None:
+        nonlocal current, body
+        if current is not None:
+            entries.append((current[0], current[1], "\n".join(body)))
+            current, body = None, []
+
+    for line in lines[span[0] : span[1]]:
+        if line.startswith("### "):
+            close()
+            pattern = (
+                r"^###\s+(.+?)\s+—\s+(.+?)\s*$" if split_skill else r"^###\s+(.+?)\s*$"
+            )
+            match = re.match(pattern, line)
+            if not match:
+                # A titled section may carry prose sub-headings (e.g.
+                # `### Shared character API usage`); skip, do not abort.
+                if split_skill:
+                    continue
+                raise fail(f"bad section entry heading: {line!r}")
+            current = (match.group(1), match.group(2) if split_skill else None)
+            continue
+        if re.match(r"#{1,6}\s", line):
+            close()
+            continue
+        if current is not None and line.strip():
+            body.append(line.rstrip())
+    close()
+    return entries
+
+
+def parse_persona_library(library: Path) -> tuple[list[str], dict[str, tuple[str, str]]]:
+    """Persona name -> (library skill, body), in file order.
+
+    Duplicate names make the lookup ambiguous and abort the run.
+    """
+    if not library.is_dir():
+        raise fail(f"library directory not found: {library}")
+    titles: list[str] = []
+    index: dict[str, tuple[str, str]] = {}
+    for path in sorted(
+        p
+        for p in library.glob("*.md")
+        if p.name not in EXCLUDED_FILES and p.name != "SOURCE.md"
+    ):
+        lines = _read_lines(path)
+        span = _section_span(lines, PERSONA_SECTION)
+        if span is None:
+            continue
+        for name, skill, body in _entries_in_span(lines, span, True):
+            if name in index:
+                raise fail(f"duplicate persona {name!r} in {path.name}")
+            assert skill is not None
+            index[name] = (skill, body)
+            titles.append(name)
+    return titles, index
+
+
+def parse_band_library(library: Path) -> tuple[list[str], dict[str, str]]:
+    """Band ability skill -> body, one entry per mapped band file."""
+    if not library.is_dir():
+        raise fail(f"library directory not found: {library}")
+    titles: list[str] = []
+    index: dict[str, str] = {}
+    for stem in BAND_FILES:
+        path = library / f"{stem}.md"
+        if not path.is_file():
+            continue
+        lines = _read_lines(path)
+        span = _section_span(lines, BAND_SECTION)
+        if span is None:
+            continue
+        entries = _entries_in_span(lines, span, False)
+        if len(entries) != 1:
+            raise fail(f"{path.name} band ability must have one entry, got {len(entries)}")
+        skill, _none, body = entries[0]
+        if skill in index:
+            raise fail(f"duplicate band ability {skill!r}")
+        index[skill] = body
+        titles.append(skill)
     return titles, index
 
 
@@ -353,12 +516,86 @@ def find_mismatches(pairs, cards, index) -> list[str]:
     ]
 
 
+def load_event_pairs(path: Path) -> dict[str, str]:
+    data = load_json(path, "event pairs")
+    pairs: dict[str, str] = {}
+    for local_id, title in data.items():
+        if not local_id.startswith("event:"):
+            raise fail(f"event pair id lacks an 'event:' prefix: {local_id!r}")
+        if not isinstance(title, str):
+            raise fail(f"event pair {local_id!r} does not map to a title")
+        pairs[local_id] = title
+    return pairs
+
+
+def load_name_pairs(path: Path, label: str) -> dict[str, str]:
+    """A ``{display key: library skill}`` object with string keys and values."""
+    data = load_json(path, label)
+    pairs: dict[str, str] = {}
+    for key, skill in data.items():
+        if not isinstance(skill, str):
+            raise fail(f"{label} entry {key!r} does not map to a skill")
+        pairs[key] = skill
+    return pairs
+
+
+def persona_state(
+    pairs: dict[str, str],
+    personas: dict,
+    index: dict[str, tuple[str, str]],
+    name: str,
+) -> tuple[bool, bool]:
+    """(title_ok, text_ok) for one paired persona, normalized body compare."""
+    if name not in personas or name not in index:
+        return False, False
+    skill, body = index[name]
+    title_ok = pairs[name] == skill
+    persona = personas[name]
+    text = persona.get("text", "") if isinstance(persona, dict) else ""
+    return title_ok, normalize_text(body) == normalize_text(text)
+
+
+def group_state(
+    pairs: dict[str, str], groups: dict, index: dict[str, str], band: str
+) -> tuple[bool, bool]:
+    """(title_ok, text_ok) for one paired band, normalized body compare."""
+    skill = pairs[band]
+    if band not in groups or skill not in index:
+        return False, False
+    group = groups[band]
+    text = group.get("text", "") if isinstance(group, dict) else ""
+    return True, normalize_text(index[skill]) == normalize_text(text)
+
+
+def event_pair_state(
+    pairs: dict[str, str], events: dict, index: dict[str, list[str]], local_id: str
+) -> tuple[bool, bool]:
+    """(title_ok, text_ok) for one paired event; same normalization as cards.
+
+    The compare ignores the derived flag: local event names drop ``[衍生]``.
+    """
+    _derived, norm = normalize_local_id(local_id)
+    _t_derived, t_norm = normalize_title(pairs[local_id])
+    bodies = index.get(t_norm)
+    bare = local_id.split(":", 1)[1]
+    if bare not in events or not bodies:
+        return False, False
+    title_ok = norm == t_norm
+    event = events[bare]
+    text = event.get("text", "") if isinstance(event, dict) else ""
+    text_ok = any(normalize_text(body) == normalize_text(text) for body in bodies)
+    return title_ok, text_ok
+
+
 def compute() -> int:
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--display", required=True, type=Path)
     parser.add_argument("--pairs", required=True, type=Path)
     parser.add_argument("--library", required=True, type=Path)
     parser.add_argument("--roster", required=True, type=Path)
+    parser.add_argument("--event-pairs", required=True, type=Path)
+    parser.add_argument("--persona-pairs", required=True, type=Path)
+    parser.add_argument("--group-pairs", required=True, type=Path)
     args = parser.parse_args()
 
     display = load_json(args.display, "display")
@@ -429,6 +666,33 @@ def compute() -> int:
         1 for title in titles if normalize_title(title) not in used_keys
     )
 
+    events = display.get("events")
+    if not isinstance(events, dict):
+        raise fail(f"display has no object 'events' map: {args.display}")
+    event_pairs = load_event_pairs(args.event_pairs)
+    event_titles, event_index = parse_event_library(args.library)
+
+    event_paired = 0
+    event_title_match = 0
+    event_text_match = 0
+    event_synced = 0
+    for local_id in event_pairs:
+        if local_id.split(":", 1)[1] not in events:
+            continue
+        event_paired += 1
+        title_ok, text_ok = event_pair_state(event_pairs, events, event_index, local_id)
+        event_title_match += int(title_ok)
+        event_text_match += int(text_ok)
+        event_synced += int(title_ok and text_ok)
+
+    event_unpaired_local = sorted(
+        bare for bare in events if f"event:{bare}" not in event_pairs
+    )
+    used_event_keys = {normalize_title(title)[1] for title in event_pairs.values()}
+    event_unpaired_library = sum(
+        1 for title in event_titles if normalize_title(title)[1] not in used_event_keys
+    )
+
     print(f"METRIC face_paired={paired}")
     print(f"METRIC face_full={full}")
     print(f"METRIC face_title_match={title_match}")
@@ -447,6 +711,116 @@ def compute() -> int:
         print(f"ASI full=0 id={local_id}")
     for local_id in find_mismatches(pairs, cards, index)[:MAX_ASI]:
         print(f"ASI synced=0 id={local_id}")
+
+    print(f"METRIC event_paired={event_paired}")
+    print(f"METRIC event_full={event_synced}")
+    print(f"METRIC event_title_match={event_title_match}")
+    print(f"METRIC event_text_match={event_text_match}")
+    print(f"METRIC event_synced={event_synced}")
+    print(f"METRIC event_unpaired_local={len(event_unpaired_local)}")
+    print(f"METRIC event_unpaired_library={event_unpaired_library}")
+    print(f"METRIC events_present={len(events)}")
+
+    for local_id in sorted(event_pairs):
+        if local_id.split(":", 1)[1] not in events:
+            print(f"ASI event_paired=0 id={local_id}")
+    event_bad = [
+        local_id
+        for local_id in sorted(event_pairs)
+        if local_id.split(":", 1)[1] in events
+        and not all(event_pair_state(event_pairs, events, event_index, local_id))
+    ]
+    for local_id in event_bad[:MAX_ASI]:
+        print(f"ASI event_synced=0 id={local_id}")
+
+    personas = display.get("personas")
+    if not isinstance(personas, dict):
+        raise fail(f"display has no object 'personas' map: {args.display}")
+    persona_pairs = load_name_pairs(args.persona_pairs, "persona pairs")
+    persona_titles, persona_index = parse_persona_library(args.library)
+
+    persona_paired = 0
+    persona_title_match = 0
+    persona_text_match = 0
+    persona_full = 0
+    for name in persona_pairs:
+        if name not in personas:
+            continue
+        persona_paired += 1
+        title_ok, text_ok = persona_state(
+            persona_pairs, personas, persona_index, name
+        )
+        persona_title_match += int(title_ok)
+        persona_text_match += int(text_ok)
+        persona_full += int(title_ok and text_ok)
+
+    persona_unpaired_local = sorted(name for name in personas if name not in persona_pairs)
+    used_personas = set(persona_pairs)
+    persona_unpaired_library = sum(
+        1 for name in persona_titles if name not in used_personas
+    )
+
+    groups = display.get("groups")
+    if not isinstance(groups, dict):
+        raise fail(f"display has no object 'groups' map: {args.display}")
+    group_pairs = load_name_pairs(args.group_pairs, "group pairs")
+    group_titles, group_index = parse_band_library(args.library)
+
+    group_paired = 0
+    group_title_match = 0
+    group_text_match = 0
+    group_full = 0
+    for band in group_pairs:
+        if band not in groups:
+            continue
+        group_paired += 1
+        title_ok, text_ok = group_state(group_pairs, groups, group_index, band)
+        group_title_match += int(title_ok)
+        group_text_match += int(text_ok)
+        group_full += int(title_ok and text_ok)
+
+    group_unpaired_local = sorted(band for band in groups if band not in group_pairs)
+    used_groups = set(group_pairs.values())
+    group_unpaired_library = sum(1 for skill in group_titles if skill not in used_groups)
+
+    print(f"METRIC persona_paired={persona_paired}")
+    print(f"METRIC persona_full={persona_full}")
+    print(f"METRIC persona_title_match={persona_title_match}")
+    print(f"METRIC persona_text_match={persona_text_match}")
+    print(f"METRIC persona_unpaired_local={len(persona_unpaired_local)}")
+    print(f"METRIC persona_unpaired_library={persona_unpaired_library}")
+    print(f"METRIC personas_present={len(personas)}")
+
+    print(f"METRIC group_paired={group_paired}")
+    print(f"METRIC group_full={group_full}")
+    print(f"METRIC group_title_match={group_title_match}")
+    print(f"METRIC group_text_match={group_text_match}")
+    print(f"METRIC group_unpaired_local={len(group_unpaired_local)}")
+    print(f"METRIC group_unpaired_library={group_unpaired_library}")
+    print(f"METRIC groups_present={len(groups)}")
+
+    for name in sorted(persona_pairs):
+        if name not in personas:
+            print(f"ASI persona_paired=0 id={name}")
+    persona_bad = [
+        name
+        for name in sorted(persona_pairs)
+        if name in personas
+        and not all(persona_state(persona_pairs, personas, persona_index, name))
+    ]
+    for name in persona_bad[:MAX_ASI]:
+        print(f"ASI persona_full=0 id={name}")
+    for band in sorted(group_pairs):
+        if band not in groups:
+            print(f"ASI group_paired=0 id={band}")
+    group_bad = [
+        band
+        for band in sorted(group_pairs)
+        if band in groups
+        and not all(group_state(group_pairs, groups, group_index, band))
+    ]
+    for band in group_bad[:MAX_ASI]:
+        print(f"ASI group_full=0 id={band}")
     return 0
 
 

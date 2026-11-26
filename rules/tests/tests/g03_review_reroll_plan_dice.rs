@@ -17,7 +17,8 @@ fn zz_kanon_second_roll_uses_the_plan_dice() {
     t.begin_turn(0);
     drain(&mut t);
     t.set_pos(0, 0);
-    t.m.world_mut().st.players[0].state_set("skill.kanonLost.silent", 3);
+    // Three silent turns latch [呼诶诶]; the latch is what rewrites the dice.
+    t.m.world_mut().st.players[0].state_set("skill.kanonLost.hehe", 1);
     // First roll 1d20+1d4 = 8+2 = 10; second 1d20+1d4 = 7+1 = 8; |10-8| = 2.
     t.dice(&[8, 2, 7, 1]);
     t.roll(0).unwrap();

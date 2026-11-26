@@ -10,6 +10,8 @@ use game_core::msg::Arg;
 use game_core::net::NetMessage;
 use game_core::state::stage;
 
+const BAND_MUJICA: &str = "skill:Ave Mujica:假面之下的真实";
+
 // ---------------------------------------------------------- local helpers
 
 fn rest(t: &mut Table) {
@@ -1259,6 +1261,38 @@ fn sakiko_crychic_nudge_moves_the_destination() {
     );
 }
 
+/// 規則书 (3): 「回合结束时手牌数至少为3则进入[人偶模式]，严格小于3则退出」
+/// -- the threshold is read only at the turn end, not on every hand change.
+#[test]
+fn mutsumi_crychic_threshold_reads_only_at_turn_end() {
+    let mut t = Table::new(&["若叶睦（CRYCHIC）", "高松灯（CRYCHIC）"]);
+    t.clean();
+    t.strip_skills();
+    // The state axis is the persona's (3); re-place it after the strip.
+    t.place_raw(0, "skill:若叶睦（CRYCHIC）:精致的人偶");
+    t.place_raw(0, BAND_MUJICA);
+    t.begin_turn(0);
+    drain(&mut t);
+    t.set_state(0, "skillState", 1);
+    t.set_hand(0, &["通用:GREAT", "通用:GREAT"]);
+    t.set_draw(0, &["通用:GREAT"]);
+    // Playing the drawer brings the hand to 3 mid-turn (`HandChanged`) -- the
+    // state may not follow yet.
+    t.give(0, &["TEST:drawer"]);
+    t.play(0, "TEST:drawer").unwrap();
+    drain(&mut t);
+    assert_eq!(t.hand(0).len(), 3, "hand is three");
+    assert_eq!(t.state(0, "skillState"), 1, "HandChanged alone changes nothing");
+    // Clear the pending move, then the turn end re-reads the hand (3 >= 3).
+    t.dice(&[1]);
+    t.roll(0).unwrap();
+    drain(&mut t);
+    t.end(0).unwrap();
+    rest(&mut t);
+    drain(&mut t);
+    assert_eq!(t.state(0, "skillState"), 2, "keys={:?}", t.recent_keys(30));
+}
+
 #[test]
 fn mutsumi_crychic_skill_fire_cap() {
     let mut t = Table::new(&["若叶睦（CRYCHIC）", "高松灯（CRYCHIC）"]);
@@ -1421,6 +1455,38 @@ fn crychic_band_skill_blocks_at_hand_6() {
         "hand size tracked: {}",
         t.hand(0).len()
     );
+}
+
+#[test]
+fn crychic_band_blocks_a_raw_spend_at_hand_6() {
+    // [黑刀之夜]（2）: 「无法主动进行会直接[消耗]或[支付]资金的动作」 -- a raw
+    // redeem debit is the 消耗 arm (the 支付 arm is `lock_pay`).
+    let mut t = Table::new(&["高松灯（CRYCHIC）", "长崎素世（CRYCHIC）"]);
+    t.clean();
+    t.begin_turn(0);
+    while t.prompt().is_some() {
+        decline_q(&mut t);
+    }
+    let deed = tile("江户川公园");
+    t.own(0, &[deed]);
+    t.mortgage(0, deed).unwrap();
+    t.set_hand(
+        0,
+        &[
+            "R:[衍生] 压",
+            "R:[衍生] 压",
+            "R:[衍生] 压",
+            "R:[衍生] 压",
+            "R:[衍生] 压",
+            "R:[衍生] 压",
+        ],
+    );
+    let m0 = t.money(0);
+    // The redeem still lifts the mortgage; the 消耗 itself is voided.
+    t.redeem(0, deed).unwrap();
+    drain(&mut t);
+    assert!(!t.mortgaged(deed), "the deed was redeemed");
+    assert_eq!(t.money(0), m0, "no money left the seat under the lock");
 }
 
 // =====================================================================

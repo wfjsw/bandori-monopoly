@@ -17,10 +17,14 @@
 //! `cannot_play`) refuses every action while stunned; `prop::PLAYABLE_STUNNED`
 //! is the documented exception (the same waiver 壱雫空 carries).
 
-use bandori_std::ctx::{self, state};
+use bandori_std::ctx::{self, plan, state};
 use bandori_std::state_key;
 use card_sdk::abi::{roll_source, ActionKind};
 use card_sdk::{key, Action, CardDef, Msg, On};
+
+/// This turn's `turn_key` once the press has run its move. A pause inside the
+/// walk replays this body; the stored key keeps the replay from walking again.
+const MOVED_THIS_TURN: &str = "skill.rinkoGeo.movedThisTurn";
 
 pub const RINKO: CardDef = CardDef::new(
     "skill:白金燐子:即使1cm也要前进",
@@ -82,11 +86,14 @@ fn use_skill(player_id: i32) -> card_sdk::Asked {
     if x < 1 || !bandori_std::fire::spend_skill(player_id, x, &Msg::new(key!("rinko_spend")))? {
         return Ok(());
     }
-    // 「固定为X*6」 -- the face is pinned, not rolled.
-    ctx::set_fixed_roll(x * 6, roll_source::SKILL);
-    // 「本次移动不受异常移动效果影响」 -- the companion layer closes the
-    // stay half of the move gate, and the generic walk-exempt flag cancels
-    // the immobile clamp for this walk.
+    // 「固定为X*6」 -- `set_settles(true)` so the landing settles whichever arm
+    // below walks the pinned face. The plan's dice terms stay: another
+    // effect's die (都筑诗船's −1d6) folds onto the pinned face.
+    plan::set_settles(true);
+    // 「获得一层[霸体]状态」 -- [霸体] is the `UNSTOPPABLE` alias: 「不受[异常
+    // 移动效果]影响，回合结束时移除该状态」. The companion layer closes the
+    // stay half of the move gate, and the generic walk-exempt flag cancels the
+    // immobile clamp for this walk.
     state::add(player_id, state_key::UNSTOPPABLE, 1);
     bandori_std::status::declare_companion(player_id, state_key::UNSTOPPABLE);
     state::set_expires(player_id, state_key::UNSTOPPABLE, ctx::state::TURN_END);
@@ -96,6 +103,23 @@ fn use_skill(player_id: i32) -> card_sdk::Asked {
         player_id,
         &Msg::new(key!("rinko_fixed")).i("n", (x * 6) as i64),
     );
+    // 「并立刻进入移动阶段，进行固定为X×6格的移动」 -- the face is pinned and
+    // normally the press runs the move (`run_planned_move` marks `MainMoved`,
+    // so no later main move). The pin is a *face*, not a step count, so a
+    // dice term another effect adds (都筑诗船's −1d6) still lands on it.
+    // While the seat cannot move (stun / exile) the move gate is read against
+    // the committed world, which the pause discards the fresh [霸体] write
+    // from; there the ordinary roll walks the pinned face instead.
+    ctx::set_fixed_roll(x * 6, roll_source::SKILL);
+    let cannot_move = ctx::state::get(player_id, state_key::STUN) > 0
+        || ctx::state::get(player_id, state_key::EXILE) > 0;
+    // A pause inside the walk replays this body; the per-turn latch keeps the
+    // replay from starting a second move (`plan::claim` does not survive the
+    // plan copy).
+    if !cannot_move && ctx::slot(player_id, MOVED_THIS_TURN) != ctx::turn_key() {
+        ctx::set_slot(player_id, MOVED_THIS_TURN, ctx::turn_key());
+        ctx::run_planned_move(player_id);
+    }
     Ok(())
 }
 

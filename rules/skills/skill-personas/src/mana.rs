@@ -1,22 +1,29 @@
 //! `skill:纯田真奈:甜甜圈爱好者`（Sumimi）
 //!
 //! 规则书（skill sheet, 纯田真奈）:
-//! > （1）每次[经过]CiRCLE时获得1个[火罐]（初始1，上限2）
-//! > （2）经过"购物中心"，"便利店"，"快餐店"，"羽泽咖啡厅"，"山吹面包房"时，在
-//! > 触发结算前可选择消耗一个火罐并向对应格子进行一次支付（可向抵押格子正常支付其
-//! > 原本收费，若为无主格子则为消耗对应收费资金），之后，直到你的下个回合结束，你的
-//! > 资金消耗减半。
+//! > [资源]：
+//! > （1）[火罐]：初始1，上限2。
+//! > [自动]：
+//! > （1）自己每次[经过]CiRCLE时：获得1个[火罐]。
+//! > [主动]：
+//! > （1）自己[经过]“购物中心”、“便利店”、“快餐店”、“羽泽咖啡厅”或“山吹面包房”
+//! > 时：可使用1个[火罐]，依次进行以下操作：
+//! > 1. 向对应格子进行1次[支付]。可向已抵押的格子正常[支付]其原本收费；若为无主
+//! > 格子，改为[消耗]对应收费金额。
+//! > 2. 获得一层[甜甜圈]状态。
+//! > [甜甜圈]状态：自己的[消耗]与[支付]资金减半。在获得该状态后的下个回合结束时移除
+//! > 该状态。
 //!
 //! （2） 「向对应格子进行一次支付」 is a voluntary pay to the tile's owner (or
 //! the bank, when it is unowned) *before* the settle -- a pre-emptive charge
 //! that buys the half-price window.
 //!
-//! 「直到你的下个回合结束，你的资金消耗减半」 -- the window runs through the
-//! end of the owner's **next** turn, not the arming turn's. The keyed state
-//! carries two `TurnEnd` layers (one lost at each of the owner's own turn-end
-//! wear-offs), so an arm on turn T dies at the end of turn T+1. 「你的资金
-//! 消耗减半」 also scopes to the owner's own spending: the pay bend is
-//! `actor == owner`.
+//! 「[甜甜圈]状态：自己的[消耗]与[支付]资金减半。在获得该状态后的下个回合结束时
+//! 移除该状态」 -- the window runs through the end of the owner's **next** turn,
+//! not the arming turn's. The keyed state carries two `TurnEnd` layers (one lost
+//! at each of the owner's own turn-end wear-offs), so an arm on turn T dies at
+//! the end of turn T+1. 「自己的[消耗]与[支付]」 scopes both arms to the owner:
+//! the pay bend is `actor == owner`, the spend arm reads the same latch.
 
 use bandori_std::ctx::{self, state};
 use bandori_std::state_key;
@@ -51,8 +58,8 @@ pub const MANA: CardDef = CardDef::new(
         // （1）+（2） one `Pass` entry (see [`PASS_PRE`]); the body picks the
         // branch. The choice / spend / pay stay in the body.
         On::Action(Action::Pass(PASS_PRE, None, on_pass)),
-        // 「你的资金消耗减半」 -- only the owner's own pays, and only while
-        // the window is armed. `value > 0` is the amount floor.
+        // 「自己的[消耗]与[支付]资金减半」 -- only the owner's own pays, and
+        // only while the window is armed. `value > 0` is the amount floor.
         //
         // ABI v74 Pattern A: pure integer transform `(value + 1) / 2` (the old
         // `set_pay_amount((amount + 1) / 2)`). No prompt, no side effects -- the
@@ -61,6 +68,14 @@ pub const MANA: CardDef = CardDef::new(
             "actor == owner && card.placed && slot('skill.manaDonut.half') > 0 && value > 0",
             None,
             on_pay,
+        )),
+        // 「自己的[消耗]…资金减半」 -- the same latch on the raw-消耗 window
+        // (`spendBefore`, raised before a redeem / auction / `lose_raw` debit
+        // at the full cost). The body shaves it with `set_pay_amount`.
+        On::Action(Action::SpendBefore(
+            "actor == owner && card.placed && slot('skill.manaDonut.half') > 0 && value > 0",
+            None,
+            on_spend,
         )),
         // No `TurnEnd` clear: the two `TurnEnd` layers tick off at the owner's
         // own wear-offs (before the `TurnEnd` hook fires).
@@ -129,10 +144,20 @@ fn on_pass(player_id: i32) -> card_sdk::Asked {
     Ok(())
 }
 
-/// 「你的资金消耗减半」. `value > 0` is the condition.
+/// 「自己的[支付]资金减半」. `value > 0` is the condition.
 /// Pure Filter body (ABI v74 Pattern A): the ceil-half figure is the return.
 fn on_pay(_player_id: i32, value: i32) -> i32 {
     (value + 1) / 2
+}
+
+/// 「自己的[消耗]资金减半」 -- the `spendBefore` arm. The same ceil-half figure,
+/// written back over the pending debit.
+fn on_spend(_player_id: i32) -> card_sdk::Asked {
+    let v = ctx::trigger::value();
+    if v > 0 {
+        ctx::trigger::set_pay_amount((v + 1) / 2);
+    }
+    Ok(())
 }
 
 //
@@ -156,4 +181,10 @@ pub fn on_pass_kani(player_id: i32) -> card_sdk::Asked {
 #[inline(always)]
 pub fn on_pay_kani(player_id: i32, value: i32) -> i32 {
     on_pay(player_id, value)
+}
+
+#[cfg(kani)]
+#[inline(always)]
+pub fn on_spend_kani(player_id: i32) -> card_sdk::Asked {
+    on_spend(player_id)
 }

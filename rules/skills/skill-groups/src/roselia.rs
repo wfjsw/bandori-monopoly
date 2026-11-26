@@ -129,7 +129,9 @@ bandori_std::roster::GroupDef::new(r#"Roselia"#)
     .short_name(r#"R"#)
     .color(r#"#3344AA"#)
     .skill(r#"对音乐的纯粹"#)
-    .text(r#"（1）本局游戏购买的第一个非Live House格子购买价格减半，在你拥有任意初始Live House格子前，那个格子对你视为Live House。（2）购买任何Live House格子的地契时购买价格减半"#)
+    .text(r#"[自动]：
+（1）自己在本局游戏购买的第一个非Live House格子的购买价格减半。在自己拥有任意初始Live House格子前，该格子对自己视为Live House。
+（2）自己购买任何Live House格子的地契时：购买价格减半。"#)
     .logo(r#"005"#);
 
 //

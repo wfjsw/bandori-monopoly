@@ -3743,6 +3743,7 @@ impl CardWorld for Run {
         self.fig_write(value);
     }
     fn set_trigger_target(&mut self, to: i32) {
+        self.trigger.target_set = true;
         self.trigger.target = to;
     }
     fn set_trigger_pay_kind(&mut self, kind: i32) {
@@ -6379,7 +6380,11 @@ impl<M: CardModules> RulesBridge<M> {
                     // `PayeeHalf` captures its victim from the declaration's
                     // `to`, so the leg names the declared payee there.
                     game_core::engine::PayShape::PayeeHalf => d.partner,
-                    _ => d.to,
+                    // A rewritten total target governs every leg; a plain
+                    // split's total left it alone and each leg keeps its own
+                    // requested payee.
+                    _ if d.target_set => d.to,
+                    _ => (to >= 0).then_some(to as usize),
                 },
                 d.partner,
                 d.rent,
@@ -9137,6 +9142,9 @@ impl<M: CardModules> RulesBridge<M> {
         // `set_pay_amount`)? The settle body reads it back to tell "already
         // paid by the pre-stage" (`0`) from "untouched" (`-1`).
         t.value_set = trigger.value_set;
+        if trigger.target_set {
+            t.target_set = true;
+        }
         // The composed multiplier of a `Fold::Mul` stage (the settle stages
         // read it back).
         t.fold_milli = trigger.fold_milli;
@@ -12197,6 +12205,7 @@ fn bridge_trigger(t: &CoreTrigger) -> Trigger {
         ordinal: t.ordinal,
         value: t.value,
         value_set: t.value_set,
+        target_set: t.target_set,
         fold: t.fold,
         fold_input: t.fold_input,
         fold_milli: t.fold_milli,
@@ -15447,6 +15456,9 @@ impl<M: CardModules> CardRules for RulesBridge<M> {
         // `set_pay_amount`)? The settle body reads it back to tell "already
         // paid by the pre-stage" (`0`) from "untouched" (`-1`).
         t.value_set = trigger.value_set;
+        if trigger.target_set {
+            t.target_set = true;
+        }
         // The composed multiplier of a `Fold::Mul` stage (the settle stages
         // read it back).
         t.fold_milli = trigger.fold_milli;

@@ -41,6 +41,8 @@
   "uika_sumimi_paid": "{{who}} paid {{n}}",
   "uika_sumimi_placed": "Placed a fire pot on {{tile}}",
   "uika_sumimi_spend": "Become an Idol",
+  "uika_sumimi_subst_note": "fire pot covers the spend",
+  "uika_sumimi_substitute": "Become an Idol: {{n}} fire-pot marker(s) spent instead",
   "uika_sumimi_title": "Become an Idol",
   "uika_sumimi_which": "Which tile?",
   "uika_sumimi_reason": "Become an Idol",
@@ -131,7 +133,6 @@
   "yukina_start": "Let's Practise: gained {{tile}} and start there",
   "yukina_stop_ask": "Stop at {{tile}}?",
   "yukina_stop_title": "Let's Practise",
-
   "lisa_cancel_ask": "Spend 1 more fire pot to hand out a temporary pot and cancel this [Settle]?",
   "lisa_cancel_title": "Loving Goddess",
   "lisa_gain": "Loving Goddess: +1 fire pot",

@@ -16,9 +16,15 @@
 //! （3） 「视为使用该角色的技能」 is `ctx::play_card(skill_id, player_id)?`, the
 //! same invocation haruhikage uses; the skill id is the mark name minus the
 //! `模仿标记:` prefix (or the legacy `角色标记:`: replays and saves still hold
-//! it, so every read accepts both). 「尽力补齐资源消耗」 is advice on paying the
-//! invoked skill's cost, not a rule -- the sheet's `思路` column is play advice
-//! and is not implemented.
+//! it, so every read accepts both).
+//!
+//! 「若该技能需要使用[火罐]，则使用自己拥有数量与所需数量中的较小值」 is a
+//! fire **substitution**: only `min(held, needed)` of this player's own pots are
+//! spent (pre-paid before the invocation, the shortfall bridged by providerless
+//! temp pots so the invoked body's own charge lands), and every other resource
+//! (money, [P✽P粉丝] flips) is left to the body in full. The needed count is
+//! read from the table below; skills that choose X within the held count
+//! (rinko / masking / umiri) need no substitution, so they map to 0.
 
 use bandori_std::ctx::{self, state};
 use card_sdk::abi::ActionKind;
@@ -48,6 +54,43 @@ fn held_marks(player_id: i32) -> alloc::vec::Vec<NameId> {
     let mut names = ctx::held_names(player_id, MARK_PREFIX);
     names.extend(ctx::held_names(player_id, LEGACY_PREFIX));
     names
+}
+
+/// Fire the named skill needs, for the （3） substitution. A **residual**: skills
+/// charge fire inside their body and no cost metadata is declarable on a
+/// persona sheet (`On::Play.cost` exists for held tokens, but the faces here
+/// spend in-body), so the count is transcribed. `0` = the skill picks X within
+/// the held count and needs no substitution (rinko / masking / umiri), or it
+/// spends no fire at all.
+fn fire_need(id: &str) -> i32 {
+    match id {
+        "skill:千早爱音:重新开始" | "skill:市谷有咲:盆栽爱好者" => 2,
+        "skill:濑田薰:梦幻的王子殿下" => 7,
+        "skill:冰川纱夜:踏上荆棘之路的觉悟" => 6,
+        "skill:山吹沙绫:焕然一新的天空中" => 5,
+        "skill:花园多惠:花园警察，出警！" => 4,
+        "skill:要乐奈:投币式停车场的猫" | "skill:牛込里美:里美的决心" => 3,
+        "skill:上原绯玛丽:大家一起迈出新的一步"
+        | "skill:户山香澄:非凡之星"
+        | "skill:和奏瑞依:一次又一次竭尽全力"
+        | "skill:今井莉莎:慈爱女神"
+        | "skill:纯田真奈:甜甜圈爱好者"
+        | "skill:奥泽美咲:另一个我"
+        | "skill:青叶摩卡:我行我素"
+        | "skill:若叶睦（CRYCHIC）:精致的人偶"
+        | "skill:美竹兰:叛逆的红挑染"
+        | "skill:丰川祥子（CRYCHIC）:你愿意和我组建乐队吗？"
+        | "skill:都筑诗船:尽力了吗"
+        | "skill:长崎素世:通透的颜色"
+        | "skill:椎名立希:决定练习日的会议"
+        | "skill:桐谷透子:天上天下，唯我独尊"
+        | "skill:宇田川巴:豚骨酱油拉面大姐"
+        | "skill:高松灯（CRYCHIC）:跌跌撞撞..."
+        | "skill:羽泽鸫:伟大的平凡"
+        | "skill:三角初华（Sumimi）:成为偶像"
+        | "skill:凑友希那:来练习吧" => 1,
+        _ => 0,
+    }
 }
 
 /// The mark name for a skill id.
@@ -208,8 +251,35 @@ fn use_skill(player_id: i32) -> card_sdk::Asked {
         return Ok(());
     };
     let id = mark_skill(mark);
-    ctx::add_held_by_name(player_id, mark.as_str(), -1, i32::MAX)?;
+    // 「若该技能需要使用[火罐]，则使用自己拥有数量与所需数量中的较小值」 --
+    // pre-pay `min(held, needed)` of this player's own pots, then bridge the
+    // invoked body's full charge with providerless temp pots so it draws the
+    // bridge first (net own spend = the minimum). No `needed` (0) leaves the
+    // body's charge untouched. Other resources are the body's, untouched here.
+    //
+    // The mark is removed *after* the play: a pause inside the invoked body
+    // replays this body from the top, and an already-removed mark would empty
+    // `marks` and return early. On the replay the pre-pay and play are recorded
+    // answers, so nothing is charged twice.
+    let needed = fire_need(id);
+    if needed > 0 {
+        let pre = bandori_std::fire::get(player_id).min(needed);
+        if pre > 0
+            && !bandori_std::fire::spend_skill(player_id, pre, &Msg::new(key!("nanami_spend")))?
+        {
+            return Ok(());
+        }
+        bandori_std::fire::temp::grant(player_id, needed);
+    }
+    let temp_before = bandori_std::fire::temp::get(player_id);
     ctx::play_card(id, player_id)?;
+    // The body aborted before its charge (or a [奇迹水晶] substituted it): drop
+    // the bridge we added, keeping any pots a provider already lent.
+    let left = bandori_std::fire::temp::get(player_id) - (temp_before - needed);
+    if needed > 0 && left > 0 {
+        ctx::add_held_by_name(player_id, bandori_std::fire::TEMP_KEY, -left, i32::MAX)?;
+    }
+    ctx::add_held_by_name(player_id, mark.as_str(), -1, i32::MAX)?;
     ctx::log(player_id, &Msg::new(key!("nanami_used")).card("card", id));
     Ok(())
 }

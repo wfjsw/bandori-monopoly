@@ -3,8 +3,30 @@
 
 mod common;
 use common::*;
+use game_core::state::stage;
 
 // ---------------------------------------------------------------- helpers
+
+/// Tick until the engine rests (same shape as `mygo::rest`) -- a paused run
+/// needs the queue driven, not just prompts declined.
+fn rest(t: &mut Table) {
+    for _ in 0..2000 {
+        let st = t.m.state();
+        if st.phase != "play" || st.prompt.id != 0 {
+            return;
+        }
+        let w = t.m.world();
+        if !w.next_turn_pending
+            && w.leftovers.is_empty()
+            && !st.busy
+            && matches!(st.step, stage::OPS | stage::END | stage::MOVE)
+        {
+            return;
+        }
+        t.m.tick(0.25);
+    }
+    panic!("rest: stuck at {:?}", t.m.state().step);
+}
 
 /// Answer every open prompt with its default (decline / skip).
 fn drain(t: &mut Table) {
@@ -572,7 +594,7 @@ fn rinko_skill_2_fixes_the_move_roll_to_x_times_six() {
             t.decline();
         }
     }
-    t.roll(0).unwrap();
+    // The press runs the move itself now (no separate roll).
     drain(&mut t);
     assert_eq!(t.pos(0), 12, "2 * 6 = 12, events {:?}", t.recent_keys(10));
     assert_eq!(t.charge(0), 0, "2 pots spent");
@@ -1101,4 +1123,29 @@ fn yukina_pass_hook_announces_the_pot_loss() {
         !keys.iter().any(|k| k == "log.effect_nothing"),
         "no 「（无事发生）」: {keys:?}"
     );
+}
+
+/// 规则书 (2): 「获得一层[霸体]状态，并立刻进入移动阶段，进行固定为X×6格的移动」
+/// -- the press arms `unstoppable` (霸体) and runs the move itself, no roll.
+#[test]
+fn rinko_gains_unstoppable_and_moves_immediately() {
+    let mut t = Table::new(&["白金燐子", "户山香澄"]);
+    t.clean();
+    t.begin_turn(0);
+    t.set_fire(0, 1, 3);
+    t.set_pos(0, 0);
+    let skill = t.skill_id(0, "1cm");
+    t.skill(0, &skill).unwrap();
+    while t.prompt().is_some() {
+        if t.dump_prompt().contains("rinko") {
+            let _ = t.answer_one(0); // X = 1
+        } else {
+            t.decline();
+        }
+    }
+    rest(&mut t);
+    drain(&mut t);
+    assert_eq!(t.state(0, "unstoppable"), 1, "霸体 layer armed");
+    assert_eq!(t.pos(0), 6, "moved 1*6 immediately, no roll");
+    assert_eq!(t.charge(0), 0, "pot spent");
 }

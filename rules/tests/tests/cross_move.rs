@@ -519,7 +519,7 @@ fn m10_rinko_while_stunned() {
             t.decline();
         }
     }
-    // 「使这回合移动掷骰的结果固定为X*6」 -- the roll is still taken; the face is pinned.
+    // Cannot move (stun): the face is pinned and the turn's roll walks it.
     t.roll(0).unwrap();
     drain(&mut t);
     assert_eq!(t.pos(0), 12, "moves exactly 12");
@@ -553,7 +553,6 @@ fn m11_rinko_plus_yolo() {
             }
         }
     }
-    t.roll(0).unwrap();
     loop {
         let Some(_) = t.prompt() else { break };
         if t.counteract_offered("AG:Y.O.L.O") {
@@ -1320,4 +1319,33 @@ fn m30_unstoppable_walks_through_stay() {
     t.roll(0).unwrap();
     drain(&mut t);
     assert_eq!(t.pos(0), 5, "still rolls and moves");
+}
+
+// 规则书: 宇田川巴 (3): 「此效果每圈限一次」 -- the latch clears on the
+// owner's CiRCLE pass.
+#[test]
+fn m21b_tomoe_latch_is_per_lap() {
+    let mut t = Table::new(&["宇田川巴", "花园多惠"]);
+    t.clean();
+    t.begin_turn(0);
+    t.set_pos(0, 45);
+    t.set_fire(0, 1, 1);
+    let sid = t.skill_id(0, "豚骨酱油拉面大姐");
+    t.skill(0, &sid).unwrap();
+    drain(&mut t);
+    let err = t.skill(0, &sid).unwrap_err();
+    assert!(err.contains("tomoe_used_lap"), "latched this lap: {err}");
+    // Walk past CiRCLE: start shifted to 55, dice 6 -> 61 wraps past 0.
+    t.dice(&[6]);
+    t.roll(0).unwrap();
+    drain(&mut t);
+    assert_eq!(t.state(0, "skill.tomoeRamen.used"), 0, "the CiRCLE pass cleared the latch");
+    // A later 运营 can press again (`skip_move` ends the turn without a walk).
+    t.m.world_mut().st.skip_move = true;
+    t.end(0).unwrap();
+    drain(&mut t);
+    t.begin_turn(0);
+    drain(&mut t);
+    t.set_fire(0, 1, 1);
+    assert!(t.skill(0, &sid).is_ok(), "re-armed after the lap");
 }

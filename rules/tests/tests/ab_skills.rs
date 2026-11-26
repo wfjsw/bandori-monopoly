@@ -615,3 +615,28 @@ fn soyo_waiver_denies_the_next_circle_pot() {
         "the latch is consumed"
     );
 }
+
+/// Library (2): 「为自己场上的任意1张卡拥有[奇迹水晶]资源的卡添加1个[奇迹
+/// 水晶]并获得1层…[立希]状态」 -- only crystal-bearing cards are offered, and
+/// holding [立希] refuses the next press.
+#[test]
+fn taki_only_offers_crystal_cards_and_latches() {
+    let mut t = Table::new(&["椎名立希", "花园多惠"]);
+    t.clean();
+    t.begin_turn(0);
+    t.set_fire(0, 2, 5);
+    let card = "CRYCHIC:想要成为人类";
+    t.place_raw(0, card);
+    t.place_raw(0, card);
+    t.set_crystals(0, card, 1);
+    let sid = t.skill_id(0, "决定练习日的会议");
+    t.skill(0, &sid).unwrap();
+    let p = t.expect_prompt();
+    assert_eq!(p.options.len(), 1, "only the crystal-bearing copy: {}", t.dump_prompt());
+    t.answer_one(0).unwrap();
+    drain(&mut t);
+    assert_eq!(t.crystals(0, card), Some(2), "one crystal added");
+    t.set_fire(0, 2, 5);
+    let err = t.skill(0, &sid).unwrap_err();
+    assert!(err.contains("taki_holding_riki"), "refused while holding [立希]: {err}");
+}

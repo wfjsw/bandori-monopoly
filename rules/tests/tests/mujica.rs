@@ -938,6 +938,61 @@ fn mutsumi_skill_bound() {
     assert!(t.skills(0).iter().any(|s| s.contains("若叶睦")));
 }
 
+/// 規則书 [自動]（1）: 「自己未处于[人偶模式]，回合开始前：获得1个[火罐]」
+/// (cap 6, initial 0).
+#[test]
+fn mutsumi_gains_one_fire_before_her_turn_start() {
+    let mut t = Table::new(&["若叶睦", "丰川祥子"]);
+    t.clean();
+    assert_eq!(t.charge_max(0), 6, "cap 6");
+    assert_eq!(t.charge(0), 0, "initial 0");
+    t.begin_turn(0);
+    drain(&mut t);
+    assert_eq!(t.charge(0), 1, "the turn-start gain");
+}
+
+/// 規則书 [自動]（2）: 「自己从手牌使用卡牌时：失去所有[火罐]」 -- her own play
+/// wipes the pool; the 状态2 latch still tracks the seat.
+#[test]
+fn mutsumi_loses_all_fire_on_her_own_play() {
+    let mut t = Table::new(&["若叶睦", "丰川祥子"]);
+    t.clean();
+    t.begin_turn(0);
+    drain(&mut t);
+    t.set_fire(0, 4, 6);
+    t.give_play(0, "TEST:echo").unwrap();
+    drain(&mut t);
+    assert_eq!(t.charge(0), 0, "all fire is gone");
+    assert_eq!(t.state(0, "skill.mutsumiActor.lastPlay"), 1, "own seat latched");
+}
+
+/// 規則书 [主動]（1）: 「可使用6个[火罐]，自己[抽卡]1张」 -- five pots plus the
+/// turn-start gain make six, which the draw costs.
+#[test]
+fn mutsumi_six_fire_buys_the_turn_start_draw() {
+    let mut t = Table::new(&["若叶睦", "丰川祥子"]);
+    t.clean();
+    t.set_fire(0, 5, 6);
+    t.set_draw(0, &["R:[衍生] 压"]);
+    t.begin_turn(0);
+    drain(&mut t);
+    assert_eq!(t.charge(0), 0, "6 spent");
+    assert_eq!(t.hand(0), vec!["R:[衍生] 压".to_string()], "drew one");
+}
+
+/// 規則书 [主動]（1） needs a full six; five after the gain is not enough.
+#[test]
+fn mutsumi_fewer_than_six_fire_does_not_draw() {
+    let mut t = Table::new(&["若叶睦", "丰川祥子"]);
+    t.clean();
+    t.set_fire(0, 4, 6);
+    t.set_draw(0, &["R:[衍生] 压"]);
+    t.begin_turn(0);
+    drain(&mut t);
+    assert_eq!(t.charge(0), 5, "the gain landed, nothing spent");
+    assert!(t.hand(0).is_empty(), "no draw");
+}
+
 const MUTSUMI_COVER: &str = "skill.mutsumiActor.cover";
 
 fn mutsumi_cover(t: &Table, who: usize) -> i32 {

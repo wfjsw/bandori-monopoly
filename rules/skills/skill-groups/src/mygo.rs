@@ -170,15 +170,19 @@ fn press(player_id: i32) -> card_sdk::Asked {
 }
 
 /// （2）「你的回合中，可于移动掷骰前选择移动1格以替代移动掷骰并移除一个[奇迹水晶]」.
+/// （2）「自己的运营阶段中：可选择使用此卡的1个[奇迹水晶]，立刻进入移动阶段并将本
+/// 回合的主要移动改为“正向移动1格”」.
 fn step_one(player_id: i32) -> card_sdk::Asked {
     if crate::cover_crystals(player_id) < 1 {
         return Ok(());
     }
     crate::spend_crystals(player_id, 1)?;
-    // 规则书（2）: 「移动1格以替代移动掷骰」 -- the shaped 1-step move replaces
-    // the roll and runs now (`ctx::run_planned_move`).
+    // 规则书（2）: 「立刻进入移动阶段并将本回合的主要移动改为“正向移动1格”」 --
+    // the press is 运营-only (`On::Play`), the walk runs now (「立刻进入移动阶段」,
+    // `ctx::run_planned_move`) and 「正向」 is an explicit forward one step.
     plan::clear_dice();
     plan::set_steps(1);
+    plan::set_reverse(false);
     ctx::run_planned_move(player_id);
     ctx::log(player_id, &Msg::new(key!("mygo_step")));
     Ok(())
@@ -209,7 +213,16 @@ bandori_std::roster::GroupDef::new(r#"MyGO!!!!!"#)
     .short_name(r#"MyGO"#)
     .color(r#"#3388BB"#)
     .skill(r#"迷途之星"#)
-    .text(r#"（1）开局时投掷3d20，并取出目作为你本局游戏的起始点 （2）若移动掷骰出目为16及以上，为此卡添加一个[奇迹水晶]（上限1）。你的回合中，可于移动掷骰前选择移动1格以替代移动掷骰并移除一个[奇迹水晶] （3）每次你的卡在未生效的情况下进入弃牌堆时，为此卡添加一个可超出上限的[奇迹水晶] （最多超出2个）；你的回合中，可移除此卡的两个[奇迹水晶]以抽一张卡。"#)
+    .text(r#"[资源]：
+（1）[奇迹水晶]：初始0，上限1。
+（2）来自“迷途之星”[自动]（3）的临时[奇迹水晶]：初始0，上限2。
+[自动]：
+（1）游戏开始时：自己[投掷]3d20，以结果对应的格子作为本局游戏的起点。
+（2）自己的移动[投掷]结果至少为16时：为此卡添加1个[奇迹水晶]。
+（3）自己的卡在未生效的情况下进入弃卡区时：为此卡添加1个临时[奇迹水晶]。
+[主动]：
+（1）自己的运营阶段中：可选择使用此卡的1个[奇迹水晶]，立刻进入移动阶段并将本回合的主要移动改为“正向移动1格”。
+（2）自己的运营阶段中：可选择使用此卡的2个[奇迹水晶]，自己[抽卡]1张。"#)
     .logo(r#"045"#);
 
 //

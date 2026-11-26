@@ -37,7 +37,7 @@ pub const HEAT_HEAD: CardDef = CardDef::new(
 .props(&[(bandori_std::marker::TURNS_LEFT, 2)])
         .meta(&card_sdk::meta::CardMeta::new()
             .name(r#"超燃甩头"#)
-            .text(CardText::para(r#"将此卡放置于场地中央，抽到的玩家的下回合结束前所有玩家的移动掷骰增加1d6，此后抽到的玩家的下回合结束前所有玩家的移动掷骰减少1d6，此后放入事件弃牌。"#))
+            .text(CardText::para(r#"将此卡放置于场地中央，抽到的玩家的下回合结束前所有玩家的移动掷骰增加1d6，此后抽到的玩家的下回合结束前所有玩家的移动掷骰减少1d6，此后放入事件弃卡区。"#))
             // sheet cell A18
             .derived(false));
 

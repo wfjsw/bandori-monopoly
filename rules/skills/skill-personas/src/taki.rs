@@ -4,10 +4,13 @@
 //! > （1）场上每有玩家获得一层[停留]时，你获得一个[火罐]（初始0，上限5）
 //! > （2）运营阶段可消耗1个[火罐]为你场上的任何一张卡添加一个[奇迹水晶]，每回合限一次。
 //!
+//! The library narrows （2）: 「自己的运营阶段且不拥有[立希]时：可使用1个[火罐]，
+//! 为自己场上的任意1张卡拥有[奇迹水晶]资源的卡添加1个[奇迹水晶]并获得1层“回合
+//! 结束时减少1层的”[立希]状态」. The target must already **hold** a [奇迹水晶]
+//! resource, and the [立希] status is the once-a-turn latch.
+//!
 //! （1） 「场上每有玩家」 is *anyone*, not just this player, so the `abnormal`
 //! outcome hook fires for every recipient and the clause counts each layer.
-//!
-//! 「每回合限一次」 is a latch, which is what the keyed state is for.
 
 use bandori_std::counter;
 use bandori_std::ctx::{self, state, trigger};
@@ -15,7 +18,10 @@ use bandori_std::state_key;
 use card_sdk::abi::{AbKind, ActionKind};
 use card_sdk::{key, Action, CardDef, Msg, On};
 
-/// Latch for 「每回合限一次」.
+/// Latch for the 「[立希]」 status. 「每回合限一次」 / 「不拥有[立希]」 are the
+/// same latch: while the status is up the press is refused; it wears one layer
+/// at the owner's next turn start (「回合结束时减少1层」, the decrement lands on
+/// the following turn start here).
 const USED: &str = "skill.takiMeeting.used";
 
 pub const TAKI: CardDef = CardDef::new(
@@ -68,7 +74,7 @@ fn can_use(player_id: i32) -> Option<Msg> {
         return Some(Msg::new(key!("skill_blocked")));
     }
     if state::get(player_id, USED) != 0 {
-        return Some(Msg::new(key!("taki_used")));
+        return Some(Msg::new(key!("taki_holding_riki")));
     }
     if bandori_std::fire::get(player_id) < 1 {
         return Some(Msg::new(key!("taki_no_fire")));
@@ -77,12 +83,17 @@ fn can_use(player_id: i32) -> Option<Msg> {
     None
 }
 
-/// （2）「为你场上的任何一张卡添加一个[奇迹水晶]」.
+/// （2）「为自己场上的任意1张卡拥有[奇迹水晶]资源的卡添加一个[奇迹水晶]」.
 fn use_skill(player_id: i32) -> card_sdk::Asked {
-    // 「为你场上的任何一张卡添加一个[奇迹水晶]」 -- the pick is an *instance*,
-    // so walk the field as `(uid, id)` and keep the uid rather than resolving
-    // the name back afterwards (two copies would both resolve to the first).
-    let field = ctx::field_instances(player_id);
+    // 「拥有[奇迹水晶]资源的卡」 -- only instances already carrying the
+    // counter qualify (the add is on top of one, not a first crystal).
+    // The pick is an *instance*, so walk the field as `(uid, id)` and keep the
+    // uid rather than resolving the name back afterwards (two copies would
+    // both resolve to the first).
+    let field: alloc::vec::Vec<_> = ctx::field_instances(player_id)
+        .into_iter()
+        .filter(|(uid, _)| ctx::counter_at(*uid, counter::CRYSTALS) > 0)
+        .collect();
     if field.is_empty() {
         return Ok(());
     }

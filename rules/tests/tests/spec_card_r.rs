@@ -1850,7 +1850,7 @@ fn rinko_fix_roll_to_x_times_six() {
             t.decline();
         }
     }
-    t.roll(0).unwrap();
+    // The press enters the move phase itself now; no separate roll.
     drain(&mut t);
     assert_eq!(t.pos(0), 12, "2 * 6 = 12");
     assert_eq!(t.charge(0), 0, "2 火罐 spent");

@@ -330,6 +330,7 @@ impl CardWorld for TestWorld {
         Vec::new()
     }
     fn set_trigger_target(&mut self, to: i32) {
+        self.trigger.target_set = true;
         self.trigger.target = to;
     }
     fn set_trigger_cancelled(&mut self) {

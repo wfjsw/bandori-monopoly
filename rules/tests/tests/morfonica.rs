@@ -11,6 +11,27 @@ use game_core::state::{stage, Counter};
 
 // ---------------------------------------------------------------- helpers
 
+/// Tick until the engine rests (same shape as `mygo::rest`) -- a paused run
+/// needs the queue driven, not just prompts declined.
+fn rest(t: &mut Table) {
+    for _ in 0..2000 {
+        let st = t.m.state();
+        if st.phase != "play" || st.prompt.id != 0 {
+            return;
+        }
+        let w = t.m.world();
+        if !w.next_turn_pending
+            && w.leftovers.is_empty()
+            && !st.busy
+            && matches!(st.step, stage::OPS | stage::END | stage::MOVE)
+        {
+            return;
+        }
+        t.m.tick(0.25);
+    }
+    panic!("rest: stuck at {:?}", t.m.state().step);
+}
+
 /// [`Table::settle`], but also accepts a resting MOVE stage (a card that moves
 /// a non-turn player can leave the engine in MOVE at rest).
 fn settle_move(t: &mut Table) {
@@ -2199,5 +2220,35 @@ fn starry_pass_hook_is_silent_off_circle() {
     assert!(
         !keys.iter().any(|k| k == "log.effect_nothing"),
         "no 「（无事发生）」: {keys:?}"
+    );
+}
+
+/// 规则书 (3): 「若该技能需要使用[火罐]，则使用自己拥有数量与所需数量中的较小值」
+/// -- owning none still lets the mark's skill run; only `min(held, needed)` is
+/// spent (0 here) and the borrowed body does its work.
+#[test]
+fn nanami_substitutes_fire_at_the_minimum() {
+    let mut t = Table::new(&["广町七深", "宇田川巴"]);
+    t.clean();
+    t.begin_turn(0);
+    t.set_pos(0, 45);
+    add_token(&mut t, 0, "模仿标记:skill:宇田川巴:豚骨酱油拉面大姐", 1);
+    t.set_fire(0, 0, 2);
+    t.skill(0, "skill:广町七深:这是很普通的事吧？").unwrap();
+    t.answer_one(0).unwrap(); // pick the only mark
+    rest(&mut t);
+    decline_all(&mut t);
+    // Owned none, so the pre-pay spent nothing; the body's 1-pot cost rode the
+    // bridge. At 45→55 the shift overshoots the shop and refunds one pot.
+    assert_eq!(t.charge(0), 1, "no own pot needed; 1 is the overshoot refund");
+    assert_eq!(
+        t.m.world().held_count(0, bandori_std::fire::TEMP_KEY),
+        0,
+        "the bridge temp pot is consumed"
+    );
+    assert!(
+        t.recent_keys(60).iter().any(|k| k.contains("tomoe_moved")),
+        "the borrowed body ran: {:?}",
+        t.recent_keys(20)
     );
 }
