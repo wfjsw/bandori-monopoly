@@ -34,9 +34,12 @@ fn play(player_id: i32) -> card_sdk::Asked {
     // event roster (`ctx::event_card_ids`) minus every card whose
     // `CardMeta.derived` is set (`ctx::card_derived`, EVENT-04). No hand table:
     // the derived flags live beside each event's own rule body.
+    // An event still in play is not banishable: its instance carries the
+    // running clause (飞鸟山之战's clock), which the card's removal would drop.
     let mut pool: Vec<String> = ctx::event_card_ids()
         .into_iter()
         .filter(|id| !ctx::card_derived(id))
+        .filter(|id| !ctx::event_is_active(id.strip_prefix("event:").unwrap_or(id.as_str())))
         .collect();
     for _ in 0..3 {
         if pool.is_empty() {

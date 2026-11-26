@@ -425,12 +425,13 @@ questions are in the appendix.
 - **class**: C
 - **severity**: low
 - **suggested batch**: skills: CiRCLE / sumimi
-- **locations**: `rules/status/src/no_hand.rs:6-9`
+- **locations**: `rules/events/src/asukayama.rs:6-9`
 - **rulebook**: 「手卡上限数量减1」 is card text; the 2→1→0 ladder is ours.
-- **current**: the dance **moved** from the inline `play.rs` steps into
-  `status:no_hand`'s `TurnStart` / `TurnEnd` hooks. The `TODO(规则书)` stays (the
-  ladder is still our reading of card text, not a glossary clause); the host now
-  owns it.
+- **current**: the dance **moved** from the inline `play.rs` steps into the
+  granting event's own `TurnStartBefore` / `TurnEnd` hooks, and then out of
+  `rules/status` entirely (the event stays in play until the veto lapses). The
+  `TODO(规则书)` stays (the ladder is still our reading of card text, not a
+  glossary clause); the event owns it.
 
 ## AYA-POOL-01 — 「将Y个…变正」 pool-of-Y vs per-seat remaining-Y
 - **kind**: rulebook divergence
