@@ -430,7 +430,8 @@ pub enum Input {
         m: i32,
     },
     /// Animation-done ack from seat `m` for state version `seq`. Releases the
-    /// turn-clock hold (see `engine::Match::anim_done`). Recorded so replays
+    /// turn-clock hold (see `engine::Match::anim_done`). Only an accepted ack
+    /// is recorded (a no-op one replays to the same nothing); recorded so replays
     /// reproduce the same pauses.
     AnimDone {
         m: i32,

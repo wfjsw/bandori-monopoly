@@ -305,16 +305,32 @@ impl MatchHandle {
                 if meta.dirty {
                     meta.gaps = true;
                 }
-                meta.dirty = true;
-                self.save_meta(&meta)?;
                 let before = self.snapshot()?;
                 let out = f(&before, &self.engine)?;
-                self.store
-                    .match_put(&self.id, &out.state)
-                    .map_err(|e| e.to_string())?;
-                self.note(&mut meta, log(&out), &out);
-                meta.dirty = false;
-                self.save_meta(&meta)?;
+                // Persist the in-flight marker only when the op actually
+                // writes: a crash inside a no-op (nothing stored yet) loses
+                // nothing and must not stamp `gaps` on the record.
+                let writes = out.changed || out.recorded;
+                if writes {
+                    meta.dirty = true;
+                    self.save_meta(&meta)?;
+                }
+                // A refused `act` / a no-op `anim_done` leaves the blob
+                // byte-identical: skip the ~40 KB write. A refused act still
+                // gets its log line (the replay re-runs it and flags a
+                // divergence if the outcome moved); a no-op ack gets none.
+                if out.changed {
+                    self.store
+                        .match_put(&self.id, &out.state)
+                        .map_err(|e| e.to_string())?;
+                }
+                if out.recorded {
+                    self.note(&mut meta, log(&out), &out);
+                }
+                if writes {
+                    meta.dirty = false;
+                    self.save_meta(&meta)?;
+                }
                 if out.ended {
                     self.seal(&mut meta)?;
                 }
@@ -366,6 +382,12 @@ impl MatchHandle {
                 value: (out.value, drive),
                 checkpoint: out.checkpoint,
                 ended: out.ended,
+                // Always true even when the engine says "unchanged": the hold
+                // budget (`clock_hold.elapsed`) and the wait beat live in the
+                // blob and move every tick, so a skipped write would rewind
+                // them on the next load.
+                changed: true,
+                recorded: true,
             })
         })
     }
@@ -408,7 +430,7 @@ impl MatchHandle {
     /// The acting seat's animation queue drained for state version `seq`.
     /// Recorded as [`Input::AnimDone`] so replays reproduce the clock hold.
     /// Returns whether the ack was accepted (it clears that seat from the
-    /// hold; a stale / foreign ack is still recorded, but changes nothing).
+    /// hold; a stale / foreign ack is a no-op and is not recorded).
     pub fn anim_done(&self, member: i32, seq: i32) -> Result<bool, String> {
         self.run(
             |_| Input::AnimDone { m: member, seq },

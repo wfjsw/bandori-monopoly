@@ -75,14 +75,25 @@ function useMatchDriver(opts: {
   }, [presenting]);
   useEffect(() => () => setPresenting(false), []);
   const ackedSeq = useRef(-1);
+  // Read as its own value: `sess` is a stable object with `spectator` mutated
+  // in place, so without the dep a seat taken over a paused frame would never
+  // ack it.
+  const spectator = "spectator" in sess && sess.spectator;
   useEffect(() => {
     if (presenting) return;
     if (sess.kind !== "online") return;
-    const seq = m?.S.seq;
-    if (seq == null || ackedSeq.current === seq) return;
+    // A spectator is not in the hold's member list: the server would 400 the
+    // ack after taking the room lock, so it never fires one.
+    if (spectator) return;
+    // Only a frame that is actually holding the clock needs an ack. Every
+    // other seq change (the release frame included -- releasing bumps `seq`)
+    // would otherwise make every connected session post a no-op.
+    if (!m?.S.clockPaused) return;
+    const seq = m.S.seq;
+    if (ackedSeq.current === seq) return;
     ackedSeq.current = seq;
     void sess.animDone(seq);
-  }, [presenting, m?.S.seq, sess]);
+  }, [presenting, m?.S.clockPaused, m?.S.seq, sess, spectator]);
   useEffect(() => {
     if (!m) return;
     const S = m.S;

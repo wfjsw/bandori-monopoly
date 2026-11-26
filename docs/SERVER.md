@@ -382,7 +382,10 @@ that is still animating late events does not lose clock time to the lag:
   published between engine segments). It drives both the frozen clock display
   and the ack gate: the client posts `POST /api/rooms/{id}/anim-done {seq}` once
   per state version only when `presenting` is false, so a walk split across
-  segments never releases the hold in the gap. `game/presentation.ts` mirrors
+  segments never releases the hold in the gap -- and only when the frame says
+  `clockPaused`, since every other seq change has no hold to release (the
+  release itself bumps `seq`, so acking it would make every connected session
+  echo one no-op). Spectators do not ack. `game/presentation.ts` mirrors
   the flag for the prompt sheet's timer. The shown state lags the paused
   commit, so its `clock` deadlines are stale while presenting and must not be
   interpolated -- every timer displays the engine's frozen value instead.
@@ -392,8 +395,9 @@ that is still animating late events does not lose clock time to the lag:
   same kind actually grew (an effect granted time) -- the bonus → base handover
   is not a reset. The ring's full mark is the turn's biggest pool of that kind,
   never the latest frame's pool (`board/turnClock.ts`).
-  Acks are recorded as `Input::AnimDone` so replays reproduce the same pauses
-  (`docs/REPLAY.md`).
+  A releasing ack is recorded as `Input::AnimDone` so replays reproduce the
+  same pauses (`docs/REPLAY.md`); an ack that releases nothing is answered
+  `released: false` and writes no state and no log line.
 
 ### Order roll (`/order-ready`)
 

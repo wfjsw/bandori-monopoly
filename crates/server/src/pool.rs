@@ -157,6 +157,14 @@ pub struct Out<T> {
     /// The worker's turn-boundary checkpoint: `{round, turn, hash}` at a turn boundary.
     pub checkpoint: Option<Checkpoint>,
     pub ended: bool,
+    /// False when the op left the state byte-identical (a no-op `anim_done`,
+    /// a refused `act`): the caller skips the blob write.
+    pub changed: bool,
+    /// False when the op needs no record-log line. Only a no-op `anim_done`
+    /// sets it: a refused `act` writes no state but must stay in the log --
+    /// the replay re-runs it and flags a divergence if the outcome moved
+    /// (`record.rs`, `Input::Act`).
+    pub recorded: bool,
 }
 
 impl Out<()> {
@@ -167,6 +175,8 @@ impl Out<()> {
             value: (),
             checkpoint,
             ended,
+            changed: true,
+            recorded: true,
         })
     }
 }
@@ -389,11 +399,18 @@ impl Pool {
             None | Some(Value::Null) => None,
             Some(e) => Some(serde_json::from_value(e.clone()).map_err(|e| e.to_string())?),
         };
+        // The worker compares the blob: an accepted no-op (an empty
+        // `preselect`, a duplicate `end`) is `Ok` with an identical state just
+        // like a refusal, so `err` alone is not the answer. Older workers sent
+        // no field; assume the write then.
+        let changed = v.get("changed").and_then(Value::as_bool).unwrap_or(true);
         Ok(Out {
             state,
             value: err,
             checkpoint,
             ended,
+            changed,
+            recorded: true,
         })
     }
 
@@ -415,6 +432,10 @@ impl Pool {
                 value: changed,
                 checkpoint,
                 ended,
+                // Always write: the hold budget moves every tick even when
+                // the engine reports "unchanged" (see `Room::tick`).
+                changed: true,
+                recorded: true,
             },
             drive,
         ))
@@ -426,7 +447,10 @@ impl Pool {
     }
 
     /// `value` is whether the ack was accepted (it clears that seat from the
-    /// clock hold).
+    /// clock hold). An accepted ack is the only variant that changes anything;
+    /// a stale / foreign one leaves the blob byte-identical, so it carries
+    /// `changed: false` / `recorded: false` and the server skips the write and
+    /// the log line.
     pub fn anim_done(&self, state: &str, member: i32, seq: i32) -> Result<Out<bool>, String> {
         let v =
             self.call(json!({"op": "anim_done", "state": state, "member": member, "seq": seq}))?;
@@ -437,6 +461,8 @@ impl Pool {
             value: released,
             checkpoint,
             ended,
+            changed: released,
+            recorded: released,
         })
     }
 
@@ -450,6 +476,10 @@ impl Pool {
             value: ready,
             checkpoint,
             ended,
+            // `ready` is exactly "the flag moved": a repeat / foreign ack
+            // leaves the blob identical and needs no log line.
+            changed: ready,
+            recorded: ready,
         })
     }
 

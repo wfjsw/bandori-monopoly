@@ -369,10 +369,18 @@ fn run(ctx: &Ctx, req: &Value) -> Result<Value, String> {
             // The drive list is what the tick loop claims for the bot service;
             // it rides the tick reply so a beat costs one round-trip, not two.
             let mut drive: Option<Vec<i32>> = None;
+            // The pre-op blob, for the one op whose "changed" is not the
+            // engine's broadcast flag: a refused act returns `Ok` too, and so
+            // do a couple of accepted no-ops (an empty `preselect`, a
+            // duplicate `end`). Only a byte comparison answers "did the state
+            // move" for all of them; `take_changed()` would miss `preselect`,
+            // which mutates the hidden pick intent without setting it.
+            let mut act_before: Option<String> = None;
             let out = match op {
                 "act" => {
                     let member = req.get("member").and_then(Value::as_i64).unwrap_or(0) as i32;
                     let cmd: NetMessage = parse(req, "cmd")?;
+                    act_before = req.get("state").and_then(Value::as_str).map(str::to_string);
                     // "" on success, else the `Msg` JSON the client renders.
                     match m.act(member, &cmd) {
                         Ok(()) => Value::Null,
@@ -395,8 +403,10 @@ fn run(ctx: &Ctx, req: &Value) -> Result<Value, String> {
                     let released = m.anim_done(member, seq);
                     // Report whether this ack was accepted (it clears that
                     // seat from the hold; a stale one is a no-op). Carried as
-                    // `released`, not `error`.
-                    let mut v = json!({"ok": true, "state": m.save(), "changed": true, "ended": m.ended(), "released": released});
+                    // `released`, not `error`; `changed` tells the server
+                    // whether the blob differs at all (a no-op one does not,
+                    // so the write and the log line are skipped).
+                    let mut v = json!({"ok": true, "state": m.save(), "changed": released, "ended": m.ended(), "released": released});
                     if let Some(ckpt) = checkpoint(&m, before) {
                         v["ckpt"] = ckpt;
                     }
@@ -406,8 +416,8 @@ fn run(ctx: &Ctx, req: &Value) -> Result<Value, String> {
                     let member = req.get("member").and_then(Value::as_i64).unwrap_or(0) as i32;
                     let ready = m.order_ready(member);
                     // `ready` is whether the ack registered (a repeat / stale
-                    // one is a no-op).
-                    let mut v = json!({"ok": true, "state": m.save(), "changed": true, "ended": m.ended(), "ready": ready});
+                    // one is a no-op) -- and exactly when the blob differs.
+                    let mut v = json!({"ok": true, "state": m.save(), "changed": ready, "ended": m.ended(), "ready": ready});
                     if let Some(ckpt) = checkpoint(&m, before) {
                         v["ckpt"] = ckpt;
                     }
@@ -418,7 +428,9 @@ fn run(ctx: &Ctx, req: &Value) -> Result<Value, String> {
                     Value::Null
                 }
             };
-            let mut v = json!({"ok": true, "state": m.save(), "changed": true, "ended": m.ended()});
+            let state = m.save();
+            let changed = act_before.as_ref().is_none_or(|b| *b != state);
+            let mut v = json!({"ok": true, "state": state, "changed": changed, "ended": m.ended()});
             if let Some(d) = drive {
                 v["drive"] = json!(d);
             }

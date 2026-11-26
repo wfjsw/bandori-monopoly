@@ -29,7 +29,8 @@ endpoint policy, and the deviations below.
   * the start: either `seed` + members + mode + weights, or a `save()` snapshot;
   * the ordered public calls: `act`, `quick_start`, `finish`, `member_left`,
     `member_back` and `anim_done` (the turn-clock anim hold -- see
-    `docs/SERVER.md` §Turn clock);
+    `docs/SERVER.md` §Turn clock; only accepted acks are logged, a no-op ack
+    replays to the same nothing);
   * the exact `tick(dt)` f32 sequence.
 * **Randomness and serialization:**
   * Both RNG streams (`World.rng` and `Match.live_rng`) are serialized.

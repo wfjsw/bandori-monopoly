@@ -238,10 +238,8 @@ async fn a_match_started_on_a_can_be_acted_on_via_b() {
     let (base_b, _sb, tb) = spawn(&store, |_| {}).await;
 
     let host = Client::new(&base_a, "Host").await;
-    let id = host.ok("/api/rooms", json!({ "name": "Act" })).await["room"]["id"]
-        .as_str()
-        .unwrap()
-        .to_string();
+    let created = host.ok("/api/rooms", json!({ "name": "Act" })).await;
+    let id = created["room"]["id"].as_str().unwrap().to_string();
     host.ok(&format!("/api/rooms/{id}/bots"), json!({ "op": "add" }))
         .await;
     host.ok(&format!("/api/rooms/{id}/bots"), json!({ "op": "add" }))
@@ -263,14 +261,31 @@ async fn a_match_started_on_a_can_be_acted_on_via_b() {
     handle.quick_start().unwrap();
 
     let host_on_b = host.on(&base_b);
-    // `anim-done` is a recorded match op; any seat may send it and it always
-    // lands in the log. B has the same session, so it is the same member.
-    let (s, v) = host_on_b
-        .post(&format!("/api/rooms/{id}/anim-done"), json!({ "seq": 0 }))
-        .await;
-    assert_eq!(s, StatusCode::OK, "{v}");
+    // `quick_start` commits a turn: the engine holds the acting human's clock
+    // for the new `seq` until its ack. That accepted ack is a recorded match
+    // op; B has the same session, so it is the same member. The bot driver
+    // answers the opening mulligan on a tick, which moves `seq`, so re-read
+    // and retry until the ack names the live hold.
+    let seq = |h: &server::room::MatchHandle| -> i32 {
+        serde_json::from_str::<Value>(&h.snapshot().unwrap()).unwrap()["seq"]
+            .as_i64()
+            .unwrap() as i32
+    };
+    let mut released = false;
+    for _ in 0..40 {
+        let (s, v) = host_on_b
+            .post(&format!("/api/rooms/{id}/anim-done"), json!({ "seq": seq(&handle) }))
+            .await;
+        assert_eq!(s, StatusCode::OK, "{v}");
+        if v["released"] == true {
+            released = true;
+            break;
+        }
+        tokio::time::sleep(Duration::from_millis(25)).await;
+    }
+    assert!(released, "the seat was held");
 
-    // The log (in the shared store) carries the op B just ran.
+    // The log (in the shared store) carries the ack B just ran.
     let lines = store.record_log_get(&id).unwrap();
     assert!(
         lines.iter().any(|l| l.contains("AnimDone")),
@@ -486,25 +501,101 @@ async fn concurrent_acts_on_two_servers_serialise() {
     .await;
     host.ok(&format!("/api/rooms/{id}/start"), json!({ "force": true }))
         .await;
-    {
+    let handle = {
         let room = sa.room(&id).unwrap();
         let r = room.lock().unwrap();
-        r.game.as_ref().expect("match").quick_start().unwrap();
-    }
-
+        r.game.as_ref().expect("match").clone()
+    };
+    handle.quick_start().unwrap();
     let host_on_b = host.on(&base_b);
     let path1 = format!("/api/rooms/{id}/anim-done");
     let path2 = path1.clone();
-    let p1 = host.post(&path1, json!({ "seq": 1 }));
-    let p2 = host_on_b.post(&path2, json!({ "seq": 2 }));
-    let (r1, r2) = tokio::join!(p1, p2);
-    assert_eq!(r1.0, StatusCode::OK, "{r1:?}");
-    assert_eq!(r2.0, StatusCode::OK, "{r2:?}");
-
+    // Same member, same hold: exactly one ack releases and is recorded as
+    // `Input::AnimDone`, the other is an unrecorded no-op. Both land (no
+    // clobbered blob, no lost update), which is what the lock proves. The bot
+    // driver moves `seq` on a tick, so retry with the live seq.
+    let seq = |h: &server::room::MatchHandle| -> i32 {
+        serde_json::from_str::<Value>(&h.snapshot().unwrap()).unwrap()["seq"]
+            .as_i64()
+            .unwrap() as i32
+    };
+    let mut done = false;
+    for _ in 0..40 {
+        let s = seq(&handle);
+        let (r1, r2) = tokio::join!(
+            host.post(&path1, json!({ "seq": s })),
+            host_on_b.post(&path2, json!({ "seq": s })),
+        );
+        assert_eq!(r1.0, StatusCode::OK, "{r1:?}");
+        assert_eq!(r2.0, StatusCode::OK, "{r2:?}");
+        let released = [&r1.1["released"], &r2.1["released"]]
+            .iter()
+            .filter(|v| v.as_bool() == Some(true))
+            .count();
+        assert_eq!(released, 1, "one ack releases: {r1:?} {r2:?}");
+        done = true;
+        break;
+    }
+    assert!(done);
     let lines = store.record_log_get(&id).unwrap();
     let anims = lines.iter().filter(|l| l.contains("AnimDone")).count();
-    assert_eq!(anims, 2, "both acts recorded, neither lost: {lines:?}");
+    assert_eq!(anims, 1, "only the releasing ack is recorded: {lines:?}");
 
     ta.abort();
     tb.abort();
+}
+
+/// A refused act writes no state (the blob stays byte-identical) but its
+/// `Input::Act` stays in the record: the replay re-runs it and flags a
+/// divergence if the outcome were to change.
+#[tokio::test]
+async fn a_refused_act_writes_no_state_but_is_recorded() {
+    let store = dummy::Store::new();
+    let (base, sa, ta) = spawn(&store, |_| {}).await;
+    let host = Client::new(&base, "Host").await;
+    let id = host.ok("/api/rooms", json!({ "name": "Refuse" })).await["room"]["id"]
+        .as_str()
+        .unwrap()
+        .to_string();
+    host.ok(&format!("/api/rooms/{id}/bots"), json!({ "op": "add" }))
+        .await;
+    host.ok(&format!("/api/rooms/{id}/bots"), json!({ "op": "add" }))
+        .await;
+    host.ok(
+        &format!("/api/rooms/{id}/nonce"),
+        json!({ "nonce": format!("{:064x}", 1) }),
+    )
+    .await;
+    host.ok(&format!("/api/rooms/{id}/start"), json!({ "force": true }))
+        .await;
+    {
+        let room = sa.room(&id).unwrap();
+        room.lock()
+            .unwrap()
+            .game
+            .as_ref()
+            .expect("match")
+            .quick_start()
+            .unwrap();
+    }
+
+    // Freeze the ticker before comparing blobs: a tick moves the hold budget.
+    ta.abort();
+    tokio::time::sleep(Duration::from_millis(100)).await;
+    let before = store.match_get(&id).unwrap().unwrap();
+
+    let (s, v) = host
+        .post(&format!("/api/rooms/{id}/act"), json!({ "act": "bogus" }))
+        .await;
+    assert_eq!(s, StatusCode::BAD_REQUEST, "{v}");
+    assert_eq!(v["error"]["k"], "err.unknown_act", "{v}");
+    assert_eq!(store.match_get(&id).unwrap().unwrap(), before, "state untouched");
+
+    let lines = store.record_log_get(&id).unwrap();
+    let refused = lines
+        .iter()
+        .filter(|l| l.contains("\"Act\"") || l.contains("Act{"))
+        .count();
+    assert!(refused > 0, "the refusal is recorded: {lines:?}");
+    assert!(lines.iter().any(|l| l.contains("\"ok\":false")), "{lines:?}");
 }

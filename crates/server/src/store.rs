@@ -385,10 +385,13 @@ pub fn try_lock<'a>(
 
 /// Run `f` while holding the cross-process lock `key`.
 ///
-/// Retries with short sleeps up to `deadline`. The outer `Err` is the lock
-/// itself (never a fallthrough to unlocked execution); the inner `Result` is
-/// whatever `f` returned. Match / room operations are short, so the
-/// [`LOCK_TTL_MS`] default needs no renewal.
+/// Retries with short sleeps up to `deadline`. Match / room operations are
+/// sub-millisecond, so the backoff starts at 1 ms and doubles to a 5 ms cap --
+/// a fixed 15 ms made every queued ack pay a whole scheduler slice, which the
+/// ack echo storm multiplies. The outer `Err` is the lock itself (never a
+/// fallthrough to unlocked execution); the inner `Result` is whatever `f`
+/// returned. Operations are short, so the [`LOCK_TTL_MS`] default needs no
+/// renewal.
 pub fn try_with_lock<T, E>(
     store: &dyn CrossState,
     key: &str,
@@ -398,6 +401,7 @@ pub fn try_with_lock<T, E>(
     f: impl FnOnce() -> Result<T, E>,
 ) -> Result<Result<T, E>, StoreError> {
     let start = std::time::Instant::now();
+    let mut backoff = Duration::from_millis(1);
     loop {
         match try_lock(store, key, owner, ttl_ms) {
             Ok(Some(_guard)) => {
@@ -411,7 +415,8 @@ pub fn try_with_lock<T, E>(
                         "lock {key} not acquired within {deadline:?}"
                     )));
                 }
-                std::thread::sleep(Duration::from_millis(15));
+                std::thread::sleep(backoff);
+                backoff = (backoff * 2).min(Duration::from_millis(5));
             }
             Err(e) => return Err(e),
         }

@@ -720,7 +720,10 @@ pub async fn events(
 /// `POST /api/rooms/{id}/anim-done` -- the seat's animation queue has drained
 /// for state version `seq`. Clears that seat from the turn-clock hold, which
 /// releases once every pending human seat has acked (10s cap applies if one
-/// never arrives). Recorded as `Input::AnimDone`.
+/// never arrives). A releasing ack is recorded as `Input::AnimDone`; an ack
+/// that releases nothing (no hold, stale seq, seat not held -- e.g. a
+/// spectator's, or the echo of the release frame) answers `released: false`
+/// and writes neither the blob nor the log.
 #[derive(Debug, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct AnimationDoneRequest {
@@ -777,6 +780,9 @@ pub async fn order_ready(
 }
 
 /// `POST /api/rooms/{id}/act` -- a match command (`NetMessage` with `act` set).
+/// A refused command (400) writes no state -- the blob is byte-identical --
+/// but is recorded as `Input::Act { ok: false }`, which is what lets a replay
+/// reproduce the refusal instead of drifting.
 pub async fn act(
     State(s): S,
     Auth(sess): Auth,

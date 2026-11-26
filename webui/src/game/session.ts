@@ -1066,9 +1066,34 @@ export class OnlineSession extends GameSession {
     emitOnlineView(this.extras, v, (m) => super.emitView(m), () => this.view);
   }
 
+  /** One command in flight per seat. A second one sent before the first
+   *  answers is refused by the engine (the state moved) and still costs a
+   *  server round-trip and a recorded `ok: false`; a burst (persona
+   *  preselection, a double click on a slow beat) collapses to the newest
+   *  intent instead. */
+  private sending = false;
+  private queued: Command | null = null;
+
   async act(cmd: Command): Promise<Msg | null> {
     if (this.readOnly) return { k: "err.not_a_player" };
-    const r = await api.act(this.id, cmd);
+    if (this.sending) {
+      this.queued = cmd;
+      return null;
+    }
+    return this.send(cmd);
+  }
+
+  private async send(cmd: Command): Promise<Msg | null> {
+    this.sending = true;
+    let r: Awaited<ReturnType<typeof api.act>>;
+    try {
+      r = await api.act(this.id, cmd);
+    } finally {
+      this.sending = false;
+    }
+    const next = this.queued;
+    this.queued = null;
+    if (next) void this.send(next);
     return r.ok ? null : (r.error ?? { k: "err.unknown_act" });
   }
 
