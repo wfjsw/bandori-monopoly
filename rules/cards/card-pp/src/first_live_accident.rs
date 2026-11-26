@@ -40,11 +40,12 @@ fn first_live_accident(player_id: i32) -> card_sdk::Asked {
     );
     // 规则书[持续]: 「[拥有者]不可使用丸山彩、若宫伊芙、白鹭千圣或大和麻弥的
     // [主动]（1）技能，也不可使用冰川日菜的[自动]（2）技能。」 -- one seal per
-    // named *entry*, not the band: the four (1) actives and 日菜's one (2)
-    // automatic. The tag is what each skill's own press/hook gate reads through
-    // `skill_blocked` (`skillBlock:<tag>`); `:1` / `:2` names the numbered
-    // entry so the same persona's other clause stays open (and every other PP
-    // skill with it). Bound to the placed instance so they die with the card.
+    // named *entry*, not the band: the four (1) presses and 日菜's one (2)
+    // automatic. The four (2) autos (大和麻弥's included) stay usable. The tag
+    // is what each skill's own press/hook gate reads through `skill_blocked`
+    // (`skillBlock:<tag>`); `:1` / `:2` names the numbered entry so the same
+    // persona's other clause stays open (and every other PP skill with it).
+    // Bound to the placed instance so they die with the card.
     // The body's own writes cross onto live before the draw routine runs, so
     // the hook the very next `ctx::draw` raises already sees the seal (HOST-02).
     for tag in [

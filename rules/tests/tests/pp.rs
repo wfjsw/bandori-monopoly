@@ -2730,7 +2730,7 @@ fn strong_flower_pass_hook_is_silent_off_its_tile() {
 /// 规则书[持续]: 「[拥有者]不可使用丸山彩、若宫伊芙、白鹭千圣或大和麻弥的[主动]
 /// （1）技能，也不可使用冰川日菜的[自动]（2）技能。」 -- the seal is one per
 /// named *entry*, not the whole band. These five tags are what the skills'
-/// own gates read.
+/// own gates read; the four (2) autos (大和麻弥's included) stay open.
 const ACCIDENT_SEALS: [&str; 5] = [
     "skillBlock:skill:丸山彩:With~:1",
     "skillBlock:skill:若宫伊芙:天下统一:1",
@@ -2841,8 +2841,8 @@ fn accident_blocks_hina_automatic_2() {
     );
 }
 
-/// 规则书[持续]: only the named entry is sealed -- the four characters' (2)
-/// autos stay usable. 丸山彩's (2) prompt still opens on the owner's payment.
+/// 规则书[持续]: only the named entries are sealed -- the four (2) autos stay
+/// usable. 丸山彩's (2) prompt still opens on the owner's payment.
 #[test]
 fn accident_leaves_the_named_active_2_usable() {
     let mut t = Table::vanilla(2);
@@ -2865,6 +2865,32 @@ fn accident_leaves_the_named_active_2_usable() {
         t.decline();
     }
     assert!(seen_aya, "丸山彩's (2) must stay usable: {seen_aya}");
+}
+
+/// 规则书[持续]: 大和麻弥's (2) is an automatic on a draw and stays usable --
+/// the accident's own draw offers it and, answered, it runs. The (1) is sealed,
+/// the (2) is not.
+#[test]
+fn accident_leaves_maya_automatic_2_usable() {
+    let mut t = Table::vanilla(2);
+    t.set_character_raw(0, "大和麻弥");
+    t.place_raw(0, "skill:大和麻弥:朝阳照耀的片刻");
+    set_fans(&mut t, 0, 3, 0);
+    // The play's own draw is the (2)'s window; the card seals maya's (1) before
+    // it, so this also proves the (1) seal does not shadow the (2).
+    t.give_play(0, "PP:初次演出事故").unwrap();
+    let mut asked = false;
+    while t.prompt().is_some() {
+        let p = t.expect_prompt();
+        if p.title.key().contains("maya") && !asked {
+            asked = true;
+            t.answer_one(1).unwrap();
+        } else {
+            t.decline();
+        }
+    }
+    assert!(asked, "大和麻弥's (2) window must open under the card");
+    assert_eq!(fans(&t, 0).0, 2, "the (2) flipped one fan");
 }
 
 /// 规则书[持续]: the seal names entries, not the band -- another band's skill

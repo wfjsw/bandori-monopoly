@@ -704,7 +704,7 @@ Genuine engine / book discrepancies. These tests stay red.
 * **C-PP-first-accident-02** -- book: 「[拥有者]不可使用丸山彩、若宫伊芙、白鹭千圣或
   大和麻弥的[主动]（1）技能，也不可使用冰川日菜的[自动]（2）技能」. Engine: one
   `skillBlock:skill:<id>:<clause>` seal per named entry; the four (1) bodies and
-  日菜's (2) refuse, everything else (including the four (2)s) stays open.
+  日菜's (2) refuse, everything else (including the four (2) autos) stays open.
   Tests: `accident_blocks_the_named_active_1`, `accident_blocks_hina_automatic_2`.
 * **C-PP-band-idol-02** -- book: overflow of a fan-flip becomes crystals on
   the band card (「X大于拥有的反面的[P✽P粉丝]时可为此卡添加等量溢出的[奇迹水晶]」).

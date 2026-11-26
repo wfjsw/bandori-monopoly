@@ -472,17 +472,18 @@ fn first_accident_hand() {
     .expect("C-PP-first-accident-01");
 }
 
-/// C-PP-first-accident-02 -- [持续]: owner cannot use any PP character's (2)
-/// skill. The book is absolute; a prompt offering 丸山彩's, 大和麻弥's or
-/// 冰川日菜's (2) is a violation.
+/// C-PP-first-accident-02 -- [持续]: the owner cannot use the four named (1)
+/// actives or 冰川日菜's (2) automatic. The four (2) autos stay usable; only a
+/// 日菜 (2) prompt is a violation here.
 #[test]
 fn first_accident_blocks_pp_skill_2() {
     forall(4, 0x46_4144, |rng, _i| {
         let mut t = Table::vanilla(2);
         t.set_character_raw(0, "丸山彩");
         t.place_raw(0, "skill:丸山彩:With~");
-        // The other two PP (2) skills the clause covers: 大和麻弥's window sits
-        // on a draw (the accident's own play draws), 冰川日菜's at turn start.
+        // 大和麻弥's (2) sits on a draw (the accident's own play draws) but is
+        // an automatic the text leaves open; 冰川日菜's (2) at turn start is the
+        // one (2) the clause covers.
         t.place_raw(0, "skill:大和麻弥:朝阳照耀的片刻");
         t.place_raw(0, "skill:冰川日菜:日菜抽中的大奖");
         let up = rng.range(3, 6);
@@ -493,9 +494,10 @@ fn first_accident_blocks_pp_skill_2() {
             let hit = |k: &str| {
                 p.title.key().contains(k) || p.options.iter().any(|o| format!("{o:?}").contains(k))
             };
-            // 「maya」 first: `maya_title` also contains 「aya」. 丸山彩's (2)
-            // is usable under the new text and stays out of the set.
-            ["maya", "hina"]
+            // 冰川日菜's (2) only: 丸山彩's and 大和麻弥's (2) are autos the
+            // text leaves usable (`maya_title` also contains 「aya」, so a
+            // 「maya」 key would misfire on an aya prompt).
+            ["hina"]
                 .into_iter()
                 .find(|&k| hit(k))
                 .map(|k| k.to_string())
@@ -507,7 +509,7 @@ fn first_accident_blocks_pp_skill_2() {
         while t.prompt().is_some() {
             if let Some(k) = pp_skill_prompt(&t) {
                 return Err(format!(
-                    "C-PP-first-accident-02: PP (2) skill {k} offered under 初次演出事故: {}",
+                    "C-PP-first-accident-02: PP (2) skill {k} (日菜) offered under 初次演出事故: {}",
                     t.dump_prompt()
                 ));
             }
