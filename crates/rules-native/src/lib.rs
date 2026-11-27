@@ -898,6 +898,20 @@ impl CardModules for NativeModules {
         call: Call,
         log: &game_core::engine::GuestLog,
         already_admitted: &[i32],
+        on_body: Option<&mut dyn FnMut(&mut Run, i32)>,
+        on_trap: Option<&mut dyn FnMut(&mut Run, i32, &str)>,
+    ) -> Result<Option<HookRun<Run>>, RuleError> {
+        let mut scope = None;
+        self.run_hook_with_scope(world, call, log, already_admitted, &mut scope, on_body, on_trap)
+    }
+
+    fn run_hook_with_scope(
+        &self,
+        world: &Run,
+        call: Call,
+        log: &game_core::engine::GuestLog,
+        already_admitted: &[i32],
+        scope: &mut Option<game_rules::condition::WindowScope>,
         mut on_body: Option<&mut dyn FnMut(&mut Run, i32)>,
         mut on_trap: Option<&mut dyn FnMut(&mut Run, i32, &str)>,
     ) -> Result<Option<HookRun<Run>>, RuleError> {
@@ -911,7 +925,6 @@ impl CardModules for NativeModules {
         if entries.is_empty() {
             return Ok(None);
         }
-        let scope = game_rules::condition::window_scope(&game_rules::condition::fill_window(world));
         let cand = game_rules::condition::fill_candidate(
             world,
             player_id,
@@ -944,6 +957,14 @@ impl CardModules for NativeModules {
             {
                 // docs/GUARDS.md §4.4: every guard call goes through `admits`.
                 let condition = self.index.condition(card, entry);
+                // The window is the bulk of a conditioned hook and is built
+                // from the world; a caller quoting many tiles passes the same
+                // slot so it is built once (see `host::Ruleset`).
+                if condition.is_some() && scope.is_none() {
+                    *scope = Some(game_rules::condition::window_scope(
+                        &game_rules::condition::fill_window(&cur),
+                    ));
+                }
                 // Re-entered after a pause: the condition and guard cleared on
                 // the earlier pass and this pass's own body writes may now
                 // refuse them, so only the declare replays (`OP_RUN` carries
@@ -952,10 +973,10 @@ impl CardModules for NativeModules {
                     true
                 } else if self.entry_guard_is_none(card, entry) {
                     // G4 deleted the residual: the condition alone decides.
-                    game_rules::condition::admits_condition(condition, Some(&scope), &cand)
+                    game_rules::condition::admits_condition(condition, scope.as_ref(), &cand)
                 } else {
                     let asked: Result<bool, ()> =
-                        game_rules::condition::admits(condition, Some(&scope), &cand, || {
+                        game_rules::condition::admits(condition, scope.as_ref(), &cand, || {
                             let st = state.take().expect("host state present");
                             // A guard is a pure query: refuse inline answers (see
                             // `game_rules::inline`).
@@ -1024,6 +1045,9 @@ impl CardModules for NativeModules {
                 Outcome::Done(w, _) => {
                     // Later entries see earlier writes and earlier answers.
                     cur = w;
+                    // The window predates the write; the next conditioned
+                    // entry (or caller) rebuilds.
+                    *scope = None;
                     next_answer = after_body;
                 }
                 paused => {
