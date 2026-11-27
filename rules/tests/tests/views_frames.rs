@@ -88,3 +88,4 @@ fn bench_frame_work() {
     println!("quotes: base={base_ms:.2}ms old(10 seats)={old_ms:.2}ms new(base+10)={new_ms:.2}ms");
 }
 
+

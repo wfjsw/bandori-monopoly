@@ -14240,6 +14240,7 @@ impl<M: CardModules> RulesBridge<M> {
         card: &str,
         kind: TriggerKind,
         trig: &mut Trigger,
+        scope: &mut Option<rules_cond::WindowScope>,
     ) {
         let Some(idx) = self.ruleset.card(card) else {
             return;
@@ -14256,7 +14257,7 @@ impl<M: CardModules> RulesBridge<M> {
         run.current_uid = uid;
         // `None` for `on_body`: a quote is a preview, never an activation --
         // the commit's own re-quote is the run that may flash.
-        if let Ok(Some(hr)) = self.ruleset.run_hook(
+        if let Ok(Some(hr)) = self.ruleset.run_hook_with_scope(
             &*run,
             Call::Hook {
                 card: idx,
@@ -14265,6 +14266,7 @@ impl<M: CardModules> RulesBridge<M> {
             },
             &Default::default(),
             &[],
+            &mut *scope,
             None,
             // A quote's world is dropped, so a trap line has no home here;
             // the commit's re-quote runs the real (logging) drive.
@@ -14983,6 +14985,11 @@ impl<M: CardModules> CardRules for RulesBridge<M> {
             flash_cued: false,
             flash_ordinal: 0,
         };
+        // One condition window for the whole quote: every hook starts from the
+        // same pre-quote world (`run.world`, never written back), so the
+        // snapshot is built once instead of once per instance per tile -- it
+        // was ~90% of a quote.
+        let mut scope: Option<rules_cond::WindowScope> = None;
         q.tiles
             .iter()
             .map(|&t| {
@@ -14996,7 +15003,7 @@ impl<M: CardModules> CardRules for RulesBridge<M> {
                 let mut at = |run: &mut Run, kind: TriggerKind, price: i32| {
                     let mut trig = buy_trigger(kind, q, t, price, st, w.turn.activation_ordinal);
                     for &(uid, owner, ref card) in &instances {
-                        self.pure_buy_hook(run, uid, owner, card, kind, &mut trig);
+                        self.pure_buy_hook(run, uid, owner, card, kind, &mut trig, &mut scope);
                     }
                     trig
                 };

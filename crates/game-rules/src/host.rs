@@ -2733,6 +2733,29 @@ impl Ruleset {
         call: Call,
         log: &game_core::engine::GuestLog,
         already_admitted: &[i32],
+        on_body: Option<&mut dyn FnMut(&mut W, i32)>,
+        on_trap: Option<&mut dyn FnMut(&mut W, i32, &str)>,
+    ) -> Result<Option<HookRun<W>>, RuleError> {
+        let mut scope = None;
+        self.run_hook_with_scope(world, call, log, already_admitted, &mut scope, on_body, on_trap)
+    }
+
+    /// [`Self::run_hook`] with its condition window supplied by the caller.
+    ///
+    /// The window snapshot is built from the world and is the bulk of a hook
+    /// whose entry carries a condition (~1 ms a call). A caller that runs many
+    /// hooks against the same unchanged world -- the tile quotes do, one per
+    /// instance per tile -- builds it once and passes the same slot: calls that
+    /// start from the pristine world reuse it, and a call whose body writes the
+    /// world drops it (`None`) for the next one, which is the COND-01 rule the
+    /// local rebuild follows inside a call.
+    pub fn run_hook_with_scope<W: CardWorld>(
+        &self,
+        world: &W,
+        call: Call,
+        log: &game_core::engine::GuestLog,
+        already_admitted: &[i32],
+        scope: &mut Option<rules_cond::WindowScope>,
         mut on_body: Option<&mut dyn FnMut(&mut W, i32)>,
         mut on_trap: Option<&mut dyn FnMut(&mut W, i32, &str)>,
     ) -> Result<Option<HookRun<W>>, RuleError> {
@@ -2750,8 +2773,6 @@ impl Ruleset {
         // Later entries see the writes of earlier bodies (`cur`), so the scope
         // is rebuilt after each executed body (COND-01): a `slot()` condition
         // must read the same world its body would, not the pre-window snapshot.
-        let mut scope: Option<rules_cond::WindowScope> = None;
-        let mut scope_stale = false;
         let mut cur: W = world.clone();
         // One `next_answer` cursor threads the whole call: every guard, every
         // `OP_DECLARE` and every body reads the shared answer log in order, so
@@ -2776,11 +2797,10 @@ impl Ruleset {
                 .get(card as usize)
                 .and_then(|r| r.get(entry as usize))
                 .and_then(|p| p.as_ref());
-            if condition.is_some() && (scope.is_none() || scope_stale) {
-                scope = Some(crate::condition::window_scope_owned(
+            if condition.is_some() && scope.is_none() {
+                *scope = Some(crate::condition::window_scope_owned(
                     crate::condition::fill_window(&cur),
                 ));
-                scope_stale = false;
             }
             // `card.placed` must answer for the **running instance** (the
             // guest's `ctx::is_placed()`): a game-start hook also runs for the
@@ -2876,7 +2896,9 @@ impl Ruleset {
                 Outcome::Done(w, _) => {
                     // Later entries see earlier writes and earlier answers.
                     cur = w;
-                    scope_stale = true;
+                    // The window was built from the pre-write world; drop it so
+                    // the next conditioned entry (or the next caller) rebuilds.
+                    *scope = None;
                     next_answer = after_body;
                 }
                 paused => {
@@ -3275,7 +3297,7 @@ impl Ruleset {
         let mut store = new_store(&self.inner.engine, state);
         store.set_fuel(self.fuel).map_err(trap)?;
         #[cfg(feature = "bot-cost")]
-        bot_cost::STORE_NS.fetch_add(
+        bot_cost::prof::STORE.fetch_add(
             t0.elapsed().as_nanos() as u64,
             std::sync::atomic::Ordering::Relaxed,
         );
@@ -3685,6 +3707,18 @@ pub trait CardModules: Clone + Send + Sync + 'static {
         on_body: Option<&mut dyn FnMut(&mut crate::Run, i32)>,
         on_trap: Option<&mut dyn FnMut(&mut crate::Run, i32, &str)>,
     ) -> Result<Option<HookRun<crate::Run>>, RuleError>;
+    /// [`Self::run_hook`] on a caller-owned condition window (see
+    /// [`Ruleset::run_hook_with_scope`]).
+    fn run_hook_with_scope(
+        &self,
+        world: &crate::Run,
+        call: Call,
+        log: &game_core::engine::GuestLog,
+        already_admitted: &[i32],
+        scope: &mut Option<rules_cond::WindowScope>,
+        on_body: Option<&mut dyn FnMut(&mut crate::Run, i32)>,
+        on_trap: Option<&mut dyn FnMut(&mut crate::Run, i32, &str)>,
+    ) -> Result<Option<HookRun<crate::Run>>, RuleError>;
     fn can_counteract(
         &self,
         world: &crate::Run,
@@ -3819,6 +3853,27 @@ impl CardModules for Ruleset {
         on_trap: Option<&mut dyn FnMut(&mut crate::Run, i32, &str)>,
     ) -> Result<Option<HookRun<crate::Run>>, RuleError> {
         Ruleset::run_hook::<crate::Run>(self, world, call, log, already_admitted, on_body, on_trap)
+    }
+    fn run_hook_with_scope(
+        &self,
+        world: &crate::Run,
+        call: Call,
+        log: &game_core::engine::GuestLog,
+        already_admitted: &[i32],
+        scope: &mut Option<rules_cond::WindowScope>,
+        on_body: Option<&mut dyn FnMut(&mut crate::Run, i32)>,
+        on_trap: Option<&mut dyn FnMut(&mut crate::Run, i32, &str)>,
+    ) -> Result<Option<HookRun<crate::Run>>, RuleError> {
+        Ruleset::run_hook_with_scope::<crate::Run>(
+            self,
+            world,
+            call,
+            log,
+            already_admitted,
+            scope,
+            on_body,
+            on_trap,
+        )
     }
     fn can_counteract(
         &self,
@@ -4242,6 +4297,7 @@ fn fold_exit(v: i64) -> Result<i64, Error> {
 /// i32 result for `can_counteract`, 0 otherwise. A guest that stops for a prompt comes
 /// back as [`need_input`], never as the raw sentinel.
 #[cfg(feature = "sandbox")]
+
 fn call_card<W: CardWorld>(
     rules: &Inner,
     store: &mut Store<HostState<W>>,
@@ -4251,8 +4307,6 @@ fn call_card<W: CardWorld>(
     player_id: i32,
 ) -> Result<i64, Error> {
     let slot = rules.slots[card as usize];
-    #[cfg(feature = "bot-cost")]
-    let t0 = std::time::Instant::now();
     let inst = instantiate_cached(rules, &mut *store, slot.module)?;
     #[cfg(feature = "bot-cost")]
     {
