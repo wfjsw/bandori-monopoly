@@ -1307,6 +1307,12 @@ impl Match {
         std::mem::take(&mut self.changed)
     }
 
+    /// The public state version (`seq` moves exactly when `changed`): a cache
+    /// key for anything derived from the whole state, e.g. tile quotes.
+    pub fn seq(&self) -> i32 {
+        self.seq
+    }
+
     pub fn ended(&self) -> bool {
         self.world.st.phase == "ended"
     }
@@ -1524,14 +1530,20 @@ impl Match {
 
     /// Per-card notes for the member's hand.
     pub fn hand_notes_of(&self, member: i32) -> Vec<Msg> {
+        let cx = self.view_cx();
+        self.hand_notes_with(&cx, member)
+    }
+
+    /// [`Match::hand_notes_of`] on a caller-owned context (one world clone for
+    /// a whole `views()` call instead of one per seat).
+    pub fn hand_notes_with(&self, cx: &PlayCtx<'_>, member: i32) -> Vec<Msg> {
         let Some(i) = self.player_index(member) else {
             return vec![];
         };
-        let cx = PlayCtx::new(self.world.clone(), &self.data, &*self.rules, &[]);
         self.world.hidden[i]
             .hand
             .iter()
-            .map(|c| self.rules.hand_note(&cx, i, c))
+            .map(|c| self.rules.hand_note(cx, i, c))
             .collect()
     }
 
@@ -1552,6 +1564,27 @@ impl Match {
             &*self.rules,
             self.player_index(member),
         )
+    }
+
+    /// The seat-independent quote table ([`purchase::tile_quotes_base`]):
+    /// compute once per `views()` call, then [`Match::tile_quotes_from`] each
+    /// seat. A frame's `BuyGate` / `Buy*` work is per seat, the base is not.
+    pub fn tile_quotes_base(&self) -> Vec<Option<crate::state::TileQuote>> {
+        purchase::tile_quotes_base(&self.data, &self.world)
+    }
+
+    /// The member's quote table on top of a shared base -- the same answer as
+    /// [`Match::tile_quotes`], minus the seat-independent pass.
+    pub fn tile_quotes_from(
+        &self,
+        base: &[Option<crate::state::TileQuote>],
+        member: i32,
+    ) -> Vec<Option<crate::state::TileQuote>> {
+        let mut out = base.to_vec();
+        if let Some(me) = self.player_index(member) {
+            purchase::tile_quotes_viewer(&mut out, &self.data, &self.world, &*self.rules, me);
+        }
+        out
     }
 
     /// Per-viewer extras the client's 托管 autopilot reads on top of [`Match::state`].
@@ -1583,14 +1616,22 @@ impl Match {
     /// Typed twin of [`Match::view_extras`] for in-process callers (the bot's
     /// rollout / action abstraction). Same fields, no JSON round trip.
     pub fn view_extras_typed(&self, member: i32) -> ViewExtra {
+        let cx = self.view_cx();
+        self.view_extras_typed_with(&cx, member)
+    }
+
+    /// [`Match::view_extras_typed`] on a caller-owned context: a `views()`
+    /// call over N seats pays the world clone once instead of N times.
+    pub fn view_extras_typed_with(&self, cx: &PlayCtx<'_>, member: i32) -> ViewExtra {
         let t0 = rtimer::now();
-        let v = self.view_extra_parts(member);
+        let v = self.view_extra_parts(cx, member);
         rtimer::add(&rtimer::VIEW_EXTRA_NS, t0);
         v
     }
 
     fn view_extra_inner(&self, member: i32) -> serde_json::Value {
-        let p = self.view_extra_parts(member);
+        let cx = self.view_cx();
+        let p = self.view_extra_parts(&cx, member);
         let ai_answer = p.ai_answer.map(|a| {
             serde_json::json!({
                 "answer": a.answer,
@@ -1607,7 +1648,7 @@ impl Match {
         })
     }
 
-    fn view_extra_parts(&self, member: i32) -> ViewExtra {
+    fn view_extra_parts(&self, cx: &PlayCtx<'_>, member: i32) -> ViewExtra {
         let Some(i) = self.player_index(member) else {
             return ViewExtra::default();
         };
@@ -1623,7 +1664,6 @@ impl Match {
                 worth: l.ask.worth.get(k).copied().unwrap_or(0),
             })
         });
-        let cx = PlayCtx::new(self.world.clone(), &self.data, &*self.rules, &[]);
         let mut playable = Vec::new();
         let mut ai_playable = Vec::new();
         let mut estimated_cost = Vec::new();
@@ -1688,6 +1728,13 @@ impl Match {
     /// installed, so a policy's RNG draws do not persist into the match.
     /// `bot-core::policy` decides on one of these.
     pub fn bot_cx(&self) -> PlayCtx<'_> {
+        self.view_cx()
+    }
+
+    /// The context a frame build reads through (`view_extras`, hand notes,
+    /// quotes): a throwaway world clone, no answers installed. One per
+    /// `views()` call serves every seat in it.
+    pub fn view_cx(&self) -> PlayCtx<'_> {
         PlayCtx::new(self.world.clone(), &self.data, &*self.rules, &[])
     }
 

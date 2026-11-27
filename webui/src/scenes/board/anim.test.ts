@@ -661,6 +661,20 @@ test("Animator: the flash hits once, then restores before fading", async () => {
   assert.equal(anim.flash, null);
 });
 
+test("Animator: revive re-arms a face disposed mid-beat", async () => {
+  const anim = new Animator(() => {}, () => null, false);
+  anim.push(frame({ id: 501, type: "card", card: "TEST:revive", kind: "play", uid: -1, msg: { k: "log.played" }, flash: true }));
+  await sleep(50);
+  assert.ok(anim.flash, "the face is up");
+  const id = anim.flash!.id;
+  anim.dispose(); // StrictMode teardown: the beat's timers go with it
+  await sleep(900);
+  assert.equal(anim.flash?.id, id, "the face is pinned while disposed");
+  anim.revive();
+  for (let i = 0; i < 400 && anim.flash; i++) await sleep(10);
+  assert.equal(anim.flash, null, "revive restarts the beat, so the face retires");
+});
+
 test("flash styles: the halo is a composited triangle on a chain-sized face", () => {
   const here = path.dirname(fileURLToPath(import.meta.url));
   const css = readFileSync(path.join(here, "Board.module.css"), "utf8");

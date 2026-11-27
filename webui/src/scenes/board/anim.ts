@@ -234,6 +234,21 @@ export class Animator {
   /** (Re)attach -- React StrictMode unmounts and remounts once in development. */
   revive(): void {
     this.disposed = false;
+    // A flash on screen when the old instance was disposed lost its timers
+    // with it; without a re-arm the face would stay up forever. An
+    // already-fading flash only owes its removal.
+    if (this.flash) {
+      const id = this.flash.id;
+      if (this.flash.out) {
+        this.flashTimer = setTimeout(() => {
+          if (this.flash?.id !== id || !this.flash.out) return;
+          this.flash = null;
+          this.bump();
+        }, CARD_FLASH_FADE_MS / Math.max(1, this.speed));
+      } else {
+        this.armFlash(id, this.fast());
+      }
+    }
     if (this.queue.length) {
       this.animating = false;
       void this.run();

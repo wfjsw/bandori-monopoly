@@ -258,7 +258,10 @@ function pump(forceSave = false): void {
     haveView = true;
     const push: SoloPush = { push: "sync", events: evs };
     const members = [you, ...botSeats];
-    const frames = JSON.parse(match.views(JSON.stringify(members))) as MatchView[];
+    // Only the human seat draws deed captions; a bot answers from the extras,
+    // so its frame carries `tileQuotes: null` and the quote pass is not paid
+    // per bot.
+    const frames = JSON.parse(match.views(JSON.stringify(members), JSON.stringify([you]))) as MatchView[];
     const v = frames[0];
     const j = JSON.stringify(v);
     if (j !== viewJson) {
@@ -328,7 +331,7 @@ function atSavePoint(force = false): boolean {
   if (!force && now - lastSaveCheck < SAVE_CHECK_MS) return false;
   lastSaveCheck = now;
   try {
-    const frames = JSON.parse(match.views(JSON.stringify([you]))) as MatchView[];
+    const frames = JSON.parse(match.views(JSON.stringify([you]), "[]")) as MatchView[];
     const st = frames[0]?.state;
     return st ? safeSavePoint(st) : false;
   } catch {

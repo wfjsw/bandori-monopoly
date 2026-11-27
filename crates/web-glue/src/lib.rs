@@ -745,38 +745,101 @@ fn rules() -> Result<Arc<dyn CardRules>, JsError> {
 
 // ------------------------------------------------------------------ frame
 
+/// What a batch of frames shares: one view context (one world clone for the
+/// whole call instead of one per seat), the turn's play history, and -- only
+/// when some seat asked for captions -- the seat-independent quote table, served
+/// through the match's version-keyed cache when there is one.
+struct FrameShared<'a> {
+    cx: game_core::engine::PlayCtx<'a>,
+    played: &'a [String],
+    cards_played: usize,
+    quotes: Option<QuoteSource<'a>>,
+}
+
+struct QuoteSource<'a> {
+    base: Vec<Option<game_core::state::TileQuote>>,
+    cache: Option<&'a RefCell<QuoteCache>>,
+}
+
+impl QuoteSource<'_> {
+    fn of(&self, m: &game_core::engine::Match, member: i32) -> Vec<Option<game_core::state::TileQuote>> {
+        let Some(cache) = self.cache else {
+            return m.tile_quotes_from(&self.base, member);
+        };
+        let seq = m.seq();
+        let mut c = cache.borrow_mut();
+        // Same version: always the exact table. A moved state re-serves the
+        // last table while the staleness budget lasts; only then a rebuild.
+        if c.seq == seq {
+            if let Some(hit) = c.by_member.get(&member) {
+                return hit.clone();
+            }
+        } else if c.stale_left > 0 {
+            if let Some(hit) = c.by_member.get(&member) {
+                let out = hit.clone();
+                c.stale_left -= 1;
+                return out;
+            }
+        }
+        let out = m.tile_quotes_from(&self.base, member);
+        c.seq = seq;
+        c.stale_left = QUOTE_STALE_FRAMES;
+        c.by_member.insert(member, out.clone());
+        out
+    }
+}
+
+impl<'a> FrameShared<'a> {
+    fn new(
+        m: &'a game_core::engine::Match,
+        quotes: bool,
+        cache: Option<&'a RefCell<QuoteCache>>,
+    ) -> Self {
+        let (played, cards_played) = m.played_context();
+        Self {
+            cx: m.view_cx(),
+            played,
+            cards_played,
+            quotes: quotes.then(|| QuoteSource { base: m.tile_quotes_base(), cache }),
+        }
+    }
+}
+
 /// One seat's frame: the same shape the server's `match` frame uses.
-/// `state` is passed in rather than recomputed because `public_state()` is
-/// not member-dependent -- a batch of frames (`views`) pays for it once.
+/// `state` and the shared context are passed in because neither is
+/// member-dependent -- a batch of frames (`views`) pays for them once.
+/// `with_quotes` fills `tileQuotes`; a bot seat does not draw captions.
 fn frame(
     m: &game_core::engine::Match,
     member: i32,
     state: &game_core::state::MatchState,
+    sh: &FrameShared<'_>,
+    with_quotes: bool,
 ) -> serde_json::Value {
     let player_id = state.player_of(member);
     // Typed twin of `view_extras`: same fields, without building an
     // intermediate `serde_json::Value` and cloning its members back out
     // just to re-embed them here. `view()` / `views()` are the per-dirty-tick
     // hot path (one call per human seat plus one per advanced bot).
-    let extra = m.view_extras_typed(member);
-    // The turn's public play history rides the frame: a seat-view fork's
-    // max-plays cap and skill de-dup read it (`SeatView::played`), and only
-    // the live world has it otherwise.
-    let (played, cards_played) = m.played_context();
+    let extra = m.view_extras_typed_with(&sh.cx, member);
+    let quotes = match (&sh.quotes, with_quotes) {
+        (Some(q), true) => Some(q.of(m, member)),
+        _ => None,
+    };
     serde_json::json!({
         "state": state,
         "hand": m.hand_of(member),
-        "handNotes": m.hand_notes_of(member),
+        "handNotes": m.hand_notes_with(&sh.cx, member),
         "draw": m.draw_of(member),
         "you": member,
         "playerId": player_id,
-        "played": played,
-        "cardsPlayed": cards_played,
+        "played": sh.played,
+        "cardsPlayed": sh.cards_played,
         "aiAnswer": extra.ai_answer,
         "playable": extra.playable,
         "aiPlayable": extra.ai_playable,
         "estCost": extra.estimated_cost,
-        "tileQuotes": m.tile_quotes(member),
+        "tileQuotes": quotes,
         "inspection": m.inspection_of(member),
         "skills": extra.skills,
     })
@@ -784,11 +847,36 @@ fn frame(
 
 // ------------------------------------------------------------------ solo match
 
+/// Per-seat quote tables for one state version. A pump re-sends frames for
+/// the same `seq` (a missing seat, a save-point probe, a re-broadcast), and
+/// `seq` moves exactly when anything a quote reads can change -- so a repeat
+/// pump pays nothing, and every entry expires with the version it was built
+/// for.
+#[derive(Default)]
+struct QuoteCache {
+    seq: i32,
+    /// Mismatched-state requests still allowed to re-serve the last table. A
+    /// quote build runs every buy hook on the board (~0.5 s with ten seats
+    /// holding a buy skill), while the captions move only on a deed / money /
+    /// turn change -- so a burst of events re-serves the table a couple of
+    /// times instead of stalling the pump on each one.
+    ///
+    /// Counted in requests, not milliseconds: `wasm32-unknown-unknown` has no
+    /// clock (`Instant::now` traps), and on the 50 ms pump a request is a frame.
+    stale_left: u8,
+    by_member: HashMap<i32, Vec<Option<game_core::state::TileQuote>>>,
+}
+
+/// How many mismatched frames may reuse the last quote table before a rebuild.
+/// Two frames ≈ 100 ms of pump at rest, and the captions are informational.
+const QUOTE_STALE_FRAMES: u8 = 2;
+
 /// A match running entirely in the browser (solo mode vs bots). Wraps a
 /// [`RecordedMatch`], so the whole game can be exported as a `.bdrec`.
 #[wasm_bindgen]
 pub struct SoloMatch {
     m: RecordedMatch,
+    quotes: RefCell<QuoteCache>,
 }
 
 #[wasm_bindgen]
@@ -837,6 +925,7 @@ impl SoloMatch {
         };
         Ok(SoloMatch {
             m: RecordedMatch::new(data, rules()?, setup, mode),
+            quotes: RefCell::default(),
         })
     }
 
@@ -859,6 +948,7 @@ impl SoloMatch {
             Match::restore(data()?, rules()?, json).map_err(|e| JsError::new(&e.to_string()))?;
         Ok(SoloMatch {
             m: RecordedMatch::from_snapshot(m),
+            quotes: RefCell::default(),
         })
     }
 
@@ -868,7 +958,7 @@ impl SoloMatch {
     pub fn restore_with_record(&self, save: &str, rec: &str) -> Result<SoloMatch, JsError> {
         let m = RecordedMatch::restore(data()?, rules()?, save, rec)
             .map_err(|e| JsError::new(&e.to_string()))?;
-        Ok(SoloMatch { m })
+        Ok(SoloMatch { m, quotes: RefCell::default() })
     }
 
     /// The whole match as JSON, for `restore`.
@@ -919,24 +1009,32 @@ impl SoloMatch {
     /// the per-viewer board caption data ([`Match::tile_quotes`]).
     pub fn view(&self, member: i32) -> String {
         let m = self.m.inner();
-        json(&frame(m, member, &m.state()))
+        let state = m.state();
+        let sh = FrameShared::new(m, true, None);
+        json(&frame(m, member, &state, &sh, true))
     }
 
-    /// Frames for several seats in one call. `state` is computed and serialised
-    /// once and shared by every frame -- `public_state()` is not member-dependent,
-    /// so a dirty pump that wants the human seat plus N advanced bots pays for it
-    /// once instead of N+1 times.
+    /// Frames for several seats in one call. `state`, the view context and the
+    /// seat-independent quote table are computed once and shared by every frame
+    /// -- `public_state()` is not member-dependent, so a dirty pump that wants
+    /// the human seat plus N advanced bots pays for them once instead of N+1
+    /// times.
     ///
     /// `members_json` is a JSON array of member indices (`[1, 2, 3]`).
-    /// Returns a JSON array of `MatchView` objects in the same order, each with
-    /// its own `you` / hand / extras fields and the shared `state`.
-    pub fn views(&self, members_json: &str) -> Result<String, JsError> {
+    /// `quote_members_json` names the members whose frames need `tileQuotes`
+    /// (deed captions are a human UI surface; a bot seat answers from the
+    /// extras). Returns a JSON array of `MatchView` objects in the same order,
+    /// each with its own `you` / hand / extras fields and the shared `state`;
+    /// seats outside `quote_members` carry `"tileQuotes": null`.
+    pub fn views(&self, members_json: &str, quote_members_json: &str) -> Result<String, JsError> {
         let members: Vec<i32> = parse("members", members_json)?;
+        let quote_members: Vec<i32> = parse("quoteMembers", quote_members_json)?;
         let m = self.m.inner();
         let state = m.state();
+        let sh = FrameShared::new(m, !quote_members.is_empty(), Some(&self.quotes));
         let frames: Vec<serde_json::Value> = members
             .iter()
-            .map(|&member| frame(m, member, &state))
+            .map(|&member| frame(m, member, &state, &sh, quote_members.contains(&member)))
             .collect();
         // One `json()` over the whole array: a single `serde_json::to_string`,
         // not per-frame strings concatenated (the shared `state` would then be
@@ -1109,7 +1207,8 @@ impl ReplayMatch {
                 "skills": serde_json::Value::Null,
             }));
         }
-        json(&frame(m, member, &state))
+        let sh = FrameShared::new(m, true, None);
+        json(&frame(m, member, &state, &sh, true))
     }
 
     /// Events the replayer has produced so far (the full stream, not the

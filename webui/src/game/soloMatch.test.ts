@@ -82,6 +82,26 @@ const members = [
   { id: 3, player: "P3", character: "", cnId: "", ready: true, host: false, bot: true, away: false, mentality: "standard" },
 ];
 
+test("views(): tileQuotes only for the seats that asked, nothing else differs", async () => {
+  const glue = await loadGlue("views-quotes");
+  const fair = soloFair(glue, members, 0, 1);
+  const m = new glue.SoloMatch(JSON.stringify(members), fair.derived, 0, JSON.stringify({}));
+  m.set_fair(JSON.stringify(fair.open));
+  m.quick_start();
+  const membersJson = JSON.stringify([1, 2]);
+  // A bot seat rides the same batch without paying for captions.
+  const asked = JSON.parse(m.views(membersJson, "[1]")) as MatchView[];
+  assert.ok((asked[0].tileQuotes ?? []).length > 0, "the named seat carries quotes");
+  assert.equal(asked[1].tileQuotes ?? null, null, "an unnamed seat carries null");
+  const bare = JSON.parse(m.views(membersJson, "[]")) as MatchView[];
+  assert.equal(bare[0].tileQuotes ?? null, null, "no quote members: null");
+  const strip = (v: MatchView) => {
+    const { tileQuotes: _q, ...rest } = v;
+    return rest;
+  };
+  assert.deepEqual(strip(asked[0]), strip(bare[0]), "quotes are the only difference");
+});
+
 test("a seeded SoloMatch plays to completion in the built wasm glue and seals a record", async () => {
   const glue = await loadGlue("solo-match");
   const fair = soloFair(glue, members, 0, 1);
@@ -107,7 +127,7 @@ test("a seeded SoloMatch plays to completion in the built wasm glue and seals a 
     m.tick_steps(4);
     steps += 1;
     assert.ok(steps < 20_000, `game did not finish in ${steps} tick calls`);
-    const views = JSON.parse(m.views(JSON.stringify(ids))) as MatchView[];
+    const views = JSON.parse(m.views(JSON.stringify(ids), JSON.stringify(ids))) as MatchView[];
     for (const v of views) {
       const S = v.state;
       const me = v.playerId;
