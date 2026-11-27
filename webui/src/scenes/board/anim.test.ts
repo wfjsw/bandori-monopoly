@@ -703,16 +703,35 @@ test("flash styles: the halo is a composited triangle on a chain-sized face", ()
   assert.match(glow, /0%, 100% \{ opacity: 0; \}/);
   assert.match(glow, /50% \{ opacity: 1; \}/);
   assert.doesNotMatch(bare, /4%,\s*94%/, "no held peak");
+  // Phone canvas: the caption leaves the flow entirely and hangs past the
+  // card's right edge -- in the flow it fed back into the shrink-to-fit
+  // `.flash` and collapsed to its padding.
+  const compactCaption = bare.match(/:global\(:root\[data-compact\]\) \.flashCaption \{[^}]*\}/)?.[0] ?? "";
+  assert.match(compactCaption, /position:\s*absolute/, "the compact caption leaves the flow");
+  assert.match(compactCaption, /left:\s*calc\(100% \+ 8px\)/, "it starts past the card's right edge");
+  assert.match(compactCaption, /max-width:\s*240px/, "and caps its own width so a long line wraps");
 });
 
-test("big cards: the title is at least 1.5x the old scale", () => {
-  const css = readFileSync(path.join(path.dirname(fileURLToPath(import.meta.url)), "../../ui/Card.module.css"), "utf8");
+test("big cards: the title is 16px, and `big` is a copy of mini", () => {
+  const here = path.dirname(fileURLToPath(import.meta.url));
+  const css = readFileSync(path.join(here, "../../ui/Card.module.css"), "utf8");
   const bare = css.replace(/\/\*[\s\S]*?\*\//g, "");
   const title = bare.match(/\.big \.title \{[^}]*\}/)?.[0] ?? "";
   assert.ok(title, "the big title rule exists");
-  const m = /font-size:\s*calc\(var\(--card-w, 240px\) \* ([\d.]+)\)/.exec(title);
-  assert.ok(m, "the big title must scale with --card-w");
-  assert.ok(+m[1] >= 0.18, `title scale ${m[1]} is under 1.5x the old 0.12`);
+  assert.match(title, /font-size:\s*16px/, "the big title is 16px");
+  // `big` is `mini`'s rule copied whole into a class of its own: never paired
+  // with `mini`, so no metric leaks in and the copy needs no counter-rules.
+  // Both the flash and the counter chain render it; their tilt is the caller's.
+  const copy = bare.match(/\.big \{[^}]*\}/)?.[0] ?? "";
+  assert.ok(copy, "the big size exists");
+  assert.match(copy, /width:\s*var\(--card-w, 120px\)/, "it copies mini's width");
+  assert.match(copy, /min-height:\s*calc\(var\(--card-w, 120px\) \* 1\.5\)/, "and mini's height");
+  assert.doesNotMatch(copy, /padding|gap/, "without scaled metrics of its own");
+  assert.doesNotMatch(bare, /\.chain \{/, "no separate chain size is left behind");
+  const board = readFileSync(path.join(here, "Board.tsx"), "utf8");
+  assert.match(board, /size="big" width=\{cardW\} className=\{s\.chainFace\}/, "the chain renders big");
+  assert.match(board, /size="big" className=\{cx\(s\.flashCard/, "so does the flash, as the only size class");
+  assert.doesNotMatch(board, /s\.flashMini/, "nothing composes mini onto the face");
 });
 
 test("Animator: a body line re-arms one hit, never during the fade", async () => {

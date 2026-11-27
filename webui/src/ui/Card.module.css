@@ -65,22 +65,17 @@
    set `width` and stylesheet order picked the winner. */
 .mini { width: var(--card-w, 120px); min-height: calc(var(--card-w, 120px) * 1.5); }
 .mid { width: var(--card-w, 150px); min-height: calc(var(--card-w, 150px) * 1.5); }
-/* `big` is `mini` at a larger scale: every metric below is the `mini` figure
-   as a fraction of its 120px width, so the proportions stay identical at any
-   `--card-w` (the chain renders it down to a few dozen px). */
+/* `big`: `mini`'s rule copied whole (the activation flash and the counter
+   chain's links both render it). It is one class of its own, never paired with
+   `mini`, so no metric can leak in and there are no counter-rules --
+   `padding` / `gap` / art radius / colour strip all stay `.face`'s base
+   figures. Rotation is the caller's (`.chainMine` / `.chainTheirs`), not a
+   size concern. */
 .big {
-  width: var(--card-w, 240px);
-  min-height: calc(var(--card-w, 240px) * 1.5);
-  padding: calc(var(--card-w, 240px) * 0.0333);
-  gap: calc(var(--card-w, 240px) * 0.0167);
+  width: var(--card-w, 120px);
+  min-height: calc(var(--card-w, 120px) * 1.5);
 }
-.big .art { border-radius: calc(var(--card-w, 240px) * 0.025); }
-.big .line { height: calc(var(--card-w, 240px) * 0.0333); margin-top: calc(var(--card-w, 240px) * 0.0167); }
-.big .title {
-  font-size: calc(var(--card-w, 240px) * 0.18);
-  padding: calc(var(--card-w, 240px) * 0.0333) calc(var(--card-w, 240px) * 0.0167)
-    calc(var(--card-w, 240px) * 0.0167);
-}
+.big .title { font-size: 16px; }
 .hand { width: var(--card-w, 54px); min-height: calc(var(--card-w, 54px) * 1.5); padding: 2px; transition: transform 0.12s; }
 .hand:hover { transform: translateY(-6px); }
 .hand .art { aspect-ratio: 1; }
