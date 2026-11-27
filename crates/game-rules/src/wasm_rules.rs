@@ -14917,6 +14917,30 @@ impl<M: CardModules> CardRules for RulesBridge<M> {
         if instances.is_empty() {
             return q.tiles.iter().map(|&t| native(t)).collect();
         }
+        // A seat can hold the same rule twice (a granted copy keeps its uid but
+        // the same card and owner). Re-running one (owner, card) for a stage
+        // that only reads (the gate) or assigns (a `Set`) cannot change the
+        // answer, so those stages walk one instance per copy; an adding /
+        // multiplying stage stacks and keeps every copy. `QUOTE_FULL` forces
+        // the undeduped walk (the equivalence test's reference).
+        let deduped: Vec<(i32, i32, String)> = {
+            let mut seen = std::collections::HashSet::new();
+            instances
+                .iter()
+                .filter(|(_, owner, card)| seen.insert((*owner, card.clone())))
+                .cloned()
+                .collect()
+        };
+        let forced = std::env::var("QUOTE_FULL").is_ok();
+        let stacks = |kind: TriggerKind| {
+            matches!(
+                kind,
+                TriggerKind::BuyAdd
+                    | TriggerKind::BuyMul
+                    | TriggerKind::ForceBuyAdd
+                    | TriggerKind::ForceBuyMul
+            )
+        };
         // Only the stages somebody actually declares are run -- a `BuySet`
         // nobody hooks is a no-op that would cost a linker init per tile. The
         // per-card `hook_mask` shift (fix C), not an entry-table scan.
@@ -15002,7 +15026,12 @@ impl<M: CardModules> CardRules for RulesBridge<M> {
                 }
                 let mut at = |run: &mut Run, kind: TriggerKind, price: i32| {
                     let mut trig = buy_trigger(kind, q, t, price, st, w.turn.activation_ordinal);
-                    for &(uid, owner, ref card) in &instances {
+                    let list = if forced || stacks(kind) {
+                        &instances
+                    } else {
+                        &deduped
+                    };
+                    for &(uid, owner, ref card) in list {
                         self.pure_buy_hook(run, uid, owner, card, kind, &mut trig, &mut scope);
                     }
                     trig

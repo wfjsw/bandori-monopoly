@@ -89,3 +89,23 @@ fn bench_frame_work() {
 }
 
 
+
+#[test]
+fn duplicate_copies_do_not_change_a_quote() {
+    let chars = ten();
+    let cs: Vec<&str> = chars.iter().map(String::as_str).collect();
+    let mut t = Table::new(&cs);
+    arrange(&mut t);
+    // Every seat here holds 星之鼓动 twice; the quote collapses the copies for
+    // the stages a repeat cannot stack, so a forced full walk must agree.
+    let t0 = std::time::Instant::now();
+    let deduped: Vec<_> = (1..=10).map(|m| t.m.tile_quotes(m)).collect();
+    let deduped_ms = t0.elapsed();
+    std::env::set_var("QUOTE_FULL", "1");
+    let t0 = std::time::Instant::now();
+    let full: Vec<_> = (1..=10).map(|m| t.m.tile_quotes(m)).collect();
+    let full_ms = t0.elapsed();
+    std::env::remove_var("QUOTE_FULL");
+    assert_eq!(full, deduped);
+    println!("full={full_ms:?} deduped={deduped_ms:?}");
+}
